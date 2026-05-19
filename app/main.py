@@ -5,6 +5,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import water_demand
+
 app = FastAPI(
     title="Заря API",
     description="Расчёты внутреннего водоснабжения и канализации по СП 30.13330.2020",
@@ -12,7 +14,6 @@ app = FastAPI(
 )
 
 # CORS — разрешаем фронтенду обращаться к API
-# Пока разрешаем всё, при деплое сузим список
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Подключаем роутеры
+app.include_router(water_demand.router)
 
 
 @app.get("/")
