@@ -1,0 +1,2188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расчёт расходов воды СП 30.13330.2020</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:14px;background:#f5f5f5;color:#222;padding:1rem}
+h1{font-size:18px;font-weight:600;margin-bottom:1rem}
+.card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1.25rem;margin-bottom:1rem}
+.card-title{font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem}
+select,input[type=number]{background:#f5f5f5;border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:13px;color:#222;width:100%}
+.row{display:grid;grid-template-columns:3fr 0.8fr 32px;gap:6px;align-items:center;margin-bottom:6px}
+.hdr{display:grid;grid-template-columns:3fr 0.8fr 32px;gap:6px;margin-bottom:4px}
+.hdr span{font-size:11px;color:#888}
+.del{background:none;border:none;color:#aaa;cursor:pointer;font-size:18px;width:32px;text-align:center}
+.del:hover{color:#e53}
+.add-btn{background:#f0f0f0;border:1px solid #ccc;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;margin-top:4px}
+.calc-btn{width:100%;padding:10px;font-size:15px;font-weight:600;background:#fff;border:1px solid #ccc;border-radius:6px;cursor:pointer;margin-top:0}
+.add-btn:hover,.calc-btn:hover{background:#e8e8e8}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:.5rem}
+.met{background:#f5f5f5;border-radius:6px;padding:.6rem .8rem}
+.met-lbl{font-size:11px;color:#666;margin-bottom:3px}
+.met-val{font-size:17px;font-weight:600}
+.met-unit{font-size:10px;color:#999}
+.steps{background:#f5f5f5;border-radius:6px;padding:.875rem;font-size:12px;color:#555;line-height:2.2;font-family:monospace}
+.steps b{color:#222;font-family:Arial,sans-serif}
+.err{color:#e53;font-size:13px;margin-top:6px}
+.sect{font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .4rem}
+.ref{font-size:11px;color:#888;margin-top:1rem;border-top:1px solid #eee;padding-top:.75rem}
+</style>
+</head>
+<body>
+<h1>Расчёт расходов воды — СП 30.13330.2020</h1>
+
+<div class="card">
+  <div class="card-title">Группы потребителей</div>
+
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:.75rem;cursor:pointer">
+    <input type="checkbox" id="k06_check" style="width:auto;margin:0">
+    Бытовой корпус промпредприятия (прим. 7) — применить коэф. 0,6
+  </label>
+
+  <div class="hdr"><span>Тип потребителя</span><span>Кол-во U</span><span></span></div>
+  <div id="groups"></div>
+  <button class="add-btn" onclick="addGroup()">+ Добавить группу</button>
+
+  <div style="margin-top:1rem;border-top:1px solid #eee;padding-top:.75rem">
+    <details>
+      <summary style="font-size:12px;font-weight:600;color:#666;cursor:pointer;user-select:none">▸ Калькулятор блюд для общепита (примечание 8)</summary>
+      <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:3px">Тип заведения</div>
+          <select id="cafe_type" onchange="calcCafe()" style="width:100%;font-size:12px;padding:4px 6px">
+            <option value="2|0.45">Столовая / кафе (m=2, y=0,45)</option>
+            <option value="3|0.45">Студ. столовая / при предприятии (m=3, y=0,45)</option>
+            <option value="1.5|0.55">Ресторан (m=1,5, y=0,55)</option>
+            <option value="custom">Другое (ввести вручную)</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:3px">n — посадочных мест</div>
+          <input type="number" id="cafe_n" value="50" min="1" oninput="calcCafe()" style="font-size:12px;padding:4px 6px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:3px">T — время работы, ч</div>
+          <input type="number" id="cafe_T" value="10" min="1" max="24" oninput="calcCafe()" style="font-size:12px;padding:4px 6px">
+        </div>
+      </div>
+      <div id="cafe_custom_row" style="display:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:3px">m — число посадок</div>
+          <input type="number" id="cafe_m_custom" value="2" step="0.5" oninput="calcCafe()" style="font-size:12px;padding:4px 6px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:3px">y — коэф. неравномерности</div>
+          <input type="number" id="cafe_y_custom" value="1.0" step="0.05" min="0.1" max="1" oninput="calcCafe()" style="font-size:12px;padding:4px 6px">
+        </div>
+      </div>
+      <div id="cafe_result" style="font-size:12px;color:#444;line-height:2;background:#f9f9f9;border-radius:6px;padding:.5rem .75rem"></div>
+    </details>
+  </div>
+</div>
+<button class="calc-btn" onclick="calculate()">Рассчитать</button>
+<div id="err" class="err"></div>
+<div id="results" style="display:none">
+  <div class="card" style="margin-top:1rem">
+    <div class="sect">Общий (tot)</div><div class="metrics" id="r-tot"></div>
+    <div class="sect">Холодный (c)</div><div class="metrics" id="r-c"></div>
+    <div class="sect">Горячий (h)</div><div class="metrics" id="r-h"></div>
+    <div class="sect">Стоки и тепло</div><div class="metrics" id="r-ex"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Ход расчёта</div>
+    <div class="steps" id="steps"></div>
+  </div>
+  <div class="ref">
+    Расчёт выполнен по СП 30.13330.2020 «Внутренний водопровод и канализация зданий».<br>
+    Таблица А.2 — нормы расходов воды потребителями.<br>
+    Таблица Б.2 — коэффициенты α(α_hr) при P(P_hr) ≤ 0,1 и любом N, а также при P > 0,1 и N > 200.
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ТАБЛИЦА А.2 СП 30.13330.2020
+// qu_tot, qu_h       — суточные нормы (средние сутки), л
+// q_hr_tot, q_hr_h   — нормы в час наибольшего водопотребления, л
+// q0_tot, q0_c, q0_h — расход прибором секундный, л/с
+// q0hr_tot,q0hr_c,q0hr_h — расход прибором часовой, л/ч
+// ============================================================
+const TBL = [
+  {label:"Жилые дома - с ваннами ≥1500мм и душами (1 житель)", um:"житель",
+   qu_tot:180,qu_h:70, q_hr_tot:11.6,q_hr_h:6.5, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Жилые дома - с сидячими ваннами и душами (1 житель)", um:"житель",
+   qu_tot:160,qu_h:65, q_hr_tot:10.3,q_hr_h:5.7, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Жилые дома - с центр. ГВС, умыв., мойками, душами (1 житель)", um:"житель",
+   qu_tot:130,qu_h:50, q_hr_tot:8.2,q_hr_h:4.5, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Жилые дома - без ванн (1 житель)", um:"житель",
+   qu_tot:70,qu_h:0, q_hr_tot:5.0,q_hr_h:0, q0_tot:0.2,q0_c:0.2,q0_h:0, q0hr_tot:50,q0hr_c:50,q0hr_h:0},
+  {label:"Общежития - с общими душевыми (1 чел)", um:"чел",
+   qu_tot:85,qu_h:45, q_hr_tot:10.4,q_hr_h:5.4, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Общежития - с душами при всех комнатах (1 чел)", um:"чел",
+   qu_tot:110,qu_h:50, q_hr_tot:12.5,q_hr_h:7.0, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Гостиницы - с душами во всех номерах (1 чел)", um:"чел",
+   qu_tot:230,qu_h:120, q_hr_tot:19,q_hr_h:10.2, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:115,q0hr_c:80,q0hr_h:80},
+  {label:"Гостиницы - до 25% номеров с ваннами (1 чел)", um:"чел",
+   qu_tot:200,qu_h:85, q_hr_tot:22.4,q_hr_h:8.8, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:250,q0hr_c:180,q0hr_h:180},
+  {label:"Гостиницы - до 75% номеров с ваннами (1 чел)", um:"чел",
+   qu_tot:250,qu_h:130, q_hr_tot:28,q_hr_h:12.8, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:280,q0hr_c:190,q0hr_h:190},
+  {label:"Гостиницы - до 100% номеров с ваннами (1 чел)", um:"чел",
+   qu_tot:300,qu_h:160, q_hr_tot:30,q_hr_h:13.6, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Больницы - с общими ваннами и душевыми (1 койка)", um:"койка",
+   qu_tot:115,qu_h:65, q_hr_tot:8.4,q_hr_h:4.6, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Больницы - с санузлами у палат (1 койка)", um:"койка",
+   qu_tot:200,qu_h:75, q_hr_tot:12,q_hr_h:6.55, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Больницы инфекционные (1 койка)", um:"койка",
+   qu_tot:240,qu_h:95, q_hr_tot:14,q_hr_h:8.1, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:200,q0hr_c:120,q0hr_h:120},
+  {label:"Санатории - с общими душами (1 место)", um:"место",
+   qu_tot:130,qu_h:55, q_hr_tot:12.5,q_hr_h:7.0, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Санатории - с душами при всех комнатах (1 место)", um:"место",
+   qu_tot:150,qu_h:65, q_hr_tot:12.5,q_hr_h:7.0, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Санатории - с ваннами (1 место)", um:"место",
+   qu_tot:200,qu_h:100, q_hr_tot:10,q_hr_h:4.2, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Поликлиники и амбулатории (1 больной в смену)", um:"больной/смену",
+   qu_tot:13,qu_h:4.4, q_hr_tot:2.6,q_hr_h:1.0, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:80,q0hr_c:60,q0hr_h:60},
+  {label:"Административные здания (1 работающий)", um:"работающий",
+   qu_tot:12,qu_h:4.5, q_hr_tot:4,q_hr_h:1.7, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:80,q0hr_c:60,q0hr_h:60},
+  {label:"Образовательные организации проф. и высшего образования (1 уч./препод.)", um:"чел",
+   qu_tot:17.2,qu_h:5, q_hr_tot:2.7,q_hr_h:1.0, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Общеобразовательные - с душами и столовой п/ф (1 уч./препод.)", um:"чел",
+   qu_tot:16,qu_h:5, q_hr_tot:3.5,q_hr_h:1.2, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Дошкольные орг. - столовая на п/ф, дневное (1 ребёнок)", um:"ребёнок",
+   qu_tot:22,qu_h:10, q_hr_tot:9.5,q_hr_h:3.8, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Дошкольные орг. - столовая на сырье, прачечная, дневное (1 ребёнок)", um:"ребёнок",
+   qu_tot:60,qu_h:21, q_hr_tot:18,q_hr_h:6.8, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:100,q0hr_c:60,q0hr_h:60},
+  {label:"Предприятия общепита - в обеденном зале (1 усл. блюдо)", um:"усл.блюдо",
+   qu_tot:12,qu_h:3.4, q_hr_tot:12,q_hr_h:3.4, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Предприятия общепита - продажа на дом (1 усл. блюдо)", um:"усл.блюдо",
+   qu_tot:10,qu_h:2.6, q_hr_tot:10,q_hr_h:2.6, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Магазины продовольственные (1 раб. в смену / 20м²)", um:"работающий",
+   qu_tot:250,qu_h:55, q_hr_tot:37,q_hr_h:8.2, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+  {label:"Театры/концертные залы - зрители (1 зритель)", um:"зритель",
+   qu_tot:10,qu_h:4, q_hr_tot:0.9,q_hr_h:0.26, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:60,q0hr_c:40,q0hr_h:40},
+  {label:"Театры/концертные залы - артисты (1 артист)", um:"артист",
+   qu_tot:40,qu_h:21, q_hr_tot:3.4,q_hr_h:1.9, q0_tot:0.14,q0_c:0.1,q0_h:0.1, q0hr_tot:80,q0hr_c:50,q0hr_h:50},
+  {label:"Спортивные залы / бассейны - посетители (1 чел)", um:"чел",
+   qu_tot:100,qu_h:60, q_hr_tot:100,q_hr_h:60, q0_tot:0.2,q0_c:0.14,q0_h:0.14, q0hr_tot:80,q0hr_c:50,q0hr_h:50},
+  {label:"Прачечные механизированные (1 кг сухого белья)", um:"кг белья",
+   qu_tot:75,qu_h:21.3, q_hr_tot:75,q_hr_h:21.3, q0_tot:0.3,q0_c:0.2,q0_h:0.2, q0hr_tot:300,q0hr_c:200,q0hr_h:200},
+];
+
+// ============================================================
+// ТАБЛИЦА Б.2 СП 30.13330.2020
+// Значения α(α_hr) при P(P_hr) ≤ 0,1 и любом N,
+// а также при P > 0,1 и N > 200
+// Пары: [NP, alpha]
+// ============================================================
+const B2 = [
+  [0.015,0.200],[0.016,0.205],[0.017,0.207],[0.018,0.210],[0.019,0.212],
+  [0.020,0.215],[0.021,0.217],[0.022,0.219],[0.023,0.222],[0.024,0.224],
+  [0.025,0.226],[0.026,0.228],[0.027,0.230],[0.028,0.233],[0.029,0.235],
+  [0.030,0.237],[0.031,0.239],[0.032,0.241],[0.033,0.243],[0.034,0.245],
+  [0.035,0.247],[0.036,0.249],[0.037,0.250],[0.038,0.252],[0.039,0.254],
+  [0.040,0.256],[0.041,0.258],[0.042,0.259],[0.043,0.261],[0.044,0.263],
+  [0.045,0.265],[0.046,0.266],[0.047,0.268],[0.048,0.270],[0.049,0.271],
+  [0.050,0.273],[0.052,0.276],[0.054,0.280],[0.056,0.283],[0.058,0.286],
+  [0.060,0.289],[0.062,0.292],[0.064,0.295],[0.065,0.298],[0.068,0.301],
+  [0.070,0.304],[0.072,0.307],[0.074,0.309],[0.076,0.312],[0.078,0.315],
+  [0.080,0.318],[0.082,0.320],[0.084,0.323],[0.086,0.326],[0.088,0.328],
+  [0.090,0.331],[0.092,0.333],[0.094,0.336],[0.096,0.338],[0.098,0.341],
+  [0.100,0.343],[0.105,0.349],[0.110,0.355],[0.115,0.361],[0.120,0.367],
+  [0.125,0.373],[0.130,0.378],[0.135,0.384],[0.140,0.389],[0.145,0.394],
+  [0.150,0.399],[0.155,0.405],[0.160,0.410],[0.165,0.415],[0.170,0.420],
+  [0.175,0.425],[0.180,0.430],[0.185,0.435],[0.190,0.439],[0.195,0.444],
+  [0.200,0.449],[0.210,0.458],[0.220,0.467],[0.230,0.476],[0.240,0.485],
+  [0.250,0.493],[0.260,0.502],[0.270,0.510],[0.280,0.518],[0.290,0.526],
+  [0.300,0.534],[0.310,0.542],[0.320,0.550],[0.330,0.558],[0.340,0.565],
+  [0.350,0.573],[0.360,0.580],[0.370,0.588],[0.380,0.595],[0.390,0.602],
+  [0.400,0.610],[0.410,0.617],[0.420,0.624],[0.430,0.631],[0.440,0.638],
+  [0.450,0.645],[0.460,0.652],[0.470,0.658],[0.480,0.665],[0.490,0.672],
+  [0.500,0.678],[0.520,0.692],[0.540,0.704],[0.560,0.717],[0.580,0.730],
+  [0.600,0.742],[0.620,0.755],[0.640,0.767],[0.660,0.779],[0.680,0.791],
+  [0.700,0.803],[0.720,0.815],[0.740,0.826],[0.760,0.838],[0.780,0.849],
+  [0.800,0.860],[0.820,0.872],[0.840,0.883],[0.860,0.894],[0.880,0.905],
+  [0.900,0.916],[0.920,0.927],[0.940,0.937],[0.960,0.948],[0.980,0.959],
+  [1.000,0.969],[1.050,0.995],[1.100,1.021],[1.150,1.046],[1.200,1.071],
+  [1.250,1.096],[1.300,1.120],[1.350,1.144],[1.400,1.168],[1.450,1.191],
+  [1.500,1.215],[1.550,1.238],[1.600,1.261],[1.650,1.283],[1.700,1.306],
+  [1.750,1.328],[1.800,1.350],[1.850,1.372],[1.900,1.394],[1.950,1.416],
+  [2.000,1.437],[2.100,1.479],[2.200,1.521],[2.300,1.563],[2.400,1.604],
+  [2.500,1.644],[2.600,1.684],[2.700,1.724],[2.800,1.763],[2.900,1.802],
+  [3.000,1.840],[3.100,1.879],[3.200,1.917],[3.300,1.954],[3.400,1.991],
+  [3.500,2.029],[3.600,2.065],[3.700,2.102],[3.800,2.138],[3.900,2.174],
+  [4.000,2.210],[4.100,2.246],[4.200,2.281],[4.300,2.317],[4.400,2.352],
+  [4.500,2.386],[4.600,2.421],[4.700,2.456],[4.800,2.490],[4.900,2.524],
+  [5.000,2.558],[5.100,2.592],[5.200,2.626],[5.300,2.660],[5.400,2.693],
+  [5.500,2.726],[5.600,2.760],[5.700,2.793],[5.800,2.826],[5.900,2.858],
+  [6.000,2.891],[6.100,2.924],[6.200,2.956],[6.300,2.989],[6.400,3.021],
+  [6.500,3.053],[6.600,3.085],[6.700,3.117],[6.800,3.149],[6.900,3.181],
+  [7.000,3.213],[7.100,3.244],[7.200,3.276],[7.300,3.307],[7.400,3.339],
+  [7.500,3.370],[7.600,3.401],[7.700,3.432],[7.800,3.463],[7.900,3.494],
+  [8.000,3.525],[8.100,3.556],[8.200,3.586],[8.300,3.617],[8.400,3.647],
+  [8.500,3.678],[8.600,3.708],[8.700,3.738],[8.800,3.768],[8.900,3.798],
+  [9.000,3.828],[9.100,3.858],[9.200,3.888],[9.300,3.918],[9.400,3.948],
+  [9.500,3.978],[9.600,4.008],[9.700,4.037],[9.800,4.067],[9.900,4.097],
+  [10.0,4.126],[10.2,4.185],[10.4,4.244],[10.6,4.302],[10.8,4.361],
+  [11.0,4.419],[11.2,4.477],[11.4,4.534],[11.6,4.592],[11.8,4.649],
+  [12.0,4.706],[12.2,4.763],[12.4,4.820],[12.6,4.877],[12.8,4.933],
+  [13.0,4.990],[13.2,5.046],[13.4,5.102],[13.6,5.158],[13.8,5.214],
+  [14.0,5.270],[14.2,5.326],[14.4,5.382],[14.6,5.437],[14.8,5.492],
+  [15.0,5.547],[15.2,5.602],[15.4,5.657],[15.6,5.712],[15.8,5.767],
+  [16.0,5.821],[16.2,5.876],[16.4,5.930],[16.6,5.984],[16.8,6.039],
+  [17.0,6.093],[17.2,6.147],[17.4,6.201],[17.6,6.254],[17.8,6.308],
+  [18.0,6.362],[18.2,6.415],[18.4,6.469],[18.6,6.522],[18.8,6.575],
+  [19.0,6.629],[20.0,6.897],[21.0,7.163],[22.0,7.428],[23.0,7.691],
+  [24.0,7.954],[25.0,8.215],[26.0,8.459],[27.0,8.701],[27.5,8.828],
+  [28.0,8.955],[28.5,9.081],[29.0,9.207],[29.5,9.332],[30.0,9.457],
+  [30.5,9.583],[31.0,9.707],[31.5,9.832],[32.0,9.957],[32.5,10.08],
+  [33.0,10.20],[33.5,10.33],[34.0,10.45],[34.5,10.58],[35.0,10.70],
+  [35.5,10.82],[36.0,10.94],[36.5,11.07],[37.5,11.31],[38.0,11.44],
+  [38.5,11.56],[39.0,11.69],[39.5,11.81],[40.0,11.94],[41.0,12.18],
+  [42.0,12.43],[43.0,12.67],[44.0,12.91],[45.0,13.16],[45.5,13.27],
+  [46.0,13.38],[46.5,13.49],[47.0,13.61],[47.5,13.73],[48.0,13.85],
+  [48.5,13.97],[49.0,14.09],[49.5,14.20],[50.0,14.32],[51.0,14.56],
+  [52.0,14.80],[53.0,15.04],[54.0,15.27],[55.0,15.51],[56.0,15.74],
+  [57.0,15.98],[58.0,16.22],[59.0,16.45],[60.0,16.69],[61.0,16.92],
+  [62.0,17.15],[63.0,17.39],
+];
+
+// ============================================================
+// ИНТЕРПОЛЯЦИЯ α по таблице Б.2
+// ============================================================
+function getAlpha(NP) {
+  if (NP <= 0) return 0.200;
+  if (NP < 0.015) return 0.200;
+  if (NP >= B2[B2.length-1][0]) {
+    // За пределами таблицы — аппроксимация по формуле
+    return 1.72 * Math.pow(NP, 0.49) - 0.5;
+  }
+  for (let i = 0; i < B2.length - 1; i++) {
+    if (NP >= B2[i][0] && NP <= B2[i+1][0]) {
+      const k = (NP - B2[i][0]) / (B2[i+1][0] - B2[i][0]);
+      return B2[i][1] + k * (B2[i+1][1] - B2[i][1]);
+    }
+  }
+  return 0.200;
+}
+
+// ============================================================
+// UI
+// ============================================================
+let gid = 0;
+const SEL = TBL.map((c,i) => `<option value="${i}">${c.label}</option>`).join('');
+
+function addGroup(ti=0, U=100) {
+  const id = gid++;
+  const d = document.createElement('div');
+  d.className = 'row'; d.id = 'g' + id;
+  d.innerHTML = `<select>${SEL.replace(`value="${ti}"`, `value="${ti}" selected`)}</select>`
+    + `<input type="number" value="${U}" min="1">`
+    + `<button class="del" onclick="this.parentNode.remove()">×</button>`;
+  document.getElementById('groups').appendChild(d);
+}
+
+function f(v, n=3) { return (isNaN(v)||!isFinite(v)) ? '—' : v.toFixed(n); }
+function mc(l, v, u) {
+  return `<div class="met"><div class="met-lbl">${l}</div><div class="met-val">${v} <span class="met-unit">${u}</span></div></div>`;
+}
+
+// ============================================================
+// ОСНОВНОЙ БЛОК РАСЧЁТА
+// Алгоритм:
+//   СЕКУНДНЫЙ:
+//     NP_i = q_hr_u_i × U_i / (q0_i × 3600)
+//     ∑NP  = сумма всех NP_i
+//     q0_avg = ∑(NP_i × q0_i) / ∑NP  (средневзвешенное)
+//     α из таблицы Б.2 по ∑NP
+//     q_sec = 5 × q0_avg × α
+//
+//   ЧАСОВОЙ:
+//     NP_hr_i = 3600 × NP_сек_i × q0_i / q0hr_i
+//     ∑NP_hr  = сумма всех NP_hr_i
+//     q0hr_avg = ∑(NP_hr_i × q0hr_i) / ∑NP_hr
+//     α_hr из таблицы Б.2 по ∑NP_hr
+//     q_hr = 0.005 × q0hr_avg × α_hr
+// ============================================================
+function calcBlock(groups, qhr_fn, q0_fn, q0hr_fn, label, log) {
+  // --- СЕКУНДНЫЙ ---
+  let items = [], sum_np = 0, sum_npq0 = 0;
+  log.push(`<b>${label} — секундный:</b>`);
+  for (const g of groups) {
+    const qhr = qhr_fn(g.c), q0 = q0_fn(g.c);
+    if (!q0 || !qhr || qhr <= 0) continue;
+    const np = qhr * g.U / (q0 * 3600);
+    items.push({np, q0, g});
+    sum_np   += np;
+    sum_npq0 += np * q0;
+    log.push(`&nbsp;&nbsp;NP = ${qhr}×${g.U} / (${q0}×3600) = <b>${f(np,4)}</b> &nbsp;[${g.c.label.split('(')[0].trim()}, ${g.U} ${g.c.um}]`);
+  }
+  if (!sum_np) return {q_sec:0, q_hr:0};
+  const q0_avg = sum_npq0 / sum_np;
+  const alpha  = getAlpha(sum_np);
+  const q_sec  = 5 * q0_avg * alpha;
+  log.push(`&nbsp;&nbsp;∑NP = <b>${f(sum_np,4)}</b>`);
+  if (items.length > 1)
+    log.push(`&nbsp;&nbsp;q₀ = (${items.map(x=>`${f(x.np,4)}×${x.q0}`).join(' + ')}) / ${f(sum_np,4)} = <b>${f(q0_avg,4)} л/с</b>`);
+  else
+    log.push(`&nbsp;&nbsp;q₀ = <b>${f(q0_avg,4)} л/с</b>`);
+  log.push(`&nbsp;&nbsp;α = <b>${f(alpha,3)}</b> &nbsp;→&nbsp; q = 5 × ${f(q0_avg,4)} × ${f(alpha,3)} = <b>${f(q_sec,3)} л/с</b>`);
+
+  // --- ЧАСОВОЙ ---
+  let items_hr = [], sum_nph = 0, sum_nphq0hr = 0;
+  log.push(`<b>${label} — часовой:</b>`);
+  for (const x of items) {
+    const q0hr = q0hr_fn(x.g.c);
+    if (!q0hr) continue;
+    const nph = 3600 * x.np * x.q0 / q0hr;
+    items_hr.push({nph, q0hr, g:x.g});
+    sum_nph     += nph;
+    sum_nphq0hr += nph * q0hr;
+    log.push(`&nbsp;&nbsp;NP = 3600 × ${f(x.np,4)} × ${x.q0} / ${q0hr} = <b>${f(nph,4)}</b> &nbsp;[${x.g.c.label.split('(')[0].trim()}]`);
+  }
+  if (!sum_nph) return {q_sec, q_hr:0};
+  const q0hr_avg = sum_nphq0hr / sum_nph;
+  const alpha_hr = getAlpha(sum_nph);
+  const q_hr     = 0.005 * q0hr_avg * alpha_hr;
+  log.push(`&nbsp;&nbsp;∑NP = <b>${f(sum_nph,4)}</b>`);
+  if (items_hr.length > 1)
+    log.push(`&nbsp;&nbsp;q₀ₕᵣ = (${items_hr.map(x=>`${f(x.nph,4)}×${x.q0hr}`).join(' + ')}) / ${f(sum_nph,4)} = <b>${f(q0hr_avg,2)} л/ч</b>`);
+  else
+    log.push(`&nbsp;&nbsp;q₀ₕᵣ = <b>${f(q0hr_avg,2)} л/ч</b>`);
+  log.push(`&nbsp;&nbsp;α = <b>${f(alpha_hr,3)}</b> &nbsp;→&nbsp; q = 0.005 × ${f(q0hr_avg,2)} × ${f(alpha_hr,3)} = <b>${f(q_hr,4)} м³/ч</b>`);
+
+  return {q_sec, q_hr};
+}
+
+function calculate() {
+  document.getElementById('err').textContent = '';
+  document.getElementById('results').style.display = 'none';
+  const rows = [...document.getElementById('groups').children];
+  if (!rows.length) { document.getElementById('err').textContent = 'Добавьте хотя бы одну группу'; return; }
+  const k06 = document.getElementById('k06_check').checked ? 0.6 : 1.0;
+  const groups = rows
+    .map(r => ({c: TBL[+r.querySelector('select').value], U: Math.round((+r.querySelector('input').value||0) * k06)}))
+    .filter(g => g.U > 0);
+  if (!groups.length) { document.getElementById('err').textContent = 'Укажите количество потребителей'; return; }
+  if (k06 < 1) log.push('<b>⚠ Применён коэффициент 0,6 (бытовой корпус, примечание 7 СП 30)</b>');
+
+  const log = [];
+  log.push('<b>═══ 1. СЕКУНДНЫЙ И ЧАСОВОЙ РАСХОДЫ ═══</b>');
+  const tot = calcBlock(groups, c=>c.q_hr_tot,          c=>c.q0_tot, c=>c.q0hr_tot, 'Общий (tot)', log);
+  const hot = calcBlock(groups, c=>c.q_hr_h,            c=>c.q0_h,   c=>c.q0hr_h,   'Горячий (h)', log);
+  const cld = calcBlock(groups, c=>c.q_hr_tot-c.q_hr_h, c=>c.q0_c,   c=>c.q0hr_c,   'Холодный (c)', log);
+
+  log.push('<b>═══ 2. СУТОЧНЫЙ РАСХОД (арифметическая сумма) ═══</b>');
+  const day_tot = groups.reduce((s,g) => s + g.c.qu_tot * g.U / 1000, 0);
+  const day_h   = groups.reduce((s,g) => s + g.c.qu_h   * g.U / 1000, 0);
+  const day_c   = day_tot - day_h;
+  for (const g of groups)
+    log.push(`&nbsp;&nbsp;${g.c.qu_tot}×${g.U}/1000 = <b>${f(g.c.qu_tot*g.U/1000,3)} м³/сут</b> &nbsp;[${g.c.label.split('(')[0].trim()}]`);
+  log.push(`&nbsp;&nbsp;q<sub>сут</sub><sup>tot</sup> = <b>${f(day_tot,3)}</b> &nbsp; q<sub>сут</sub><sup>h</sup> = <b>${f(day_h,3)}</b> &nbsp; q<sub>сут</sub><sup>c</sup> = <b>${f(day_c,3)}</b> м³/сут`);
+
+  log.push('<b>═══ 3. СТОКИ И ТЕПЛО ═══</b>');
+  const q_stok = tot.q_sec + 1.6;
+  const Q_max  = 1.16 * hot.q_hr * (65 - 5);
+  const Q_avg  = 1.16 * (day_h / 24) * (65 - 5);
+  log.push(`&nbsp;&nbsp;q<sub>стоки</sub> = ${f(tot.q_sec,3)} + 1.6 = <b>${f(q_stok,3)} л/с</b>`);
+  log.push(`&nbsp;&nbsp;Q<sub>макс</sub> = 1.16 × ${f(hot.q_hr,4)} × (65-5) = <b>${f(Q_max,1)} кВт</b>`);
+  log.push(`&nbsp;&nbsp;Q<sub>ср</sub> = 1.16 × ${f(day_h,3)}/24 × (65-5) = <b>${f(Q_avg,1)} кВт</b>`);
+
+  document.getElementById('r-tot').innerHTML = mc('Секундный',f(tot.q_sec,3),'л/с') + mc('Часовой',f(tot.q_hr,3),'м³/ч') + mc('Суточный',f(day_tot,2),'м³/сут');
+  document.getElementById('r-c').innerHTML   = mc('Секундный',f(cld.q_sec,3),'л/с') + mc('Часовой',f(cld.q_hr,3),'м³/ч') + mc('Суточный',f(day_c,2),'м³/сут');
+  document.getElementById('r-h').innerHTML   = mc('Секундный',f(hot.q_sec,3),'л/с') + mc('Часовой',f(hot.q_hr,3),'м³/ч') + mc('Суточный',f(day_h,2),'м³/сут');
+  document.getElementById('r-ex').innerHTML  = mc('Расход стоков',f(q_stok,3),'л/с') + mc('Q макс ГВС',f(Q_max,1),'кВт') + mc('Q ср ГВС',f(Q_avg,1),'кВт');
+  document.getElementById('steps').innerHTML = log.join('<br>');
+  document.getElementById('results').style.display = 'block';
+
+  // Автозаполнение блока счётчиков
+  document.getElementById('m_q_sec_tot').value = f(tot.q_sec, 3);
+  document.getElementById('m_q_sec_c').value   = f(cld.q_sec, 3);
+  document.getElementById('m_q_sec_h').value   = f(hot.q_sec, 3);
+  document.getElementById('m_q_day_tot').value = f(day_tot, 3);
+  document.getElementById('m_q_day_c').value   = f(day_c,   3);
+  document.getElementById('m_q_day_h').value   = f(day_h,   3);
+  document.getElementById('m_q_hr_c').value    = f(cld.q_hr, 3);
+  document.getElementById('m_q_hr_h').value    = f(hot.q_hr, 3);
+  calcMeters();
+}
+
+addGroup(17, 480);
+
+// ============================================================
+// КАЛЬКУЛЯТОР ОБЩЕПИТА (примечание 8)
+// Uч = 2.2 × n × m
+// Uсут = Uч × T × y
+// ============================================================
+function calcCafe() {
+  const type = document.getElementById('cafe_type').value;
+  const customRow = document.getElementById('cafe_custom_row');
+  let m, y;
+  if (type === 'custom') {
+    customRow.style.display = 'grid';
+    m = +document.getElementById('cafe_m_custom').value || 2;
+    y = +document.getElementById('cafe_y_custom').value || 1.0;
+  } else {
+    customRow.style.display = 'none';
+    [m, y] = type.split('|').map(Number);
+  }
+  const n = +document.getElementById('cafe_n').value || 0;
+  const T = +document.getElementById('cafe_T').value || 0;
+  if (!n || !T) return;
+  const Uch  = 2.2 * n * m;
+  const Usut = Uch * T * y;
+  document.getElementById('cafe_result').innerHTML =
+    `U<sub>ч</sub> = 2,2 × ${n} × ${m} = <b>${Uch.toFixed(0)} усл. блюд/ч</b><br>`
+    + `U<sub>сут</sub> = ${Uch.toFixed(0)} × ${T} × ${y} = <b>${Usut.toFixed(0)} усл. блюд/сут</b><br>`
+    + `<span style="color:#888">→ введите <b>${Usut.toFixed(0)}</b> в поле "Кол-во U" для строки "Предприятия общепита"</span>`;
+}
+calcCafe();
+</script>
+
+<!-- БЛОК ПОЛИВА -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Расход воды на поливку (п. 26-27 СП 30)</div>
+  <p style="font-size:12px;color:#888;margin-bottom:.5rem">Оставьте площадь = 0 если данный тип отсутствует. Суточный расход на полив суммируется к водопотреблению, но не учитывается в стоках (п. 5.13 СП 30).</p>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;font-size:13px">
+    <label for="irr_times" style="color:#444">Число поливок в сутки (прим. 6):</label>
+    <select id="irr_times" onchange="calcIrr()" style="width:auto;padding:4px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+      <option value="1" selected>1 (по умолчанию)</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+  </div>
+
+  <div class="irr-row">
+    <span>Травяной покров</span>
+    <input type="number" id="ir_grass" value="0" min="0"> м²
+    <span class="irr-norm">3 л/м²</span>
+  </div>
+  <div class="irr-row">
+    <span>Футбольное поле</span>
+    <input type="number" id="ir_football" value="0" min="0"> м²
+    <span class="irr-norm">0,5 л/м²</span>
+  </div>
+  <div class="irr-row">
+    <span>Прочие спортивные сооружения</span>
+    <input type="number" id="ir_sport" value="0" min="0"> м²
+    <span class="irr-norm">1,5 л/м²</span>
+  </div>
+  <div class="irr-row">
+    <span>Усоверш. покрытия, тротуары, площади</span>
+    <input type="number" id="ir_paving" value="0" min="0"> м²
+    <select id="ir_paving_norm" style="width:auto;padding:4px 6px;font-size:12px">
+      <option value="0.4">0,4 л/м²</option>
+      <option value="0.5" selected>0,5 л/м²</option>
+    </select>
+  </div>
+  <div class="irr-row">
+    <span>Зелёные насаждения, газоны, цветники</span>
+    <input type="number" id="ir_lawn" value="0" min="0"> м²
+    <select id="ir_lawn_norm" style="width:auto;padding:4px 6px;font-size:12px">
+      <option value="6">Песок — 6 л/м²</option>
+      <option value="4" selected>Суглинок — 4 л/м²</option>
+      <option value="3">Глина — 3 л/м²</option>
+    </select>
+  </div>
+  <div class="irr-row" style="border-top:1px solid #eee;margin-top:.5rem;padding-top:.75rem">
+    <span>Каток (заливка, 1 раз за зиму)</span>
+    <input type="number" id="ir_rink" value="0" min="0"> м²
+    <span class="irr-norm">0,5 л/м²</span>
+  </div>
+
+  <div id="irr_result" style="display:none;margin-top:1rem;background:#f5f5f5;border-radius:6px;padding:.75rem 1rem;font-size:13px;line-height:2"></div>
+</div>
+
+<script>
+// Пересчёт полива при любом изменении
+['ir_grass','ir_football','ir_sport','ir_paving','ir_paving_norm','ir_lawn','ir_lawn_norm','ir_rink','irr_times'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', calcIrr);
+  document.getElementById(id).addEventListener('change', calcIrr);
+});
+
+function calcIrr() {
+  const grass    = (+document.getElementById('ir_grass').value||0) * 3;
+  const football = (+document.getElementById('ir_football').value||0) * 0.5;
+  const sport    = (+document.getElementById('ir_sport').value||0) * 1.5;
+  const paving   = (+document.getElementById('ir_paving').value||0) * (+document.getElementById('ir_paving_norm').value);
+  const lawn     = (+document.getElementById('ir_lawn').value||0) * (+document.getElementById('ir_lawn_norm').value);
+  const rink     = (+document.getElementById('ir_rink').value||0) * 0.5;
+
+  const irr_times = +document.getElementById('irr_times').value || 1;
+  const total_summer = (grass + football + sport + paving + lawn) * irr_times; // л/сут
+  const total_winter = rink; // л/сут (1 раз за зиму)
+  const total_m3 = total_summer / 1000;
+  const rink_m3  = total_winter / 1000;
+
+  if (total_summer === 0 && total_winter === 0) {
+    document.getElementById('irr_result').style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  if (grass)    html += `Травяной покров: ${(+document.getElementById('ir_grass').value).toLocaleString()} м² × 3 = <b>${(grass/1000).toFixed(3)} м³/сут</b><br>`;
+  if (football) html += `Футбольное поле: ${(+document.getElementById('ir_football').value).toLocaleString()} м² × 0,5 = <b>${(football/1000).toFixed(3)} м³/сут</b><br>`;
+  if (sport)    html += `Спортивные сооружения: ${(+document.getElementById('ir_sport').value).toLocaleString()} м² × 1,5 = <b>${(sport/1000).toFixed(3)} м³/сут</b><br>`;
+  if (paving)   html += `Покрытия/тротуары: ${(+document.getElementById('ir_paving').value).toLocaleString()} м² × ${document.getElementById('ir_paving_norm').value} = <b>${(paving/1000).toFixed(3)} м³/сут</b><br>`;
+  if (lawn)     html += `Газоны/цветники: ${(+document.getElementById('ir_lawn').value).toLocaleString()} м² × ${document.getElementById('ir_lawn_norm').value} = <b>${(lawn/1000).toFixed(3)} м³/сут</b><br>`;
+  if (rink)     html += `Каток (1 раз за зиму): ${(+document.getElementById('ir_rink').value).toLocaleString()} м² × 0,5 = <b>${(rink_m3).toFixed(3)} м³</b><br>`;
+  if (irr_times > 1) html += `Число поливок в сутки: <b>${irr_times}</b><br>`;
+  html += `<b>Итого полив (лето): ${total_m3.toFixed(3)} м³/сут</b>`;
+  if (rink) html += `<br><b>Итого каток (зима): ${rink_m3.toFixed(3)} м³ (разово)</b>`;
+  html += `<br><span style="color:#888;font-size:11px">⚠ Полив учитывается в суточном водопотреблении, но не в стоках (п. 5.13 СП 30)</span>`;
+
+  document.getElementById('irr_result').innerHTML = html;
+  document.getElementById('irr_result').style.display = 'block';
+}
+</script>
+
+<style>
+.irr-row{display:grid;grid-template-columns:2fr 0.7fr auto auto;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
+.irr-row input{padding:5px 8px;font-size:13px;background:#f5f5f5;border:1px solid #ccc;border-radius:6px;width:100%}
+.irr-norm{font-size:11px;color:#888;white-space:nowrap}
+</style>
+
+<!-- БЛОК ВОДОСТОКОВ -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Водостоки кровли (СП 30 + СП 32.13330)</div>
+  <p style="font-size:12px;color:#888;margin-bottom:1rem">
+    Q = F × q₅ / 10000 &nbsp;|&nbsp; q₅ = 4ⁿ × q₂₀ &nbsp;|&nbsp; F = F<sub>кр</sub> + 0,3 × F<sub>ст</sub>
+  </p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;position:relative">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Город объекта</div>
+      <input type="text" id="city_input" placeholder="Начните вводить город..." oninput="citySearch()" autocomplete="off"
+        style="width:100%;padding:6px 10px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+      <div id="city_dropdown" style="display:none;position:absolute;top:58px;left:0;background:#fff;border:1px solid #ccc;border-radius:6px;z-index:100;max-height:200px;overflow-y:auto;width:280px;box-shadow:0 4px 12px rgba(0,0,0,0.12)"></div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Период P (лет)</div>
+      <select id="storm_P" onchange="calcStorm()" style="width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="1" selected>P = 1 (1 раз в год)</option>
+        <option value="2">P = 2</option>
+        <option value="3">P = 3</option>
+        <option value="5">P = 5</option>
+        <option value="10">P = 10</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="city_selected" style="font-size:12px;color:#666;margin-bottom:8px;min-height:18px"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Площадь кровли F<sub>кр</sub>, м²</div>
+      <input type="number" id="storm_F_roof" value="0" min="0" oninput="calcStorm()"
+        style="width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Площадь вертик. стен F<sub>ст</sub>, м²</div>
+      <input type="number" id="storm_F_walls" value="0" min="0" oninput="calcStorm()"
+        style="width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+  </div>
+
+  <div id="storm_result" style="display:none;margin-top:.75rem;background:#f5f5f5;border-radius:6px;padding:.75rem 1rem;font-size:13px;line-height:2.2"></div>
+</div>
+
+<script>
+// ============================================================
+// БАЗА ГОРОДОВ
+// q20 — по карте приложения Б СП 32.13330.2018, л/(с·га), P=1
+// n   — таблица 8 СП 32, при P≤1
+// ============================================================
+const CITIES = [
+  {name:"Москва",                   q20:80,  n:0.71, region:"Равнинные области запада и центра Европейской части России"},
+  {name:"Санкт-Петербург",          q20:60,  n:0.62, region:"Север Европейской части России и Западной Сибири"},
+  {name:"Мурманск",                 q20:40,  n:0.40, region:"Побережье Белого и Баренцева морей"},
+  {name:"Архангельск",              q20:50,  n:0.40, region:"Побережье Белого и Баренцева морей"},
+  {name:"Калининград",              q20:70,  n:0.71, region:"Равнинные области запада и центра Европейской части России"},
+  {name:"Нижний Новгород",          q20:80,  n:0.71, region:"Равнинные области запада и центра Европейской части России"},
+  {name:"Казань",                   q20:70,  n:0.71, region:"Равнинные области запада и центра Европейской части России"},
+  {name:"Самара",                   q20:70,  n:0.67, region:"Низовье Волги и Дона, Южный Крым"},
+  {name:"Волгоград",                q20:60,  n:0.67, region:"Низовье Волги и Дона, Южный Крым"},
+  {name:"Воронеж",                  q20:80,  n:0.71, region:"Равнинные области запада и центра Европейской части России"},
+  {name:"Ростов-на-Дону",           q20:70,  n:0.67, region:"Низовье Волги и Дона, Южный Крым"},
+  {name:"Краснодар",                q20:80,  n:0.70, region:"Наветренные склоны возвышенностей и Северное Предкавказье"},
+  {name:"Сочи",                     q20:110, n:0.62, region:"Черноморское побережье и западный склон Большого Кавказа"},
+  {name:"Севастополь",              q20:60,  n:0.67, region:"Низовье Волги и Дона, Южный Крым"},
+  {name:"Махачкала",                q20:60,  n:0.57, region:"Южный склон Большого Кавказа, Дагестан"},
+  {name:"Пятигорск",                q20:80,  n:0.63, region:"Ставропольская возвышенность, северные предгорья Кавказа"},
+  {name:"Екатеринбург",             q20:60,  n:0.71, region:"Возвышенности Европейской части России, западный склон Урала"},
+  {name:"Челябинск",                q20:60,  n:0.71, region:"Возвышенности Европейской части России, западный склон Урала"},
+  {name:"Пермь",                    q20:60,  n:0.71, region:"Возвышенности Европейской части России, западный склон Урала"},
+  {name:"Тюмень",                   q20:60,  n:0.62, region:"Север Европейской части России и Западной Сибири"},
+  {name:"Оренбург",                 q20:60,  n:0.65, region:"Нижнее Поволжье"},
+  {name:"Новосибирск",              q20:70,  n:0.72, region:"Южная часть Западной Сибири"},
+  {name:"Омск",                     q20:60,  n:0.72, region:"Южная часть Западной Сибири"},
+  {name:"Красноярск",               q20:70,  n:0.69, region:"Средняя Сибирь"},
+  {name:"Иркутск",                  q20:80,  n:0.60, region:"Восточная Сибирь"},
+  {name:"Якутск",                   q20:30,  n:0.60, region:"Восточная Сибирь"},
+  {name:"Хабаровск",                q20:90,  n:0.65, region:"Бассейны рек Шилки и Аргуни, долина Среднего Амура"},
+  {name:"Владивосток",              q20:90,  n:0.65, region:"Район о. Ханка"},
+  {name:"Южно-Сахалинск",           q20:60,  n:0.45, region:"Бассейны рек Японского моря, о. Сахалин"},
+  {name:"Петропавловск-Камчатский", q20:50,  n:0.36, region:"Побережье Охотского моря, бассейны рек Берингова моря"},
+];
+
+// Коэффициент γ для пересчёта q20 при P > 1 (таблица 9 СП 32)
+const GAMMA = {1:1.0, 2:1.20, 3:1.38, 5:1.59, 10:1.87};
+
+let selectedCity = null;
+
+function citySearch() {
+  const val = document.getElementById('city_input').value.trim().toLowerCase();
+  const dd  = document.getElementById('city_dropdown');
+  if (!val) { dd.style.display='none'; return; }
+  const matches = CITIES.filter(c => c.name.toLowerCase().includes(val));
+  if (!matches.length) { dd.style.display='none'; return; }
+  dd.innerHTML = matches.map(c =>
+    `<div onclick="selectCity('${c.name}')"
+      style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0"
+      onmouseover="this.style.background='#f5f5f5'"
+      onmouseout="this.style.background='#fff'">${c.name}</div>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+function selectCity(name) {
+  selectedCity = CITIES.find(c => c.name === name);
+  document.getElementById('city_input').value = name;
+  document.getElementById('city_dropdown').style.display = 'none';
+  document.getElementById('city_selected').innerHTML =
+    `q₂₀ = <b>${selectedCity.q20} л/(с·га)</b> &nbsp;|&nbsp; n = <b>${selectedCity.n}</b>`
+    + `&nbsp;|&nbsp; <span style="color:#aaa;font-size:11px">${selectedCity.region}</span>`;
+  calcStorm();
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#city_input') && !e.target.closest('#city_dropdown'))
+    document.getElementById('city_dropdown').style.display = 'none';
+});
+
+function calcStorm() {
+  if (!selectedCity) return;
+  const F_roof  = +document.getElementById('storm_F_roof').value  || 0;
+  const F_walls = +document.getElementById('storm_F_walls').value || 0;
+  const P       = +document.getElementById('storm_P').value       || 1;
+  if (!F_roof) { document.getElementById('storm_result').style.display='none'; return; }
+
+  const F     = F_roof + 0.3 * F_walls;
+  const q20   = selectedCity.q20;
+  const n     = selectedCity.n;
+  const g     = GAMMA[P] || 1.0;
+  const q20_P = q20 * g;
+  const q5    = Math.pow(4, n) * q20_P;
+  const Q     = F * q5 / 10000;
+
+  let html = `F = ${F_roof.toLocaleString()} + 0,3×${F_walls.toLocaleString()} = <b>${F.toFixed(1)} м²</b><br>`;
+  html += `q₂₀ = ${q20} л/(с·га)`;
+  if (P > 1) html += ` × γ(P=${P}) = ${q20} × ${g} = <b>${q20_P.toFixed(1)} л/(с·га)</b>`;
+  html += `<br>q₅ = 4<sup>${n}</sup> × ${q20_P.toFixed(1)} = <b>${q5.toFixed(2)} л/(с·га)</b><br>`;
+  html += `<b style="font-size:15px">Q = ${F.toFixed(1)} × ${q5.toFixed(2)} / 10000 = ${Q.toFixed(3)} л/с</b><br>`;
+  html += `<span style="color:#aaa;font-size:11px">q₂₀: карта приложения Б СП 32.13330.2018 &nbsp;|&nbsp; n: таблица 8 СП 32</span>`;
+
+  document.getElementById('storm_result').innerHTML = html;
+  document.getElementById('storm_result').style.display = 'block';
+}
+</script>
+
+<!-- БЛОК ПОДБОРА СЧЁТЧИКОВ -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Подбор счётчиков воды (п. 12.14–12.17 СП 30.13330.2020)</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Тип ГВС</div>
+      <select id="m_gvs_type" onchange="calcMeters()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="central">Централизованное ГВС (2 счётчика: ХВС + ГВС)</option>
+        <option value="local">Местный нагрев (3 счётчика: общий ввод + ХВС + ГВС перед нагревателем)</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Период потребления T, ч</div>
+      <select id="m_T" onchange="calcMeters()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="24" selected>24 ч (жильё, круглосуточно)</option>
+        <option value="12">12 ч (две смены)</option>
+        <option value="8">8 ч (одна смена)</option>
+        <option value="10">10 ч</option>
+        <option value="16">16 ч</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Q<sub>пож</sub> — расход на пожаротушение, л/с</div>
+      <input type="number" id="m_qfire" value="0" min="0" step="0.1" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+      <div style="font-size:11px;color:#aaa;margin-top:2px">0 если пожаротушение не предусмотрено</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Количество вводов</div>
+      <select id="m_vvods" onchange="calcMeters()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="1" selected>1 ввод</option>
+        <option value="2">2 ввода</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Тип здания</div>
+      <select id="m_bldg" onchange="calcMeters()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="public" selected>Общественное / жилое многокв.</option>
+        <option value="individual">Индивидуальный жилой дом</option>
+      </select>
+    </div>
+  </div>
+
+  <p style="font-size:12px;color:#888;margin-bottom:.5rem">
+    Расходы подтягиваются автоматически после нажатия «Рассчитать» в основном блоке.
+    Или введите вручную:
+  </p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem">
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сек</sub><sup>tot</sup>, л/с</div>
+      <input type="number" id="m_q_sec_tot" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сек</sub><sup>c</sup>, л/с</div>
+      <input type="number" id="m_q_sec_c" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сек</sub><sup>h</sup>, л/с</div>
+      <input type="number" id="m_q_sec_h" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сут</sub><sup>tot</sup>, м³/сут</div>
+      <input type="number" id="m_q_day_tot" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сут</sub><sup>c</sup>, м³/сут</div>
+      <input type="number" id="m_q_day_c" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>сут</sub><sup>h</sup>, м³/сут</div>
+      <input type="number" id="m_q_day_h" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>час</sub><sup>c</sup>, м³/ч</div>
+      <input type="number" id="m_q_hr_c" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div>
+      <div style="font-size:11px;color:#666;margin-bottom:3px">q<sub>час</sub><sup>h</sup>, м³/ч</div>
+      <input type="number" id="m_q_hr_h" value="0" step="0.01" oninput="calcMeters()"
+        style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+  </div>
+
+  <div id="meters_result" style="display:none"></div>
+</div>
+
+<script>
+// ============================================================
+// ТАБЛИЦА 12.1 СП 30.13330.2020
+// d — диаметр мм, qmin/qexpl/qmax — м³/ч, qthr — порог чувств.
+// qday_max — макс объём м³/сут, S — гидр. сопротивление м/(л/с)²
+// type: w=крыльчатый, t=турбинный
+// ============================================================
+const METERS = [
+  {d:15,  qmin:0.03, qexpl:1.2,  qmax:3,   qthr:0.015, S:14.5,        type:'w'},
+  {d:20,  qmin:0.05, qexpl:2,    qmax:5,   qthr:0.025, S:5.18,        type:'w'},
+  {d:25,  qmin:0.07, qexpl:2.8,  qmax:7,   qthr:0.035, S:2.64,        type:'w'},
+  {d:32,  qmin:0.1,  qexpl:4,    qmax:10,  qthr:0.05,  S:1.3,         type:'w'},
+  {d:40,  qmin:0.16, qexpl:6.4,  qmax:16,  qthr:0.08,  S:0.5,         type:'w'},
+  {d:50,  qmin:0.3,  qexpl:12,   qmax:30,  qthr:0.15,  S:0.143,       type:'w'},
+  {d:65,  qmin:1.5,  qexpl:17,   qmax:70,  qthr:0.6,   S:81e-5*1e4,   type:'t'},  // S=0.081
+  {d:80,  qmin:2,    qexpl:36,   qmax:110, qthr:0.7,   S:264e-5*1e4,  type:'t'},  // S=0.0264 — wait, нужно пересчитать
+  {d:100, qmin:3,    qexpl:65,   qmax:180, qthr:1.2,   S:76.6e-5*1e4, type:'t'},
+  {d:150, qmin:4,    qexpl:140,  qmax:350, qthr:1.6,   S:13e-5*1e4,   type:'t'},
+  {d:200, qmin:6,    qexpl:210,  qmax:600, qthr:3,     S:3.5e-5*1e4,  type:'t'},
+  {d:250, qmin:15,   qexpl:380,  qmax:1000,qthr:7,     S:1.8e-5*1e4,  type:'t'},
+];
+
+// Правильные S для турбинных из таблицы 12.1 (м/(л/с)²)
+// В таблице записано как 81×10⁻⁵ м/(л/с)² но это уже в л/с
+// Перепроверим: для d65 S=81×10⁻⁵ × (1 л/с)² = 0.00081 м - слишком мало
+// В твоих расчётах офиса: h=S×q²=1.3×1.5²=2.93 м (d32) — верно, S в м/(л/с)²
+// Для d65: S=81×10⁻⁵ ... нет, в расчёте бассейна: S=810×10⁻⁵×q² — значит S=0.0081
+// Исправляем:
+METERS[6].S  = 81   * 1e-5 * 1e4 / 1e4;  // = 0.0081  д65
+METERS[7].S  = 264  * 1e-5 * 1e4 / 1e4;  // = 0.00264 д80 — нет
+// Из расчёта бассейна: h=264×10⁻⁵×21.46²=1.22 м.вст — здесь q в л/с
+// Значит S=264×10⁻⁵ = 0.00264 м/(л/с)²
+METERS[6].S  = 81   * 1e-5;   // 0.00081
+METERS[7].S  = 264  * 1e-5;   // 0.00264
+METERS[8].S  = 76.6 * 1e-5;   // 0.000766
+METERS[9].S  = 13   * 1e-5;   // 0.00013
+METERS[10].S = 3.5  * 1e-5;   // 0.000035
+METERS[11].S = 1.8  * 1e-5;   // 0.000018
+
+function pickMeter(q_sr_hr) {
+  // Выбираем наименьший счётчик у которого qexpl >= q_sr_hr
+  for (const m of METERS) {
+    if (m.qexpl >= q_sr_hr) return m;
+  }
+  return METERS[METERS.length-1];
+}
+
+function checkMeter(m, q_sec, q_fire, q_hr, label, individual) {
+  const h_limit_a = m.type === 'w' ? 5   : 2.5;
+  const h_limit_b = m.type === 'w' ? 10  : 5;
+  const type_label = m.type === 'w' ? 'крыльчатый' : 'турбинный';
+  const q_sec_ls = q_sec; // уже в л/с
+
+  // Проверка а)
+  const h_a = m.S * q_sec_ls * q_sec_ls;
+  const ok_a = h_a <= h_limit_a;
+
+  // Проверка б) — только для ХВС/tot
+  let h_b = null, ok_b = true, need_bypass = false;
+  if (q_fire > 0) {
+    h_b = m.S * Math.pow(q_sec_ls + q_fire, 2);
+    ok_b = h_b <= h_limit_b;
+    if (!ok_b) need_bypass = true;
+  }
+
+  // Проверка в)
+  const ok_v = m.qthr <= q_hr;
+
+  let result = {m, ok_a, ok_b, ok_v, h_a, h_b, need_bypass, type_label, h_limit_a, h_limit_b, label, individual};
+
+  // Если не прошла а) — берём больший
+  if (!ok_a) {
+    const idx = METERS.indexOf(m);
+    if (idx < METERS.length - 1) {
+      return checkMeter(METERS[idx+1], q_sec, q_fire, q_hr, label, individual);
+    }
+  }
+
+  // Если не прошла в) — рекомендуем меньший (но только если прошла а))
+  // Конфликт а и в → комбинированный
+  result.need_combo = ok_a && !ok_v && m.d > 15;
+
+  return result;
+}
+
+function renderMeter(r) {
+  const ok_color = '#2a7a2a', err_color = '#c0392b', warn_color = '#b7770d';
+  let html = `<div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:.75rem">`;
+  html += `<div style="font-size:13px;font-weight:600;margin-bottom:.5rem">${r.label}</div>`;
+  html += `<div style="font-size:13px;margin-bottom:.25rem">`;
+  html += `Принят: <b>∅${r.m.d} мм</b> (${r.type_label}) &nbsp;|&nbsp; S = ${r.m.S} м/(л/с)² &nbsp;|&nbsp; Q<sub>экспл</sub> = ${r.m.qexpl} м³/ч</div>`;
+
+  // Проверка а
+  const col_a = r.ok_a ? ok_color : err_color;
+  html += `<div style="font-size:12px;color:${col_a}">`;
+  html += `✦ Проверка а): h = ${r.m.S} × ${r.h_a ? (Math.sqrt(r.h_a/r.m.S)).toFixed(3) : '?'}² = <b>${r.h_a ? r.h_a.toFixed(3) : '?'} м</b> `;
+  html += r.ok_a ? `≤ ${r.h_limit_a} м ✓` : `> ${r.h_limit_a} м ✗ → принят больший диаметр`;
+  html += `</div>`;
+
+  // Проверка б
+  if (r.h_b !== null) {
+    const col_b = r.ok_b ? ok_color : warn_color;
+    html += `<div style="font-size:12px;color:${col_b}">`;
+    html += `✦ Проверка б): h = ${r.m.S} × (q+Q<sub>пож</sub>)² = <b>${r.h_b.toFixed(3)} м</b> `;
+    html += r.ok_b ? `≤ ${r.h_limit_b} м ✓` : `> ${r.h_limit_b} м`;
+    if (r.need_bypass) {
+      html += ` → <b style="color:${err_color}">ТРЕБУЕТСЯ ОБВОДНАЯ ЛИНИЯ с электрозадвижкой (п. 12.10, 12.11 СП 30)</b>`;
+      if (!r.individual) html += `<br><span style="font-size:11px;color:#888">Электрозадвижка открывается от кнопок у ПК или от систем противопожарной автоматики</span>`;
+    }
+    html += `</div>`;
+  }
+
+  // Проверка в
+  const col_v = r.ok_v ? ok_color : warn_color;
+  html += `<div style="font-size:12px;color:${col_v}">`;
+  html += `✦ Проверка в): q<sub>min</sub> счётчика = ${r.m.qthr} м³/ч `;
+  if (r.ok_v) {
+    html += `✓ (измеряет минимальные расходы)`;
+  } else {
+    html += `— не измеряет малые расходы`;
+    if (r.need_combo) html += ` → <b>Рекомендован комбинированный счётчик</b>`;
+  }
+  html += `</div>`;
+
+  html += `</div>`;
+  return html;
+}
+
+function calcMeters() {
+  const gvs_type  = document.getElementById('m_gvs_type').value;
+  const T         = +document.getElementById('m_T').value || 24;
+  const q_fire    = +document.getElementById('m_qfire').value || 0;
+  const vvods     = +document.getElementById('m_vvods').value || 1;
+  const individual = document.getElementById('m_bldg').value === 'individual';
+
+  const q_sec_tot = +document.getElementById('m_q_sec_tot').value || 0;
+  const q_sec_c   = +document.getElementById('m_q_sec_c').value   || 0;
+  const q_sec_h   = +document.getElementById('m_q_sec_h').value   || 0;
+  const q_day_tot = +document.getElementById('m_q_day_tot').value || 0;
+  const q_day_c   = +document.getElementById('m_q_day_c').value   || 0;
+  const q_day_h   = +document.getElementById('m_q_day_h').value   || 0;
+  const q_hr_c    = +document.getElementById('m_q_hr_c').value    || 0;
+  const q_hr_h    = +document.getElementById('m_q_hr_h').value    || 0;
+
+  if (!q_sec_c && !q_sec_h && !q_sec_tot) {
+    document.getElementById('meters_result').style.display = 'none';
+    return;
+  }
+
+  let html = '';
+
+  if (gvs_type === 'central') {
+    // 2 счётчика: ХВС и ГВС
+    const sr_c = q_day_c / T;
+    const sr_h = q_day_h / T;
+
+    const m_c = pickMeter(sr_c);
+    const r_c = checkMeter(m_c, q_sec_c, q_fire, q_hr_c, 'Счётчик ХВС (холодная вода)', individual);
+    html += renderMeter(r_c);
+
+    const m_h = pickMeter(sr_h);
+    // ГВС — без пожара, без обводной (п.12.12)
+    const r_h = checkMeter(m_h, q_sec_h, 0, q_hr_h, 'Счётчик ГВС (горячая вода, п. 12.12 — обводная не требуется)', individual);
+    html += renderMeter(r_h);
+
+  } else {
+    // 3 счётчика: общий ввод, ХВС, ГВС перед нагревателем
+    const sr_tot = q_day_tot / T;
+    const sr_c   = q_day_c   / T;
+    const sr_h   = q_day_h   / T;
+
+    const m_tot = pickMeter(sr_tot);
+    const r_tot = checkMeter(m_tot, q_sec_tot, q_fire, q_hr_c + q_hr_h, 'Счётчик на вводе (общий, tot)', individual);
+    html += renderMeter(r_tot);
+
+    const m_c = pickMeter(sr_c);
+    const r_c = checkMeter(m_c, q_sec_c, 0, q_hr_c, 'Счётчик ХВС', individual);
+    html += renderMeter(r_c);
+
+    const m_h = pickMeter(sr_h);
+    const r_h = checkMeter(m_h, q_sec_h, 0, q_hr_h, 'Счётчик перед водонагревателем (ГВС, п. 12.12)', individual);
+    html += renderMeter(r_h);
+  }
+
+  // Примечание про обводную при 1 вводе
+  if (vvods === 1 && !individual) {
+    html += `<div style="font-size:12px;color:#888;background:#fffbf0;border:1px solid #f0d080;border-radius:6px;padding:.6rem .875rem">
+      ⚠ При одном вводе водопровода обводная линия у счётчика ХВС предусматривается обязательно (п. 12.10 СП 30).
+    </div>`;
+  }
+
+  document.getElementById('meters_result').innerHTML = html;
+  document.getElementById('meters_result').style.display = 'block';
+}
+</script>
+
+
+<!-- БЛОК ПОЖАРОТУШЕНИЯ ВПВ -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Расход на внутреннее пожаротушение ВПВ (СП 10.13130.2020)</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Тип здания</div>
+      <select id="f_type" onchange="updateFireFields()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="f13">Ф1.3 — Многоквартирные жилые дома</option>
+        <option value="f12_hotel">Ф1.2 — Гостиницы</option>
+        <option value="f12_hostel">Ф1.2 — Общежития коридорного типа</option>
+        <option value="f11">Ф1.1 — Больницы, дома престарелых, школы-интернаты</option>
+        <option value="f21_theater">Ф2.1 — Театры, кинотеатры, концертные залы, клубы, цирки</option>
+        <option value="f21_lib">Ф2.1 — Библиотеки, архивы, спортивные сооружения</option>
+        <option value="f22">Ф2.2 — Музеи, выставки, танцевальные залы; Ф3.1 — Магазины</option>
+        <option value="f_office">Ф1.2 Гостиницы / Ф3.4 Поликлиники / Ф3.6 Спортивные / Ф4.2 ВУЗы / Ф4.3 Офисы / Адм.-бытовые</option>
+        <option value="f5">Ф5.1/Ф5.2 — Производственные и складские здания</option>
+      </select>
+    </div>
+    <div id="f_floor_wrap">
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Количество этажей</div>
+      <input type="number" id="f_floors" value="10" min="1" max="100" oninput="calcFire()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+  </div>
+
+  <!-- Доп поля - показываются по типу здания -->
+  <div id="f_extra" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px"></div>
+
+  <!-- Параметры производственных зданий -->
+  <div id="f_prod_wrap" style="display:none;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Степень огнестойкости</div>
+      <select id="f_fire_deg" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="I_II">I и II</option>
+        <option value="III">III</option>
+        <option value="IV">IV</option>
+        <option value="V">V</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Категория по пожарн. опасности</div>
+      <select id="f_cat" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="AB">А или Б</option>
+        <option value="V">В</option>
+        <option value="GD">Г или Д</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Класс конструктивной опасности</div>
+      <select id="f_class" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="C0">С0</option>
+        <option value="C1">С1</option>
+        <option value="C2">С2</option>
+        <option value="C3">С3</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Объём здания, тыс. м³</div>
+      <input type="number" id="f_volume" value="5" min="0" step="0.1" oninput="calcFire()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+  </div>
+
+  <!-- Параметры ПК -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:.75rem">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Диаметр клапана ПК</div>
+      <select id="f_dn" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="50" selected>DN 50</option>
+        <option value="65">DN 65</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Диаметр ствола, мм</div>
+      <select id="f_nozzle" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="13" selected>13 мм</option>
+        <option value="16">16 мм</option>
+        <option value="19">19 мм</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Длина рукава, м</div>
+      <select id="f_hose" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="10">10 м</option>
+        <option value="15">15 м</option>
+        <option value="20" selected>20 м</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Высота струи, м</div>
+      <select id="f_jet" onchange="calcFire()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="6">6 м</option>
+        <option value="8">8 м</option>
+        <option value="10">10 м</option>
+        <option value="12" selected>12 м</option>
+        <option value="14">14 м</option>
+        <option value="16">16 м</option>
+        <option value="18">18 м</option>
+        <option value="20">20 м</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="fire_result" style="display:none;background:#f5f5f5;border-radius:6px;padding:.875rem 1rem;font-size:13px;line-height:2.2"></div>
+</div>
+
+<script>
+// ============================================================
+// ТАБЛИЦА 7.3 СП 10.13130.2020
+// Ключ: dn_nozzle_hose_jet → {q, p}
+// q — расход л/с, p — давление МПа у клапана
+// ============================================================
+const T73 = {
+  // DN50
+  '50_13_10_12': {q:2.6, p:0.202}, '50_13_15_12': {q:2.6, p:0.206}, '50_13_20_12': {q:2.6, p:0.210},
+  '50_13_10_14': {q:2.8, p:0.236}, '50_13_15_14': {q:2.8, p:0.241}, '50_13_20_14': {q:2.8, p:0.245},
+  '50_13_10_16': {q:3.2, p:0.316}, '50_13_15_16': {q:3.2, p:0.322}, '50_13_20_16': {q:3.2, p:0.328},
+  '50_13_10_18': {q:3.6, p:0.390}, '50_13_15_18': {q:3.6, p:0.398}, '50_13_20_18': {q:3.6, p:0.406},
+  '50_16_10_6':  {q:2.6, p:0.092}, '50_16_15_6':  {q:2.6, p:0.096}, '50_16_20_6':  {q:2.6, p:0.100},
+  '50_16_10_8':  {q:2.9, p:0.120}, '50_16_15_8':  {q:2.9, p:0.125}, '50_16_20_8':  {q:2.9, p:0.130},
+  '50_16_10_10': {q:3.3, p:0.151}, '50_16_15_10': {q:3.3, p:0.157}, '50_16_20_10': {q:3.3, p:0.164},
+  '50_16_10_12': {q:3.7, p:0.192}, '50_16_15_12': {q:3.7, p:0.196}, '50_16_20_12': {q:3.7, p:0.210},
+  '50_16_10_14': {q:4.2, p:0.248}, '50_16_15_14': {q:4.2, p:0.255}, '50_16_20_14': {q:4.2, p:0.263},
+  '50_16_10_16': {q:4.6, p:0.293}, '50_16_15_16': {q:4.6, p:0.300}, '50_16_20_16': {q:4.6, p:0.318},
+  '50_16_10_18': {q:5.1, p:0.360}, '50_16_15_18': {q:5.1, p:0.380}, '50_16_20_18': {q:5.1, p:0.400},
+  '50_19_10_6':  {q:3.4, p:0.088}, '50_19_15_6':  {q:3.4, p:0.096}, '50_19_20_6':  {q:3.4, p:0.104},
+  '50_19_10_8':  {q:4.1, p:0.129}, '50_19_15_8':  {q:4.1, p:0.138}, '50_19_20_8':  {q:4.1, p:0.148},
+  '50_19_10_10': {q:4.6, p:0.160}, '50_19_15_10': {q:4.6, p:0.173}, '50_19_20_10': {q:4.6, p:0.185},
+  '50_19_10_12': {q:5.2, p:0.206}, '50_19_15_12': {q:5.2, p:0.223}, '50_19_20_12': {q:5.2, p:0.240},
+  // DN65
+  '65_13_10_12': {q:2.6, p:0.198}, '65_13_15_12': {q:2.6, p:0.199}, '65_13_20_12': {q:2.6, p:0.201},
+  '65_13_10_14': {q:2.8, p:0.230}, '65_13_15_14': {q:2.8, p:0.231}, '65_13_20_14': {q:2.8, p:0.233},
+  '65_13_10_16': {q:3.2, p:0.310}, '65_13_15_16': {q:3.2, p:0.313}, '65_13_20_16': {q:3.2, p:0.315},
+  '65_13_10_18': {q:3.6, p:0.380}, '65_13_15_18': {q:3.6, p:0.383}, '65_13_20_18': {q:3.6, p:0.385},
+  '65_16_10_6':  {q:2.6, p:0.088}, '65_16_15_6':  {q:2.6, p:0.089}, '65_16_20_6':  {q:2.6, p:0.090},
+  '65_16_10_8':  {q:2.9, p:0.110}, '65_16_15_8':  {q:2.9, p:0.112}, '65_16_20_8':  {q:2.9, p:0.114},
+  '65_16_10_10': {q:3.3, p:0.140}, '65_16_15_10': {q:3.3, p:0.143}, '65_16_20_10': {q:3.3, p:0.146},
+  '65_16_10_12': {q:3.7, p:0.180}, '65_16_15_12': {q:3.7, p:0.183}, '65_16_20_12': {q:3.7, p:0.186},
+  '65_16_10_14': {q:4.2, p:0.230}, '65_16_15_14': {q:4.2, p:0.233}, '65_16_20_14': {q:4.2, p:0.236},
+  '65_16_10_16': {q:4.6, p:0.276}, '65_16_15_16': {q:4.6, p:0.280}, '65_16_20_16': {q:4.6, p:0.284},
+  '65_16_10_18': {q:5.1, p:0.338}, '65_16_15_18': {q:5.1, p:0.342}, '65_16_20_18': {q:5.1, p:0.346},
+  '65_16_10_20': {q:5.6, p:0.412}, '65_16_15_20': {q:5.6, p:0.418}, '65_16_20_20': {q:5.6, p:0.424},
+  '65_19_10_6':  {q:3.4, p:0.078}, '65_19_15_6':  {q:3.4, p:0.080}, '65_19_20_6':  {q:3.4, p:0.083},
+  '65_19_10_8':  {q:4.1, p:0.114}, '65_19_15_8':  {q:4.1, p:0.117}, '65_19_20_8':  {q:4.1, p:0.121},
+  '65_19_10_10': {q:4.6, p:0.143}, '65_19_15_10': {q:4.6, p:0.147}, '65_19_20_10': {q:4.6, p:0.151},
+  '65_19_10_12': {q:5.2, p:0.182}, '65_19_15_12': {q:5.2, p:0.190}, '65_19_20_12': {q:5.2, p:0.199},
+  '65_19_10_14': {q:5.7, p:0.218}, '65_19_15_14': {q:5.7, p:0.224}, '65_19_20_14': {q:5.7, p:0.230},
+  '65_19_10_16': {q:6.3, p:0.266}, '65_19_15_16': {q:6.3, p:0.273}, '65_19_20_16': {q:6.3, p:0.280},
+  '65_19_10_18': {q:7.0, p:0.329}, '65_19_15_18': {q:7.0, p:0.338}, '65_19_20_18': {q:7.0, p:0.348},
+  '65_19_10_20': {q:7.5, p:0.372}, '65_19_15_20': {q:7.5, p:0.385}, '65_19_20_20': {q:7.5, p:0.397},
+};
+
+// Таблица 7.1: жилые и общественные здания
+// Возвращает {n_pk, q_pk} или null если ВПВ не требуется
+function getFireT71(type, floors, corridor_len, seats, area) {
+  if (type === 'f13') {
+    // Многоквартирные жилые дома Ф1.3
+    if (floors < 12) return null; // ВПВ не требуется
+    if (floors <= 16) return corridor_len > 10 ? {n:2, q:2.6} : {n:1, q:2.6};
+    if (floors <= 25) return {n:2, q:2.6};
+    return {n:2, q:2.6}; // свыше 25 — отдельный расчёт
+  }
+  if (type === 'f_office') {
+    // Ф1.2 гостиницы / Ф3.4 / Ф3.6 / Ф4.2 / Ф4.3 / адм.-бытовые
+    if (floors < 6) return null;
+    if (floors <= 10) return {n:1, q:2.6};
+    if (floors <= 16) return {n:2, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f12_hotel') {
+    // Гостиницы — как Ф4.3
+    if (floors < 6) return null;
+    if (floors <= 10) return {n:1, q:2.6};
+    if (floors <= 16) return {n:2, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f12_hostel') {
+    // Общежития коридорного типа Ф1.2
+    if (floors < 1) return null;
+    if (floors <= 10) return {n:1, q:2.6};
+    if (floors <= 16) return {n:2, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f11') {
+    // Ф1.1 больницы, дома престарелых — независимо от объёма
+    if (floors <= 3) return {n:1, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f21_theater') {
+    // Ф2.1 театры, кинотеатры
+    if (seats <= 300) return {n:1, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f21_lib') {
+    // Ф2.1 библиотеки, архивы, спортивные (до 50м)
+    if (area <= 2500) return {n:1, q:2.6};
+    return {n:2, q:2.6};
+  }
+  if (type === 'f22') {
+    // Ф2.2 музеи, выставки / Ф3.1 магазины
+    if (floors <= 3) return {n:1, q:2.6};
+    return {n:2, q:2.6};
+  }
+  return null;
+}
+
+// Таблица 7.2: производственные и складские здания
+function getFireT72(fire_deg, cat, cls, volume_k) {
+  // volume_k — тыс. м³
+  const big = volume_k > 150;
+  if (fire_deg === 'I_II') {
+    if (cat === 'AB' || cat === 'V') {
+      if (cls === 'C0' || cls === 'C1') return big ? {n:3, q:2.6} : {n:2, q:2.6};
+    }
+    if (cat === 'GD') return null;
+  }
+  if (fire_deg === 'III') {
+    if (cat === 'AB' || cat === 'V') {
+      if (cls === 'C0') return big ? {n:3, q:2.6} : {n:2, q:2.6};
+    }
+    if (cat === 'GD') {
+      if (cls === 'C0' || cls === 'C1') return big ? {n:2, q:2.6} : null;
+    }
+  }
+  if (fire_deg === 'IV') {
+    if (cat === 'AB' && cls === 'C0') return big ? {n:3, q:2.6} : {n:2, q:2.6};
+    if (cat === 'V') {
+      if (cls === 'C0' || cls === 'C1') return big ? {n:2, q:5.0} : {n:2, q:2.6};
+      if (cls === 'C2' || cls === 'C3') return big ? {n:4, q:2.6} : {n:3, q:2.6};
+    }
+    if (cat === 'GD') return big ? {n:2, q:2.6} : null;
+  }
+  if (fire_deg === 'V') {
+    if (cat === 'V') return big ? {n:2, q:5.0} : {n:2, q:2.6};
+    if (cat === 'GD') return big ? {n:2, q:2.6} : {n:1, q:2.6};
+  }
+  return null;
+}
+
+function updateFireFields() {
+  const type = document.getElementById('f_type').value;
+  const isProd = type === 'f5';
+  document.getElementById('f_prod_wrap').style.display = isProd ? 'grid' : 'none';
+
+  let extra = '';
+  if (type === 'f13') {
+    extra += `<div><div style="font-size:12px;color:#666;margin-bottom:4px">Длина коридора, м</div>
+      <input type="number" id="f_corridor" value="8" min="0" oninput="calcFire()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></div>`;
+  }
+  if (type === 'f21_theater') {
+    extra += `<div><div style="font-size:12px;color:#666;margin-bottom:4px">Вместимость зала, мест</div>
+      <input type="number" id="f_seats" value="200" min="1" oninput="calcFire()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></div>`;
+  }
+  if (type === 'f21_lib' || type === 'f22') {
+    extra += `<div><div style="font-size:12px;color:#666;margin-bottom:4px">Общая площадь, м²</div>
+      <input type="number" id="f_area" value="2000" min="1" oninput="calcFire()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></div>`;
+  }
+  document.getElementById('f_extra').innerHTML = extra;
+  calcFire();
+}
+
+function calcFire() {
+  const type   = document.getElementById('f_type').value;
+  const floors = +document.getElementById('f_floors').value || 1;
+  const dn     = document.getElementById('f_dn').value;
+  const nozzle = document.getElementById('f_nozzle').value;
+  const hose   = document.getElementById('f_hose').value;
+  const jet    = document.getElementById('f_jet').value;
+
+  const corridor = +( document.getElementById('f_corridor')?.value || 0 );
+  const seats    = +( document.getElementById('f_seats')?.value    || 0 );
+  const area     = +( document.getElementById('f_area')?.value     || 0 );
+
+  // Подбор по таблице 7.1 или 7.2
+  let res = null;
+  if (type === 'f5') {
+    const deg    = document.getElementById('f_fire_deg').value;
+    const cat    = document.getElementById('f_cat').value;
+    const cls    = document.getElementById('f_class').value;
+    const vol    = +document.getElementById('f_volume').value || 0;
+    res = getFireT72(deg, cat, cls, vol);
+  } else {
+    res = getFireT71(type, floors, corridor, seats, area);
+  }
+
+  // Данные из таблицы 7.3
+  const key = `${dn}_${nozzle}_${hose}_${jet}`;
+  const t73 = T73[key];
+
+  const div = document.getElementById('fire_result');
+
+  if (!res) {
+    div.innerHTML = `<span style="color:#2a7a2a;font-weight:600">✓ Внутренний противопожарный водопровод не требуется</span>
+      <br><span style="font-size:11px;color:#aaa">Согласно таблице 7.1/7.2 СП 10.13130.2020 для выбранных параметров ВПВ не предусматривается</span>`;
+    div.style.display = 'block';
+    document.getElementById('m_qfire').value = 0;
+    calcMeters();
+    return;
+  }
+
+  const q_dikt = t73 ? t73.q : res.q;
+  const Q_fire = res.n * q_dikt;
+  const p_klapan = t73 ? t73.p : '—';
+
+  let html = '';
+  html += `По таблице ${type==='f5'?'7.2':'7.1'} СП 10.13130.2020:<br>`;
+  html += `Количество ПК-с для расчёта: <b>${res.n} шт.</b><br>`;
+  html += `Расход диктующего ПК-с (таблица 7.3, DN${dn}, ствол ${nozzle}мм, рукав ${hose}м, струя ${jet}м): `;
+  if (t73) {
+    html += `<b>${t73.q} л/с</b>, давление у клапана: <b>${t73.p} МПа</b><br>`;
+  } else {
+    html += `<b>нет данных в таблице 7.3 для выбранной комбинации</b> — выберите другие параметры<br>`;
+  }
+  html += `<b style="font-size:15px">Q<sub>пож</sub> = ${res.n} × ${q_dikt} = ${Q_fire.toFixed(1)} л/с</b><br>`;
+  html += `<span style="font-size:11px;color:#888">Значение Q<sub>пож</sub> автоматически подставлено в блок подбора счётчиков</span>`;
+
+  div.innerHTML = html;
+  div.style.display = 'block';
+
+  // Подставляем Q_пож в блок счётчиков
+  document.getElementById('m_qfire').value = Q_fire.toFixed(1);
+  calcMeters();
+}
+
+// Инициализация
+updateFireFields();
+</script>
+
+
+<!-- БЛОК ТЕПЛОИЗОЛЯЦИИ -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Тепловая изоляция трубопроводов (п. 10.3, 8.12, 26.10 СП 30 + СП 61.13330)</div>
+
+  <!-- Общие параметры -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Место прокладки</div>
+      <select id="ins_location" onchange="calcInsulation()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="room_hot">Отапливаемое помещение (tн = 20°С)</option>
+        <option value="room_cold">Неотапливаемое помещение (ввести температуру)</option>
+        <option value="parking">Подземная стоянка (Г1, tн = 5°С)</option>
+      </select>
+    </div>
+    <div id="ins_t_manual_wrap" style="display:none">
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Температура в помещении, °С</div>
+      <input type="number" id="ins_t_room" value="5" oninput="calcInsulation()"
+        style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+    </div>
+    <div id="ins_humidity_wrap">
+      <div style="font-size:12px;color:#666;margin-bottom:4px">Относительная влажность воздуха, %</div>
+      <select id="ins_humidity" onchange="calcInsulation()" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5">
+        <option value="40">40%</option>
+        <option value="50">50%</option>
+        <option value="60" selected>60%</option>
+        <option value="70">70%</option>
+        <option value="80">80%</option>
+        <option value="90">90%</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Трубопроводы ГВС -->
+  <div style="background:#f9f9f9;border-radius:6px;padding:.875rem;margin-bottom:1rem">
+    <div style="font-size:13px;font-weight:600;color:#444;margin-bottom:.75rem">
+      ГВС — защита от тепловых потерь (п. 10.3 СП 30, табл. 4 СП 61)
+    </div>
+    <div id="gvs_rows"></div>
+    <button class="add-btn" onclick="addGvsRow()" style="margin-top:4px;font-size:12px;padding:5px 12px">+ Добавить трубопровод ГВС</button>
+  </div>
+
+  <!-- Трубопроводы ХВС -->
+  <div style="background:#f9f9f9;border-radius:6px;padding:.875rem;margin-bottom:.5rem">
+    <div style="font-size:13px;font-weight:600;color:#444;margin-bottom:.75rem">
+      ХВС — защита от конденсата (п. 8.12, 26.10 СП 30, В.2.4 СП 61)
+    </div>
+    <div id="hvs_rows"></div>
+    <button class="add-btn" onclick="addHvsRow()" style="margin-top:4px;font-size:12px;padding:5px 12px">+ Добавить трубопровод ХВС</button>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// ТАБЛИЦА 4 СП 61.13330.2012
+// В помещении, >5000 ч/год, положительные температуры
+// Нормы линейной плотности теплового потока qL, Вт/м
+// ============================================================
+const T4_SP61 = {
+  // диаметры мм
+  DN: [15, 20, 25, 40, 50, 65, 80, 100, 125, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000, 1400],
+  // температуры °С
+  T:  [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600],
+  // значения [DN_index][T_index]
+  q: [
+    [6,14,23,33,43,54,66,79,93,107,122,138],    // 15
+    [7,16,26,37,48,60,73,87,102,117,134,151],   // 20
+    [8,18,28,40,52,65,79,94,110,126,144,162],   // 25
+    [9,21,32,45,59,73,89,105,122,141,160,180],  // 40
+    [10,23,36,50,64,80,96,114,133,152,173,194], // 50
+    [12,26,41,56,72,89,107,127,147,169,191,214],// 65
+    [13,28,44,60,77,95,114,135,156,179,202,227],// 80
+    [14,31,48,65,84,103,124,146,169,193,218,244],// 100
+    [16,35,53,72,92,113,136,159,184,210,237,265],// 125
+    [18,38,58,79,100,123,147,172,199,226,255,285],// 150
+    [22,46,70,93,118,144,172,200,230,262,294,328],// 200
+    [26,53,79,106,134,162,193,224,257,291,327,364],// 250
+    [29,60,88,118,148,179,212,246,281,318,357,396],// 300
+    [33,66,97,129,161,195,230,267,305,344,385,428],// 350
+    [36,72,106,139,174,210,247,286,326,368,411,456],// 400
+    [39,78,114,150,187,225,264,305,348,392,437,484],// 450
+    [43,84,123,161,200,241,282,326,370,417,465,514],// 500
+    [49,96,139,181,225,269,315,363,412,462,515,569],// 600
+    [55,107,153,200,247,295,344,395,448,502,558,616],// 700
+    [61,118,169,220,270,322,376,431,487,546,606,668],// 800
+    [67,130,185,239,294,350,407,466,527,589,653,718],// 900
+    [74,141,201,259,318,377,438,501,565,631,699,768],// 1000
+    [99,187,263,337,411,485,561,638,716,797,880,964],// 1400
+  ]
+};
+
+// Таблица В.3 СП 61 — RнL (м·°С/Вт) в помещении, высокий коэф. излучения
+// [DN_mm, t100, t300, t500]
+const RNL_TABLE = [
+  [32,0.50,0.35,0.30],[40,0.45,0.30,0.25],[50,0.40,0.25,0.20],
+  [100,0.25,0.19,0.15],[125,0.21,0.17,0.13],[150,0.18,0.15,0.11],
+  [200,0.16,0.13,0.10],[250,0.13,0.10,0.09],[300,0.11,0.09,0.08],
+  [350,0.10,0.08,0.07],[400,0.09,0.07,0.06],[500,0.075,0.065,0.06],
+  [600,0.062,0.055,0.05],[700,0.055,0.051,0.045],[800,0.048,0.045,0.042],
+  [1000,0.040,0.037,0.034],[2000,0.022,0.020,0.017],
+];
+
+// Таблица В.4 СП 61 — допустимый перепад температур (tн - tп) для предотвращения конденсата
+// [tн°С]: {влажность: перепад}
+const TV4 = {
+  10: {40:13.4, 50:10.4, 60:7.8, 70:5.5, 80:3.5, 90:1.6},
+  15: {40:14.2, 50:10.9, 60:9.1, 70:5.7, 80:3.6, 90:1.7},
+  20: {40:14.8, 50:11.3, 60:8.4, 70:5.9, 80:3.7, 90:1.8},
+  25: {40:15.3, 50:11.7, 60:8.7, 70:6.1, 80:3.8, 90:1.9},
+  30: {40:15.9, 50:12.2, 60:9.0, 70:6.3, 80:4.0, 90:2.0},
+};
+
+function interpTV4(t_room, humidity) {
+  const temps = [10, 15, 20, 25, 30];
+  const t = Math.max(10, Math.min(30, t_room));
+  const phi = humidity;
+  // найти ближайшие
+  let t1 = temps[0], t2 = temps[1];
+  for (let i = 0; i < temps.length - 1; i++) {
+    if (t >= temps[i] && t <= temps[i+1]) { t1=temps[i]; t2=temps[i+1]; break; }
+  }
+  const k = (t - t1) / (t2 - t1);
+  const dt1 = TV4[t1][phi] || 0;
+  const dt2 = TV4[t2][phi] || 0;
+  return dt1 + k*(dt2-dt1);
+}
+
+function interpQL(dn_mm, t_c) {
+  const dns = T4_SP61.DN, ts = T4_SP61.T, qs = T4_SP61.q;
+  // индекс DN
+  let di1 = 0, di2 = 1;
+  for (let i = 0; i < dns.length - 1; i++) {
+    if (dn_mm >= dns[i] && dn_mm <= dns[i+1]) { di1=i; di2=i+1; break; }
+    if (dn_mm >= dns[dns.length-1]) { di1=dns.length-1; di2=dns.length-1; break; }
+    if (dn_mm <= dns[0]) { di1=0; di2=0; break; }
+  }
+  // индекс T
+  let ti1 = 0, ti2 = 1;
+  for (let i = 0; i < ts.length - 1; i++) {
+    if (t_c >= ts[i] && t_c <= ts[i+1]) { ti1=i; ti2=i+1; break; }
+    if (t_c >= ts[ts.length-1]) { ti1=ts.length-1; ti2=ts.length-1; break; }
+    if (t_c <= ts[0]) { ti1=0; ti2=0; break; }
+  }
+  const kd = di1===di2 ? 0 : (dn_mm-dns[di1])/(dns[di2]-dns[di1]);
+  const kt = ti1===ti2 ? 0 : (t_c-ts[ti1])/(ts[ti2]-ts[ti1]);
+  const q00=qs[di1][ti1], q01=qs[di1][ti2], q10=qs[di2][ti1], q11=qs[di2][ti2];
+  return q00*(1-kd)*(1-kt)+q01*(1-kd)*kt+q10*kd*(1-kt)+q11*kd*kt;
+}
+
+function getRnL(dn_mm, t_c) {
+  const tbl = RNL_TABLE;
+  // найти строку по DN
+  let i1=0, i2=1;
+  for (let i=0; i<tbl.length-1; i++) {
+    if (dn_mm>=tbl[i][0] && dn_mm<=tbl[i+1][0]) { i1=i; i2=i+1; break; }
+    if (dn_mm>=tbl[tbl.length-1][0]) { i1=tbl.length-1; i2=tbl.length-1; break; }
+  }
+  // интерполяция по T (100, 300, 500)
+  const k = i1===i2 ? 0 : (dn_mm-tbl[i1][0])/(tbl[i2][0]-tbl[i1][0]);
+  let ti=1; // колонка для 100°С
+  if (t_c >= 300) ti = 2;
+  if (t_c >= 500) ti = 3;
+  const r1=tbl[i1][ti], r2=tbl[i2][ti];
+  return r1 + k*(r2-r1);
+}
+
+// Стандартные наружные диаметры труб (мм) по DN
+const PIPE_OD = {
+  10:17.2, 15:21.3, 20:26.9, 25:33.7, 32:42.4, 40:48.3, 50:60.3,
+  65:76.1, 80:88.9, 100:114.3, 125:139.7, 150:168.3, 200:219.1,
+  250:273, 300:323.9, 350:355.6, 400:406.4, 500:508, 600:610
+};
+
+function calcGvs(dn_mm, t_gvs, t_room, lambda_k) {
+  const d = (PIPE_OD[dn_mm] || dn_mm) / 1000; // наружный диаметр трубы, м
+  const t_n = t_room;
+  const qL = interpQL(dn_mm, t_gvs);
+  const RnL = getRnL(dn_mm, t_gvs);
+  const K = 1.2; // коэф. доп. потерь (стальные трубы на подвижных опорах DN<150)
+
+  // ln B = 2π × λ × (K(tв-tн)/qL - RнL)
+  const lnB = 2 * Math.PI * lambda_k * (K * (t_gvs - t_n) / qL - RnL);
+  const B = Math.exp(lnB);
+  let delta_calc = d * (B - 1) / 2 * 1000; // мм
+  // Округление до 10мм вверх, минимум 10мм
+  let delta = Math.max(10, Math.ceil(delta_calc / 10) * 10);
+
+  return {qL, RnL, K, lnB, B, delta_calc, delta, d_mm: d*1000};
+}
+
+function calcHvs(dn_mm, t_hvs, t_room, humidity, lambda_k) {
+  const d = (PIPE_OD[dn_mm] || dn_mm) / 1000;
+  // Перепад из таблицы В.4
+  const dt = interpTV4(t_room, humidity);
+  // Температура поверхности изоляции = tн - dt (чтобы не было конденсата)
+  const t_surf = t_room - dt;
+  // Если температура воды выше температуры поверхности - конденсата не будет
+  if (t_hvs >= t_surf) {
+    return {need: false, dt, t_surf};
+  }
+  // Формула В.2.4 СП 61 для цилиндрической поверхности:
+  // RнL_insul = (tн - tв)/(tн - tп) × RнL_ext
+  // ln B = 2π × λ × RнL_insul × (tп - tв)/(tн - tп)
+  // Упрощённый расчёт через В.33-В.34:
+  // αн = 7 Вт/м²°С (высокий коэф. излучения, пенокаучук/вспен.полиэтилен)
+  const alpha_n = 7; // Вт/м²°С
+  const RnL = 1 / (Math.PI * d * alpha_n);
+  // ln B = 2π × λ × RнL × (tп - tв)/(tн - tп)
+  const lnB = 2 * Math.PI * lambda_k * RnL * (t_surf - t_hvs) / (t_room - t_surf);
+  const B = Math.exp(lnB);
+  let delta_calc = d * (B - 1) / 2 * 1000;
+  let delta = Math.max(10, Math.ceil(delta_calc / 10) * 10);
+  return {need: true, dt, t_surf, RnL, lnB, B, delta_calc, delta, d_mm: d*1000};
+}
+
+// ─── UI ────────────────────────────────────────────────────
+let gvsId = 0, hvsId = 0;
+
+const DN_OPTIONS = [10,15,20,25,32,40,50,65,80,100,125,150,200,250,300,350,400,500,600]
+  .map(d => `<option value="${d}">${d}</option>`).join('');
+
+function addGvsRow(dn=25, t=60) {
+  const id = gvsId++;
+  const div = document.createElement('div');
+  div.id = 'gvs_' + id;
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 0.7fr 0.7fr 28px;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML = `
+    <select style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+      <option>Подающий стояк ГВС</option><option>Циркуляционный стояк</option>
+      <option>Подающая магистраль</option><option>Циркуляционная магистраль</option>
+    </select>
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:11px;color:#888">DN</span>
+      <select class="dn-sel" style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff;flex:1" onchange="calcInsulation()">
+        ${DN_OPTIONS.replace(`value="${dn}"`, `value="${dn}" selected`)}
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:11px;color:#888">t°</span>
+      <input type="number" class="t-inp" value="${t}" min="40" max="90" style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff;width:100%" oninput="calcInsulation()">
+    </div>
+    <button style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px" onclick="this.parentNode.remove();calcInsulation()">×</button>`;
+  document.getElementById('gvs_rows').appendChild(div);
+  calcInsulation();
+}
+
+function addHvsRow(dn=25, t=10) {
+  const id = hvsId++;
+  const div = document.createElement('div');
+  div.id = 'hvs_' + id;
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 0.7fr 0.7fr 28px;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML = `
+    <select style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+      <option>Стояк ХВС</option><option>Магистраль ХВС</option>
+      <option>Подводка ХВС</option>
+    </select>
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:11px;color:#888">DN</span>
+      <select class="dn-sel" style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff;flex:1" onchange="calcInsulation()">
+        ${DN_OPTIONS.replace(`value="${dn}"`, `value="${dn}" selected`)}
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:11px;color:#888">t°</span>
+      <input type="number" class="t-inp" value="${t}" min="1" max="25" style="font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff;width:100%" oninput="calcInsulation()">
+    </div>
+    <button style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px" onclick="this.parentNode.remove();calcInsulation()">×</button>`;
+  document.getElementById('hvs_rows').appendChild(div);
+  calcInsulation();
+}
+
+function getParams() {
+  const loc = document.getElementById('ins_location').value;
+  let t_room = 20;
+  if (loc === 'room_cold') t_room = +document.getElementById('ins_t_room').value || 5;
+  if (loc === 'parking') t_room = 5;
+  const humidity = +document.getElementById('ins_humidity').value || 60;
+  const is_parking = loc === 'parking';
+  return {t_room, humidity, is_parking};
+}
+
+function calcInsulation() {
+  const loc = document.getElementById('ins_location').value;
+  document.getElementById('ins_t_manual_wrap').style.display = loc === 'room_cold' ? '' : 'none';
+
+  const {t_room, humidity, is_parking} = getParams();
+  const lambda_gvs = 0.05; // п.10.3 СП 30
+  const lambda_hvs = 0.040; // вспен. полиэтилен/пенокаучук, λ при 20°С
+
+  // ГВС
+  document.querySelectorAll('#gvs_rows > div').forEach(row => {
+    const dn = +row.querySelector('.dn-sel').value;
+    const t = +row.querySelector('.t-inp').value;
+    const res = calcGvs(dn, t, t_room, lambda_gvs);
+    const detail_id = 'gvs_det_' + row.id;
+    const mat = is_parking ? 'минеральная вата (Г1)' : 'вспен. полиэтилен / пенокаучук';
+    const mat_lambda = is_parking ? 'λ ≤ 0,05 Вт/м·°С' : 'λ ≤ 0,05 Вт/м·°С';
+
+    let existing = row.nextElementSibling;
+    if (existing && existing.classList.contains('ins-result')) existing.remove();
+
+    const result = document.createElement('div');
+    result.className = 'ins-result';
+    result.style.cssText = 'margin-bottom:8px;padding:6px 10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;font-size:12px';
+    result.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span>DN${dn} (d=${res.d_mm.toFixed(1)}мм), t=${t}°С → <b>δ = ${res.delta} мм</b> &nbsp;|&nbsp; ${mat}, ${mat_lambda}</span>
+        <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent==='▸'?'▾':'▸'"
+          style="background:none;border:none;cursor:pointer;font-size:13px;color:#888">▸</button>
+        <div style="display:none;margin-top:6px;color:#666;font-family:monospace;font-size:11px;line-height:1.8;border-top:1px solid #eee;padding-top:6px">
+          qL (табл.4 СП61, DN${dn}, ${t}°С) = <b>${res.qL.toFixed(1)} Вт/м</b><br>
+          RнL (табл.В.3) = <b>${res.RnL.toFixed(3)} м·°С/Вт</b><br>
+          K = ${res.K} (стальные трубы, подвижные опоры)<br>
+          ln B = 2π × ${lambda_gvs} × (${res.K}×(${t}-${t_room})/${res.qL.toFixed(1)} - ${res.RnL.toFixed(3)}) = <b>${res.lnB.toFixed(4)}</b><br>
+          B = e^${res.lnB.toFixed(4)} = <b>${res.B.toFixed(4)}</b><br>
+          δ расч. = ${res.d_mm.toFixed(1)}×(${res.B.toFixed(4)}-1)/2 = <b>${res.delta_calc.toFixed(1)} мм</b><br>
+          δ прин. = <b>${res.delta} мм</b> (округление вверх до 10мм, min 10мм — п.6.12 СП61, п.10.3 СП30)
+        </div>
+      </div>`;
+    row.insertAdjacentElement('afterend', result);
+  });
+
+  // ХВС
+  document.querySelectorAll('#hvs_rows > div').forEach(row => {
+    const dn = +row.querySelector('.dn-sel').value;
+    const t = +row.querySelector('.t-inp').value;
+    const res = calcHvs(dn, t, t_room, humidity, lambda_hvs);
+
+    let existing = row.nextElementSibling;
+    if (existing && existing.classList.contains('ins-result')) existing.remove();
+
+    const result = document.createElement('div');
+    result.className = 'ins-result';
+    result.style.cssText = 'margin-bottom:8px;padding:6px 10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;font-size:12px';
+
+    if (!res.need) {
+      result.innerHTML = `<span style="color:#2a7a2a">✓ DN${dn}, t=${t}°С — изоляция от конденсата <b>не требуется</b> (tтрубы=${t}°С > tкрит=${res.t_surf.toFixed(1)}°С)</span>`;
+    } else {
+      const mat = is_parking ? 'пенокаучук группы Г1 (μ ≥ 3000)' : 'вспен. полиэтилен / пенокаучук (μ ≥ 3000)';
+      result.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>DN${dn} (d=${res.d_mm.toFixed(1)}мм), t=${t}°С → <b>δ = ${res.delta} мм</b> &nbsp;|&nbsp; ${mat}, λ ≤ 0,040 Вт/м·°С</span>
+          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent==='▸'?'▾':'▸'"
+            style="background:none;border:none;cursor:pointer;font-size:13px;color:#888">▸</button>
+          <div style="display:none;margin-top:6px;color:#666;font-family:monospace;font-size:11px;line-height:1.8;border-top:1px solid #eee;padding-top:6px">
+            tпомещ. = ${t_room}°С, φ = ${humidity}%<br>
+            Δt (табл.В.4 СП61) = <b>${res.dt.toFixed(1)}°С</b><br>
+            tкрит. поверхн. изол. = ${t_room} - ${res.dt.toFixed(1)} = <b>${res.t_surf.toFixed(1)}°С</b><br>
+            αн = 7 Вт/(м²·°С) (п.В.2.4 СП61, высокий коэф. излучения)<br>
+            RнL = 1/(π×${res.d_mm.toFixed(1)/1000}×7) = <b>${res.RnL.toFixed(4)} м·°С/Вт</b><br>
+            ln B = 2π×${lambda_hvs}×${res.RnL.toFixed(4)}×(${res.t_surf.toFixed(1)}-${t})/(${t_room}-${res.t_surf.toFixed(1)}) = <b>${res.lnB.toFixed(4)}</b><br>
+            B = <b>${res.B.toFixed(4)}</b><br>
+            δ расч. = ${res.d_mm.toFixed(1)}×(B-1)/2 = <b>${res.delta_calc.toFixed(1)} мм</b><br>
+            δ прин. = <b>${res.delta} мм</b> (округление вверх до 10мм — п.6.12 СП61)
+          </div>
+        </div>`;
+    }
+    row.insertAdjacentElement('afterend', result);
+  });
+}
+
+document.getElementById('ins_location').addEventListener('change', calcInsulation);
+
+// Начальные строки
+addGvsRow(25, 60);
+addGvsRow(25, 50);
+addHvsRow(25, 10);
+</script>
+
+
+<!-- БЛОК РАСЧЁТА НАПОРА И ПОДБОРА НАСОСА -->
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Подбор насоса по рабочей точке (СП 30.13330, методика Grundfos)</div>
+
+  <!-- Параметры системы -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+
+    <!-- Левая колонка - напор -->
+    <div style="background:#f9f9f9;border-radius:6px;padding:.875rem">
+      <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.75rem">
+        Hp = H_geom + ΣH_l + H_пр - H_гар
+      </div>
+
+      <!-- H_geom - два режима -->
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:12px;color:#666">H_geom — геометрическая высота</span>
+          <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px">
+            <input type="radio" name="hgeom_mode" value="auto" checked onchange="updateHgeom()"> авто
+          </label>
+          <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px">
+            <input type="radio" name="hgeom_mode" value="manual" onchange="updateHgeom()"> вручную
+          </label>
+        </div>
+        <div id="hgeom_auto_row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">Этажей n</div>
+            <input type="number" id="n_floors" value="9" min="1" oninput="updateHgeom()"
+              style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">Высота этажа, м</div>
+            <input type="number" id="h_floor" value="3.0" step="0.1" oninput="updateHgeom()"
+              style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+          </div>
+        </div>
+        <div id="hgeom_manual_row" style="display:none">
+          <div style="font-size:11px;color:#888;margin-bottom:2px">H_geom, м (вручную)</div>
+          <input type="number" id="h_geom_manual" value="25" oninput="calcPumpHead()"
+            style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+        </div>
+        <div style="font-size:11px;color:#888;margin-top:4px">
+          H_geom = <b id="hgeom_val">24</b> м &nbsp;((n-1)×h_эт + 1)
+        </div>
+      </div>
+
+      <!-- Потери -->
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:#888;margin-bottom:2px">ΣH_l — потери напора в сети, м (ввод вручную)</div>
+        <input type="number" id="h_losses" value="5" step="0.5" min="0" oninput="calcPumpHead()"
+          style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+        <div style="font-size:11px;color:#aaa;margin-top:2px">Включая счётчик, арматуру, трубопроводы</div>
+      </div>
+
+      <!-- H_пр и H_гар -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:2px">H_пр — своб. напор у прибора, м</div>
+          <input type="number" id="h_pr" value="20" min="0" oninput="calcPumpHead()"
+            style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:2px">H_гар — гар. напор сети, м</div>
+          <input type="number" id="h_gar" value="20" min="0" oninput="calcPumpHead()"
+            style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:6px;padding:.6rem .875rem;border:2px solid #90c8f0">
+        <div style="font-size:11px;color:#666">Требуемый напор насоса:</div>
+        <div style="font-size:22px;font-weight:700;color:#1a6aaa" id="hp_result">—</div>
+        <div style="font-size:11px;color:#aaa" id="hp_formula">—</div>
+      </div>
+    </div>
+
+    <!-- Правая колонка - расход и тип -->
+    <div style="background:#f9f9f9;border-radius:6px;padding:.875rem">
+      <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.75rem">Параметры подбора</div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:#888;margin-bottom:2px">Расчётный расход Q, м³/ч</div>
+        <input type="number" id="q_design" value="5" step="0.1" min="0.1" oninput="calcPumpHead()"
+          style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#fff;font-weight:600">
+        <div style="font-size:11px;color:#aaa;margin-top:2px">Из расчёта водопотребления (q_sec × 3.6)</div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:#888;margin-bottom:2px">Тип насоса</div>
+        <select id="pump_sel_type" onchange="calcPumpHead()"
+          style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#fff">
+          <option value="boost">Повысительный / ХВС / ГВС</option>
+          <option value="circ">Циркуляционный ГВС</option>
+          <option value="fire">Пожарная установка</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:#888;margin-bottom:2px">Количество насосов в установке</div>
+        <select id="pump_count_sel" onchange="calcPumpHead()"
+          style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#fff">
+          <option value="1">1 насос</option>
+          <option value="2p">2 параллельно (Q×2, H=const)</option>
+          <option value="2s">2 последовательно (H×2, Q=const)</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:6px">
+        <div style="font-size:11px;color:#888;margin-bottom:2px">NPSH_a — кавитац. запас системы, м</div>
+        <input type="number" id="npsh_a" value="8" step="0.5" min="0" oninput="calcPumpHead()"
+          style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
+        <div style="font-size:11px;color:#aaa;margin-top:2px">Для насосов в здании из сети ≥ 8м</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SVG ГРАФИК -->
+  <div style="margin-bottom:1rem">
+    <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">График Q-H: кривая насоса и характеристика системы</div>
+    <div style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:.5rem;overflow:hidden">
+      <svg id="pump_chart" width="100%" viewBox="0 0 600 320" style="display:block"></svg>
+    </div>
+    <div style="font-size:11px;color:#888;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap">
+      <span><span style="color:#1a6aaa">●</span> Кривая насоса</span>
+      <span><span style="color:#c0392b">●</span> Характеристика системы</span>
+      <span><span style="color:#27ae60">★</span> Рабочая точка</span>
+      <span><span style="color:#f39c12">■</span> Зона BEP (0.7-1.1×Q_opt)</span>
+    </div>
+  </div>
+
+  <!-- РЕЗУЛЬТАТ ПОДБОРА - TOP 3 -->
+  <div id="pump_rec_result"></div>
+</div>
+
+<script>
+// ============================================================
+// ТЕСТОВАЯ БАЗА - 4 насоса с кривыми Q-H
+// ============================================================
+const PUMP_CURVES = [
+  {
+    model: 'MAGNA3 32-80',
+    brand: 'Grundfos',
+    type: 'circ',
+    P_kw: 0.130,
+    P_max_bar: 10,
+    T_max: 110,
+    NPSHr: 2.0,
+    Q_opt: 3.5,
+    note: 'Резьбовое DN32, 1×230В, ЧРП встроен',
+    curve: [{q:0,h:8.5},{q:1,h:8.3},{q:2,h:8.0},{q:3,h:7.5},{q:4,h:6.5},{q:5,h:5.0},{q:6,h:3.0}]
+  },
+  {
+    model: 'CR 10-4',
+    brand: 'Grundfos',
+    type: 'boost',
+    P_kw: 2.2,
+    P_max_bar: 10,
+    T_max: 120,
+    NPSHr: 3.5,
+    Q_opt: 6.0,
+    note: 'Вертикальный многоступенчатый, DN50',
+    curve: [{q:0,h:40},{q:2,h:39},{q:4,h:37},{q:6,h:34},{q:8,h:29},{q:10,h:22},{q:11,h:16}]
+  },
+  {
+    model: 'CR 5-8',
+    brand: 'Grundfos',
+    type: 'boost',
+    P_kw: 1.1,
+    P_max_bar: 10,
+    T_max: 120,
+    NPSHr: 3.0,
+    Q_opt: 3.5,
+    note: 'Вертикальный многоступенчатый, DN32',
+    curve: [{q:0,h:66},{q:1,h:64},{q:2,h:62},{q:3,h:58},{q:4,h:52},{q:5,h:44},{q:6,h:34},{q:7,h:20}]
+  },
+  {
+    model: 'Hydro MX-A CR15-9',
+    brand: 'Grundfos',
+    type: 'fire',
+    P_kw: 11.0,
+    P_max_bar: 16,
+    T_max: 40,
+    NPSHr: 4.0,
+    Q_opt: 12.0,
+    note: '1 осн.+1 рез., шкаф автоматики, DN65, СП 10',
+    curve: [{q:0,h:97},{q:3,h:95},{q:6,h:92},{q:9,h:87},{q:12,h:80},{q:15,h:70},{q:18,h:57},{q:20,h:45},{q:22,h:28}]
+  }
+];
+
+// Линейная интерполяция по кривой насоса
+function interpH(curve, q) {
+  if (q <= curve[0].q) return curve[0].h;
+  if (q >= curve[curve.length-1].q) return 0;
+  for (let i = 0; i < curve.length-1; i++) {
+    if (q >= curve[i].q && q <= curve[i+1].q) {
+      const k = (q - curve[i].q) / (curve[i+1].q - curve[i].q);
+      return curve[i].h + k * (curve[i+1].h - curve[i].h);
+    }
+  }
+  return 0;
+}
+
+// Найти рабочую точку - пересечение кривой насоса и кривой системы
+function findWorkingPoint(curve, H_stat, k_sys, pump_mode) {
+  const Q_max = curve[curve.length-1].q;
+  const steps = 200;
+  let best = null, best_diff = Infinity;
+  for (let i = 0; i <= steps; i++) {
+    const q = Q_max * i / steps;
+    let h_pump = interpH(curve, q);
+    // Учёт режима (параллельный - кривая растянута по Q)
+    const h_sys = H_stat + k_sys * q * q;
+    const diff = Math.abs(h_pump - h_sys);
+    if (diff < best_diff) { best_diff = diff; best = {q, h: h_pump, h_sys}; }
+  }
+  return best;
+}
+
+// Построить кривую насоса с учётом режима
+function buildEffectiveCurve(curve, mode) {
+  if (mode === '1') return curve;
+  if (mode === '2p') {
+    // Параллельно: при том же H - Q удваивается
+    return curve.map(pt => ({q: pt.q * 2, h: pt.h}));
+  }
+  if (mode === '2s') {
+    // Последовательно: при том же Q - H удваивается
+    return curve.map(pt => ({q: pt.q, h: pt.h * 2}));
+  }
+  return curve;
+}
+
+// Обновление H_geom
+function updateHgeom() {
+  const mode = document.querySelector('input[name="hgeom_mode"]:checked').value;
+  document.getElementById('hgeom_auto_row').style.display = mode === 'auto' ? 'grid' : 'none';
+  document.getElementById('hgeom_manual_row').style.display = mode === 'manual' ? 'block' : 'none';
+  calcPumpHead();
+}
+
+function getHgeom() {
+  const mode = document.querySelector('input[name="hgeom_mode"]:checked').value;
+  if (mode === 'manual') return +document.getElementById('h_geom_manual').value || 0;
+  const n = +document.getElementById('n_floors').value || 1;
+  const hf = +document.getElementById('h_floor').value || 3;
+  return (n - 1) * hf + 1;
+}
+
+function calcPumpHead() {
+  const H_geom = getHgeom();
+  document.getElementById('hgeom_val').textContent = H_geom.toFixed(1);
+
+  const H_l   = +document.getElementById('h_losses').value || 0;
+  const H_pr  = +document.getElementById('h_pr').value     || 20;
+  const H_gar = +document.getElementById('h_gar').value    || 0;
+  const Q_des = +document.getElementById('q_design').value || 1;
+  const type  = document.getElementById('pump_sel_type').value;
+  const mode  = document.getElementById('pump_count_sel').value;
+  const npsh_a = +document.getElementById('npsh_a').value || 8;
+
+  const Hp = H_geom + H_l + H_pr - H_gar;
+  const Hp_display = Hp > 0 ? Hp : 0;
+
+  document.getElementById('hp_result').textContent = Hp_display.toFixed(1) + ' м';
+  document.getElementById('hp_formula').textContent =
+    `${H_geom.toFixed(1)} + ${H_l} + ${H_pr} - ${H_gar} = ${Hp_display.toFixed(1)} м`;
+
+  // Кривая системы: H_сист = H_стат + k×Q²
+  const H_stat = H_gar > 0 ? H_gar : 0;
+  const k_sys  = Hp_display > H_stat && Q_des > 0
+    ? (Hp_display - H_stat) / (Q_des * Q_des)
+    : 0.1;
+
+  // Подбор насосов
+  const candidates = PUMP_CURVES.filter(p => p.type === type);
+  if (!candidates.length) {
+    document.getElementById('pump_rec_result').innerHTML =
+      '<div style="color:#c00;font-size:13px">Нет насосов выбранного типа в тестовой базе</div>';
+    drawChart(null, null, null, null, null);
+    return;
+  }
+
+  // Оценка каждого кандидата
+  const results = candidates.map(pump => {
+    const eff_curve = buildEffectiveCurve(pump.curve, mode === '1' ? '1' : mode === '2p' ? '2p' : '2s');
+    const wp = findWorkingPoint(eff_curve, H_stat, k_sys);
+    if (!wp || wp.q <= 0) return null;
+
+    const Q_max_eff = eff_curve[eff_curve.length-1].q;
+    const Q_ratio = wp.q / (pump.Q_opt * (mode === '2p' ? 2 : 1));
+    const H_excess = (wp.h - Hp_display) / Hp_display * 100;
+
+    // Насос должен перекрывать требуемый расход и напор
+    if (wp.q < Q_des * 0.85) return null;
+    if (interpH(eff_curve, 0) < Hp_display * 0.9) return null;
+
+    // Scoring
+    let score = 100;
+    // BEP: идеал Q_ratio = 0.85-1.0
+    if (Q_ratio >= 0.7 && Q_ratio <= 1.1) score += 30;
+    else if (Q_ratio >= 0.6 && Q_ratio <= 1.2) score += 15;
+    else score -= 20;
+    // Запас по напору: идеал 5-20%
+    if (H_excess >= 5 && H_excess <= 20) score += 20;
+    else if (H_excess >= 0 && H_excess <= 35) score += 5;
+    else if (H_excess > 35) score -= 15;
+    else score -= 30; // напора не хватает
+    // Близость рабочего расхода к расчётному
+    const Q_err = Math.abs(wp.q - Q_des) / Q_des;
+    if (Q_err < 0.1) score += 20;
+    else if (Q_err < 0.2) score += 10;
+    // NPSH
+    const npsh_ok = npsh_a >= pump.NPSHr + 0.5;
+    if (!npsh_ok) score -= 50;
+
+    // Объяснение
+    const reasons = [];
+    if (Q_ratio >= 0.7 && Q_ratio <= 1.1)
+      reasons.push('✓ рабочая точка близка к зоне макс. КПД');
+    else if (Q_ratio < 0.7)
+      reasons.push('⚠ насос работает на малом расходе (ниже BEP)');
+    else
+      reasons.push('⚠ насос перегружен по расходу (выше BEP)');
+    if (H_excess >= 5 && H_excess <= 20)
+      reasons.push(`✓ запас по напору +${H_excess.toFixed(0)}% — оптимально`);
+    else if (H_excess > 20)
+      reasons.push(`⚠ большой запас по напору +${H_excess.toFixed(0)}% — насос избыточен`);
+    else if (H_excess >= 0)
+      reasons.push(`✓ напора хватает (запас +${H_excess.toFixed(0)}%)`);
+    else
+      reasons.push('✗ напора недостаточно для данной системы');
+    if (!npsh_ok)
+      reasons.push(`✗ КАВИТАЦИЯ: NPSHa=${npsh_a}м < NPSHr+0.5=${(pump.NPSHr+0.5).toFixed(1)}м`);
+    else
+      reasons.push(`✓ кавитации нет: NPSHa=${npsh_a}м > NPSHr+0.5=${(pump.NPSHr+0.5).toFixed(1)}м`);
+    if (mode === '2p') reasons.push('↔ параллельная схема — увеличен расход');
+    if (mode === '2s') reasons.push('↕ последовательная схема — увеличен напор');
+
+    return {pump, eff_curve, wp, score, reasons, H_excess, Q_ratio, npsh_ok};
+  }).filter(Boolean).sort((a,b) => b.score - a.score);
+
+  if (!results.length) {
+    document.getElementById('pump_rec_result').innerHTML =
+      '<div style="color:#c00;font-size:13px;padding:.5rem">Ни один насос из тестовой базы не подходит для заданных параметров. Скорректируйте параметры или добавьте насосы через импорт CSV.</div>';
+    drawChart(null, null, null, null, null);
+    return;
+  }
+
+  // Отрисовка графика для лучшего варианта
+  const best = results[0];
+  drawChart(best.eff_curve, H_stat, k_sys, best.wp, best.pump);
+
+  // Рендер Top-3
+  renderTop3(results.slice(0, 3), Hp_display, Q_des);
+}
+
+function renderTop3(results, Hp, Q_des) {
+  const medals = ['🥇', '🥈', '🥉'];
+  const borders = ['#f0b800','#aaa','#c07028'];
+  let html = '<div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">Рекомендации — Top-3</div>';
+  html += '<div style="display:grid;gap:8px">';
+
+  results.forEach((r, i) => {
+    html += `<div style="border:2px solid ${borders[i]};border-radius:8px;padding:.875rem;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:.5rem">
+        <div>
+          <span style="font-size:16px">${medals[i]}</span>
+          <span style="font-size:14px;font-weight:700;margin-left:6px">${r.pump.brand} ${r.pump.model}</span>
+          <span style="font-size:11px;color:#888;margin-left:8px">${r.pump.note}</span>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#888">
+          P = ${r.pump.P_kw} кВт &nbsp;|&nbsp; до ${r.pump.P_max_bar} бар
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:.5rem">
+        <div style="background:#f5f5f5;border-radius:4px;padding:4px 8px;text-align:center">
+          <div style="font-size:10px;color:#888">Q рабочий</div>
+          <div style="font-size:14px;font-weight:600">${r.wp.q.toFixed(2)} м³/ч</div>
+        </div>
+        <div style="background:#f5f5f5;border-radius:4px;padding:4px 8px;text-align:center">
+          <div style="font-size:10px;color:#888">H рабочий</div>
+          <div style="font-size:14px;font-weight:600">${r.wp.h.toFixed(1)} м</div>
+        </div>
+        <div style="background:#f5f5f5;border-radius:4px;padding:4px 8px;text-align:center">
+          <div style="font-size:10px;color:#888">Мощность P2</div>
+          <div style="font-size:14px;font-weight:600">${(r.pump.P_kw * 0.9).toFixed(2)} кВт</div>
+        </div>
+      </div>
+      <div style="font-size:11px;line-height:1.8;color:#555">
+        ${r.reasons.map(rr => `<div>${rr}</div>`).join('')}
+      </div>
+      <div style="font-size:10px;color:#aaa;margin-top:4px;border-top:1px solid #eee;padding-top:4px">
+        Score: ${r.score} &nbsp;|&nbsp; Q_ratio: ${(r.Q_ratio*100).toFixed(0)}% &nbsp;|&nbsp;
+        Мощность двигателя ≥ ${(r.pump.P_kw * 1.15).toFixed(2)} кВт (запас 15%)
+      </div>
+    </div>`;
+  });
+
+  html += '</div>';
+  document.getElementById('pump_rec_result').innerHTML = html;
+}
+
+// ============================================================
+// SVG ГРАФИК
+// ============================================================
+function drawChart(curve, H_stat, k_sys, wp, pump) {
+  const svg = document.getElementById('pump_chart');
+  const W = 600, H = 320;
+  const PAD = {left:55, right:20, top:20, bottom:45};
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top - PAD.bottom;
+
+  if (!curve) {
+    svg.innerHTML = '<text x="300" y="160" text-anchor="middle" fill="#aaa" font-size="14">Введите параметры для построения графика</text>';
+    return;
+  }
+
+  const Q_max = curve[curve.length-1].q * 1.1;
+  const H_max_val = curve[0].h * 1.15;
+
+  function sx(q) { return PAD.left + (q / Q_max) * CW; }
+  function sy(h) { return PAD.top + CH - (h / H_max_val) * CH; }
+
+  let out = '';
+
+  // Фон
+  out += `<rect x="${PAD.left}" y="${PAD.top}" width="${CW}" height="${CH}" fill="#fafafa" stroke="#ddd"/>`;
+
+  // BEP зона (0.7-1.1 × Q_opt)
+  if (pump) {
+    const bep_Q_lo = pump.Q_opt * 0.7;
+    const bep_Q_hi = pump.Q_opt * 1.1;
+    const bx1 = sx(Math.max(0, bep_Q_lo));
+    const bx2 = sx(Math.min(Q_max, bep_Q_hi));
+    out += `<rect x="${bx1}" y="${PAD.top}" width="${bx2-bx1}" height="${CH}" fill="rgba(243,156,18,0.10)" stroke="rgba(243,156,18,0.3)" stroke-dasharray="4,3"/>`;
+    out += `<text x="${(bx1+bx2)/2}" y="${PAD.top+12}" text-anchor="middle" font-size="9" fill="#f39c12">BEP</text>`;
+  }
+
+  // Сетка
+  for (let i = 0; i <= 5; i++) {
+    const y = PAD.top + (CH / 5) * i;
+    const h_val = H_max_val * (1 - i/5);
+    out += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left+CW}" y2="${y}" stroke="#e0e0e0" stroke-width="1"/>`;
+    out += `<text x="${PAD.left-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#888">${h_val.toFixed(0)}</text>`;
+  }
+  for (let i = 0; i <= 5; i++) {
+    const x = PAD.left + (CW / 5) * i;
+    const q_val = Q_max * i / 5;
+    out += `<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${PAD.top+CH}" stroke="#e0e0e0" stroke-width="1"/>`;
+    out += `<text x="${x}" y="${PAD.top+CH+16}" text-anchor="middle" font-size="10" fill="#888">${q_val.toFixed(1)}</text>`;
+  }
+
+  // Оси
+  out += `<line x1="${PAD.left}" y1="${PAD.top}" x2="${PAD.left}" y2="${PAD.top+CH}" stroke="#888" stroke-width="1.5"/>`;
+  out += `<line x1="${PAD.left}" y1="${PAD.top+CH}" x2="${PAD.left+CW}" y2="${PAD.top+CH}" stroke="#888" stroke-width="1.5"/>`;
+  out += `<text x="${PAD.left-35}" y="${PAD.top+CH/2}" text-anchor="middle" font-size="11" fill="#555" transform="rotate(-90,${PAD.left-35},${PAD.top+CH/2})">H, м</text>`;
+  out += `<text x="${PAD.left+CW/2}" y="${H-5}" text-anchor="middle" font-size="11" fill="#555">Q, м³/ч</text>`;
+
+  // Кривая системы
+  const sys_pts = [];
+  for (let i = 0; i <= 40; i++) {
+    const q = Q_max * i / 40;
+    const h = H_stat + k_sys * q * q;
+    if (h <= H_max_val * 1.05) sys_pts.push(`${sx(q).toFixed(1)},${sy(h).toFixed(1)}`);
+  }
+  out += `<polyline points="${sys_pts.join(' ')}" fill="none" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,3"/>`;
+
+  // Кривая насоса
+  const pump_pts = curve.map(pt => `${sx(pt.q).toFixed(1)},${sy(pt.h).toFixed(1)}`);
+  out += `<polyline points="${pump_pts.join(' ')}" fill="none" stroke="#1a6aaa" stroke-width="2.5"/>`;
+
+  // Рабочая точка
+  if (wp) {
+    const wx = sx(wp.q), wy = sy(wp.h);
+    // Пунктирные линии к осям
+    out += `<line x1="${wx}" y1="${wy}" x2="${wx}" y2="${PAD.top+CH}" stroke="#27ae60" stroke-width="1" stroke-dasharray="3,3"/>`;
+    out += `<line x1="${PAD.left}" y1="${wy}" x2="${wx}" y2="${wy}" stroke="#27ae60" stroke-width="1" stroke-dasharray="3,3"/>`;
+    // Точка
+    out += `<circle cx="${wx}" cy="${wy}" r="7" fill="#27ae60" opacity="0.25"/>`;
+    out += `<circle cx="${wx}" cy="${wy}" r="4" fill="#27ae60"/>`;
+    // Подпись
+    const lx = wx + 8, ly = wy - 8;
+    out += `<rect x="${lx-2}" y="${ly-12}" width="90" height="28" rx="3" fill="white" opacity="0.85"/>`;
+    out += `<text x="${lx+2}" y="${ly}" font-size="10" fill="#1a7a30" font-weight="600">Q=${wp.q.toFixed(2)} м³/ч</text>`;
+    out += `<text x="${lx+2}" y="${ly+12}" font-size="10" fill="#1a7a30" font-weight="600">H=${wp.h.toFixed(1)} м</text>`;
+  }
+
+  // Заголовок
+  if (pump) {
+    out += `<text x="${PAD.left+10}" y="${PAD.top+18}" font-size="11" fill="#1a6aaa" font-weight="600">${pump.brand} ${pump.model}</text>`;
+  }
+
+  svg.innerHTML = out;
+}
+
+// Инициализация
+updateHgeom();
+</script>
+
+</body>
+</html>
