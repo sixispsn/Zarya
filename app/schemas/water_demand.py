@@ -1,11 +1,5 @@
 """
 Pydantic-схемы для API расчёта водопотребления.
-
-Эти классы описывают формат данных, которые принимает и возвращает API.
-FastAPI автоматически:
-- валидирует входные данные;
-- генерирует документацию в /docs;
-- сериализует ответы в JSON.
 """
 from pydantic import BaseModel, Field
 
@@ -13,13 +7,7 @@ from pydantic import BaseModel, Field
 class ConsumerGroupInput(BaseModel):
     """Группа потребителей на входе API."""
     code: str = Field(..., description="Код типа потребителя", examples=["office"])
-    count: int = Field(..., gt=0, description="Количество потребителей U", examples=[100])
-    appliances: int = Field(
-        default=0,
-        ge=0,
-        description="Число приборов N. Если 0 - примем равным count.",
-        examples=[0],
-    )
+    count: int = Field(..., gt=0, description="Количество потребителей U", examples=[480])
 
 
 class WaterDemandRequest(BaseModel):
@@ -28,12 +16,6 @@ class WaterDemandRequest(BaseModel):
         ...,
         min_length=1,
         description="Список групп потребителей",
-    )
-    period_hours: float = Field(
-        default=24.0,
-        gt=0,
-        le=24,
-        description="Период водопотребления T, часов в сутки",
     )
     apply_k06: bool = Field(
         default=False,
@@ -46,9 +28,12 @@ class FlowOutput(BaseModel):
     q_sec: float = Field(..., description="Секундный расход, л/с")
     q_hr: float = Field(..., description="Часовой расход, м³/ч")
     q_day: float = Field(..., description="Суточный расход, м³/сут")
-    np_value: float = Field(..., description="Значение NP (для отладки)")
+    np_sec: float = Field(..., description="∑NP секундный (для отладки)")
+    np_hr: float = Field(..., description="∑NP часовой")
+    q0_avg: float = Field(..., description="Средневзвешенный q0, л/с")
+    q0hr_avg: float = Field(..., description="Средневзвешенный q0_hr, л/ч")
     alpha: float = Field(..., description="Коэффициент α по табл. Б.2")
-    alpha_hr: float = Field(..., description="Коэффициент α_hr (часовой)")
+    alpha_hr: float = Field(..., description="Коэффициент α_hr")
 
 
 class WaterDemandResponse(BaseModel):
@@ -64,5 +49,5 @@ class WaterDemandResponse(BaseModel):
 class ConsumerNormInfo(BaseModel):
     """Информация о норме потребителя (для справочника)."""
     code: str
-    name: str
+    label: str
     unit: str

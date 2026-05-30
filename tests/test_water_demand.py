@@ -1,5 +1,7 @@
 """
 Тесты для расчёта водопотребления.
+
+Эталонные числа взяты из legacy/sp30_calculator.html — режим расчёта 1-в-1.
 """
 import pytest
 
@@ -16,110 +18,159 @@ class TestAlphaTable:
 
     def test_alpha_at_exact_point(self):
         """α при точном попадании в табличное значение."""
-        assert get_alpha(0.1) == 0.249
-        assert get_alpha(1.0) == 0.691
-        assert get_alpha(10.0) == 3.820
+        assert get_alpha(0.015) == 0.200
+        assert get_alpha(1.000) == 0.969
+        assert get_alpha(10.0) == 4.126
 
     def test_alpha_below_minimum(self):
-        """NP ниже минимума - возвращается минимальная α."""
+        """NP ниже минимума - возвращается 0.200."""
         assert get_alpha(0.001) == 0.200
         assert get_alpha(0.0) == 0.200
+        assert get_alpha(-1.0) == 0.200
 
     def test_alpha_above_maximum(self):
-        """NP выше максимума - возвращается максимальная α."""
-        assert get_alpha(100.0) == 3.820
-        assert get_alpha(1000.0) == 3.820
+        """NP выше максимума - аппроксимация формулой."""
+        # NP=100: α = 1.72 × 100^0.49 - 0.5 ≈ 1.72 × 9.55 - 0.5 ≈ 15.92
+        result = get_alpha(100.0)
+        assert 15.0 < result < 17.0
 
     def test_alpha_interpolation(self):
         """Линейная интерполяция между точками."""
-        # Между NP=0.1 (α=0.249) и NP=0.15 (α=0.279)
-        # При NP=0.125: α = 0.249 + (0.279 - 0.249) × (0.125 - 0.1) / 0.05 = 0.264
-        result = get_alpha(0.125)
-        assert abs(result - 0.264) < 0.001
+        # При NP=3.8095 (между 3.8→2.138 и 3.9→2.174)
+        # α = 2.138 + 0.095 × (2.174-2.138) = 2.138 + 0.00342 = 2.141
+        result = get_alpha(3.8095)
+        assert abs(result - 2.141) < 0.001
 
 
 # ============================================================
-# Тесты расчёта водопотребления
+# Golden tests: сверка с эталонным расчётом из HTML
 # ============================================================
 
-class TestWaterDemand:
-    """Проверка расчёта водопотребления для разных сценариев."""
+class TestGoldenOffice480:
+    """
+    Эталон: Административные здания (office), 480 работающих.
+    Из legacy/sp30_calculator.html: ожидаемые результаты в каждом поле.
+    """
 
-    def test_simple_residential(self):
-        """Базовый расчёт: 480 жителей в жилом доме с централизованным ГВС."""
-        groups = [ConsumerGroup(code="residential_with_bath_centralized_hw", count=480)]
-        result = calculate_water_demand(groups)
+    @pytest.fixture
+    def result(self):
+        groups = [ConsumerGroup(code="office", count=480)]
+        return calculate_water_demand(groups)
 
-        # Базовые проверки - результаты должны быть положительными
-        assert result.total.q_sec > 0
-        assert result.cold.q_sec > 0
-        assert result.hot.q_sec > 0
+    def test_total_q_sec(self, result):
+        """q_sec_tot = 1.499 л/с."""
+        assert result.total.q_sec == 1.499
 
-        # Суточные расходы по нормам: 300 л × 480 = 144000 л = 144 м³
-        assert result.total.q_day == 144.0
-        # Холодная: 180 л × 480 = 86.4 м³
-        assert result.cold.q_day == 86.4
-        # Горячая: 120 л × 480 = 57.6 м³
-        assert result.hot.q_day == 57.6
+    def test_total_q_hr(self, result):
+        """q_hr_tot = 3.182 м³/ч (округлено до 3 знаков)."""
+        # В HTML: 3.1816 → round до 3 знаков = 3.182
+        assert result.total.q_hr == 3.182
 
+    def test_total_q_day(self, result):
+        """q_day_tot = 5.760 м³/сут."""
+        assert result.total.q_day == 5.760
+
+    def test_total_alpha(self, result):
+        """α для общего потока ≈ 2.141."""
+        assert result.total.alpha == 2.141
+
+    def test_total_np(self, result):
+        """∑NP для общего потока ≈ 3.8095."""
+        assert result.total.np_sec == 3.8095
+
+    def test_cold_q_sec(self, result):
+        """q_sec_c = 0.933 л/с."""
+        assert result.cold.q_sec == 0.933
+
+    def test_cold_q_hr(self, result):
+        """q_hr_c = 1.941 м³/ч."""
+        # В HTML: 1.9407 → 1.941
+        assert result.cold.q_hr == 1.941
+
+    def test_cold_q_day(self, result):
+        """q_day_c = 3.600 м³/сут."""
+        assert result.cold.q_day == 3.600
+
+    def test_hot_q_sec(self, result):
+        """q_sec_h = 0.774 л/с."""
+        assert result.hot.q_sec == 0.774
+
+    def test_hot_q_hr(self, result):
+        """q_hr_h = 1.547 м³/ч."""
+        # В HTML: 1.5474 → 1.547
+        assert result.hot.q_hr == 1.547
+
+    def test_hot_q_day(self, result):
+        """q_day_h = 2.160 м³/сут."""
+        assert result.hot.q_day == 2.160
+
+    def test_sewage(self, result):
+        """q_sewage = 1.499 + 1.6 = 3.099 л/с."""
+        assert result.sewage_flow == 3.099
+
+    def test_heat_max(self, result):
+        """Q_max = 1.16 × 1.5474 × 60 ≈ 107.7 кВт."""
+        assert result.heat_max_kw == 107.7
+
+    def test_heat_avg(self, result):
+        """Q_avg = 1.16 × 2.160/24 × 60 ≈ 6.3 кВт."""
+        assert result.heat_avg_kw == 6.3
+
+
+# ============================================================
+# Базовые тесты
+# ============================================================
+
+class TestErrors:
     def test_empty_groups_raises(self):
-        """Пустой список групп - ошибка."""
         with pytest.raises(ValueError, match="пуст"):
             calculate_water_demand([])
 
     def test_unknown_code_raises(self):
-        """Неизвестный код потребителя - ошибка."""
         groups = [ConsumerGroup(code="unknown_type", count=100)]
         with pytest.raises(ValueError, match="Неизвестный код"):
             calculate_water_demand(groups)
 
-    def test_local_hw_has_zero_hot(self):
-        """Местное ГВС - горячая вода = 0 (вся идёт как холодная)."""
-        groups = [ConsumerGroup(code="residential_with_bath_local_hw", count=100)]
+
+class TestK06:
+    """Тесты коэффициента 0.6 (примечание 7 СП 30)."""
+
+    def test_apply_k06_reduces_count(self):
+        """k06 уменьшает количество потребителей в 0.6 раза."""
+        groups = [ConsumerGroup(code="office", count=480)]
+        with_k = calculate_water_demand(groups, apply_k06=True)
+        # 480 × 0.6 = 288 → расход должен быть меньше
+        without_k = calculate_water_demand(groups, apply_k06=False)
+        assert with_k.total.q_day < without_k.total.q_day
+
+
+class TestNoHotWater:
+    """Тесты для потребителей без горячей воды."""
+
+    def test_no_bath_has_zero_hot(self):
+        """Жилые дома без ванн — горячей воды нет."""
+        groups = [ConsumerGroup(code="residential_no_bath", count=100)]
         result = calculate_water_demand(groups)
         assert result.hot.q_sec == 0.0
+        assert result.hot.q_hr == 0.0
         assert result.hot.q_day == 0.0
-        # Но общий и холодный должны быть равны
-        assert result.total.q_sec == result.cold.q_sec
-        assert result.total.q_day == result.cold.q_day
 
-    def test_apply_k06_reduces_all_flows(self):
-        """Коэффициент 0.6 уменьшает все расходы."""
-        groups = [ConsumerGroup(code="office", count=200)]
-        without_k = calculate_water_demand(groups, apply_k06=False)
-        with_k = calculate_water_demand(groups, apply_k06=True)
 
-        assert with_k.total.q_sec == round(without_k.total.q_sec * 0.6, 3)
-        assert with_k.cold.q_day == round(without_k.cold.q_day * 0.6, 3)
+class TestMixedGroups:
+    """Тесты для смешанных групп."""
 
-    def test_sewage_flow_low_consumption(self):
-        """Стоки при низком расходе = q_total (без +1.6)."""
-        groups = [ConsumerGroup(code="office", count=50)]
-        result = calculate_water_demand(groups)
-        # При малом расходе q_sec < 8, стоки = q_total
-        assert result.total.q_sec < 8.0
-        assert result.sewage_flow == result.total.q_sec
-
-    def test_heat_calculations(self):
-        """Тепловые потоки рассчитаны и положительны для ГВС."""
-        groups = [ConsumerGroup(code="residential_with_bath_centralized_hw", count=480)]
-        result = calculate_water_demand(groups)
-        assert result.heat_max_kw > 0
-        assert result.heat_avg_kw > 0
-        # Максимальный должен быть больше или равен среднему
-        assert result.heat_max_kw >= result.heat_avg_kw
-
-    def test_mixed_groups(self):
-        """Смешанная группа: жилой дом + офис."""
+    def test_office_plus_residential(self):
+        """Смесь офиса и жилья считается корректно."""
         groups = [
-            ConsumerGroup(code="residential_with_bath_centralized_hw", count=300),
-            ConsumerGroup(code="office", count=50),
+            ConsumerGroup(code="office", count=100),
+            ConsumerGroup(code="residential_central_hw", count=200),
         ]
         result = calculate_water_demand(groups)
-        # Должно работать без ошибок
+        # Должно работать, результаты положительные
+        assert result.total.q_sec > 0
         assert result.total.q_day > 0
-        # Суточный = сумма по группам
-        # Жилые: 300×480/1000 = но нет, 300 л × 300 = 90 м³
-        # Офис: 16 × 50 = 800 л = 0.8 м³
-        # Итого: 90.8 м³
-        assert abs(result.total.q_day - 90.8) < 0.01
+        # Суточный = арифметическая сумма
+        # Офис: 12 × 100 / 1000 = 1.2 м³
+        # Жильё центр. ГВС: 130 × 200 / 1000 = 26.0 м³
+        # Итого: 27.2 м³
+        assert abs(result.total.q_day - 27.2) < 0.01
