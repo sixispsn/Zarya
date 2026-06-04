@@ -5,7 +5,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import irrigation, storm, water_demand, water_meters
+from app.api import fire, irrigation, storm, water_demand, water_meters
 
 app = FastAPI(
     title="Заря API",
@@ -27,6 +27,7 @@ app.include_router(water_demand.router)
 app.include_router(irrigation.router)
 app.include_router(storm.router)
 app.include_router(water_meters.router)
+app.include_router(fire.router)
 @app.get("/")
 def root():
     """Проверка что сервер работает."""
