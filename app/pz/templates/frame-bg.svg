@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" preserveAspectRatio="none">
+<rect x="20" y="5" width="185" height="287" fill="none" stroke="black" stroke-width="0.5"/>
+<rect x="8" y="5" width="12" height="287" fill="none" stroke="black" stroke-width="0.3"/>
+<line x1="8" y1="207" x2="20" y2="207" stroke="black" stroke-width="0.3"/>
+<line x1="8" y1="232" x2="20" y2="232" stroke="black" stroke-width="0.3"/>
+<line x1="8" y1="267" x2="20" y2="267" stroke="black" stroke-width="0.3"/>
+<text x="14" y="219.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 14 219.5)" font-family="serif">Взам. инв. №</text>
+<text x="14" y="249.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 14 249.5)" font-family="serif">Подп. и дата</text>
+<text x="14" y="279.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 14 279.5)" font-family="serif">Инв. № подл.</text>
+</svg>

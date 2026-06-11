@@ -1,0 +1,41 @@
+@page {
+  size: A4;
+  margin: 14mm 8mm 25mm 35mm;
+  background-image: url("frame-bg.svg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  @bottom-center { content: element(stamp6); }
+}
+@page :first {
+  margin-bottom: 62mm;
+  @bottom-center { content: element(stamp3); }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Liberation Serif", "Times New Roman", serif; font-size: 11pt; line-height: 1.35; color: #000; }
+
+h1.section-title { text-align: center; font-weight: bold; font-size: 13pt; margin-bottom: 10pt; }
+.subitem { text-align: justify; text-indent: 1.25cm; margin-bottom: 6pt; }
+.subitem .letter { font-weight: bold; }
+.fill { background: #fff200; padding: 0 2px; }
+
+table.data { border-collapse: collapse; margin: 6pt 0 6pt 1.25cm; font-size: 10pt; }
+table.data td, table.data th { border: 0.3mm solid #000; padding: 2pt 6pt; text-align: left; }
+table.data th { font-weight: bold; background: #f0f0f0; }
+
+/* Штамп форма 3 — первый лист */
+.stamp3 { position: running(stamp3); width: 185mm; }
+.stamp3 table { width: 185mm; border-collapse: collapse; table-layout: fixed; }
+.stamp3 td { border: 0.3mm solid #000; text-align: center; vertical-align: middle; font-size: 7pt; line-height: 1; padding: 0 .5mm; }
+.stamp3 .cph { font-size: 11pt; font-weight: bold; }
+.stamp3 .onm { font-size: 8.5pt; }
+
+/* Штамп форма 6 — последующие листы */
+.stamp6 { position: running(stamp6); width: 185mm; }
+.stamp6 table { width: 185mm; border-collapse: collapse; table-layout: fixed; }
+.stamp6 td { border: 0.3mm solid #000; text-align: center; vertical-align: middle; font-size: 7pt; line-height: 1; }
+.stamp6 .cph { font-size: 10pt; font-weight: bold; }
+
+.pageno:before { content: counter(page); }
+.pages:before { content: counter(pages); }
