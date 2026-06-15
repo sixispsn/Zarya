@@ -3,13 +3,17 @@
 
 Берёт модель Project, рендерит Jinja2-шаблоны подпунктов,
 вставляет в шаблон листа со штампом, превращает в PDF через WeasyPrint.
+
+ВАЖНО: CSS подключается через stylesheets=, а не инлайном в HTML —
+autoescape Jinja2 экранирует кавычки внутри <style> и ломает url(...).
 """
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from weasyprint import HTML
+from weasyprint import CSS, HTML
 
 from app.pz.project import BuildingPurpose, Project
+from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -17,19 +21,23 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 def _build_env() -> Environment:
     """Создать Jinja2-окружение, читающее шаблоны из папки templates."""
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=select_autoescape(["html"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    # Число в русской записи: num(2) -> "5,76"
+    env.filters["num"] = lambda v, p=2: f"{v:.{p}f}".replace(".", ",")
+    return env
 
 
 def _subitems_template_name(purpose: BuildingPurpose) -> str:
     """Выбрать файл шаблона подпунктов по типу объекта."""
     mapping = {
         BuildingPurpose.PUBLIC: "subitems_public.html",
-        # жилой и производственный добавим позже
+        BuildingPurpose.RESIDENTIAL: "subitems_residential.html",
+        # производственный добавим позже
     }
     name = mapping.get(purpose)
     if name is None:
@@ -41,11 +49,13 @@ def _subitems_template_name(purpose: BuildingPurpose) -> str:
 
 
 def generate_pz_html(project: Project) -> str:
-    """Собрать полный HTML пояснительной записки (для отладки/предпросмотра)."""
+    """Собрать HTML пояснительной записки (без CSS — для отладки/предпросмотра)."""
     env = _build_env()
 
-    # 1. Рендерим текст подпунктов
     subitems_tpl = env.get_template(_subitems_template_name(project.building.purpose))
+    fire_net = decide_fire_network(project.fire, project.materials)
+    head = calc_required_head(project.source)
+    tu_check = check_tu_limits(project.flows, project.source)
     body_html = subitems_tpl.render(
         doc=project.document,
         building=project.building,
@@ -55,19 +65,13 @@ def generate_pz_html(project: Project) -> str:
         fire=project.fire,
         meters=project.meters,
         pumps=project.pumps,
+        fire_net=fire_net,
+        head=head,
+        tu_check=tu_check,
     )
 
-    # 2. Читаем CSS рамки
-    frame_css = (TEMPLATES_DIR / "frame.css").read_text(encoding="utf-8")
-
-    # 3. Вставляем в шаблон листа со штампом
     doc_tpl = env.get_template("document.html")
-    full_html = doc_tpl.render(
-        frame_css=frame_css,
-        doc=project.document,
-        body_html=body_html,
-    )
-    return full_html
+    return doc_tpl.render(doc=project.document, body_html=body_html)
 
 
 def generate_pz_pdf(project: Project, output_path: str) -> str:
@@ -82,5 +86,11 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
         Путь к созданному PDF.
     """
     html_str = generate_pz_html(project)
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(output_path)
+    frame_css = CSS(
+        filename=str(TEMPLATES_DIR / "frame.css"),
+        base_url=str(TEMPLATES_DIR),
+    )
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=[frame_css]
+    )
     return output_path

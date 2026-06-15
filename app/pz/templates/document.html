@@ -2,30 +2,29 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<style>{{ frame_css }}</style>
 </head>
 <body>
 
-{# Штамп форма 3 — первый лист #}
+{# Штамп форма 3 — первый лист (40 мм: 3x5 верхний блок + 5x5 подписи) #}
 <div class="stamp3">
   <table>
     <colgroup>
-      <col style="width:7mm"><col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:12mm"><col style="width:16mm">
-      <col style="width:50mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+      <col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:15mm"><col style="width:10mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:17.5mm"><col style="width:17.5mm">
     </colgroup>
     <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
-      <td rowspan="6" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td>
-      <td colspan="3" rowspan="3" class="onm">{{ doc.object_name or '⟦ОБЪЕКТ⟧' }}</td></tr>
+      <td rowspan="3" colspan="4" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
     <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док</td><td>Подп.</td><td>Дата</td>
+    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док.</td><td>Подп.</td><td>Дата</td></tr>
+    <tr style="height:5mm"><td colspan="2" class="lbl">Разраб.</td><td colspan="2">{{ doc.developer_name }}</td><td></td><td></td>
+      <td rowspan="5" class="ttl">{{ doc.sheet_title }}</td>
       <td>Стадия</td><td>Лист</td><td>Листов</td></tr>
-    <tr style="height:5mm"><td>Разраб.</td><td colspan="5">{{ doc.developer_name }}</td>
-      <td rowspan="2">{{ doc.stage.value }}</td><td rowspan="2" class="pageno"></td><td rowspan="2" class="pages"></td></tr>
-    <tr style="height:5mm"><td>Пров.</td><td colspan="5">{{ doc.inspector_name }}</td></tr>
-    <tr style="height:7.5mm"><td>Н.контр.</td><td colspan="5">{{ doc.norm_control_name }}</td>
-      <td colspan="3" rowspan="2" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
-    <tr style="height:7.5mm"><td>ГИП</td><td colspan="5">{{ doc.gip_name }}</td></tr>
+    <tr style="height:5mm"><td colspan="2" class="lbl">Пров.</td><td colspan="2">{{ doc.inspector_name }}</td><td></td><td></td>
+      <td>{{ doc.stage.value }}</td><td class="pageno"></td><td class="pages"></td></tr>
+    <tr style="height:5mm"><td colspan="2" class="lbl">Н.контр.</td><td colspan="2">{{ doc.norm_control_name }}</td><td></td><td></td>
+      <td rowspan="3" colspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
+    <tr style="height:5mm"><td colspan="2" class="lbl">ГИП</td><td colspan="2">{{ doc.gip_name }}</td><td></td><td></td></tr>
+    <tr style="height:5mm"><td colspan="2"></td><td colspan="2"></td><td></td><td></td></tr>
   </table>
 </div>
 
@@ -36,10 +35,11 @@
       <col style="width:7mm"><col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:12mm"><col style="width:16mm">
       <col style="width:110mm"><col style="width:10mm">
     </colgroup>
-    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док</td><td>Подп.</td><td>Дата</td>
+    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
       <td rowspan="3" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td><td>Лист</td></tr>
-    <tr style="height:5mm"><td colspan="6" rowspan="2"></td><td class="pageno"></td></tr>
-    <tr style="height:5mm"><td></td></tr>
+    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
+      <td rowspan="2" class="pageno"></td></tr>
+    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док</td><td>Подп.</td><td>Дата</td></tr>
   </table>
 </div>
 
