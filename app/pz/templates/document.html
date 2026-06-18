@@ -5,44 +5,47 @@
 </head>
 <body>
 
-{# Штамп форма 3 — первый лист (40 мм: 3x5 верхний блок + 5x5 подписи) #}
-<div class="stamp3">
+{# ШТАМП — форма 3, повторяется внизу каждого листа #}
+<div class="stamp">
   <table>
-    <colgroup>
-      <col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:15mm"><col style="width:10mm">
-      <col style="width:70mm"><col style="width:15mm"><col style="width:17.5mm"><col style="width:17.5mm">
-    </colgroup>
-    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
-      <td rowspan="3" colspan="4" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
-    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док.</td><td>Подп.</td><td>Дата</td></tr>
-    <tr style="height:5mm"><td colspan="2" class="lbl">Разраб.</td><td colspan="2">{{ doc.developer_name }}</td><td></td><td></td>
-      <td rowspan="5" class="ttl">{{ doc.sheet_title }}</td>
-      <td>Стадия</td><td>Лист</td><td>Листов</td></tr>
-    <tr style="height:5mm"><td colspan="2" class="lbl">Пров.</td><td colspan="2">{{ doc.inspector_name }}</td><td></td><td></td>
-      <td>{{ doc.stage.value }}</td><td class="pageno"></td><td class="pages"></td></tr>
-    <tr style="height:5mm"><td colspan="2" class="lbl">Н.контр.</td><td colspan="2">{{ doc.norm_control_name }}</td><td></td><td></td>
-      <td rowspan="3" colspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
-    <tr style="height:5mm"><td colspan="2" class="lbl">ГИП</td><td colspan="2">{{ doc.gip_name }}</td><td></td><td></td></tr>
-    <tr style="height:5mm"><td colspan="2"></td><td colspan="2"></td><td></td><td></td></tr>
+    <tr>
+      <td rowspan="6" style="width:7mm" class="center">Изм.</td>
+      <td rowspan="6" style="width:7mm" class="center">Лист</td>
+      <td rowspan="6" style="width:20mm" class="center">№&nbsp;док.</td>
+      <td rowspan="6" style="width:12mm" class="center">Подп.</td>
+      <td rowspan="6" style="width:15mm" class="center">Дата</td>
+      <td colspan="2" rowspan="3" class="cipher">{{ doc.cipher or '⟦ШИФР⟧' }}</td>
+      <td colspan="3" rowspan="3" class="object">{{ doc.object_name or '⟦НАИМЕНОВАНИЕ ОБЪЕКТА⟧' }}</td>
+    </tr>
+    <tr></tr>
+    <tr></tr>
+    <tr>
+      <td style="width:18mm" class="label">Разраб.</td>
+      <td style="width:30mm">{{ doc.developer_name }}</td>
+      <td style="width:15mm" class="center label">Стадия</td>
+      <td style="width:15mm" class="center label">Лист</td>
+      <td style="width:18mm" class="center label">Листов</td>
+    </tr>
+    <tr>
+      <td class="label">Пров.</td>
+      <td>{{ doc.inspector_name }}</td>
+      <td class="center">{{ doc.stage.value }}</td>
+      <td class="center">—</td>
+      <td class="center">—</td>
+    </tr>
+    <tr>
+      <td class="label">ГИП</td>
+      <td>{{ doc.gip_name }}</td>
+      <td colspan="3" rowspan="2" class="center object">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+    </tr>
+    <tr>
+      <td class="label">Н.&nbsp;контр.</td>
+      <td>{{ doc.norm_control_name }}</td>
+    </tr>
   </table>
 </div>
 
-{# Штамп форма 6 — последующие листы #}
-<div class="stamp6">
-  <table>
-    <colgroup>
-      <col style="width:7mm"><col style="width:10mm"><col style="width:10mm"><col style="width:10mm"><col style="width:12mm"><col style="width:16mm">
-      <col style="width:110mm"><col style="width:10mm">
-    </colgroup>
-    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
-      <td rowspan="3" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td><td>Лист</td></tr>
-    <tr style="height:5mm"><td></td><td></td><td></td><td></td><td></td><td></td>
-      <td rowspan="2" class="pageno"></td></tr>
-    <tr style="height:5mm"><td>Изм.</td><td>Кол.уч</td><td>Лист</td><td>№док</td><td>Подп.</td><td>Дата</td></tr>
-  </table>
-</div>
-
+{# ТЕЛО ДОКУМЕНТА — текст подпунктов #}
 <h1 class="section-title">Подраздел 5.2 «Система водоснабжения»</h1>
 
 {{ body_html|safe }}

@@ -14,9 +14,13 @@ from weasyprint import CSS, HTML
 
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
+from app.pz.pump_chart import PumpChart, render_pump_chart_svg
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+# CSS-файлы ПЗ (порядок важен: рамка -> таблицы). Все лежат в templates/.
+_CSS_FILES = ["frame.css", "balance.css", "equipment.css"]
 
 
 def _build_env() -> Environment:
@@ -27,8 +31,8 @@ def _build_env() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    # Число в русской записи: num(2) -> "5,76"
-    env.filters["num"] = lambda v, p=2: f"{v:.{p}f}".replace(".", ",")
+    # Число в русской записи: num(2) -> "5,76"; None -> "—"
+    env.filters["num"] = lambda v, p=2: ("—" if v is None else f"{v:.{p}f}".replace(".", ","))
     return env
 
 
@@ -48,6 +52,21 @@ def _subitems_template_name(purpose: BuildingPurpose) -> str:
     return name
 
 
+def _pump_chart_svg(project: Project) -> str:
+    """SVG характеристики Q-H принятого насоса (пусто, если насос не нужен)."""
+    p = project.pumps
+    if not (p.required and p.curve):
+        return ""
+    return render_pump_chart_svg(PumpChart(
+        curve=p.curve,
+        h_stat=p.h_stat,
+        k_sys=p.k_sys,
+        wp=((p.wp_q, p.wp_h) if p.wp_q else None),
+        q_opt=p.q_opt,
+        title=p.model,
+    ))
+
+
 def generate_pz_html(project: Project) -> str:
     """Собрать HTML пояснительной записки (без CSS — для отладки/предпросмотра)."""
     env = _build_env()
@@ -65,6 +84,8 @@ def generate_pz_html(project: Project) -> str:
         fire=project.fire,
         meters=project.meters,
         pumps=project.pumps,
+        balance=project.balance,
+        pump_chart_svg=_pump_chart_svg(project),
         fire_net=fire_net,
         head=head,
         tu_check=tu_check,
@@ -86,11 +107,11 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
         Путь к созданному PDF.
     """
     html_str = generate_pz_html(project)
-    frame_css = CSS(
-        filename=str(TEMPLATES_DIR / "frame.css"),
-        base_url=str(TEMPLATES_DIR),
-    )
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in _CSS_FILES
+    ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=[frame_css]
+        output_path, stylesheets=stylesheets
     )
     return output_path

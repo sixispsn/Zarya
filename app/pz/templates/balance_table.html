@@ -1,0 +1,68 @@
+{# ===========================================================================
+   templates/balance_table.html — Баланс водопотребления и водоотведения
+   Форма 2 приложения А ГОСТ Р 21.619-2023 (объекты непроизводственного
+   назначения, п. 5.1.21). Подключается в subitems_public.html в подпункте
+   про расчётные расходы / баланс:  {% include "balance_table.html" %}
+
+   Контекст: balance.rows = list[ConsumerRow], balance.note = str.
+   Фильтр num(x, n) — русская десятичная запятая (определён в generator.py).
+   Стили — в balance.css, передавать через stylesheets=, НЕ инлайн
+   (autoescape ломает url()).
+=========================================================================== #}
+<table class="balance">
+  <thead>
+    <tr>
+      <th rowspan="2" class="c-num">№</th>
+      <th rowspan="2" class="c-name">Наименование потребителя</th>
+      <th rowspan="2" class="c-cnt">Расчётное число<br>потребителей</th>
+      <th rowspan="2" class="c-norm">Норма расхода<br>(норм. документ)</th>
+      <th rowspan="2" class="c-reg">Режим,<br>ч/сут</th>
+      <th colspan="2">Водопотребление<br>ХВС</th>
+      <th colspan="2">Водопотребление<br>ГВС</th>
+      <th colspan="2">Водоотведение</th>
+    </tr>
+    <tr>
+      <th class="c-q">м³/сут</th>
+      <th class="c-q">м³/год</th>
+      <th class="c-q">м³/сут</th>
+      <th class="c-q">м³/год</th>
+      <th class="c-q">м³/сут</th>
+      <th class="c-q">м³/год</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% set ns = namespace(cd=0, cy=0, hd=0, hy=0, sd=0, sy=0) %}
+    {% for r in balance.rows %}
+      {% set ns.cd = ns.cd + r.q_cold_day %}
+      {% set ns.cy = ns.cy + r.q_cold_year %}
+      {% set ns.hd = ns.hd + r.q_hot_day %}
+      {% set ns.hy = ns.hy + r.q_hot_year %}
+      {% set ns.sd = ns.sd + r.q_sew_day %}
+      {% set ns.sy = ns.sy + r.q_sew_year %}
+      <tr>
+        <td class="c-num">{{ loop.index }}</td>
+        <td class="c-name">{{ r.name }}</td>
+        <td class="c-cnt">{{ r.count | num(0) }} {{ r.count_unit }}</td>
+        <td class="c-norm">{{ r.norm_display }}{% if r.nd_ref %}<br><span class="nd">{{ r.nd_ref }}</span>{% endif %}</td>
+        <td class="c-reg">{{ r.regime_h | num(0) }}</td>
+        <td class="c-q">{{ r.q_cold_day | num(2) }}</td>
+        <td class="c-q">{{ r.q_cold_year | num(1) }}</td>
+        <td class="c-q">{{ r.q_hot_day | num(2) }}</td>
+        <td class="c-q">{{ r.q_hot_year | num(1) }}</td>
+        <td class="c-q">{{ r.q_sew_day | num(2) }}</td>
+        <td class="c-q">{{ r.q_sew_year | num(1) }}</td>
+      </tr>
+    {% endfor %}
+    <tr class="total">
+      <td class="c-num"></td>
+      <td class="c-name" colspan="4">Всего по объекту</td>
+      <td class="c-q">{{ ns.cd | num(2) }}</td>
+      <td class="c-q">{{ ns.cy | num(1) }}</td>
+      <td class="c-q">{{ ns.hd | num(2) }}</td>
+      <td class="c-q">{{ ns.hy | num(1) }}</td>
+      <td class="c-q">{{ ns.sd | num(2) }}</td>
+      <td class="c-q">{{ ns.sy | num(1) }}</td>
+    </tr>
+  </tbody>
+</table>
+{% if balance.note %}<p class="balance-note">{{ balance.note }}</p>{% endif %}

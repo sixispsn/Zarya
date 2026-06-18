@@ -1,0 +1,61 @@
+/* ===========================================================================
+   equipment.css — таблицы подбора насоса (5.1.8) и счётчиков (5.1.13) + рисунок.
+   Передавать через stylesheets=[CSS(filename=...)].
+   Неразрывность — те же правила, что в balance.css.
+=========================================================================== */
+
+table.equip {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  line-height: 1.25;
+  margin: 4pt 0;
+  break-inside: avoid;
+}
+table.equip thead { display: table-header-group; }
+table.equip tr, table.equip td, table.equip th { break-inside: avoid; }
+
+table.equip th, table.equip td {
+  border: 0.5pt solid #000;
+  padding: 2pt 3pt;
+  vertical-align: middle;
+  text-align: center;
+}
+table.equip th { font-weight: 600; background: #f0f0f0; }
+
+/* насос */
+table.equip td.e-name, table.equip td.e-note { text-align: left; }
+table.equip tr.accepted td { background: #eef5ee; font-weight: 600; }
+table.equip .badge {
+  display: inline-block; font-size: 7pt; font-weight: 700;
+  color: #1a6a1a; border: 0.5pt solid #1a6a1a; border-radius: 3pt;
+  padding: 0 3pt; margin-top: 1pt;
+}
+table.equip .e-num { width: 4%; }
+table.equip .e-name { width: 26%; }
+table.equip .e-type { width: 13%; }
+table.equip .e-q, table.equip .e-h, table.equip .e-p, table.equip .e-mot { width: 9%; }
+table.equip .e-note { width: 21%; }
+
+/* счётчик */
+table.equip td.m-name, table.equip td.m-out { text-align: left; }
+table.equip .m-name { width: 22%; }
+table.equip .m-dn { width: 5%; }
+table.equip .m-type { width: 9%; }
+table.equip .m-q { width: 8%; }
+table.equip .m-h { width: 8%; }
+table.equip .m-lim { width: 9%; }
+table.equip .m-v { width: 9%; }
+table.equip .m-out { width: 13%; }
+
+/* статусы проверок */
+table.equip td.ok   { color: #1a6a1a; }
+table.equip td.warn { color: #9a6a00; }
+table.equip td.bad  { color: #b01818; font-weight: 700; }
+
+.equip-verdict { font-size: 8pt; margin: 3pt 0 0; }
+.equip-note    { font-size: 8pt; font-style: italic; margin: 3pt 0 0; }
+
+/* рисунок (график Q-H) */
+.figure { margin: 8pt 0; text-align: center; break-inside: avoid; }
+.figure-cap { font-size: 8.5pt; margin: 3pt 0 0; text-align: center; }

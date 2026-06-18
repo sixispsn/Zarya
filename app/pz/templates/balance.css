@@ -1,0 +1,73 @@
+/* ===========================================================================
+   balance.css — таблица баланса (форма 2) + общие правила неразрывности.
+   Передавать через stylesheets=[CSS(filename=...)] в WeasyPrint.
+
+   Неразрывность (закрывает PENDING #1.2):
+   - table.balance { break-inside: avoid } — короткая таблица не рвётся
+     по границе страницы: WeasyPrint переносит её целиком на след. лист.
+     Если таблица длиннее листа — вынужденно разрывается между СТРОКАМИ,
+     а шапка (table-header-group) повторяется на каждом листе.
+   - tr/td { break-inside: avoid } — строка не делится по высоте.
+   - Те же три правила применимы к ЛЮБОЙ таблице ПЗ: продублировать
+     селектор или повесить класс .keep на нужные таблицы.
+=========================================================================== */
+
+table.balance {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  line-height: 1.25;
+  margin: 4pt 0;
+  break-inside: avoid;            /* короткую — целиком на следующий лист */
+}
+
+table.balance thead {
+  display: table-header-group;    /* повтор шапки на каждом листе при разрыве */
+}
+
+table.balance tr,
+table.balance td,
+table.balance th {
+  break-inside: avoid;            /* не делить строку по высоте */
+}
+
+table.balance th,
+table.balance td {
+  border: 0.5pt solid #000;
+  padding: 2pt 3pt;
+  vertical-align: middle;
+  text-align: center;
+}
+
+table.balance th {
+  font-weight: 600;
+  background: #f0f0f0;            /* WeasyPrint печатает фон ячеек */
+}
+
+table.balance td.c-name {
+  text-align: left;
+}
+
+table.balance .nd {
+  font-size: 7pt;
+  color: #333;
+}
+
+table.balance tr.total td {
+  font-weight: 700;
+  background: #f7f7f7;
+}
+
+/* Ширины колонок (сумма ≈ 100%, влезает в рамку ГОСТ ~170 мм) */
+table.balance .c-num  { width: 4%; }
+table.balance .c-name { width: 22%; }
+table.balance .c-cnt  { width: 11%; }
+table.balance .c-norm { width: 17%; }
+table.balance .c-reg  { width: 6%; }
+table.balance .c-q    { width: 7.3%; }
+
+.balance-note {
+  font-size: 8pt;
+  font-style: italic;
+  margin: 3pt 0 0;
+}

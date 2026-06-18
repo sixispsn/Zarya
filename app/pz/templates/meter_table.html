@@ -1,0 +1,63 @@
+{# ===========================================================================
+   templates/meter_table.html — Подбор водомерных узлов.
+   Таблица с проверками а)/б)/в) по табл. 12.1 и пп. 12.x СП 30.13330.2020
+   (ГОСТ 21.619-2023, п. 5.1.13). Контекст: meters (MetersSystem).
+   Подключение: {% include "meter_table.html" %}
+=========================================================================== #}
+<table class="equip">
+  <thead>
+    <tr>
+      <th rowspan="2" class="m-name">Назначение узла</th>
+      <th rowspan="2" class="m-dn">Ду,<br>мм</th>
+      <th rowspan="2" class="m-type">Тип</th>
+      <th rowspan="2" class="m-q">Q<sub>экспл</sub>,<br>м³/ч</th>
+      <th colspan="2">а) при q<sub>с</sub></th>
+      <th colspan="2">б) при q<sub>с</sub>+Q<sub>пож</sub></th>
+      <th class="m-v">в)</th>
+      <th rowspan="2" class="m-out">Вывод</th>
+    </tr>
+    <tr>
+      <th class="m-h">h, м</th>
+      <th class="m-lim">[доп.]</th>
+      <th class="m-h">h, м</th>
+      <th class="m-lim">[доп.]</th>
+      <th class="m-v">q<sub>min</sub></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in meters.rows %}
+      <tr>
+        <td class="m-name">{{ r.label }}</td>
+        <td class="m-dn">{{ r.dn }}</td>
+        <td class="m-type">{{ r.type_label }}</td>
+        <td class="m-q">{{ r.qexpl | num(1) }}</td>
+        {# проверка а) #}
+        <td class="m-h {{ 'ok' if r.ok_a else 'bad' }}">{{ r.h_a | num(2) }}</td>
+        <td class="m-lim">≤{{ r.lim_a | num(1) }}{{ ' ✓' if r.ok_a else ' ✗' }}</td>
+        {# проверка б) #}
+        {% if r.h_b is not none %}
+          <td class="m-h {{ 'ok' if r.ok_b else 'warn' }}">{{ r.h_b | num(2) }}</td>
+          <td class="m-lim">≤{{ r.lim_b | num(1) }}{{ ' ✓' if r.ok_b else ' !' }}</td>
+        {% else %}
+          <td class="m-h">—</td><td class="m-lim">—</td>
+        {% endif %}
+        {# проверка в) #}
+        <td class="m-v {{ 'ok' if r.ok_v else 'warn' }}">{{ r.qmin | num(3) }}{{ ' ✓' if r.ok_v else ' !' }}</td>
+        {# вывод #}
+        <td class="m-out">
+          {%- if r.need_bypass %}+ обводная (12.10, 12.11)
+          {%- elif r.need_combo %}комбинированный
+          {%- else %}принят{% endif -%}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="equip-verdict">
+  Проверки: а) потери при расчётном секундном расходе h&nbsp;=&nbsp;S·q<sub>с</sub>² (предел 5&nbsp;м крыльчатый / 2,5&nbsp;м турбинный);
+  б) то же при пропуске пожарного расхода h&nbsp;=&nbsp;S·(q<sub>с</sub>+Q<sub>пож</sub>)² (предел 10&nbsp;/&nbsp;5&nbsp;м);
+  в) измерение минимальных расходов (q<sub>min</sub> счётчика&nbsp;≤&nbsp;часового расхода).
+</p>
+{% if meters.single_input_bypass_note %}
+<p class="equip-note">При одном вводе водопровода обводная линия у счётчика ХВС предусматривается обязательно (п. 12.10 СП 30.13330.2020).</p>
+{% endif %}

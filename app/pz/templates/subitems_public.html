@@ -88,6 +88,7 @@ Q = {{ pumps.q_m3h|num(1) }} м³/ч, H = {{ pumps.head_m|num(1) }} м, N = {{ p
 требуемого ({{ head.h_required_m|num(2) }} м); повысительные насосные установки на
 хозяйственно-питьевые нужды не предусматриваются.</p>
 {% endif %}
+{% if pumps.required %}{% include "pump_table.html" %}{% endif %}
 
 <p class="subhead">ж) сведения о материале труб систем водоснабжения и мерах по их защите от агрессивного воздействия грунтов и грунтовых вод.</p>
 <p class="subitem">Магистральные трубопроводы холодного водоснабжения — {{ materials.cold_mains }};
@@ -124,6 +125,7 @@ Q = {{ pumps.q_m3h|num(1) }} м³/ч, H = {{ pumps.head_m|num(1) }} м, N = {{ p
 {% if meters.hot_meter_dn %}счетчиком Ду{{ meters.hot_meter_dn }}{% else %}счетчиком <span class="fill">⟦КАЛИБР СЧЁТЧИКА ГВС⟧</span>{% endif %} в ИТП.{% endif %}
 {% if meters.notes %}{{ meters.notes }}{% endif %}
 Счетчики приняты по таблице 12.1 СП 30.13330.2020.</p>
+{% if meters.rows %}{% include "meter_table.html" %}{% endif %}
 
 <p class="subhead">м) описание системы автоматизации водоснабжения.</p>
 <p class="subitem">{% if pumps.required %}Автоматизация насосной установки предусматривает: автоматическое
@@ -176,11 +178,15 @@ Q = {{ pumps.q_m3h|num(1) }} м³/ч, H = {{ pumps.head_m|num(1) }} м, N = {{ p
 <p class="subitem">Объект относится к непроизводственным. В составе данного раздела не разрабатывается.</p>
 
 <p class="subhead">т) баланс водопотребления и водоотведения по объекту капитального строительства — для объектов непроизводственного назначения.</p>
+{% if balance.rows %}
+{% include "balance_table.html" %}
+{% else %}
 <table class="data">
   <tr><th>Наименование</th><th>м³/сут</th><th>м³/ч</th><th>л/с</th></tr>
   <tr><td>Водопотребление, всего</td><td>{{ flows.q_day_tot|num(2) }}</td><td>{{ flows.q_hr_tot|num(2) }}</td><td>{{ flows.q_sec_tot|num(2) }}</td></tr>
   <tr><td>Водоотведение, всего</td><td>{{ flows.q_day_tot|num(2) }}</td><td>{{ flows.q_hr_tot|num(2) }}</td><td>{{ flows.sewage_l_per_s|num(2) }}</td></tr>
 </table>
+{% endif %}
 <p class="subitem">Водоотведение по суточному и часовому расходам принято равным водопотреблению;
 секундный расход стоков определен с учетом расхода от прибора с максимальным водоотведением
 (п. 8.3.4 СП 30.13330.2020).</p>

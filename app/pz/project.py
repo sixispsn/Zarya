@@ -90,6 +90,34 @@ class FlowsData:
     q_year_m3: float = 0.0
 
 
+# ── БАЛАНС ВОДОПОТРЕБЛЕНИЯ/ВОДООТВЕДЕНИЯ (форма 2, прил. А ГОСТ Р 21.619-2023) ──
+
+@dataclass
+class ConsumerRow:
+    """Одна строка баланса. Объёмы — в м³; q_*_year = q_*_day · days_year,
+    но держим явными, чтобы мост мог положить точные значения из ядра."""
+    name: str = ""              # наименование потребителя
+    count: float = 0.0          # расчётное число потребителей
+    count_unit: str = ""        # ед. изм.: «мест», «чел.», «м²», «кг сух. белья»
+    norm_display: str = ""      # норма расхода, напр. «8,1 л/место·сут»
+    nd_ref: str = ""            # норм. документ: «СП 30.13330.2020, табл. А.2»
+    regime_h: float = 0.0       # режим работы, ч/сут
+    days_year: int = 0          # число суток работы в году
+    q_cold_day: float = 0.0     # ХВС, м³/сут
+    q_cold_year: float = 0.0    # ХВС, м³/год
+    q_hot_day: float = 0.0      # ГВС, м³/сут
+    q_hot_year: float = 0.0     # ГВС, м³/год
+    q_sew_day: float = 0.0      # водоотведение, м³/сут
+    q_sew_year: float = 0.0     # водоотведение, м³/год
+
+
+@dataclass
+class BalanceData:
+    """Баланс целиком. Итоги считаются в шаблоне (sum по строкам)."""
+    rows: list = field(default_factory=list)   # list[ConsumerRow]
+    note: str = ""                              # сноска под таблицей
+
+
 @dataclass
 class FireSystem:
     required: bool = False
@@ -106,6 +134,33 @@ class FireSystem:
     pk_total: int = 0                         # всего пожарных шкафов/кранов
 
 
+# ── СЧЁТЧИКИ (детальный подбор, таблица 5.1.13 ГОСТ 21.619-2023) ──
+
+@dataclass
+class MeterRow:
+    """Один водомерный узел (результат checkMeter). Проверки а)/б)/в) по
+    табл. 12.1 и пп. 12.x СП 30.13330.2020."""
+    label: str = ""            # «Счётчик ХВС», «Счётчик на вводе (общий)» …
+    dn: int = 0                # Ду, мм
+    type_label: str = ""       # «крыльчатый» / «турбинный»
+    s_resist: float = 0.0      # S, м/(л/с)²
+    qexpl: float = 0.0         # эксплуатационный расход, м³/ч
+    qmin: float = 0.0          # порог чувствительности qthr, м³/ч
+    # проверка а): потери при расчётном секундном расходе
+    h_a: float = 0.0
+    lim_a: float = 0.0         # предел (крыльч. 5 / турб. 2,5 м)
+    ok_a: bool = True
+    # проверка б): потери при q + Q_пож (None — пожара нет)
+    h_b: Optional[float] = None
+    lim_b: float = 0.0         # предел (крыльч. 10 / турб. 5 м)
+    ok_b: bool = True
+    need_bypass: bool = False  # требуется обводная с электрозадвижкой
+    # проверка в): измерение малых расходов
+    q_hr: float = 0.0          # часовой расход для сравнения
+    ok_v: bool = True
+    need_combo: bool = False   # рекомендован комбинированный счётчик
+
+
 @dataclass
 class MetersSystem:
     hws_type_meters: str = ""
@@ -116,17 +171,49 @@ class MetersSystem:
     # --- жилые дома ---
     has_apartment_meters: bool = False   # поквартирные счётчики
     has_askue: bool = False              # импульсный выход / АСКУЭ
+    # --- детальный подбор (таблица 5.1.13) ---
+    rows: list = field(default_factory=list)   # list[MeterRow]
+    single_input_bypass_note: bool = False     # примечание про обводную при 1 вводе
+
+
+# ── НАСОС (детальный подбор, таблица 5.1.8 + данные графика Q-H) ──
+
+@dataclass
+class PumpCandidate:
+    """Один кандидат из подбора (renderTop3). top3[0] — принятый."""
+    model: str = ""
+    brand: str = ""
+    type_label: str = ""        # «хозяйственно-питьевой» / «пожарный»
+    note: str = ""              # схема: «1 раб. + 1 рез., DN32»
+    wp_q: float = 0.0           # рабочая точка Q, м³/ч
+    wp_h: float = 0.0           # рабочая точка H, м
+    p2_kw: float = 0.0          # потребляемая мощность в раб. точке, кВт
+    motor_min_kw: float = 0.0   # мин. мощность двигателя (запас 15%), кВт
+    p_max_bar: float = 0.0
+    npshr: float = 0.0
+    score: float = 0.0
+    reasons: list = field(default_factory=list)  # list[str] — обоснование
 
 
 @dataclass
 class PumpSystem:
     required: bool = False
     purpose: str = ""
+    # итоговые (как было) — дублируют принятый top3[0]
     model: str = ""
     q_m3h: float = 0.0
     head_m: float = 0.0
     power_kw: float = 0.0
     count_note: str = ""
+    # --- детальный подбор (таблица 5.1.8) ---
+    top3: list = field(default_factory=list)    # list[PumpCandidate]
+    # --- данные графика Q-H принятого насоса (для pump_chart.render_*) ---
+    curve: list = field(default_factory=list)   # list[(q, h)] эффективная кривая
+    h_stat: float = 0.0                          # статич. напор системы, м
+    k_sys: float = 0.0                           # коэф. кривой системы
+    wp_q: float = 0.0                            # рабочая точка Q, м³/ч
+    wp_h: float = 0.0                            # рабочая точка H, м
+    q_opt: float = 0.0                           # BEP насоса, м³/ч
 
 
 @dataclass
@@ -168,3 +255,4 @@ class Project:
     fire: FireSystem = field(default_factory=FireSystem)
     meters: MetersSystem = field(default_factory=MetersSystem)
     pumps: PumpSystem = field(default_factory=PumpSystem)
+    balance: BalanceData = field(default_factory=BalanceData)

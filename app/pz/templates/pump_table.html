@@ -1,0 +1,49 @@
+{# ===========================================================================
+   templates/pump_table.html — Подбор повысительной насосной установки.
+   Таблица сравнения Top-3 (ГОСТ 21.619-2023, п. 5.1.8) + характеристика Q-H.
+   Контекст: pumps (PumpSystem), pump_chart_svg (str, из pump_chart.render_*).
+   Подключение в subitems_public.html (подпункт о насосных установках):
+       {% if pumps.required %}{% include "pump_table.html" %}{% endif %}
+=========================================================================== #}
+{% set accepted = pumps.top3[0] if pumps.top3 else none %}
+<table class="equip">
+  <thead>
+    <tr>
+      <th class="e-num">№</th>
+      <th class="e-name">Марка насосной установки</th>
+      <th class="e-type">Тип</th>
+      <th class="e-q">Q раб.,<br>м³/ч</th>
+      <th class="e-h">H раб.,<br>м</th>
+      <th class="e-p">N (P₂),<br>кВт</th>
+      <th class="e-mot">Мощн.&nbsp;двиг.<br>≥, кВт</th>
+      <th class="e-note">Примечание</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in pumps.top3 %}
+      <tr{% if loop.first %} class="accepted"{% endif %}>
+        <td class="e-num">{{ loop.index }}</td>
+        <td class="e-name">{{ c.brand }} {{ c.model }}{% if loop.first %}<br><span class="badge">принят</span>{% endif %}</td>
+        <td class="e-type">{{ c.type_label }}</td>
+        <td class="e-q">{{ c.wp_q | num(2) }}</td>
+        <td class="e-h">{{ c.wp_h | num(1) }}</td>
+        <td class="e-p">{{ c.p2_kw | num(2) }}</td>
+        <td class="e-mot">{{ c.motor_min_kw | num(2) }}</td>
+        <td class="e-note">{{ c.note }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if accepted and accepted.reasons %}
+<p class="equip-verdict">Обоснование выбора (поз. 1): {{ accepted.reasons | join("; ") }}.</p>
+{% endif %}
+
+{% if pump_chart_svg %}
+<div class="figure">
+  {{ pump_chart_svg | safe }}
+  <p class="figure-cap">Рисунок&nbsp;— Характеристика Q-H принятого насоса: кривая насоса,
+    кривая системы H&nbsp;=&nbsp;H<sub>ст</sub>&nbsp;+&nbsp;k·Q² и рабочая точка
+    Q&nbsp;=&nbsp;{{ pumps.wp_q | num(2) }} м³/ч, H&nbsp;=&nbsp;{{ pumps.wp_h | num(1) }} м.</p>
+</div>
+{% endif %}
