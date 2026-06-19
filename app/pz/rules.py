@@ -11,7 +11,7 @@
   СП 10.13130.2020
   ГОСТ Р 21.619-2023 (оформление)
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from app.pz.project import FireSystem, FlowsData, PipeMaterials, WaterSource
@@ -19,6 +19,13 @@ from app.pz.project import FireSystem, FlowsData, PipeMaterials, WaterSource
 # Порог рабочего давления, выше которого хоз-питьевую и пожарную сети разделяют
 # (СП 10.13130.2020, пп. 6.1.1–6.1.2; СП 30.13330.2020, 5.4.1)
 PRESSURE_LIMIT_MPA = 0.45
+
+# Коэффициент kм местных сопротивлений (∑Hil = i·l·(1+kм)), раздел 8 СП 30.13330.2020
+KM_BY_NETWORK = {
+    "domestic": 0.3,   # хоз-питьевые сети жилых и общественных зданий
+    "combined": 0.2,   # объединённые хоз-противопожарные / производственные
+    "fire": 0.1,       # противопожарные
+}
 
 
 @dataclass
@@ -49,11 +56,7 @@ def decide_fire_network(
     fire: FireSystem,
     materials: PipeMaterials,
 ) -> Optional[FireNetworkDecision]:
-    """
-    Объединённая или раздельная сеть В2.
-
-    Возвращает None, если ВПВ не требуется.
-    """
+    """Объединённая или раздельная сеть В2. None — если ВПВ не требуется."""
     if not fire.required:
         return None
 
@@ -86,11 +89,17 @@ def decide_fire_network(
 
 @dataclass
 class HeadCalc:
-    """Расчёт требуемого напора и решение по необходимости насосов."""
-    h_required_m: Optional[float]   # требуемый напор Hтр, м (None — нет данных)
-    h_guaranteed_m: Optional[float] # гарантированный напор, м
+    """Расчёт требуемого напора Hтр по формуле (14) п.8.27 СП 30.13330.2020
+    и решение о необходимости повысительной установки."""
+    h_required_m: Optional[float]   # Hтр, м (None — неполные данные)
+    h_guaranteed_m: Optional[float] # Hгар, м (из ТУ заказчика)
     components: List[tuple]         # [(название, значение_м), ...] для таблицы
-    pump_needed: Optional[bool]     # True/False/None (None — недостаточно данных)
+    pump_needed: Optional[bool]     # True/False/None
+    # разложение для подбора насоса (чтобы насос и таблица не расходились)
+    h_geom_m: Optional[float] = None        # Hgeom
+    h_losses_dynamic_m: Optional[float] = None  # ∑Hil+∑Hвод+Hтепл+Hlввод (динамика без Hпр)
+    h_pr_m: float = 20.0
+    km: float = 0.3
 
     @property
     def deficit_m(self) -> Optional[float]:
@@ -98,30 +107,70 @@ class HeadCalc:
             return None
         return round(self.h_required_m - self.h_guaranteed_m, 2)
 
+    @property
+    def h_pump_m(self) -> Optional[float]:
+        """Hнас = Hтр − Hгар (вход из сети). None — если данных нет."""
+        if self.h_required_m is None:
+            return None
+        if self.h_guaranteed_m is None:
+            return self.h_required_m
+        return round(max(self.h_required_m - self.h_guaranteed_m, 0.0), 2)
 
-def calc_required_head(source: WaterSource) -> HeadCalc:
-    """
-    Hтр = Hgeom + ∑Hil + Hпр + ∑Hвод + Hтепл + Hlввод
-    — формула (14) п.8.27 СП 30.13330.2020.
 
-    Hпр (напор перед прибором, п.8.21) по умолчанию 20 м — минимум по СП.
-    Hтепл (теплообменник) ≈ 3 м задаётся для централизованного ГВС.
-    Складывает заданные составляющие; обязательные Hпр и Hтепл всегда учитываются,
-    даже если остальные не заданы (тогда расчёт неполный — отметить в ПЗ).
-    Решение о насосах — при известных Hтр и гарантированном напоре.
+def calc_required_head(source: WaterSource, *, h_vod_m: Optional[float] = None) -> HeadCalc:
     """
+    Hтр = Hgeom + ∑Hil + Hпр + ∑Hвод + Hтепл + Hlввод (формула 14, п.8.27).
+
+    Слагаемые:
+      Hgeom  — из отметок (elev_fixture − elev_header), иначе source.h_geom_m;
+      ∑Hil   — il_dict·(1+kм), kм по network_kind; иначе source.h_il_m готовой суммой;
+      Hпр    — source.h_pr_m (20 м, п.8.21);
+      ∑Hвод  — h_vod_m из расчёта счётчика (приоритет), иначе source.h_vod_m;
+      Hтепл  — source.h_tepl_m (3 м если ТО наш; 0 если ГВС готовое/внешнее);
+      Hlввод — il_vvod·1,1, иначе source.h_vvod_m готовой суммой.
+    Hтр считается, если заданы Hgeom, ∑Hil, ∑Hвод, Hlввод (Hпр всегда есть).
+    """
+    km = KM_BY_NETWORK.get(source.network_kind, 0.3)
+
+    # Hgeom — отметки в приоритете
+    if source.elev_header_m is not None and source.elev_fixture_m is not None:
+        h_geom = round(source.elev_fixture_m - source.elev_header_m, 2)
+    else:
+        h_geom = source.h_geom_m
+
+    # ∑Hil = i·l·(1+kм)
+    if source.il_dict_m is not None:
+        h_il = round(source.il_dict_m * (1 + km), 2)
+    else:
+        h_il = source.h_il_m
+
+    h_pr = source.h_pr_m
+    h_vod = h_vod_m if h_vod_m is not None else source.h_vod_m
+    h_tepl = source.h_tepl_m  # 0 или 3
+
+    # Hlввод = i·Lввод·1,1
+    if source.il_vvod_m is not None:
+        h_vvod = round(source.il_vvod_m * 1.1, 2)
+    else:
+        h_vvod = source.h_vvod_m
+
     parts = [
-        ("Hgeom — геометрическая высота диктующего прибора", source.h_geom_m),
-        ("∑Hil — потери напора по диктующему направлению", source.h_il_m),
-        ("Hпр — напор перед диктующим прибором (п.8.21)", source.h_pr_m),
-        ("∑Hвод — потери в узлах учёта (п.12.15)", source.h_vod_m),
-        ("Hтепл — потери в теплообменнике/ИТП", source.h_tepl_m or None),
-        ("Hlввод — потери на вводе(ах)", source.h_vvod_m),
+        ("Hgeom — геом. высота диктующего прибора над точкой подключения", h_geom),
+        (f"∑Hil — потери по диктующему направлению, i·l·(1+{km:.1f})", h_il),
+        ("Hпр — свободный напор перед прибором (п.8.21)", h_pr),
+        ("∑Hвод — потери в узле учёта, h=S·q² (п.12.15)", h_vod),
+        ("Hтепл — потери в теплообменнике/ИТП", h_tepl if h_tepl else None),
+        ("Hlввод — потери на вводе, i·L·1,1", h_vvod),
     ]
     components = [(name, val) for name, val in parts if val is not None]
-    # Hтр считаем, только если заданы основные геометрия и потери
-    has_core = source.h_geom_m is not None and source.h_il_m is not None
+
+    required = [h_geom, h_il, h_pr, h_vod, h_vvod]
+    has_core = all(x is not None for x in required)
     h_req = round(sum(val for _, val in components), 2) if has_core else None
+
+    # динамика (для подбора насоса): всё кроме Hgeom и Hпр
+    dyn_parts = [h_il, h_vod, (h_tepl or 0.0), h_vvod]
+    h_losses_dyn = round(sum(x for x in dyn_parts if x is not None), 2) if has_core else None
 
     pump_needed: Optional[bool] = None
     if h_req is not None and source.guaranteed_head_m is not None:
@@ -132,28 +181,31 @@ def calc_required_head(source: WaterSource) -> HeadCalc:
         h_guaranteed_m=source.guaranteed_head_m,
         components=components,
         pump_needed=pump_needed,
+        h_geom_m=h_geom,
+        h_losses_dynamic_m=h_losses_dyn,
+        h_pr_m=h_pr,
+        km=km,
     )
 
 
 @dataclass
 class TuCheck:
     """Результат одной проверки соответствия расчёта лимиту ТУ."""
-    label: str           # что проверяем
-    calc: float          # расчётное значение
-    limit: float         # лимит ТУ
+    label: str
+    calc: float
+    limit: float
     unit: str
-    ok: bool             # проходит ли (calc <= limit)
+    ok: bool
 
     @property
     def margin(self) -> float:
-        """Запас (если ok) или превышение (если не ok), той же размерности."""
         return round(self.limit - self.calc, 3)
 
 
 @dataclass
 class TuComplianceResult:
     """Сводка проверки соответствия расчётных расходов лимитам ТУ."""
-    checks: list          # list[TuCheck]
+    checks: list
     all_ok: bool
 
     @property
@@ -174,13 +226,7 @@ class TuComplianceResult:
 
 
 def check_tu_limits(flows: FlowsData, source: WaterSource) -> TuComplianceResult:
-    """
-    Проверка: расчётные расходы (наш расчёт по СП 30) не превышают лимиты
-    присоединения (дебит), выданные ресурсоснабжающей организацией в ТУ.
-
-    Наш расчёт — главный; ТУ задаёт потолок. Превышение означает, что
-    решение не проходит и требует пересмотра либо других ТУ.
-    """
+    """Проверка: расчётные расходы (наш расчёт по СП 30) ≤ лимиты ТУ (дебит)."""
     checks: list = []
 
     if source.tu_limit_q_day is not None:

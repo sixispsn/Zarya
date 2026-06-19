@@ -48,12 +48,22 @@ class WaterSource:
     pressure_note: str = ""
     # --- составляющие требуемого напора Hтр по формуле (14) п.8.27 СП 30.13330.2020 ---
     # Hтр = Hgeom + ∑Hil + Hпр + ∑Hвод + Hтепл + Hlввод
-    h_geom_m: Optional[float] = None    # Hgeom — геом. высота диктующего прибора над точкой подключения
-    h_il_m: Optional[float] = None      # ∑Hil — потери на всех участках диктующего направления
+    # Hgeom — авто из отметок: elev_fixture_m − elev_header_m (ось коллектора насоса
+    # или ось ввода). Если отметки не заданы — берётся прямое h_geom_m.
+    elev_header_m: Optional[float] = None   # отметка оси напорного коллектора насоса / ввода, м
+    elev_fixture_m: Optional[float] = None  # отметка излива диктующего прибора, м
+    h_geom_m: Optional[float] = None        # Hgeom напрямую (если отметки не заданы)
+    # ∑Hil = i·l·(1+kм): il_dict_m — линейные потери i·l по диктующему направлению,
+    # kм добавляется автоматически по network_kind. h_il_m — готовая сумма (запасной путь).
+    il_dict_m: Optional[float] = None       # линейные i·l внутренней сети, м
+    h_il_m: Optional[float] = None          # ∑Hil готовой суммой (если задан — используется как есть)
+    network_kind: str = "domestic"          # тип сети для kм: domestic 0,3 / combined 0,2 / fire 0,1
     h_pr_m: float = 20.0                # Hпр — напор перед прибором, п.8.21 (минимум 20 м)
-    h_vod_m: Optional[float] = None     # ∑Hвод — потери в узлах учёта (12.15)
-    h_tepl_m: float = 0.0               # Hтепл — потери в теплообменнике/ИТП (≈3 м при централ. ГВС)
-    h_vvod_m: Optional[float] = None    # Hlввод — потери на вводе/вводах
+    h_vod_m: Optional[float] = None     # ∑Hвод — потери в узлах учёта (12.15); обычно из расчёта счётчика
+    h_tepl_m: float = 0.0               # Hтепл — потери в теплообменнике/ИТП (3 м если ТО наш; 0 если ГВС готовое)
+    # Hlввод = i·Lввод·1,1: il_vvod_m — линейные i·l ввода, ×1,1 (стадия П). h_vvod_m — готовой суммой.
+    il_vvod_m: Optional[float] = None       # линейные i·l ввода, м
+    h_vvod_m: Optional[float] = None        # Hlввод готовой суммой (если задан — используется как есть)
     # --- лимиты присоединения по ТУ (дебит), для проверки соответствия ---
     tu_limit_q_day: Optional[float] = None      # лимит суточного расхода ХВС, м³/сут
     tu_limit_q_sec: Optional[float] = None      # лимит секундного расхода ХВС, л/с

@@ -52,6 +52,20 @@ def _subitems_template_name(purpose: BuildingPurpose) -> str:
     return name
 
 
+def _cold_meter_loss(meters) -> float | None:
+    """Потери ∑Hвод для Hтр — счётчик на холодном (диктующем) направлении:
+    при одном вводе (Qtot) — узел на вводе; иначе — счётчик ХВС."""
+    rows = getattr(meters, "rows", None) or []
+    for r in rows:
+        if "ввод" in r.label.lower():
+            return r.h_a
+    for r in rows:
+        lab = r.label.lower()
+        if "хвс" in lab or "холодн" in lab:
+            return r.h_a
+    return None
+
+
 def _pump_chart_svg(project: Project) -> str:
     """SVG характеристики Q-H принятого насоса (пусто, если насос не нужен)."""
     p = project.pumps
@@ -73,7 +87,7 @@ def generate_pz_html(project: Project) -> str:
 
     subitems_tpl = env.get_template(_subitems_template_name(project.building.purpose))
     fire_net = decide_fire_network(project.fire, project.materials)
-    head = calc_required_head(project.source)
+    head = calc_required_head(project.source, h_vod_m=_cold_meter_loss(project.meters))
     tu_check = check_tu_limits(project.flows, project.source)
     body_html = subitems_tpl.render(
         doc=project.document,
