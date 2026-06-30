@@ -2,7 +2,7 @@
 Тестовая генерация ПЗ на данных Нахабино.
 Запуск: python make_test_pz.py
 """
-from app.pz.generator import generate_pz_pdf
+from app.pz.generator import generate_pz_pdf, generate_spec_pdf
 from app.pz.project import (
     BuildingFlags,
     BuildingPurpose,
@@ -14,6 +14,7 @@ from app.pz.project import (
     Project,
     Stage,
     WaterSource,
+    FixtureGroup,
 )
 
 # Расчётное ядро + мост + расчёт напора
@@ -26,17 +27,23 @@ from app.pz.rules import calc_required_head
 project = Project(
     document=DocumentInfo(
         cipher="3010-713-2025-ИОС2",
-        object_name="Многофункциональный зал (кинозал) и кафе на 262 места",
+        object_name="Капитальный ремонт помещений кинозала и кафе на 262 места, 2 эт., ~1800 м²",
+        object_part="Кинозал и кафе",
         object_address="пос. Нахабино",
+        organization="ООО «Индеком»",
+        developer_name="Пашкевич А.",
+        inspector_name="Терашкевич А.",
         stage=Stage.P,
     ),
     building=BuildingFlags(
         purpose=BuildingPurpose.PUBLIC,
         floors_above=2,
         height_m=10.0,
+        total_area_m2=1800.0,   # общая площадь (для удельного расчёта труб)
         hws_type=HwsType.CENTRAL,   # ГВС готовое из внешней котельной (вне нашего раздела)
         seats=262,
         fire_class="Ф2.1",
+        risers_v1=4, risers_t3=4, risers_t4=2,
     ),
     source=WaterSource(
         description="от существующей городской сети водоснабжения",
@@ -57,7 +64,16 @@ project = Project(
         q_hr_tot=3.182, q_hr_c=1.941, q_hr_h=1.547,
         sewage_l_per_s=3.099, heat_max_kw=107.7,   # тепловая нагрузка ГВС — для котельной/смежников
     ),
-    fire=FireSystem(required=True, streams=2, q_per_stream=2.6, q_total=5.2),
+    fire=FireSystem(required=True, streams=2, q_per_stream=2.6, q_total=5.2,
+                    pk_total=4, nozzle_dn=50, hose_length_m=20),
+    # Приборы по заданию АР (тест) — для арматуры спецификации
+    fixtures=[
+        FixtureGroup('Унитаз', 8),
+        FixtureGroup('Писсуар', 4),
+        FixtureGroup('Умывальник', 10),
+        FixtureGroup('Мойка кухонная', 3, valve_dn=20),
+        FixtureGroup('Раковина хозяйственная (видуар)', 2),
+    ],
 )
 
 # --- Подбор счётчиков -> project.meters (таблица 5.1.13) ---
@@ -115,3 +131,11 @@ if head.pump_needed:
 out = generate_pz_pdf(project, "/tmp/pz_nahabino.pdf")
 print(f"PDF создан: {out}")
 print("Открой командой: open /tmp/pz_nahabino.pdf")
+
+spec_out = generate_spec_pdf(project, "/tmp/spec_nahabino.pdf")
+print(f"Спецификация создана: {spec_out}")
+print("Открой командой: open /tmp/spec_nahabino.pdf")
+
+from app.pz.scheme import generate_scheme_svg
+generate_scheme_svg(project, "/tmp/scheme_nahabino.svg")
+print("Схема создана: /tmp/scheme_nahabino.svg")

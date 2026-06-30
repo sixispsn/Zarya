@@ -29,13 +29,24 @@ class DocumentInfo:
     cipher: str = ""
     object_name: str = ""
     object_address: str = ""
+    object_part: str = ""          # наименование части/здания ("Конференц зал")
     stage: Stage = Stage.P
     sheet_title: str = "Текстовая часть"
     organization: str = ""
     gip_name: str = ""
     developer_name: str = ""
     inspector_name: str = ""
+    dept_head_name: str = ""       # Нач. отдела
     norm_control_name: str = ""
+    sheet_no: str = "1"
+    sheet_total: str = "—"
+
+    @property
+    def stage_label(self) -> str:
+        try:
+            return self.stage.value
+        except Exception:
+            return "П"
 
 
 @dataclass
@@ -241,6 +252,7 @@ class BuildingFlags:
     floors_above: int = 1
     floors_below: int = 0
     height_m: float = 0.0
+    total_area_m2: float = 0.0   # общая площадь здания, м² (для удельного расчёта труб, Метод 2)
     has_parking: bool = False
     has_built_in: bool = False
     fire_class: str = ""
@@ -253,6 +265,59 @@ class BuildingFlags:
     zone_split_note: str = ""    # описание границы зон (напр. "1 зона 1-5 эт., 2 зона 6-10 эт.")
     built_in_units: list = field(default_factory=list)  # список BuiltInUnit
     separate_k1: bool = False    # раздельные выпуски К1 жильё/встройка
+    # --- число стояков по системам (для воздухоотводчиков в спецификации) ---
+    risers_v1: int = 0           # стояки ХВС (В1)
+    risers_t3: int = 0           # стояки ГВС подающие (Т3)
+    risers_t4: int = 0           # стояки ГВС циркуляционные (Т4)
+    # --- условия эксплуатации (дефолты — нормальные; негатив поднимается из ТЗ) ---
+    seismicity: int = 0          # балльность; ≥7 → мероприятия по СП 30 р.15.2/22.3
+    permafrost: bool = False     # вечномёрзлые грунты
+    unheated_zones: bool = False # есть неотапливаемые зоны прокладки труб
+    high_humidity: bool = False  # влажные помещения (усиленная защита от конденсата)
+    noise_protection: bool = True  # нужна защита от шума (вибро у насоса; СП 30)
+    fire_barriers: bool = True   # пересечение противопожарных преград (муфты на пластике)
+
+    @property
+    def seismic(self) -> bool:
+        return (self.seismicity or 0) >= 7
+
+
+# Справочник приборов от АР: имя -> (есть ХВС, есть ГВС, Ду запорного крана)
+FIXTURE_CATALOG = {
+    "Унитаз":                       (True,  False, 15),
+    "Писсуар":                      (True,  False, 15),
+    "Биде":                         (True,  True,  15),
+    "Умывальник":                   (True,  True,  15),
+    "Ванна":                        (True,  True,  15),
+    "Душевой поддон":               (True,  True,  15),
+    "Душевая кабина":               (True,  True,  15),
+    "Мойка кухонная":               (True,  True,  15),
+    "Раковина хозяйственная (видуар)": (True, True, 15),
+    "Мойка медицинская":            (True,  True,  15),
+    "Питьевой фонтанчик":           (True,  False, 15),
+    "Ножная ванна":                 (True,  True,  15),
+    "Душевая сетка (производств.)": (True,  True,  15),
+}
+
+
+@dataclass
+class FixtureGroup:
+    """Группа однотипных приборов из задания АР (для арматуры спецификации).
+    На расход не влияет (расход считается по потребителям). has_cold/has_hot/
+    valve_dn = None -> берутся из FIXTURE_CATALOG по name."""
+    name: str
+    count: int
+    has_cold: Optional[bool] = None
+    has_hot: Optional[bool] = None
+    valve_dn: Optional[int] = None
+
+    def resolved(self):
+        c, h, dn = FIXTURE_CATALOG.get(self.name, (True, False, 15))
+        return (
+            c if self.has_cold is None else self.has_cold,
+            h if self.has_hot is None else self.has_hot,
+            dn if self.valve_dn is None else self.valve_dn,
+        )
 
 
 @dataclass
@@ -266,3 +331,4 @@ class Project:
     meters: MetersSystem = field(default_factory=MetersSystem)
     pumps: PumpSystem = field(default_factory=PumpSystem)
     balance: BalanceData = field(default_factory=BalanceData)
+    fixtures: list = field(default_factory=list)  # список FixtureGroup (от АР)

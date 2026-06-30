@@ -11,10 +11,12 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import CSS, HTML
+from dataclasses import replace
 
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
+from app.pz.spec import build_specification
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -124,6 +126,35 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
         for name in _CSS_FILES
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets
+    )
+    return output_path
+
+
+# ── СПЕЦИФИКАЦИЯ (отдельный документ, шифр .С, форма 3) ────────────────────
+
+def generate_spec_html(project: Project) -> str:
+    """HTML спецификации оборудования, изделий и материалов (ГОСТ 21.110)."""
+    env = _build_env()
+    spec = build_specification(project)
+    body_html = env.get_template("spec_table.html").render(spec=spec)
+    cipher = project.document.cipher
+    spec_doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".СО") else cipher + ".СО"),
+        sheet_title="Спецификация оборудования, изделий и материалов",
+    )
+    return env.get_template("spec_document.html").render(doc=spec_doc, body_html=body_html)
+
+
+def generate_spec_pdf(project: Project, output_path: str) -> str:
+    """PDF спецификации. CSS: рамка + spec.css."""
+    html_str = generate_spec_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in ("spec_frame.css", "spec.css")
     ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets

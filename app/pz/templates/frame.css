@@ -7,7 +7,8 @@
   background-position: -25mm -15mm;
   @bottom-center {
     content: element(stamp6);
-    vertical-align: top;
+    vertical-align: bottom;
+    padding-bottom: 5mm; /* низ штампа на линии рамки */
     margin-left: -5mm;   /* дотянуть штамп до левой линии рамки (x=20) */
     margin-right: -5mm;  /* и до правой (x=205) -> ширина 185 мм */
   }
@@ -25,10 +26,11 @@
   }
 }
 @page :first {
-  margin-bottom: 45mm;
+  margin-bottom: 65mm;
   @bottom-center {
     content: element(stamp3);
-    vertical-align: top;
+    vertical-align: bottom;
+    padding-bottom: 5mm;
     margin-left: -5mm;
     margin-right: -5mm;
   }
@@ -52,9 +54,14 @@ table.data th { font-weight: bold; background: #f0f0f0; }
 .stamp3 table { width: 185mm; border-collapse: collapse; table-layout: fixed; }
 .stamp3 td { border: 0.3mm solid #000; text-align: center; vertical-align: middle; font-size: 7pt; line-height: 1.05; padding: 0 .5mm; height: 5mm; }
 .stamp3 .cph { font-size: 13pt; font-weight: bold; }
+.stamp3 .obj { font-size: 7.5pt; line-height: 1.15; padding: 0 1.5mm; }
+.stamp3 .part { font-size: 10pt; }
 .stamp3 .ttl { font-size: 11pt; font-weight: bold; }
 .stamp3 .onm { font-size: 9pt; }
 .stamp3 .lbl { text-align: left; padding-left: 1mm; }
+.stamp3 .lbll { text-align: left; padding-left: 1mm; }
+.stamp3 .lblsm { font-size: 6.5pt; }
+.stamp3 .b { }
 .stamp3 .blank { height: 4mm; }
 
 /* ── Штамп форма 2а — последующие листы (15 мм) ── */
