@@ -77,6 +77,22 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     n = max(1, b.floors_above or 1)
     fh = (b.height_m / n) if (b.height_m or 0) > 0 else 3.0
 
+    # ── данные ВПВ из модели (FireSystem), а не из SchemeParams ──
+    fire = project.fire
+    # Ду стояка В2: если задан в params явно (>0) — уважаем; иначе выводим из
+    # расхода по СП 10.13130.2020 (пропускная способность стояка):
+    #   до 7,4 л/с — Ø65; 7,4..~12 — Ø80; выше — Ø100.
+    if P.riser_v2_dn and params is not None and P.riser_v2_dn != SchemeParams.riser_v2_dn:
+        v2_dn = P.riser_v2_dn                     # ручное переопределение
+    elif fire_on:
+        q = (fire.q_total or (fire.streams * fire.q_per_stream)) if fire else 0.0
+        v2_dn = 65 if q <= 7.4 else (80 if q <= 12.0 else 100)
+    else:
+        v2_dn = P.riser_v2_dn
+    fire_pk_total = (fire.pk_total if fire else 0) or 0
+    fire_streams = (fire.streams if fire else 0) or 0
+    has_aupt = bool(fire and fire.has_aupt)
+
     occ = Occ((W, H)); G: List[str] = []
 
     # ── низкоуровневые примитивы (эталон, без изменений геометрии) ──
@@ -315,13 +331,21 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         vyn(HI1, y_rt + 90, 20, -20, 36, "В шахте", 11)
         return y_rt
 
-    # нумерация ПК: цоколь -> 1,2; далее по видимым этажам снизу вверх
+    # нумерация ПК: цоколь -> 1,2; далее по видимым этажам снизу вверх.
+    # Схема принципиальная с обрывом — показывает ПК на характерных этажах,
+    # а не все физические; полное число берётся из модели (fire.pk_total).
     pk_counter = 2 if fire_on else 0
     band_tops = []
     for i, (k, yb_) in enumerate(bands):
         nums = (pk_counter + 1, pk_counter + 2) if fire_on else (0, 0)
         pk_counter += 2 if fire_on else 0
         band_tops.append(floor_band(yb_, nums, last=(i == len(bands) - 1)))
+    pk_shown = pk_counter
+    if fire_on and fire_pk_total and pk_shown < fire_pk_total:
+        warns.append(f"на схеме показано ПК: {pk_shown} (характерные этажи); "
+                     f"по расчёту ВПВ всего {fire_pk_total} — обрыв этажей, это норма")
+    if fire_on and fire_pk_total and pk_shown > fire_pk_total:
+        warns.append(f"на схеме ПК: {pk_shown} больше расчётных {fire_pk_total} — проверить этажность/зоны")
 
     # межэтажные соединители (сквозные стояки между полосами и вниз к цоколю)
     riser_xs = ([HI1, HI2] + ([V21, V22] if fire_on else []))
@@ -335,7 +359,7 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     if fire_on and band_tops:
         y_ring = band_tops[-1] - 24
         pv(V21, band_tops[-1] + 12, y_ring); pv(V22, band_tops[-1] + 12, y_ring)
-        hbreak(V21, V22, y_ring, "В2." + DIA + str(P.riser_v2_dn), sz=11)
+        hbreak(V21, V22, y_ring, "В2." + DIA + str(v2_dn), sz=11)
 
     # обрыв
     if with_rupture and len(bands) >= 2:
@@ -384,8 +408,8 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         stq += [(HI1, v1tag[1] % 1 + " " + DIA + str(P.riser_v1_dn), 1150),
                 (HI2, v1tag[1] % 2 + " " + DIA + str(P.riser_v1_dn), 1150)]
         if fire_on:
-            stq += [(V21, "Ст.В2-1 " + DIA + str(P.riser_v2_dn), 1210),
-                    (V22, "Ст.В2-2 " + DIA + str(P.riser_v2_dn), 1210)]
+            stq += [(V21, "Ст.В2-1 " + DIA + str(v2_dn), 1210),
+                    (V22, "Ст.В2-2 " + DIA + str(v2_dn), 1210)]
         for xs, lab_, cy in stq: vbreak(xs, y_rt + 8, y_gb - 12, lab_, cy=cy, sz=11)
         x_up = 214
         ph(x_up, 2246, y_mag)      # магистраль нижней зоны
