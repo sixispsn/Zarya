@@ -17,6 +17,7 @@ from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
 from app.pz.spec import build_specification
+from app.pz.scheme import build_scheme, SchemeParams, SchemeResult, W as SCHEME_W, H as SCHEME_H
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -159,4 +160,56 @@ def generate_spec_pdf(project: Project, output_path: str) -> str:
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets
     )
+    return output_path
+
+
+# ── ПРИНЦИПИАЛЬНАЯ СХЕМА В1/В2 (отдельный лист А1, штамп форма 3) ───────────
+
+# Физический размер листа А1 по ГОСТ 2.301 (альбомная): 841×594 мм.
+# SVG схемы задан в пикселях (SCHEME_W×SCHEME_H) с сохранением этой пропорции;
+# для PDF подменяем width/height на мм, чтобы MediaBox = А1 в натуральную
+# величину (иначе cairosvg берёт 96 dpi и лист выходит ~742×524 мм — не по ГОСТ).
+_A1_MM = (841, 594)
+
+
+def generate_scheme_svg(project: Project, params: "SchemeParams | None" = None) -> str:
+    """SVG принципиальной схемы систем В1, В2 (лист А1 со штампом форма 3).
+
+    Предупреждения раскладки выносок (если есть) не роняют генерацию —
+    они доступны через generate_scheme_result().
+    """
+    return build_scheme(project, params).svg
+
+
+def generate_scheme_result(project: Project, params: "SchemeParams | None" = None) -> SchemeResult:
+    """Полный результат схемы: .svg + .warnings (для логов/валидации пайплайна)."""
+    return build_scheme(project, params)
+
+
+def _svg_to_a1_mm(svg: str) -> str:
+    """Проставить физический размер А1 в мм вместо пиксельных width/height.
+
+    viewBox остаётся в пикселях — внутренняя геометрия масштабируется cairosvg
+    автоматически. Заменяется только первое вхождение (атрибуты корневого <svg>).
+    """
+    w_mm, h_mm = _A1_MM
+    return svg.replace(
+        f'width="{SCHEME_W}" height="{SCHEME_H}"',
+        f'width="{w_mm}mm" height="{h_mm}mm"',
+        1,
+    )
+
+
+def generate_scheme_pdf(project: Project, output_path: str,
+                        params: "SchemeParams | None" = None) -> str:
+    """PDF принципиальной схемы В1/В2, лист А1 в натуральную величину.
+
+    Рендер SVG→PDF напрямую через cairosvg (не WeasyPrint): лист чисто
+    векторный и уже собран целиком, включая рамку и штамп форма 3, — прямой
+    векторный вывод сохраняет качество линий и текста при печати А1.
+    """
+    import cairosvg  # опциональная зависимость вывода схемы
+
+    svg = _svg_to_a1_mm(generate_scheme_svg(project, params))
+    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
