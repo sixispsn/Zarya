@@ -341,11 +341,14 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         pk_counter += 2 if fire_on else 0
         band_tops.append(floor_band(yb_, nums, last=(i == len(bands) - 1)))
     pk_shown = pk_counter
-    if fire_on and fire_pk_total and pk_shown < fire_pk_total:
+    if fire_on and not fire_pk_total:
         warns.append(f"на схеме показано ПК: {pk_shown} (характерные этажи); "
-                     f"по расчёту ВПВ всего {fire_pk_total} — обрыв этажей, это норма")
-    if fire_on and fire_pk_total and pk_shown > fire_pk_total:
-        warns.append(f"на схеме ПК: {pk_shown} больше расчётных {fire_pk_total} — проверить этажность/зоны")
+                     f"полное число определяется графической расстановкой по планам")
+    elif fire_on and pk_shown < fire_pk_total:
+        warns.append(f"на схеме показано ПК: {pk_shown} (характерные этажи); "
+                     f"по расстановке всего {fire_pk_total} — обрыв этажей, это норма")
+    elif fire_on and pk_shown > fire_pk_total:
+        warns.append(f"на схеме ПК: {pk_shown} больше заданных {fire_pk_total} — проверить этажность/зоны")
 
     # межэтажные соединители (сквозные стояки между полосами и вниз к цоколю)
     riser_xs = ([HI1, HI2] + ([V21, V22] if fire_on else []))

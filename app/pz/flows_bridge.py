@@ -7,7 +7,7 @@
 """
 from app.calc.water_demand import WaterDemandResult, calculate_water_demand, ConsumerGroup
 from app.pz.project import (FlowsData, PumpSystem, PumpCandidate,
-    MetersSystem, MeterRow, BalanceData, ConsumerRow)
+    MetersSystem, MeterRow, BalanceData, ConsumerRow, FireSystem)
 
 
 def flows_from_demand(
@@ -205,3 +205,46 @@ def balance_from_calc(groups, flows, *, irrigation_days: int = 50) -> BalanceDat
             q_hot_day=0, q_hot_year=0, q_sew_day=0, q_sew_year=0,
         ))
     return BalanceData(rows=rows)
+
+
+def fire_from_calc(res, *, pk_total: int = 0, nozzle_dn: int = 50,
+                   hose_length_m: int = 20, fire_duration_min: int = 60,
+                   has_aupt: bool = False) -> FireSystem:
+    """FireResult (расчёт ВПВ) -> FireSystem для модели ПЗ.
+
+    Переносит из расчётного ядра блоки 1–2 по СП 10.13130.2020:
+      • applicability — требуется ли ВПВ (res.required);
+      • demand — число одновременных струй и расходы (табл. 7.1/7.2).
+
+    ВНИМАНИЕ по pk_total (блок 3, layout). Фактическое число пожарных кранов
+    и шкафов НЕ вычисляется по таблицам СП — это результат ГРАФИЧЕСКОЙ
+    расстановки ПК на планах из условия орошения каждой точки защищаемого
+    помещения расчётным числом струй (радиус действия = длина рукава + вылет
+    компактной части струи). Такой геометрии в модели пока нет, поэтому
+    pk_total передаётся ЯВНО проектировщиком (результат его расстановки);
+    по умолчанию 0 — «определяется по планам». Автоприкидка сознательно НЕ
+    делается: правдоподобное число из воздуха для экспертизы хуже честного 0.
+    Будущий геометрический определитель — отдельный модуль (calc/fire_layout.py).
+
+    Args:
+        res: FireResult из calculate_fire() (или None -> ВПВ не требуется).
+        pk_total: фактическое число ПК из графической расстановки (0 = н/д).
+        nozzle_dn: Ду пожарного крана (клапана), из FireInput.dn.
+        hose_length_m: длина рукава, м (из FireInput.hose_m).
+        fire_duration_min: расчётная продолжительность тушения, мин.
+        has_aupt: наличие АУПТ (влияет на схему В2).
+    """
+    if res is None or not getattr(res, "required", False):
+        return FireSystem(required=False)
+    return FireSystem(
+        required=True,
+        streams=int(getattr(res, "streams", 0) or 0),
+        q_per_stream=float(getattr(res, "q_per_stream", 0.0) or 0.0),
+        q_total=float(getattr(res, "q_total", 0.0) or 0.0),
+        pressure_mpa=getattr(res, "pressure_mpa", None),
+        pk_total=int(pk_total or 0),
+        nozzle_dn=int(nozzle_dn),
+        hose_length_m=int(hose_length_m),
+        fire_duration_min=int(fire_duration_min),
+        has_aupt=bool(has_aupt),
+    )

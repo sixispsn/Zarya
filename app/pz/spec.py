@@ -429,8 +429,16 @@ def build_specification(project: Project) -> Specification:
             sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
                                     manufacturer="Торговая сеть", unit="шт.", qty=pk))
         else:
-            sec.rows.append(SpecRow(None, "Пожарные краны — указать количество ⟦кол-во ПК⟧",
-                                    unit="компл.", qty=0))
+            # pk_total не задан: число ПК определяется графической расстановкой
+            # (СП 10.13130, орошение каждой точки расчётным числом струй) —
+            # позиция вносится, количество уточняется по планам, а не молча теряется.
+            sec.rows.append(SpecRow(
+                next_pos(), f"Кран пожарный Ду{ndn} с рукавом {hose} м и стволом РС-50",
+                type_mark=f"Ду{ndn}", manufacturer="Торговая сеть", unit="компл.",
+                qty=None, note="кол-во по расстановке ПК на планах"))
+            sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
+                                    manufacturer="Торговая сеть", unit="шт.",
+                                    qty=None, note="по числу ПК"))
         sections.append(sec)
 
     return Specification(
