@@ -142,3 +142,89 @@ def test_darcy_backend_not_implemented():
     seg = PipeSegment("s", "a", "b", length_m=10.0, A=0.0)
     with pytest.raises(NotImplementedError):
         DarcyWeisbachBackend().segment_loss(seg, 2.6)
+
+
+# ============================================================
+# СЦЕНАРИЙ СОВМЕСТНОЙ РАБОТЫ ПК (вариант 2)
+# ============================================================
+
+from app.calc.fire_hydraulics import solve_fire_hydraulics_scenario
+
+
+def _forked_net(available=45.0):
+    """Общая магистраль → развилка на два стояка, по ПК на каждом."""
+    return FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "fork": HydraulicNode("fork", 0.0),
+               "a": HydraulicNode("a", 27.5), "b": HydraulicNode("b", 27.5)},
+        segments=[
+            PipeSegment("mag", "src", "fork", length_m=30.0, A=0.00246, equiv_length_m=8.0),
+            PipeSegment("riserA", "fork", "a", length_m=27.5, A=0.0110, equiv_length_m=4.0),
+            PipeSegment("riserB", "fork", "b", length_m=27.5, A=0.0110, equiv_length_m=4.0),
+        ],
+        cabinets=[FireCabinetNode("PK-A", "a", dn=50, nozzle_mm=16, hose_m=20, jet_m=6),
+                  FireCabinetNode("PK-B", "b", dn=50, nozzle_mm=16, hose_m=20, jet_m=6)],
+        source=HydraulicSource("src", available_head_m=available),
+    )
+
+
+def test_scenario_aggregates_flow_on_shared_segment():
+    # шаг 3: через общую магистраль идёт суммарный расход двух ПК
+    r = solve_fire_hydraulics_scenario(_forked_net(), required_jets=2)
+    s = r.dictating_scenario
+    assert s.segment_flows["mag"] == pytest.approx(2 * 2.6)   # оба ПК
+    assert s.segment_flows["riserA"] == pytest.approx(2.6)     # личный стояк
+    assert s.segment_flows["riserB"] == pytest.approx(2.6)
+
+
+def test_scenario_two_jets_needs_more_head_than_one():
+    # потери на общем участке ∝ Q² → совместный сценарий требует больше напора
+    r1 = solve_fire_hydraulics_scenario(_forked_net(), required_jets=1)
+    r2 = solve_fire_hydraulics_scenario(_forked_net(), required_jets=2)
+    assert r2.required_head_at_source_m > r1.required_head_at_source_m
+
+
+def test_scenario_loss_uses_aggregated_flow():
+    # потери магистрали в сценарии из 2 ПК считаются по 5.2, не по 2.6
+    r = solve_fire_hydraulics_scenario(_forked_net(), required_jets=2)
+    mag_row = next(row for row in r.dictating_scenario.cabinets[0].path
+                   if row.segment_id == "mag")
+    assert mag_row.flow_lps == pytest.approx(5.2)
+    # h = A·Leff·Q² = 0.00246·38·5.2²
+    assert mag_row.head_loss_m == pytest.approx(0.00246 * 38.0 * 5.2**2)
+
+
+def test_scenario_required_head_is_max_over_cabinets():
+    # шаг 5: требуемый напор сценария = max по активным ПК
+    r = solve_fire_hydraulics_scenario(_forked_net(), required_jets=2)
+    s = r.dictating_scenario
+    assert r.required_head_at_source_m == pytest.approx(
+        max(c.required_head_at_source_m for c in s.cabinets))
+
+
+def test_scenario_picks_worst_pair():
+    # три ПК на разной высоте; худшая пара — с наибольшим суммарным требованием
+    net = _forked_net()
+    net.nodes["c"] = HydraulicNode("c", 40.0)  # выше всех
+    net.segments.append(PipeSegment("riserC", "fork", "c", length_m=40.0, A=0.0110, equiv_length_m=4.0))
+    net.cabinets.append(FireCabinetNode("PK-C", "c", dn=50, nozzle_mm=16, hose_m=20, jet_m=6))
+    r = solve_fire_hydraulics_scenario(net, required_jets=2)
+    # диктующая пара должна включать самый высокий ПК-C
+    assert "PK-C" in r.dictating_scenario.active_cabinet_ids
+
+
+def test_scenario_one_jet_equals_single_cabinet():
+    # required_jets=1 → один активный ПК, совпадает с одиночным расчётом
+    r_scen = solve_fire_hydraulics_scenario(_forked_net(), required_jets=1)
+    assert len(r_scen.dictating_scenario.active_cabinet_ids) == 1
+
+
+def test_scenario_total_flow():
+    r = solve_fire_hydraulics_scenario(_forked_net(), required_jets=2)
+    assert r.dictating_scenario.total_flow_lps == pytest.approx(5.2)
+
+
+def test_scenario_fewer_candidates_than_jets_warns():
+    net = _forked_net()
+    net.cabinets = [net.cabinets[0]]  # только один ПК
+    r = solve_fire_hydraulics_scenario(net, required_jets=2)
+    assert any("меньше required_jets" in w for w in r.warnings)

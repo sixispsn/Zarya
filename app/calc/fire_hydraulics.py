@@ -307,6 +307,180 @@ def solve_fire_hydraulics(
 
 
 # ============================================================
+# СЦЕНАРИЙ СОВМЕСТНОЙ РАБОТЫ ПК (вариант 2: п. 7.6 СП 10)
+# ============================================================
+# При N расчётных струях по общим участкам (магистраль, низ стояка) течёт
+# СУММАРНЫЙ расход, потери там выше. Требуемый напор на источнике для сценария
+# = max по активным ПК, где потери КАЖДОГО участка считаются по его реальному
+# (агрегированному) расходу в этом сценарии, а не по расходу одного ПК.
+
+from itertools import combinations
+
+
+@dataclass
+class ScenarioCabinet:
+    """ПК внутри сценария: требуемый напор на источнике с учётом агрегированных
+    расходов по общим участкам."""
+    cabinet_id: str
+    node_id: str
+    required_head_at_cabinet_m: float
+    flow_lps: float
+    geodesic_lift_m: float
+    path_head_loss_m: float
+    required_head_at_source_m: float
+    path: List[SegmentLossRow] = field(default_factory=list)
+
+
+@dataclass
+class HydraulicScenario:
+    """Расчётный сценарий из N одновременно работающих ПК (шаг 1)."""
+    active_cabinet_ids: List[str]
+    required_head_at_source_m: float          # max по активным ПК (шаг 5)
+    total_flow_lps: float                     # суммарный расход сценария
+    segment_flows: Dict[str, float] = field(default_factory=dict)  # агрег. расход по участкам
+    cabinets: List[ScenarioCabinet] = field(default_factory=list)
+
+
+@dataclass
+class ScenarioResult:
+    """Итог сценарного расчёта: худший (диктующий) сценарий из N ПК."""
+    dictating_scenario: Optional[HydraulicScenario]
+    required_head_at_source_m: float
+    available_head_m: Optional[float]
+    available_head_ok: Optional[bool]
+    needs_pump: Optional[bool]
+    evaluated_scenarios: int = 0
+    warnings: List[str] = field(default_factory=list)
+
+
+def _segment_flows_for_scenario(
+    net: FireNetwork,
+    active: List[FireCabinetNode],
+    flows: Dict[str, float],
+) -> Tuple[Dict[str, float], Dict[str, List[PipeSegment]]]:
+    """Шаги 2-3: путь каждого активного ПК до источника + агрегация расходов.
+
+    Возвращает (расход по каждому участку, путь по каждому ПК). Расход участка =
+    сумма расходов тех активных ПК, чьи пути через него проходят.
+    """
+    seg_flow: Dict[str, float] = {}
+    paths: Dict[str, List[PipeSegment]] = {}
+    for cab in active:
+        path = _find_path(net, cab.node_id, net.source.node_id)
+        if path is None:
+            paths[cab.cabinet_id] = []
+            continue
+        paths[cab.cabinet_id] = path
+        for seg in path:
+            seg_flow[seg.segment_id] = seg_flow.get(seg.segment_id, 0.0) + flows[cab.cabinet_id]
+    return seg_flow, paths
+
+
+def _evaluate_scenario(
+    net: FireNetwork,
+    active: List[FireCabinetNode],
+    backend: HeadLossBackend,
+) -> Optional[HydraulicScenario]:
+    """Шаги 3-5: агрегация расходов, потери по агрегированному расходу участка,
+    требуемый напор на источнике для каждого активного ПК, max по сценарию."""
+    heads: Dict[str, float] = {}
+    flows: Dict[str, float] = {}
+    for cab in active:
+        h, q, _notes = _cabinet_required_head_and_flow(cab)
+        heads[cab.cabinet_id] = h
+        flows[cab.cabinet_id] = q
+
+    seg_flow, paths = _segment_flows_for_scenario(net, active, flows)
+    seg_by_id = {s.segment_id: s for s in net.segments}
+    src_elev = net.nodes[net.source.node_id].elevation_m
+
+    scen_cabs: List[ScenarioCabinet] = []
+    for cab in active:
+        path = paths.get(cab.cabinet_id)
+        if not path:
+            return None  # один из ПК не связан — сценарий невалиден
+        rows: List[SegmentLossRow] = []
+        total_loss = 0.0
+        for seg in path:
+            q_seg = seg_flow[seg.segment_id]           # шаг 4: агрегированный расход участка
+            hl = backend.segment_loss(seg, q_seg)
+            total_loss += hl
+            rows.append(SegmentLossRow(
+                segment_id=seg.segment_id, from_node=seg.from_node, to_node=seg.to_node,
+                effective_length_m=seg.effective_length_m, flow_lps=q_seg, head_loss_m=hl))
+        dz = net.nodes[cab.node_id].elevation_m - src_elev
+        req = heads[cab.cabinet_id] + dz + total_loss
+        scen_cabs.append(ScenarioCabinet(
+            cabinet_id=cab.cabinet_id, node_id=cab.node_id,
+            required_head_at_cabinet_m=heads[cab.cabinet_id], flow_lps=flows[cab.cabinet_id],
+            geodesic_lift_m=dz, path_head_loss_m=total_loss,
+            required_head_at_source_m=req, path=rows))
+
+    req_scenario = max(c.required_head_at_source_m for c in scen_cabs)  # шаг 5
+    return HydraulicScenario(
+        active_cabinet_ids=[c.cabinet_id for c in active],
+        required_head_at_source_m=req_scenario,
+        total_flow_lps=sum(flows[c.cabinet_id] for c in active),
+        segment_flows=seg_flow, cabinets=scen_cabs)
+
+
+def solve_fire_hydraulics_scenario(
+    net: FireNetwork,
+    required_jets: int,
+    *,
+    backend: Optional[HeadLossBackend] = None,
+) -> ScenarioResult:
+    """Сценарный расчёт совместной работы N=required_jets ПК (п. 7.6 СП 10).
+
+    Перебирает все допустимые сочетания активных ПК из кандидатов, для каждого
+    считает требуемый напор с агрегацией расходов по общим участкам, выбирает
+    ХУДШИЙ сценарий (диктующую пару/группу). required_jets=1 сводится к одиночному
+    расчёту (одна активная точка).
+
+    Осознанное упрощение MVP: перебор всех C(k, N) сочетаний кандидатов. На
+    реальных сетях В2 (десятки ПК, N=2) это подъёмно. Дополнительные нормативные
+    фильтры пары (напр. «на разных стояках») можно наложить позже через отбор
+    кандидатов до вызова.
+    """
+    backend = backend or SpecificResistanceBackend()
+    warnings: List[str] = []
+    if required_jets < 1:
+        raise ValueError("required_jets must be >= 1")
+
+    candidates = [c for c in net.cabinets if c.is_design_candidate]
+    if len(candidates) < required_jets:
+        warnings.append(f"кандидатов {len(candidates)} меньше required_jets={required_jets}; "
+                        f"сценарий считается по доступным")
+        required_jets = max(1, min(required_jets, len(candidates)))
+    if not candidates:
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              0, warnings + ["нет ПК-кандидатов"])
+
+    worst: Optional[HydraulicScenario] = None
+    count = 0
+    for combo in combinations(candidates, required_jets):
+        scen = _evaluate_scenario(net, list(combo), backend)
+        if scen is None:
+            continue
+        count += 1
+        if worst is None or scen.required_head_at_source_m > worst.required_head_at_source_m:
+            worst = scen
+
+    if worst is None:
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              0, warnings + ["ни один сценарий не удалось рассчитать (нет путей?)"])
+
+    avail = net.source.available_head_m
+    ok = None if avail is None else (avail >= worst.required_head_at_source_m)
+    needs_pump = None if ok is None else (not ok)
+    return ScenarioResult(
+        dictating_scenario=worst,
+        required_head_at_source_m=worst.required_head_at_source_m,
+        available_head_m=avail, available_head_ok=ok, needs_pump=needs_pump,
+        evaluated_scenarios=count, warnings=warnings)
+
+
+# ============================================================
 # ЗАГОТОВКА ВТОРОГО BACKEND (решение 1: интерфейс на будущее)
 # ============================================================
 
