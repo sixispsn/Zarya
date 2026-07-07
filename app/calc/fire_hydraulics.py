@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Protocol, Tuple
+from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 from app.data.fire_tables import get_nozzle_data
 
@@ -72,6 +72,9 @@ class FireCabinetNode:
 
     dn/nozzle_mm/hose_m/jet_m — ключ в табл. 7.3 для требуемого напора/расхода.
     is_design_candidate: участвует ли ПК в поиске диктующего.
+    riser_id: к какому стояку относится ПК (проектный объект). Источник истины
+        для нормативных ограничений типа «разные стояки» (п. 6.2.2). None
+        допустим для старых кейсов; при строгом фильтре None → пара недопустима.
     """
     cabinet_id: str
     node_id: str
@@ -80,6 +83,7 @@ class FireCabinetNode:
     hose_m: int = 20
     jet_m: int = 6
     is_design_candidate: bool = True
+    riser_id: Optional[str] = None
 
 
 @dataclass
@@ -429,6 +433,7 @@ def solve_fire_hydraulics_scenario(
     required_jets: int,
     *,
     backend: Optional[HeadLossBackend] = None,
+    scenario_filter: Optional["Callable[[Tuple[FireCabinetNode, ...]], bool]"] = None,
 ) -> ScenarioResult:
     """Сценарный расчёт совместной работы N=required_jets ПК (п. 7.6 СП 10).
 
@@ -437,10 +442,14 @@ def solve_fire_hydraulics_scenario(
     ХУДШИЙ сценарий (диктующую пару/группу). required_jets=1 сводится к одиночному
     расчёту (одна активная точка).
 
+    scenario_filter: внешний предикат допустимости набора ПК. Гидравлика НЕ знает,
+    почему набор запрещён — только «считать можно / нельзя». Нормативные правила
+    (напр. «разные стояки» по п. 6.2.2) собираются в glue-слое через
+    build_scenario_filter и передаются сюда. Если фильтр отсекает все сочетания —
+    возвращается предупреждение, а не молча посчитанный недопустимый сценарий.
+
     Осознанное упрощение MVP: перебор всех C(k, N) сочетаний кандидатов. На
-    реальных сетях В2 (десятки ПК, N=2) это подъёмно. Дополнительные нормативные
-    фильтры пары (напр. «на разных стояках») можно наложить позже через отбор
-    кандидатов до вызова.
+    реальных сетях В2 (десятки ПК, N=2) это подъёмно.
     """
     backend = backend or SpecificResistanceBackend()
     warnings: List[str] = []
@@ -458,7 +467,11 @@ def solve_fire_hydraulics_scenario(
 
     worst: Optional[HydraulicScenario] = None
     count = 0
+    filtered_out = 0
     for combo in combinations(candidates, required_jets):
+        if scenario_filter is not None and not scenario_filter(combo):
+            filtered_out += 1
+            continue
         scen = _evaluate_scenario(net, list(combo), backend)
         if scen is None:
             continue
@@ -467,8 +480,12 @@ def solve_fire_hydraulics_scenario(
             worst = scen
 
     if worst is None:
+        msg = ("ни один сценарий не удалось рассчитать (нет путей?)"
+               if filtered_out == 0 else
+               f"все сочетания ПК отсеяны фильтром допустимости ({filtered_out}); "
+               "проверьте разнесение ПК по стоякам / заполнение riser_id (п. 6.2.2)")
         return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
-                              0, warnings + ["ни один сценарий не удалось рассчитать (нет путей?)"])
+                              0, warnings + [msg])
 
     avail = net.source.available_head_m
     ok = None if avail is None else (avail >= worst.required_head_at_source_m)

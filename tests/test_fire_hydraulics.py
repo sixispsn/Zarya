@@ -228,3 +228,105 @@ def test_scenario_fewer_candidates_than_jets_warns():
     net.cabinets = [net.cabinets[0]]  # только один ПК
     r = solve_fire_hydraulics_scenario(net, required_jets=2)
     assert any("меньше required_jets" in w for w in r.warnings)
+
+
+# ============================================================
+# ФИЛЬТР ДОПУСТИМОСТИ СЦЕНАРИЯ (вариант 2: п. 6.2.2 разные стояки)
+# ============================================================
+
+def _net_with_risers():
+    """4 ПК: A(R1), B(R2), C1(R3), C2(R3) — C1 и C2 на одном стояке."""
+    return FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "fork": HydraulicNode("fork", 0.0),
+               "a": HydraulicNode("a", 27.5), "b": HydraulicNode("b", 27.5),
+               "c1": HydraulicNode("c1", 24.0), "c2": HydraulicNode("c2", 27.5)},
+        segments=[
+            PipeSegment("mag", "src", "fork", length_m=30, A=0.00246, equiv_length_m=8),
+            PipeSegment("rA", "fork", "a", length_m=27.5, A=0.011, equiv_length_m=4),
+            PipeSegment("rB", "fork", "b", length_m=27.5, A=0.011, equiv_length_m=4),
+            PipeSegment("rC", "fork", "c1", length_m=24, A=0.011, equiv_length_m=4),
+            PipeSegment("rC2", "c1", "c2", length_m=3.5, A=0.011, equiv_length_m=1),
+        ],
+        cabinets=[
+            FireCabinetNode("PK-A", "a", riser_id="R1"),
+            FireCabinetNode("PK-B", "b", riser_id="R2"),
+            FireCabinetNode("PK-C1", "c1", riser_id="R3"),
+            FireCabinetNode("PK-C2", "c2", riser_id="R3"),
+        ],
+        source=HydraulicSource("src", available_head_m=45.0),
+    )
+
+
+def test_cabinet_has_riser_id():
+    cab = FireCabinetNode("PK", "n", riser_id="R1")
+    assert cab.riser_id == "R1"
+
+
+def test_riser_id_defaults_none():
+    assert FireCabinetNode("PK", "n").riser_id is None
+
+
+def test_filter_excludes_same_riser_pair():
+    from app.calc.fire_design import build_scenario_filter
+    from app.calc.fire_models import FireCabinetNormative, PlacementMode
+    norm = FireCabinetNormative(2, True, PlacementMode.TWO_OPPOSITE_SIDES)
+    filt = build_scenario_filter(norm)
+    net = _net_with_risers()
+    r = solve_fire_hydraulics_scenario(net, 2, scenario_filter=filt)
+    # диктующая пара НЕ может быть C1+C2 (один стояк R3)
+    ids = set(r.dictating_scenario.active_cabinet_ids)
+    assert ids != {"PK-C1", "PK-C2"}
+
+
+def test_filter_none_allows_same_riser():
+    # без фильтра худшая пара может быть с одного стояка
+    net = _net_with_risers()
+    r = solve_fire_hydraulics_scenario(net, 2)  # фильтра нет
+    assert r.evaluated_scenarios == 6  # C(4,2) = 6, ничего не отсеяно
+
+
+def test_filter_strict_rejects_missing_riser():
+    from app.calc.fire_design import build_scenario_filter
+    from app.calc.fire_models import FireCabinetNormative, PlacementMode
+    norm = FireCabinetNormative(2, True, PlacementMode.TWO_OPPOSITE_SIDES)
+    filt = build_scenario_filter(norm)
+    # два ПК, один без riser_id → пара недопустима (строгий режим)
+    assert filt((FireCabinetNode("X", "a", riser_id="R1"),
+                 FireCabinetNode("Y", "b", riser_id=None))) is False
+
+
+def test_filter_all_same_riser_returns_warning():
+    from app.calc.fire_design import build_scenario_filter
+    from app.calc.fire_models import FireCabinetNormative, PlacementMode
+    norm = FireCabinetNormative(2, True, PlacementMode.TWO_OPPOSITE_SIDES)
+    filt = build_scenario_filter(norm)
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 20.0),
+               "b": HydraulicNode("b", 20.0)},
+        segments=[PipeSegment("s1", "src", "a", length_m=20, A=0.01),
+                  PipeSegment("s2", "src", "b", length_m=20, A=0.01)],
+        cabinets=[FireCabinetNode("X", "a", riser_id="R1"),
+                  FireCabinetNode("Y", "b", riser_id="R1")],  # оба R1
+        source=HydraulicSource("src", available_head_m=50.0),
+    )
+    r = solve_fire_hydraulics_scenario(net, 2, scenario_filter=filt)
+    assert r.dictating_scenario is None
+    assert any("отсея" in w for w in r.warnings)
+
+
+def test_filter_single_cabinet_always_allowed():
+    from app.calc.fire_design import build_scenario_filter
+    from app.calc.fire_models import FireCabinetNormative, PlacementMode
+    norm = FireCabinetNormative(2, True, PlacementMode.TWO_OPPOSITE_SIDES)
+    filt = build_scenario_filter(norm)
+    assert filt((FireCabinetNode("X", "a", riser_id=None),)) is True  # 1 ПК → ок
+
+
+def test_filter_off_when_not_required():
+    from app.calc.fire_design import build_scenario_filter
+    from app.calc.fire_models import FireCabinetNormative, PlacementMode
+    norm = FireCabinetNormative(2, False, PlacementMode.ONE_SIDE)  # разные стояки НЕ требуются
+    filt = build_scenario_filter(norm)
+    # даже одинаковые стояки допустимы
+    assert filt((FireCabinetNode("X", "a", riser_id="R1"),
+                 FireCabinetNode("Y", "b", riser_id="R1"))) is True

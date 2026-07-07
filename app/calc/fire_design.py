@@ -34,6 +34,31 @@ from app.calc.fire_normative import (
 from app.calc.fire_layout import (
     RectangularRoom, FireCabinetLayoutSummary, design_fire_cabinets_for_room,
 )
+from app.calc.fire_models import FireCabinetNormative
+
+
+def build_scenario_filter(normative: FireCabinetNormative):
+    """Собирает предикат допустимости набора ПК для гидравлики из нормативных
+    правил (glue-слой). Гидравлика применяет его как чёрный ящик, не зная политики.
+
+    Сейчас реализовано правило «разные стояки» (п. 6.2.2): при
+    require_different_risers все ПК набора должны иметь различные riser_id.
+
+    Строгий режим (по решению Антона): если require_different_risers=True, а у
+    какого-то ПК riser_id не заполнен — набор НЕДОПУСТИМ (иначе солвер соврёт).
+    Сюда же позже добавляются другие ограничения (одно помещение, разные ветви,
+    покрытие зоны) — гидравлики это не касается.
+    """
+    def _filter(cabs) -> bool:
+        if len(cabs) <= 1:
+            return True
+        if normative.require_different_risers:
+            risers = [c.riser_id for c in cabs]
+            if any(r is None for r in risers):
+                return False  # строгий режим: нет riser_id → недопустимо
+            return len(set(risers)) == len(risers)
+        return True
+    return _filter
 
 
 @dataclass
