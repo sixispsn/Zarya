@@ -131,6 +131,41 @@ def select_cabinets_from_candidates(
     return chosen
 
 
+def uniform_positions_along_length(
+    length_m: float,
+    max_spacing_m: float,
+    edge_offset_m: float = 0.0,
+) -> List[float]:
+    """Равномерные координаты x вдоль длины с шагом ≤ max_spacing_m.
+
+    Слой 3 использует это для типовой прямоугольной расстановки (шаг ровно L,
+    точки равномерны). В отличие от select_cabinets_from_candidates (прореживание
+    плотной решётки) — здесь точки ставятся сразу равномерно. Это «изменение №2»
+    в варианте, сохраняющем выверенную геометрию прямоугольного случая.
+
+    edge_offset_m: отступ от торцов — ПК не в самом углу. Диапазон
+    [edge_offset, length−edge_offset]; при edge_offset > max_spacing добавляются
+    страховочные точки у торцов, чтобы углы не выпали.
+    """
+    if length_m <= 0:
+        raise ValueError("length_m must be > 0")
+    if max_spacing_m <= 0:
+        raise ValueError("max_spacing_m must be > 0")
+    if edge_offset_m < 0:
+        raise ValueError("edge_offset_m must be >= 0")
+
+    usable = length_m - 2 * edge_offset_m
+    if usable <= 0:
+        return [length_m / 2.0]
+    intervals = max(1, ceil(usable / max_spacing_m))
+    xs = [edge_offset_m + i * usable / intervals for i in range(intervals + 1)]
+    if edge_offset_m > max_spacing_m + 1e-9:
+        xs = [min(max_spacing_m, edge_offset_m)] + xs + \
+             [length_m - min(max_spacing_m, edge_offset_m)]
+        xs = sorted(set(round(x, 6) for x in xs))
+    return xs
+
+
 if __name__ == "__main__":
     from app.calc.fire_layout import RectangularRoom
     room = RectangularRoom("demo", 36.0, 18.0, 8.0)

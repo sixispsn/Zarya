@@ -259,7 +259,8 @@ def layout_rectangular_room(
     validate_normative(normative)
 
     L = compute_spacing_L(room.height_m, room.width_m, jet, normative.placement_mode)
-    xs = generate_positions_along_length(room.length_m, L, edge_offset_m)
+    from app.calc.placement_rules import uniform_positions_along_length
+    xs = uniform_positions_along_length(room.length_m, L, edge_offset_m)
     placements: List[FireCabinetPlacement] = []
 
     if normative.placement_mode == PlacementMode.ONE_SIDE:
