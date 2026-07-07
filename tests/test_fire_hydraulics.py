@@ -423,3 +423,100 @@ def test_source_defaults_city_main():
     # обратная совместимость: старый источник без kind → CITY_MAIN
     src = HydraulicSource("src", available_head_m=40.0)
     assert src.kind == SourceKind.CITY_MAIN
+
+
+# ============================================================
+# ГРАФ-ОБЪЕКТ v2.1: Valve, валидация, доступ
+# ============================================================
+
+from app.calc.fire_hydraulics import Valve, ValveKind
+
+
+def test_valve_equiv_length_adds_to_effective():
+    seg = PipeSegment("s", "a", "b", length_m=30.0, A=0.002, equiv_length_m=5.0,
+                      valves=[Valve("v1", ValveKind.GATE, 2.0),
+                              Valve("v2", ValveKind.CHECK, 1.0)])
+    assert seg.valves_equiv_length_m == 3.0
+    assert seg.effective_length_m == 38.0   # 30 + 5 + 3
+
+
+def test_pipe_without_valves_backward_compatible():
+    seg = PipeSegment("s", "a", "b", length_m=30.0, A=0.002, equiv_length_m=5.0)
+    assert seg.valves == []
+    assert seg.effective_length_m == 35.0
+
+
+def test_valve_kind_types():
+    assert ValveKind.GATE.value == "gate"
+    assert ValveKind.CHECK.value == "check"
+
+
+def test_validate_clean_network():
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "n": HydraulicNode("n", 20.0)},
+        segments=[PipeSegment("s", "src", "n", length_m=20, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "n")],
+        source=HydraulicSource("src"),
+    )
+    assert net.validate() == []
+
+
+def test_validate_detects_missing_node():
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0)},
+        segments=[PipeSegment("s", "src", "ghost", length_m=10, A=0.01)],
+        cabinets=[], source=HydraulicSource("src"))
+    probs = net.validate()
+    assert any("ghost" in p and "не найден" in p for p in probs)
+
+
+def test_validate_detects_unreachable_cabinet():
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 20.0),
+               "island": HydraulicNode("island", 5.0)},
+        segments=[PipeSegment("s", "src", "a", length_m=20, A=0.01),
+                  PipeSegment("s2", "island", "island", length_m=1, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "island")],
+        source=HydraulicSource("src"))
+    probs = net.validate()
+    assert any("PK" in p and "недостижим" in p for p in probs)
+
+
+def test_validate_detects_dangling_node():
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 20.0),
+               "lonely": HydraulicNode("lonely", 3.0)},
+        segments=[PipeSegment("s", "src", "a", length_m=20, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "a")],
+        source=HydraulicSource("src"))
+    assert any("lonely" in p and "висячий" in p for p in net.validate())
+
+
+def test_neighbors_and_segments_at():
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "n1": HydraulicNode("n1", 0.0),
+               "n2": HydraulicNode("n2", 20.0)},
+        segments=[PipeSegment("mag", "src", "n1", length_m=30, A=0.002),
+                  PipeSegment("riser", "n1", "n2", length_m=20, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "n2")],
+        source=HydraulicSource("src"))
+    assert set(net.neighbors("n1")) == {"src", "n2"}
+    assert {s.segment_id for s in net.segments_at("n1")} == {"mag", "riser"}
+
+
+def test_valves_in_calculation():
+    # арматура повышает L_eff → потери → требуемый напор
+    base = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "n": HydraulicNode("n", 20.0)},
+        segments=[PipeSegment("s", "src", "n", length_m=20, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "n", riser_id="R1")],
+        source=HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=100.0))
+    withv = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "n": HydraulicNode("n", 20.0)},
+        segments=[PipeSegment("s", "src", "n", length_m=20, A=0.01,
+                              valves=[Valve("v", ValveKind.GATE, 5.0)])],
+        cabinets=[FireCabinetNode("PK", "n", riser_id="R1")],
+        source=HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=100.0))
+    r_base = solve_fire_hydraulics_scenario(base, 1)
+    r_valve = solve_fire_hydraulics_scenario(withv, 1)
+    assert r_valve.required_head_at_source_m > r_base.required_head_at_source_m

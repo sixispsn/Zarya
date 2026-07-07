@@ -43,13 +43,36 @@ class HydraulicNode:
     elevation_m: float
 
 
+class ValveKind(str, Enum):
+    """Тип запорной/защитной арматуры на участке В2 (влияет на L_eq)."""
+    GATE = "gate"              # задвижка
+    CHECK = "check"            # обратный клапан
+    BUTTERFLY = "butterfly"    # дисковый затвор
+    BALL = "ball"              # шаровой
+    OTHER = "other"
+
+
+@dataclass
+class Valve:
+    """Арматура на участке как объект (а не безликое число equiv_length_m).
+
+    equiv_length_m: эквивалентная длина местного сопротивления этого клапана, м.
+    На этапе 2.1 клапан ОПИСАТЕЛЬНЫЙ + отдаёт L_eq в расчёт через агрегацию на
+    трубе. В 2.3 (увязка кольца) войдёт как полноценный элемент.
+    """
+    valve_id: str
+    kind: ValveKind
+    equiv_length_m: float = 0.0
+
+
 @dataclass
 class PipeSegment:
     """Участок трубопровода между двумя узлами.
 
     A: удельное сопротивление участка (для h = A·L_eff·Q²).
     length_m: геометрическая длина L.
-    equiv_length_m: эквивалентная длина местных сопротивлений L_eq (решение 2).
+    equiv_length_m: собственная эквивалентная длина участка L_eq (фитинги/повороты).
+    valves: арматура на участке; её L_eq добавляется к effective_length_m.
     diameter_mm: Ду (справочно/для отчёта; на A не влияет — A уже под этот Ду).
     """
     segment_id: str
@@ -58,12 +81,18 @@ class PipeSegment:
     length_m: float
     A: float
     equiv_length_m: float = 0.0
+    valves: List[Valve] = field(default_factory=list)
     diameter_mm: Optional[int] = None
 
     @property
+    def valves_equiv_length_m(self) -> float:
+        """Суммарная L_eq арматуры на участке."""
+        return sum(v.equiv_length_m for v in self.valves)
+
+    @property
     def effective_length_m(self) -> float:
-        """L_eff = L + L_eq (решение 2)."""
-        return self.length_m + self.equiv_length_m
+        """L_eff = L + L_eq(участка) + L_eq(арматуры) (решение 2)."""
+        return self.length_m + self.equiv_length_m + self.valves_equiv_length_m
 
 
 @dataclass
@@ -128,11 +157,79 @@ class HydraulicSource:
 
 @dataclass
 class FireNetwork:
-    """Сеть В2 целиком (явный вход солвера)."""
+    """Сеть В2 целиком (явный вход солвера).
+
+    На этапе 2.1 — полноценный граф-объект: валидирует связность и ссылочную
+    целостность, даёт доступ к соседям/рёбрам узла. Не импортирует расчётную
+    часть — граф описывает сеть, солвер её считает (развязка под будущий вынос
+    в hydraulic_graph.py).
+    """
     nodes: Dict[str, HydraulicNode]
     segments: List[PipeSegment]
     cabinets: List[FireCabinetNode]
     source: HydraulicSource
+
+    def validate(self) -> List[str]:
+        """Проверяет ссылочную целостность и связность. Возвращает список проблем
+        (пустой = сеть корректна). Не бросает исключение — диагностика, а не отказ."""
+        problems: List[str] = []
+        node_ids = set(self.nodes)
+
+        # ссылочная целостность рёбер
+        for seg in self.segments:
+            if seg.from_node not in node_ids:
+                problems.append(f"участок {seg.segment_id}: узел from_node={seg.from_node} не найден")
+            if seg.to_node not in node_ids:
+                problems.append(f"участок {seg.segment_id}: узел to_node={seg.to_node} не найден")
+        # ПК и источник
+        for cab in self.cabinets:
+            if cab.node_id not in node_ids:
+                problems.append(f"ПК {cab.cabinet_id}: узел {cab.node_id} не найден")
+        if self.source.node_id not in node_ids:
+            problems.append(f"источник: узел {self.source.node_id} не найден")
+
+        # висячие узлы (не участвуют ни в одном ребре)
+        used = {n for seg in self.segments for n in (seg.from_node, seg.to_node)}
+        for nid in node_ids:
+            if nid not in used and nid != self.source.node_id:
+                problems.append(f"узел {nid} висячий (не связан ни с одним участком)")
+
+        # связность: все ПК достижимы от источника
+        if self.source.node_id in node_ids:
+            reachable = self._reachable_from(self.source.node_id)
+            for cab in self.cabinets:
+                if cab.node_id in node_ids and cab.node_id not in reachable:
+                    problems.append(f"ПК {cab.cabinet_id}: недостижим от источника")
+        return problems
+
+    def _reachable_from(self, start: str) -> set:
+        adj = self.adjacency()
+        seen = {start}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for nb, _seg in adj.get(cur, []):
+                if nb not in seen:
+                    seen.add(nb)
+                    stack.append(nb)
+        return seen
+
+    def adjacency(self) -> Dict[str, List[Tuple[str, "PipeSegment"]]]:
+        """Список смежности: узел → [(сосед, участок)]. Граф неориентированный."""
+        adj: Dict[str, List[Tuple[str, PipeSegment]]] = {nid: [] for nid in self.nodes}
+        for seg in self.segments:
+            adj.setdefault(seg.from_node, []).append((seg.to_node, seg))
+            adj.setdefault(seg.to_node, []).append((seg.from_node, seg))
+        return adj
+
+    def neighbors(self, node_id: str) -> List[str]:
+        """Соседние узлы данного узла."""
+        return [nb for nb, _ in self.adjacency().get(node_id, [])]
+
+    def segments_at(self, node_id: str) -> List["PipeSegment"]:
+        """Участки, инцидентные узлу."""
+        return [seg for seg in self.segments
+                if seg.from_node == node_id or seg.to_node == node_id]
 
 
 # ============================================================
@@ -198,22 +295,14 @@ class HydraulicResult:
 # ПОИСК ПУТИ (граф — дерево/сеть, BFS от ПК к источнику)
 # ============================================================
 
-def _build_adjacency(net: FireNetwork) -> Dict[str, List[Tuple[str, PipeSegment]]]:
-    adj: Dict[str, List[Tuple[str, PipeSegment]]] = {nid: [] for nid in net.nodes}
-    for seg in net.segments:
-        adj.setdefault(seg.from_node, []).append((seg.to_node, seg))
-        adj.setdefault(seg.to_node, []).append((seg.from_node, seg))
-    return adj
-
-
 def _find_path(net: FireNetwork, start: str, goal: str
                ) -> Optional[List[PipeSegment]]:
     """Путь (список участков) от start до goal по графу. BFS — кратчайший по числу
     участков; для дерева путь единственный. Для колец берётся один из путей
-    (для MVP достаточно; кольцевую оптимизацию оставляем на будущее)."""
+    (для MVP достаточно; кольцевую увязку — на этап 2.3)."""
     if start == goal:
         return []
-    adj = _build_adjacency(net)
+    adj = net.adjacency()
     from collections import deque
     q = deque([start])
     prev: Dict[str, Tuple[str, PipeSegment]] = {}
