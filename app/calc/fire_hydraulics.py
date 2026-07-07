@@ -32,6 +32,36 @@ from app.data.fire_tables import get_nozzle_data
 MPA_TO_M = 1.0e6 / (1000.0 * 9.81)   # ≈ 101.94 м / МПа
 
 
+# внутренний диаметр стальных труб В2 по Ду (мм). Скорость считается по нему,
+# а не по номинальному Ду (у стали внутренний заметно отличается).
+STEEL_INNER_DIAMETER_MM = {
+    50: 53.0, 65: 68.0, 80: 82.5, 100: 106.0, 125: 131.0, 150: 156.0,
+}
+
+
+class NetworkMode(str, Enum):
+    """Режим сети для проверки скорости (два уровня: hard-limit + design target)."""
+    PURE_FIRE = "pure_fire"            # чистый ВПВ (В2)
+    COMBINED_FIRE = "combined_fire"    # объединённый водопровод в пожарном режиме
+    DOMESTIC = "domestic"             # хоз-питьевой режим (не fire solver)
+
+
+# Нормативные жёсткие пределы скорости по режиму (нарушение = ошибка).
+NORMATIVE_VELOCITY_LIMIT_MPS = {
+    NetworkMode.PURE_FIRE: 10.0,       # чистый ВПВ
+    NetworkMode.COMBINED_FIRE: 3.0,    # объединённый в пожарном режиме
+    NetworkMode.DOMESTIC: 1.5,         # хоз-питьевой
+}
+
+# Проектный целевой предел (нарушение = warning; формально допустимо, но
+# гидравлика становится «нервной»: потери растут, насос раздувается).
+DESIGN_VELOCITY_TARGET_MPS = {
+    NetworkMode.PURE_FIRE: 4.0,
+    NetworkMode.COMBINED_FIRE: 3.0,
+    NetworkMode.DOMESTIC: 1.5,
+}
+
+
 # ============================================================
 # ВХОДНОЙ ГРАФ СЕТИ В2 (задаётся явно — решение 3)
 # ============================================================
@@ -82,7 +112,17 @@ class PipeSegment:
     A: float
     equiv_length_m: float = 0.0
     valves: List[Valve] = field(default_factory=list)
-    diameter_mm: Optional[int] = None
+    diameter_mm: Optional[int] = None            # Ду (номинал, для отчёта)
+    inner_diameter_mm: Optional[float] = None    # внутренний Ø для скорости
+
+    def inner_d_mm(self) -> Optional[float]:
+        """Внутренний диаметр для расчёта скорости: явный inner_diameter_mm, либо
+        табличный по Ду (сталь В2), либо Ду как приближение (с оговоркой в отчёте)."""
+        if self.inner_diameter_mm is not None:
+            return self.inner_diameter_mm
+        if self.diameter_mm is not None:
+            return STEEL_INNER_DIAMETER_MM.get(int(self.diameter_mm), float(self.diameter_mm))
+        return None
 
     @property
     def valves_equiv_length_m(self) -> float:
@@ -231,6 +271,27 @@ class FireNetwork:
         return [seg for seg in self.segments
                 if seg.from_node == node_id or seg.to_node == node_id]
 
+    def is_acyclic(self) -> bool:
+        """True, если сеть — дерево/лес (нет колец). Этап 2.2 работает только на
+        ацикличной сети; кольцо → отдельная увязка (этап 2.3)."""
+        # неориентированный граф ацикличен, если рёбер = узлов − компоненты связности
+        parent: Dict[str, str] = {n: n for n in self.nodes}
+
+        def find(x: str) -> str:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for seg in self.segments:
+            if seg.from_node not in parent or seg.to_node not in parent:
+                continue  # висячие ссылки ловит validate()
+            ra, rb = find(seg.from_node), find(seg.to_node)
+            if ra == rb:
+                return False  # ребро замыкает цикл
+            parent[ra] = rb
+        return True
+
 
 # ============================================================
 # BACKEND ЛИНЕЙНЫХ ПОТЕРЬ (решение 1: основной — A·Leff·Q²)
@@ -263,6 +324,41 @@ class SegmentLossRow:
     effective_length_m: float
     flow_lps: float
     head_loss_m: float
+
+
+@dataclass
+class SectionFlow:
+    """Section-level результат: расход/скорость/потери по участку в сценарии (2.2).
+
+    Двухуровневая проверка скорости (нормативный hard-limit + проектный target):
+      velocity_normative_ok = ошибка при нарушении (по режиму сети);
+      velocity_design_ok = warning при нарушении (рекомендуемый потолок).
+    """
+    segment_id: str
+    from_node: str
+    to_node: str
+    flow_lps: float                       # Q участка (агрегированный)
+    effective_length_m: float
+    head_loss_m: float
+    inner_diameter_mm: Optional[float]
+    velocity_mps: Optional[float]
+    velocity_normative_limit_mps: float
+    velocity_normative_ok: Optional[bool]
+    velocity_design_limit_mps: float
+    velocity_design_ok: Optional[bool]
+    is_shared: bool                       # участок несёт расход >1 активного ПК
+    serving_cabinets: List[str] = field(default_factory=list)  # ПК на этом участке
+    diameter_is_nominal: bool = False     # скорость по Ду (нет внутреннего Ø)
+
+
+def velocity_mps(flow_lps: float, inner_diameter_mm: Optional[float]) -> Optional[float]:
+    """Скорость воды в трубе, м/с. Q [л/с], d [мм] → v [м/с].
+    v = (Q·10⁻³) / (π·(d·10⁻³/2)²)."""
+    if inner_diameter_mm is None or inner_diameter_mm <= 0:
+        return None
+    import math
+    area_m2 = math.pi * (inner_diameter_mm * 1e-3 / 2.0) ** 2
+    return (flow_lps * 1e-3) / area_m2
 
 
 @dataclass
@@ -460,6 +556,7 @@ class HydraulicScenario:
     total_flow_lps: float                     # суммарный расход сценария
     segment_flows: Dict[str, float] = field(default_factory=dict)  # агрег. расход по участкам
     cabinets: List[ScenarioCabinet] = field(default_factory=list)
+    sections: List["SectionFlow"] = field(default_factory=list)  # section-level (2.2)
 
 
 @dataclass
@@ -516,13 +613,58 @@ def _segment_flows_for_scenario(
     return seg_flow, paths
 
 
+def _build_sections(
+    net: FireNetwork,
+    seg_flow: Dict[str, float],
+    paths: Dict[str, List["PipeSegment"]],
+    backend: HeadLossBackend,
+    mode: NetworkMode,
+) -> List[SectionFlow]:
+    """Section-level результат по всем участкам, несущим расход в сценарии.
+    Для каждого: Q, v (по внутреннему Ø), потери, две проверки скорости,
+    признак общего участка и список обслуживаемых ПК."""
+    # какие ПК проходят через каждый участок
+    serving: Dict[str, List[str]] = {}
+    for cab_id, path in paths.items():
+        for seg in path:
+            serving.setdefault(seg.segment_id, []).append(cab_id)
+
+    seg_by_id = {s.segment_id: s for s in net.segments}
+    norm_limit = NORMATIVE_VELOCITY_LIMIT_MPS[mode]
+    design_limit = DESIGN_VELOCITY_TARGET_MPS[mode]
+
+    sections: List[SectionFlow] = []
+    for seg_id, q in seg_flow.items():
+        seg = seg_by_id[seg_id]
+        d_in = seg.inner_d_mm()
+        v = velocity_mps(q, d_in)
+        cabs = sorted(set(serving.get(seg_id, [])))
+        sections.append(SectionFlow(
+            segment_id=seg_id, from_node=seg.from_node, to_node=seg.to_node,
+            flow_lps=q, effective_length_m=seg.effective_length_m,
+            head_loss_m=backend.segment_loss(seg, q),
+            inner_diameter_mm=d_in, velocity_mps=v,
+            velocity_normative_limit_mps=norm_limit,
+            velocity_normative_ok=(None if v is None else v <= norm_limit),
+            velocity_design_limit_mps=design_limit,
+            velocity_design_ok=(None if v is None else v <= design_limit),
+            is_shared=len(cabs) > 1, serving_cabinets=cabs,
+            diameter_is_nominal=(seg.inner_diameter_mm is None and seg.diameter_mm is not None
+                                 and int(seg.diameter_mm) not in STEEL_INNER_DIAMETER_MM),
+        ))
+    sections.sort(key=lambda s: -s.flow_lps)   # сначала магистрали (больший расход)
+    return sections
+
+
 def _evaluate_scenario(
     net: FireNetwork,
     active: List[FireCabinetNode],
     backend: HeadLossBackend,
+    mode: NetworkMode = NetworkMode.PURE_FIRE,
 ) -> Optional[HydraulicScenario]:
     """Шаги 3-5: агрегация расходов, потери по агрегированному расходу участка,
-    требуемый напор на источнике для каждого активного ПК, max по сценарию."""
+    требуемый напор на источнике для каждого активного ПК, max по сценарию.
+    Плюс section-level агрегация по всем участкам (этап 2.2)."""
     heads: Dict[str, float] = {}
     flows: Dict[str, float] = {}
     for cab in active:
@@ -531,7 +673,6 @@ def _evaluate_scenario(
         flows[cab.cabinet_id] = q
 
     seg_flow, paths = _segment_flows_for_scenario(net, active, flows)
-    seg_by_id = {s.segment_id: s for s in net.segments}
     src_elev = net.nodes[net.source.node_id].elevation_m
 
     scen_cabs: List[ScenarioCabinet] = []
@@ -557,10 +698,12 @@ def _evaluate_scenario(
             required_head_at_source_m=req, path=rows))
 
     req_scenario = max(c.required_head_at_source_m for c in scen_cabs)  # шаг 5
+    sections = _build_sections(net, seg_flow, paths, backend, mode)
     return HydraulicScenario(
         active_cabinet_ids=[c.cabinet_id for c in active],
         required_head_at_source_m=req_scenario,
         total_flow_lps=sum(flows[c.cabinet_id] for c in active),
+        sections=sections,
         segment_flows=seg_flow, cabinets=scen_cabs)
 
 
@@ -570,6 +713,8 @@ def solve_fire_hydraulics_scenario(
     *,
     backend: Optional[HeadLossBackend] = None,
     scenario_filter: Optional["Callable[[Tuple[FireCabinetNode, ...]], bool]"] = None,
+    mode: NetworkMode = NetworkMode.PURE_FIRE,
+    require_acyclic: bool = True,
 ) -> ScenarioResult:
     """Сценарный расчёт совместной работы N=required_jets ПК (п. 7.6 СП 10).
 
@@ -581,8 +726,12 @@ def solve_fire_hydraulics_scenario(
     scenario_filter: внешний предикат допустимости набора ПК. Гидравлика НЕ знает,
     почему набор запрещён — только «считать можно / нельзя». Нормативные правила
     (напр. «разные стояки» по п. 6.2.2) собираются в glue-слое через
-    build_scenario_filter и передаются сюда. Если фильтр отсекает все сочетания —
-    возвращается предупреждение, а не молча посчитанный недопустимый сценарий.
+    build_scenario_filter и передаются сюда.
+
+    mode: режим сети для проверки скорости (чистый ВПВ / объединённый / хоз).
+    require_acyclic: этап 2.2 работает только на дереве. При наличии кольца в сети
+        расчёт НЕ выполняется (кольцевую увязку — этап 2.3), а не считается по
+        одному произвольному плечу, что было бы полуправдой.
 
     Осознанное упрощение MVP: перебор всех C(k, N) сочетаний кандидатов. На
     реальных сетях В2 (десятки ПК, N=2) это подъёмно.
@@ -591,6 +740,13 @@ def solve_fire_hydraulics_scenario(
     warnings: List[str] = []
     if required_jets < 1:
         raise ValueError("required_jets must be >= 1")
+
+    if require_acyclic and not net.is_acyclic():
+        return ScenarioResult(
+            None, 0.0, net.source.available_head_m, None, None,
+            warnings=["сеть содержит кольцо: section-агрегация этапа 2.2 работает "
+                      "только на дереве. Кольцевая увязка — этап 2.3. Расчёт не "
+                      "выполнен, чтобы не выдавать полуправду по одному плечу."])
 
     candidates = [c for c in net.cabinets if c.is_design_candidate]
     if len(candidates) < required_jets:
@@ -608,7 +764,7 @@ def solve_fire_hydraulics_scenario(
         if scenario_filter is not None and not scenario_filter(combo):
             filtered_out += 1
             continue
-        scen = _evaluate_scenario(net, list(combo), backend)
+        scen = _evaluate_scenario(net, list(combo), backend, mode)
         if scen is None:
             continue
         count += 1

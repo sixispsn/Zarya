@@ -520,3 +520,148 @@ def test_valves_in_calculation():
     r_base = solve_fire_hydraulics_scenario(base, 1)
     r_valve = solve_fire_hydraulics_scenario(withv, 1)
     assert r_valve.required_head_at_source_m > r_base.required_head_at_source_m
+
+
+# ============================================================
+# ЭТАП 2.2: SECTION-АГРЕГАЦИЯ + ДВА УРОВНЯ СКОРОСТИ
+# ============================================================
+
+from app.calc.fire_hydraulics import (
+    NetworkMode, SectionFlow, velocity_mps, STEEL_INNER_DIAMETER_MM,
+    NORMATIVE_VELOCITY_LIMIT_MPS, DESIGN_VELOCITY_TARGET_MPS,
+)
+
+
+def _tree_net():
+    return FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "fork": HydraulicNode("fork", 0.0),
+               "a": HydraulicNode("a", 27.5), "b": HydraulicNode("b", 27.5)},
+        segments=[
+            PipeSegment("mag", "src", "fork", length_m=30, A=0.00246, equiv_length_m=8, diameter_mm=65),
+            PipeSegment("rA", "fork", "a", length_m=27.5, A=0.011, equiv_length_m=4, diameter_mm=50),
+            PipeSegment("rB", "fork", "b", length_m=27.5, A=0.011, equiv_length_m=4, diameter_mm=50),
+        ],
+        cabinets=[FireCabinetNode("PK-A", "a", riser_id="R1"),
+                  FireCabinetNode("PK-B", "b", riser_id="R2")],
+        source=HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=45.0),
+    )
+
+
+def test_sections_present_in_scenario():
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2)
+    assert len(r.dictating_scenario.sections) == 3   # mag + rA + rB
+
+
+def test_shared_segment_flagged():
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2)
+    mag = next(s for s in r.dictating_scenario.sections if s.segment_id == "mag")
+    assert mag.is_shared is True
+    assert set(mag.serving_cabinets) == {"PK-A", "PK-B"}
+    assert mag.flow_lps == pytest.approx(5.2)
+
+
+def test_private_segment_not_shared():
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2)
+    rA = next(s for s in r.dictating_scenario.sections if s.segment_id == "rA")
+    assert rA.is_shared is False
+    assert rA.serving_cabinets == ["PK-A"]
+    assert rA.flow_lps == pytest.approx(2.6)
+
+
+# ── скорость по внутреннему диаметру ─────────────────────────────────────────
+
+def test_velocity_uses_inner_diameter():
+    # Ду65 → внутренний 68мм из таблицы, не 65
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2)
+    mag = next(s for s in r.dictating_scenario.sections if s.segment_id == "mag")
+    assert mag.inner_diameter_mm == 68.0
+    assert mag.velocity_mps == pytest.approx(velocity_mps(5.2, 68.0))
+
+
+def test_velocity_formula():
+    # v = Q·1e-3 / (π·(d·1e-3/2)²)
+    v = velocity_mps(5.2, 68.0)
+    import math
+    area = math.pi * (68e-3 / 2) ** 2
+    assert v == pytest.approx(5.2e-3 / area)
+
+
+def test_explicit_inner_diameter_overrides_table():
+    seg = PipeSegment("s", "a", "b", length_m=10, A=0.01, diameter_mm=50, inner_diameter_mm=51.0)
+    assert seg.inner_d_mm() == 51.0   # явный, не табличный 53
+
+
+# ── два уровня проверки скорости ─────────────────────────────────────────────
+
+def test_normative_and_design_limits_by_mode():
+    assert NORMATIVE_VELOCITY_LIMIT_MPS[NetworkMode.PURE_FIRE] == 10.0
+    assert DESIGN_VELOCITY_TARGET_MPS[NetworkMode.PURE_FIRE] == 4.0
+    assert NORMATIVE_VELOCITY_LIMIT_MPS[NetworkMode.COMBINED_FIRE] == 3.0
+
+
+def test_design_warn_but_normative_ok():
+    # v между 4 и 10 → норма OK, дизайн нарушен
+    sec = SectionFlow(
+        segment_id="s", from_node="a", to_node="b", flow_lps=12.0,
+        effective_length_m=10, head_loss_m=1.0, inner_diameter_mm=53.0,
+        velocity_mps=velocity_mps(12.0, 53.0),
+        velocity_normative_limit_mps=10.0, velocity_normative_ok=None,
+        velocity_design_limit_mps=4.0, velocity_design_ok=None, is_shared=False)
+    v = sec.velocity_mps
+    assert 4.0 < v < 10.0
+    assert (v <= 10.0) is True      # норма OK
+    assert (v <= 4.0) is False      # дизайн WARN
+
+
+def test_pure_fire_normative_ok_at_moderate_velocity():
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2, mode=NetworkMode.PURE_FIRE)
+    for s in r.dictating_scenario.sections:
+        assert s.velocity_normative_limit_mps == 10.0
+        assert s.velocity_normative_ok is True   # скорости низкие
+
+
+def test_combined_mode_stricter_limit():
+    r = solve_fire_hydraulics_scenario(_tree_net(), 2, mode=NetworkMode.COMBINED_FIRE)
+    for s in r.dictating_scenario.sections:
+        assert s.velocity_normative_limit_mps == 3.0
+
+
+# ── валидация ацикличности / отказ на кольце ────────────────────────────────
+
+def test_ring_network_rejected():
+    ring = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 10),
+               "b": HydraulicNode("b", 10)},
+        segments=[PipeSegment("s1", "src", "a", length_m=10, A=0.01),
+                  PipeSegment("s2", "a", "b", length_m=10, A=0.01),
+                  PipeSegment("s3", "b", "src", length_m=10, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "a")],
+        source=HydraulicSource("src"))
+    assert ring.is_acyclic() is False
+    r = solve_fire_hydraulics_scenario(ring, 1)
+    assert r.dictating_scenario is None
+    assert any("кольцо" in w for w in r.warnings)
+
+
+def test_tree_is_acyclic():
+    assert _tree_net().is_acyclic() is True
+
+
+def test_ring_allowed_when_require_acyclic_false():
+    # если явно разрешить — считает по одному плечу (не рекомендуется, но доступно)
+    ring = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 10),
+               "b": HydraulicNode("b", 10)},
+        segments=[PipeSegment("s1", "src", "a", length_m=10, A=0.01),
+                  PipeSegment("s2", "a", "b", length_m=10, A=0.01),
+                  PipeSegment("s3", "b", "src", length_m=10, A=0.01)],
+        cabinets=[FireCabinetNode("PK", "a", riser_id="R1")],
+        source=HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=50))
+    r = solve_fire_hydraulics_scenario(ring, 1, require_acyclic=False)
+    assert r.dictating_scenario is not None   # посчитал по BFS-пути
+
+
+def test_inner_diameter_table():
+    assert STEEL_INNER_DIAMETER_MM[50] == 53.0
+    assert STEEL_INNER_DIAMETER_MM[65] == 68.0
+    assert STEEL_INNER_DIAMETER_MM[100] == 106.0
