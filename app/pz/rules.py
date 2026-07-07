@@ -88,6 +88,56 @@ def decide_fire_network(
 
 
 @dataclass
+class FirePumpDecision:
+    """Решение о повысительной насосной установке В2 (по гидравлике)."""
+    needs_pump: Optional[bool]         # None — гидравлика не рассчитана
+    required_head_m: Optional[float]
+    available_head_m: Optional[float]
+    text: str                          # формулировка для пояснительной записки
+
+
+def describe_fire_pump_requirement(fire: FireSystem) -> FirePumpDecision:
+    """Формирует вывод о необходимости насосной В2 для пояснительной записки
+    из результатов гидравлического расчёта (СП 10.13130.2020, 4.4, п. 6.1.9 прим.1).
+
+    Если гидравлика не рассчитана (нет required_head_m) — текст-заглушка, чтобы
+    ПЗ не молчала о напоре.
+    """
+    if not fire.required:
+        return FirePumpDecision(None, None, None,
+                                "Внутренний противопожарный водопровод не требуется.")
+    req = fire.required_head_m
+    avail = fire.available_head_m
+    needs = fire.needs_pump
+
+    if req is None:
+        return FirePumpDecision(
+            needs, req, avail,
+            "Требуемый напор В2 уточняется гидравлическим расчётом сети.")
+
+    if needs is None:
+        return FirePumpDecision(
+            None, req, avail,
+            f"Требуемый напор на вводе В2 составляет {req:.1f} м. "
+            "Достаточность напора источника уточняется по данным водоканала.")
+
+    if needs:
+        gap = (req - avail) if avail is not None else None
+        gap_txt = f" (дефицит {gap:.1f} м)" if gap is not None else ""
+        return FirePumpDecision(
+            True, req, avail,
+            f"Требуемый напор на вводе В2 — {req:.1f} м, доступный напор источника "
+            f"{('— ' + format(avail, '.1f') + ' м') if avail is not None else 'недостаточен'}"
+            f"{gap_txt}. Предусматривается повысительная насосная установка В2 "
+            "(СП 10.13130.2020, 4.4).")
+    return FirePumpDecision(
+        False, req, avail,
+        f"Требуемый напор на вводе В2 — {req:.1f} м, обеспечивается напором "
+        f"источника ({avail:.1f} м). Повысительная насосная установка В2 не требуется "
+        "(СП 10.13130.2020, 6.1.9, примечание 1).")
+
+
+@dataclass
 class HeadCalc:
     """Расчёт требуемого напора Hтр по формуле (14) п.8.27 СП 30.13330.2020
     и решение о необходимости повысительной установки."""

@@ -248,3 +248,61 @@ def fire_from_calc(res, *, pk_total: int = 0, nozzle_dn: int = 50,
         fire_duration_min=int(fire_duration_min),
         has_aupt=bool(has_aupt),
     )
+
+
+def enrich_fire_from_layout_and_hydraulics(
+    fire: FireSystem,
+    *,
+    layout_results=None,
+    hydraulic_result=None,
+) -> FireSystem:
+    """Дополняет FireSystem результатами геометрии (fire_layout) и гидравлики
+    (fire_hydraulics) — мост из расчётного ядра ВПВ в модель документа (ИОС2).
+
+    layout_results: список результатов расстановки ПК по помещениям здания
+        (каждый — FireCabinetLayoutSummary или FireDesignResult, у которого есть
+        число расставленных ПК). pk_total = СУММА по всем помещениям здания.
+    hydraulic_result: результат гидравлики В2 по сети — ScenarioResult или
+        HydraulicResult (диктующий напор, needs_pump). Берётся напор на источнике
+        и вердикт о насосной.
+
+    Мост НЕ считает сам — принимает уже посчитанные результаты солверов и
+    переносит их в FireSystem, откуда их подхватывают спека/схема/ПЗ.
+    Возвращает НОВЫЙ FireSystem (dataclasses.replace), исходный не мутируется.
+    """
+    import dataclasses
+
+    updates = {}
+
+    # pk_total — сумма расставленных ПК по всем помещениям здания
+    if layout_results:
+        total = 0
+        for lr in layout_results:
+            # поддерживаем и FireDesignResult (.pk_total), и layout summary
+            if hasattr(lr, "pk_total"):
+                total += int(lr.pk_total or 0)
+            elif hasattr(lr, "placement_result"):
+                total += len(lr.placement_result.placements)
+        updates["pk_total"] = total
+
+    # напор и вердикт о насосе — из гидравлики В2
+    if hydraulic_result is not None:
+        req = getattr(hydraulic_result, "required_head_at_source_m", None)
+        if req is not None:
+            updates["required_head_m"] = float(req)
+        avail = getattr(hydraulic_result, "available_head_m", None)
+        if avail is not None:
+            updates["available_head_m"] = float(avail)
+        needs = getattr(hydraulic_result, "needs_pump", None)
+        if needs is not None:
+            updates["needs_pump"] = bool(needs)
+        # диктующий ПК (одиночный) или диктующая пара (сценарий)
+        dic = getattr(hydraulic_result, "dictating_cabinet_id", None)
+        if dic is None:
+            scen = getattr(hydraulic_result, "dictating_scenario", None)
+            if scen is not None:
+                dic = "+".join(scen.active_cabinet_ids)
+        if dic is not None:
+            updates["dictating_cabinet_id"] = str(dic)
+
+    return dataclasses.replace(fire, **updates)

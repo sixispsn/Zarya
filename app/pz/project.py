@@ -153,6 +153,11 @@ class FireSystem:
     hose_length_m: int = 20                   # длина рукава ПК, м
     nozzle_dn: int = 50                       # Ду пожарного крана
     pk_total: int = 0                         # всего пожарных шкафов/кранов
+    # --- результаты гидравлического расчёта В2 (из fire_hydraulics) ---
+    required_head_m: Optional[float] = None   # требуемый напор на вводе В2, м
+    available_head_m: Optional[float] = None  # доступный напор источника, м
+    needs_pump: Optional[bool] = None         # нужна ли повысительная насосная В2
+    dictating_cabinet_id: Optional[str] = None  # диктующий ПК (или диктующая пара)
 
 
 # ── СЧЁТЧИКИ (детальный подбор, таблица 5.1.13 ГОСТ 21.619-2023) ──
