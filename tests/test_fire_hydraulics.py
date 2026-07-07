@@ -330,3 +330,96 @@ def test_filter_off_when_not_required():
     # даже одинаковые стояки допустимы
     assert filt((FireCabinetNode("X", "a", riser_id="R1"),
                  FireCabinetNode("Y", "b", riser_id="R1"))) is True
+
+
+# ============================================================
+# РАБОЧАЯ ТОЧКА НАСОСА / ТИПЫ ИСТОЧНИКА (Hydraulic Engine v2.1)
+# ============================================================
+
+from app.calc.fire_hydraulics import SourceKind, PumpDutyPoint
+
+
+def _net_src(source):
+    return FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "n1": HydraulicNode("n1", 0.0),
+               "n2": HydraulicNode("n2", 27.5)},
+        segments=[PipeSegment("mag", "src", "n1", length_m=30, A=0.00246, equiv_length_m=8),
+                  PipeSegment("riser", "n1", "n2", length_m=27.5, A=0.011, equiv_length_m=4)],
+        cabinets=[FireCabinetNode("PK-1", "n2", riser_id="R1")],
+        source=source,
+    )
+
+
+def test_city_sufficient_head_no_pump():
+    r = solve_fire_hydraulics_scenario(
+        _net_src(HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=45.0)), 1)
+    assert r.needs_pump is False
+    assert r.pump_duty is None
+
+
+def test_city_insufficient_pump_covers_deficit():
+    r = solve_fire_hydraulics_scenario(
+        _net_src(HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=30.0)), 1)
+    assert r.needs_pump is True
+    # насос добирает недостачу: H_треб − H_город
+    assert r.pump_duty.required_head_m == pytest.approx(r.required_head_at_source_m - 30.0)
+    assert r.pump_duty.flow_lps == pytest.approx(2.6)
+    assert r.pump_duty.source_kind == SourceKind.CITY_MAIN
+
+
+def test_city_unknown_head_treated_as_zero():
+    r = solve_fire_hydraulics_scenario(
+        _net_src(HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=None)), 1)
+    assert r.needs_pump is True
+    # насос на весь требуемый напор
+    assert r.pump_duty.required_head_m == pytest.approx(r.required_head_at_source_m)
+    assert any("неизвестен" in w for w in r.warnings)
+
+
+def test_reservoir_pump_includes_suction():
+    # уровень воды -3 м (ниже оси насоса) + потери всаса 2 м
+    src = HydraulicSource("src", kind=SourceKind.RESERVOIR,
+                          water_level_m=-3.0, suction_head_loss_m=2.0)
+    r = solve_fire_hydraulics_scenario(_net_src(src), 1)
+    assert r.needs_pump is True
+    # H_насоса = H_треб + подъём всаса(3) + потери всаса(2)
+    assert r.pump_duty.required_head_m == pytest.approx(r.required_head_at_source_m + 3.0 + 2.0)
+    assert r.pump_duty.suction_lift_m == pytest.approx(3.0)
+    assert r.pump_duty.source_kind == SourceKind.RESERVOIR
+
+
+def test_reservoir_always_needs_pump():
+    # даже без подъёма и потерь — у резервуара напора нет, насос обязателен
+    src = HydraulicSource("src", kind=SourceKind.RESERVOIR, water_level_m=0.0)
+    r = solve_fire_hydraulics_scenario(_net_src(src), 1)
+    assert r.needs_pump is True
+    assert r.pump_duty.required_head_m == pytest.approx(r.required_head_at_source_m)
+
+
+def test_pond_source_kind():
+    src = HydraulicSource("src", kind=SourceKind.POND, water_level_m=-1.0, suction_head_loss_m=1.5)
+    r = solve_fire_hydraulics_scenario(_net_src(src), 1)
+    assert r.pump_duty.source_kind == SourceKind.POND
+    assert r.needs_pump is True
+
+
+def test_pump_flow_equals_scenario_flow():
+    # рабочая точка Q = суммарный расход диктующего сценария
+    net = FireNetwork(
+        nodes={"src": HydraulicNode("src", 0.0), "fork": HydraulicNode("fork", 0.0),
+               "a": HydraulicNode("a", 27.5), "b": HydraulicNode("b", 27.5)},
+        segments=[PipeSegment("mag", "src", "fork", length_m=30, A=0.00246, equiv_length_m=8),
+                  PipeSegment("rA", "fork", "a", length_m=27.5, A=0.011, equiv_length_m=4),
+                  PipeSegment("rB", "fork", "b", length_m=27.5, A=0.011, equiv_length_m=4)],
+        cabinets=[FireCabinetNode("PK-A", "a", riser_id="R1"),
+                  FireCabinetNode("PK-B", "b", riser_id="R2")],
+        source=HydraulicSource("src", kind=SourceKind.CITY_MAIN, available_head_m=20.0),
+    )
+    r = solve_fire_hydraulics_scenario(net, 2)
+    assert r.pump_duty.flow_lps == pytest.approx(5.2)  # 2 струи по 2.6
+
+
+def test_source_defaults_city_main():
+    # обратная совместимость: старый источник без kind → CITY_MAIN
+    src = HydraulicSource("src", available_head_m=40.0)
+    assert src.kind == SourceKind.CITY_MAIN

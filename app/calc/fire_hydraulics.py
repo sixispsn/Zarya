@@ -86,16 +86,44 @@ class FireCabinetNode:
     riser_id: Optional[str] = None
 
 
+class SourceKind(str, Enum):
+    """Тип источника водоснабжения В2.
+
+    CITY_MAIN: городская сеть под напором — даёт H_город (может быть неизвестен).
+    RESERVOIR / POND / WELL: напора нет, есть уровень воды; насос забирает со
+        всасывающей линии и создаёт весь напор + подъём/потери всаса.
+    """
+    CITY_MAIN = "city_main"
+    RESERVOIR = "reservoir"
+    POND = "pond"
+    WELL = "well"
+
+
 @dataclass
 class HydraulicSource:
-    """Источник (ввод/выход насосной).
+    """Источник водоснабжения В2 (ввод от города или водозабор из резервуара/водоёма).
 
-    available_head_m: доступный напор, если известен (для проверки достаточности);
-        None — напор неизвестен, считаем только требуемый.
-    node_id: узел подключения источника.
+    node_id: узел подключения источника (для сети — ввод; для резервуара — ось
+        насоса / точка нагнетания).
+    kind: тип источника (см. SourceKind).
+
+    Для CITY_MAIN:
+      available_head_m: гарантированный напор города, м. None → считаем 0
+        (город часто не гарантирует напор на пожарный расход — насос на весь H_треб).
+
+    Для RESERVOIR/POND/WELL (напора нет, забор насосом со всаса):
+      water_level_m: отметка уровня воды (для резервуара — верхний уровень
+        пожарного объёма, п. 12.20; для водоёма — минимальный уровень).
+      suction_head_loss_m: потери всасывающей линии, м (упрощённо одним числом на
+        этапе 2.1; детальный участок графа — на 2.2).
+      Геодезия всаса (подъём от уровня воды до оси насоса) учитывается через
+      отметку узла source.node_id относительно water_level_m.
     """
     node_id: str
+    kind: SourceKind = SourceKind.CITY_MAIN
     available_head_m: Optional[float] = None
+    water_level_m: Optional[float] = None
+    suction_head_loss_m: float = 0.0
 
 
 @dataclass
@@ -346,6 +374,24 @@ class HydraulicScenario:
 
 
 @dataclass
+class PumpDutyPoint:
+    """Требуемая рабочая точка повысительного насоса В2 (обратный расчёт).
+
+    required_head_m: напор, который должен развивать насос (недостача до H_треб
+        для сети; весь H_треб + подъём/потери всаса для резервуара/водоёма).
+    flow_lps: расход в рабочей точке = Q_пож диктующего сценария.
+    source_kind: тип источника, от которого считался напор.
+    suction_lift_m: геодезический подъём всаса (резервуар/водоём), 0 для сети.
+    notes: пояснения к расчёту рабочей точки.
+    """
+    required_head_m: float
+    flow_lps: float
+    source_kind: "SourceKind"
+    suction_lift_m: float = 0.0
+    notes: List[str] = field(default_factory=list)
+
+
+@dataclass
 class ScenarioResult:
     """Итог сценарного расчёта: худший (диктующий) сценарий из N ПК."""
     dictating_scenario: Optional[HydraulicScenario]
@@ -353,6 +399,7 @@ class ScenarioResult:
     available_head_m: Optional[float]
     available_head_ok: Optional[bool]
     needs_pump: Optional[bool]
+    pump_duty: Optional[PumpDutyPoint] = None    # рабочая точка насоса (если нужен)
     evaluated_scenarios: int = 0
     warnings: List[str] = field(default_factory=list)
 
@@ -463,7 +510,7 @@ def solve_fire_hydraulics_scenario(
         required_jets = max(1, min(required_jets, len(candidates)))
     if not candidates:
         return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
-                              0, warnings + ["нет ПК-кандидатов"])
+                              warnings=warnings + ["нет ПК-кандидатов"])
 
     worst: Optional[HydraulicScenario] = None
     count = 0
@@ -485,16 +532,61 @@ def solve_fire_hydraulics_scenario(
                f"все сочетания ПК отсеяны фильтром допустимости ({filtered_out}); "
                "проверьте разнесение ПК по стоякам / заполнение riser_id (п. 6.2.2)")
         return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
-                              0, warnings + [msg])
+                              warnings=warnings + [msg])
 
-    avail = net.source.available_head_m
-    ok = None if avail is None else (avail >= worst.required_head_at_source_m)
-    needs_pump = None if ok is None else (not ok)
+    req_head = worst.required_head_at_source_m
+    q_pozh = worst.total_flow_lps
+    duty, avail, ok, needs_pump, pump_notes = _compute_pump_duty(net, req_head, q_pozh)
     return ScenarioResult(
         dictating_scenario=worst,
-        required_head_at_source_m=worst.required_head_at_source_m,
+        required_head_at_source_m=req_head,
         available_head_m=avail, available_head_ok=ok, needs_pump=needs_pump,
-        evaluated_scenarios=count, warnings=warnings)
+        pump_duty=duty,
+        evaluated_scenarios=count, warnings=warnings + pump_notes)
+
+
+def _compute_pump_duty(net: FireNetwork, req_head: float, q_pozh: float):
+    """Считает рабочую точку насоса по типу источника (обратный расчёт, вариант а).
+
+    Сеть (CITY_MAIN): H_город = available_head_m (None → 0). Насос добирает
+      недостачу H_насоса = max(0, H_треб − H_город). Хватает города → насос не нужен.
+    Резервуар/водоём/скважина: напора нет, насос создаёт ВЕСЬ H_треб плюс подъём
+      воды со всаса (Δz_всас = отметка оси насоса − уровень воды) и потери всаса.
+      Насос нужен всегда.
+
+    Возвращает (PumpDutyPoint|None, available_head, ok, needs_pump, notes).
+    """
+    src = net.source
+    notes: List[str] = []
+
+    if src.kind == SourceKind.CITY_MAIN:
+        h_city = src.available_head_m if src.available_head_m is not None else 0.0
+        if src.available_head_m is None:
+            notes.append("напор города неизвестен — принят 0 (уточнить у водоканала); "
+                         "насос считается на весь требуемый напор")
+        deficit = req_head - h_city
+        if deficit <= 1e-9:
+            return None, src.available_head_m, True, False, notes  # города хватает
+        duty = PumpDutyPoint(
+            required_head_m=deficit, flow_lps=q_pozh, source_kind=src.kind,
+            notes=[f"насос добирает недостачу: H_треб {req_head:.1f} − H_город "
+                   f"{h_city:.1f} = {deficit:.1f} м"])
+        return duty, src.available_head_m, False, True, notes
+
+    # резервуар / пруд / скважина — насос создаёт весь напор + всас
+    src_elev = net.nodes[src.node_id].elevation_m
+    suction_lift = 0.0
+    if src.water_level_m is not None:
+        suction_lift = src_elev - src.water_level_m  # ось насоса выше воды → подъём
+    pump_head = req_head + max(0.0, suction_lift) + src.suction_head_loss_m
+    notes.append(f"источник {src.kind.value}: напора нет, насос создаёт весь напор "
+                 f"{req_head:.1f} м + всас (подъём {max(0.0, suction_lift):.1f} м + "
+                 f"потери {src.suction_head_loss_m:.1f} м) = {pump_head:.1f} м")
+    duty = PumpDutyPoint(
+        required_head_m=pump_head, flow_lps=q_pozh, source_kind=src.kind,
+        suction_lift_m=max(0.0, suction_lift),
+        notes=[f"H_насоса = H_треб + подъём всаса + потери всаса = {pump_head:.1f} м"])
+    return duty, None, None, True, notes
 
 
 # ============================================================
