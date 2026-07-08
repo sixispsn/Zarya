@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"></head><body>
+<div class="stamp3">
+  <table>
+    <colgroup>
+      <col style="width:7mm"><col style="width:10mm"><col style="width:8mm">
+      <col style="width:12mm"><col style="width:16mm"><col style="width:12mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+    </colgroup>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Разраб.</td><td colspan="2">{{ doc.developer_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="part">{{ doc.object_part or '' }}</td>
+      <td class="lblsm">Стадия</td><td class="lblsm">Лист</td><td class="lblsm">Листов</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="2">{{ doc.stage_label or 'П' }}</td><td rowspan="2">{{ doc.sheet_no or '1' }}</td><td rowspan="2">{{ doc.sheet_total or '—' }}</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="ttl">Гидравлический расчёт В2</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td>
+    </tr>
+  </table>
+</div>
+
+<h1 class="section-title">Гидравлический расчёт внутреннего противопожарного водопровода (В2)</h1>
+
+{# ── БЛОК 1: ШАПКА РАСЧЁТА ── #}
+<table class="hdr">
+  <tr><td class="k">Расчётный сценарий</td><td>{{ h.n_simultaneous }} одновременно действующих ПК ({{ h.active_cabinet_ids|join(', ') }})</td></tr>
+  <tr><td class="k">Расчётный расход</td><td>{{ '%.1f'|format(h.total_flow_lps) }} л/с</td></tr>
+  <tr><td class="k">Диктующий</td><td>{{ h.dictating_label }}</td></tr>
+  <tr><td class="k">Требуемый напор на вводе</td><td>{{ '%.1f'|format(h.required_head_at_source_m) }} м</td></tr>
+  {% if h.available_head_m is not none %}
+  <tr><td class="k">Доступный напор источника</td><td>{{ '%.1f'|format(h.available_head_m) }} м</td></tr>
+  {% endif %}
+  {% if h.needs_pump and h.pump_duty %}
+  <tr><td class="k">Насосная установка В2</td><td>требуется: Q = {{ '%.1f'|format(h.pump_duty.flow_lps) }} л/с, H = {{ '%.1f'|format(h.pump_duty.required_head_m) }} м</td></tr>
+  {% elif h.needs_pump == false %}
+  <tr><td class="k">Насосная установка В2</td><td>не требуется</td></tr>
+  {% endif %}
+</table>
+
+{# ── БЛОК 2: ТАБЛИЦА УЧАСТКОВ ── #}
+<h2 class="sub">Таблица гидравлического расчёта по участкам</h2>
+<table class="hydr">
+  <thead>
+    <tr>
+      <th>Участок</th><th>От&nbsp;→&nbsp;До</th><th>L<sub>эф</sub>,&nbsp;м</th>
+      <th>Q,&nbsp;л/с</th><th>Ду</th><th>Ø<sub>вн</sub>,&nbsp;мм</th>
+      <th>v,&nbsp;м/с</th><th>[v]&nbsp;норм</th><th>[v]&nbsp;пр</th>
+      <th>Δh,&nbsp;м</th><th>Общий</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in segments %}
+    <tr class="{{ 'fail' if s.verdict.value == 'fail' else ('warn' if s.verdict.value == 'target' else '') }}">
+      <td>{{ s.segment_id }}</td>
+      <td>{{ s.from_node }}&nbsp;→&nbsp;{{ s.to_node }}</td>
+      <td>{{ '%.1f'|format(s.effective_length_m) }}</td>
+      <td>{{ '%.1f'|format(s.flow_lps) }}</td>
+      <td>{{ s.current_dn or '—' }}</td>
+      <td>{{ '%.0f'|format(s.inner_diameter_mm) if s.inner_diameter_mm else '—' }}</td>
+      <td>{{ '%.2f'|format(s.velocity_mps) if s.velocity_mps is not none else '—' }}</td>
+      <td>{{ '%.0f'|format(s.normative_limit_mps) }}</td>
+      <td>{{ '%.0f'|format(s.design_limit_mps) }}</td>
+      <td>{{ '%.2f'|format(s.head_loss_m) }}</td>
+      <td>{{ 'да' if s.is_shared else 'нет' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{# ── БЛОК 3: ВЕРДИКТ ПО ДИАМЕТРАМ ── #}
+{% set verdicts = segments|selectattr('current_dn')|list %}
+{% if verdicts %}
+<h2 class="sub">Вердикт по диаметрам</h2>
+<ul class="verdicts">
+  {% for s in verdicts %}
+    {% if s.verdict.value == 'ok' %}
+      <li>{{ s.segment_id }}: Ду{{ s.current_dn }} — норматив и проектный предел соблюдены.</li>
+    {% elif s.verdict.value == 'target' %}
+      <li class="warn">{{ s.segment_id }}: Ду{{ s.current_dn }} — норматив соблюдён (v≤{{ '%.0f'|format(s.normative_limit_mps) }}), но выше проектного предела {{ '%.0f'|format(s.design_limit_mps) }} м/с. Рекомендуется Ду{{ s.recommended_dn }}.</li>
+    {% else %}
+      <li class="fail">{{ s.segment_id }}: Ду{{ s.current_dn }} — ПРЕВЫШЕНИЕ норматива скорости ({{ '%.2f'|format(s.velocity_mps) }}&gt;{{ '%.0f'|format(s.normative_limit_mps) }} м/с). Требуется увеличение до Ду{{ s.recommended_dn }}.</li>
+    {% endif %}
+  {% endfor %}
+</ul>
+{% endif %}
+
+{# ── БЛОК 4: ДИКТУЮЩИЙ ПУТЬ ── #}
+{% if dictating_paths %}
+<h2 class="sub">Диктующий путь</h2>
+{% for p in dictating_paths %}
+<p class="path">ПК {{ p.cabinet_id }}: {{ p.segments|join(' → ') }}<br>
+суммарные потери по пути: {{ '%.2f'|format(p.total_loss_m) }} м;
+наибольшая потеря — участок {{ p.max_loss_segment }} ({{ '%.2f'|format(p.max_loss_m) }} м);
+требуемый напор на вводе: {{ '%.1f'|format(p.required_head_at_source_m) }} м.</p>
+{% endfor %}
+{% endif %}
+
+{# ── БЛОК 5: ЗАКЛЮЧЕНИЕ ── #}
+<h2 class="sub">Заключение</h2>
+<div class="concl">{{ conclusion_html|safe }}</div>
+
+</body></html>
