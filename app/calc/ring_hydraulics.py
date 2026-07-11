@@ -332,3 +332,235 @@ def dictating_pk_via_ring(
         return None, []
     dictating = max(heads, key=lambda h: h.required_head_at_source_m)
     return dictating, heads
+
+
+# ============================================================
+# ИНТЕГРАЦИЯ С КОНВЕЙРОМ: сеть → кольцо+ветви → section-формат
+# ============================================================
+# Мост, позволяющий solve_fire_hydraulics_scenario принимать кольцевую сеть:
+# находит контур, раскладывает сеть на кольцо + тупиковые ветви, гонит увязку
+# Кросса и отдаёт результат в ЕДИНОМ section-формате (SectionFlow) — diameter
+# audit, отчёт и гидролист работают с ним без единой правки.
+
+from app.calc.fire_hydraulics import (
+    FireNetwork, FireCabinetNode, SectionFlow, NetworkMode, velocity_mps,
+    NORMATIVE_VELOCITY_LIMIT_MPS, DESIGN_VELOCITY_TARGET_MPS,
+    STEEL_INNER_DIAMETER_MM,
+)
+
+
+def find_single_cycle(net: FireNetwork) -> Optional[Tuple[List[str], List[PipeSegment]]]:
+    """Находит единственный цикл графа: (узлы по обходу, участки по обходу).
+    None, если граф ацикличен или циклов больше одного (v3 = ровно одно кольцо)."""
+    # число независимых циклов = E - V + C (cyclomatic number)
+    nodes = set(net.nodes)
+    edges = [(s.from_node, s.to_node, s) for s in net.segments
+             if s.from_node in nodes and s.to_node in nodes]
+    # компоненты связности
+    parent = {n: n for n in nodes}
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+    comp_edges_extra = 0
+    for a, b, _ in edges:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            comp_edges_extra += 1
+        else:
+            parent[ra] = rb
+    if comp_edges_extra != 1:
+        return None   # 0 циклов (дерево) или >1 (не наш случай)
+
+    # ищем сам цикл DFS-ом с отслеживанием пути
+    adj: Dict[str, List[Tuple[str, PipeSegment]]] = {n: [] for n in nodes}
+    for a, b, seg in edges:
+        adj[a].append((b, seg)); adj[b].append((a, seg))
+
+    visited: Dict[str, bool] = {}
+    stack: List[Tuple[str, Optional[str], Optional[PipeSegment]]] = []
+    path_nodes: List[str] = []
+    path_segs: List[PipeSegment] = []
+
+    def dfs(cur: str, prev_node: Optional[str], via: Optional[PipeSegment]):
+        visited[cur] = True
+        path_nodes.append(cur)
+        if via is not None:
+            path_segs.append(via)
+        for nb, seg in adj[cur]:
+            if seg is via:
+                continue
+            if not visited.get(nb):
+                res = dfs(nb, cur, seg)
+                if res:
+                    return res
+            elif nb in path_nodes:
+                # цикл найден: от nb до конца path_nodes
+                i = path_nodes.index(nb)
+                cyc_nodes = path_nodes[i:]
+                cyc_segs = path_segs[i:] + [seg]
+                return (cyc_nodes, cyc_segs)
+        path_nodes.pop()
+        if via is not None:
+            path_segs.pop()
+        return None
+
+    for start in nodes:
+        if not visited.get(start):
+            res = dfs(start, None, None)
+            if res:
+                return res
+    return None
+
+
+@dataclass
+class RingNetworkDecomposition:
+    """Разбор сети на кольцо + тупиковые ветви."""
+    loop_nodes: List[str]
+    loop_segments: List[PipeSegment]
+    branches: List[BranchToPK]                 # ветви с ПК
+    branch_demands_by_node: Dict[str, float]   # узловые отборы
+    problems: List[str] = field(default_factory=list)
+
+
+def decompose_ring_network(
+    net: FireNetwork,
+    active_cabinets: List[FireCabinetNode],
+    flows_by_cabinet: Dict[str, float],
+    heads_by_cabinet: Dict[str, float],
+) -> RingNetworkDecomposition:
+    """Раскладывает сеть с одним кольцом: контур + тупиковые ветви от узлов
+    кольца до активных ПК. Проверяет топологию v3 (источник на кольце,
+    ПК вне кольца)."""
+    problems: List[str] = []
+    cyc = find_single_cycle(net)
+    if cyc is None:
+        return RingNetworkDecomposition([], [], [], {}, ["сеть не содержит ровно одного кольца"])
+    loop_nodes, loop_segs = cyc
+    loop_node_set = set(loop_nodes)
+    loop_seg_ids = {s.segment_id for s in loop_segs}
+
+    if net.source.node_id not in loop_node_set:
+        problems.append(f"источник {net.source.node_id} не на кольце (топология v3)")
+
+    src_elev = net.nodes[net.source.node_id].elevation_m
+    adj = net.adjacency()
+    branches: List[BranchToPK] = []
+    demands: Dict[str, float] = {}
+
+    for cab in active_cabinets:
+        if cab.node_id in loop_node_set:
+            problems.append(f"ПК {cab.cabinet_id} на участке кольца — топология v3 "
+                            "требует ПК на тупиковых ветвях")
+            continue
+        # путь от ПК до ближайшего узла кольца (BFS по не-кольцевым участкам)
+        from collections import deque
+        q = deque([cab.node_id]); prev: Dict[str, Tuple[str, PipeSegment]] = {}
+        seen = {cab.node_id}; attach = None
+        while q:
+            cur = q.popleft()
+            if cur in loop_node_set:
+                attach = cur; break
+            for nb, seg in adj.get(cur, []):
+                if seg.segment_id in loop_seg_ids or nb in seen:
+                    continue
+                seen.add(nb); prev[nb] = (cur, seg); q.append(nb)
+        if attach is None:
+            problems.append(f"ПК {cab.cabinet_id}: нет пути до кольца")
+            continue
+        # восстановить участки ветви от кольца к ПК
+        segs: List[PipeSegment] = []
+        node = attach
+        while node != cab.node_id:
+            p, s = prev[node]; segs.append(s); node = p
+        # segs идут от кольца к ПК — то, что нужно BranchToPK
+        flow = flows_by_cabinet.get(cab.cabinet_id, 0.0)
+        branches.append(BranchToPK(
+            attach_node=attach, segments=segs, flow_lps=flow,
+            cabinet_id=cab.cabinet_id,
+            cabinet_head_m=heads_by_cabinet.get(cab.cabinet_id, 0.0),
+            cabinet_elevation_m=net.nodes[cab.node_id].elevation_m,
+            source_elevation_m=src_elev))
+        demands[attach] = demands.get(attach, 0.0) + flow
+
+    return RingNetworkDecomposition(loop_nodes, loop_segs, branches, demands, problems)
+
+
+@dataclass
+class RingScenarioOutcome:
+    """Результат кольцевого сценария в едином формате конвейра."""
+    required_head_at_source_m: float
+    total_flow_lps: float
+    dictating_cabinet_id: str
+    sections: List[SectionFlow]
+    ring_result: RingSolveResult
+    per_pk: List[PKRequiredHead]
+    warnings: List[str] = field(default_factory=list)
+
+
+def solve_ring_scenario(
+    net: FireNetwork,
+    active_cabinets: List[FireCabinetNode],
+    flows_by_cabinet: Dict[str, float],
+    heads_by_cabinet: Dict[str, float],
+    mode: NetworkMode = NetworkMode.PURE_FIRE,
+) -> Optional[RingScenarioOutcome]:
+    """Кольцевой сценарий: разбор сети → увязка Кросса → полный путь до ПК →
+    sections в едином формате (аудит/отчёт/лист работают без правок)."""
+    deco = decompose_ring_network(net, active_cabinets, flows_by_cabinet, heads_by_cabinet)
+    if deco.problems:
+        return None if not deco.loop_nodes else RingScenarioOutcome(
+            0.0, 0.0, "", [], RingSolveResult(False, 0, 0.0), [],
+            warnings=deco.problems)
+
+    problem = build_loop_problem(net.source.node_id, deco.loop_nodes,
+                                 deco.loop_segments, deco.branch_demands_by_node)
+    ring = solve_single_loop(problem)
+    if not ring.converged:
+        return RingScenarioOutcome(0.0, 0.0, "", [], ring, [],
+                                   warnings=ring.warnings + ["увязка кольца не сошлась"])
+
+    dic, per_pk = dictating_pk_via_ring(ring, deco.branches)
+    if dic is None:
+        return RingScenarioOutcome(0.0, 0.0, "", [], ring, [],
+                                   warnings=["нет ветвей с ПК"])
+
+    # sections: кольцевые участки (расход из увязки) + ветви (тупики)
+    norm_limit = NORMATIVE_VELOCITY_LIMIT_MPS[mode]
+    design_limit = DESIGN_VELOCITY_TARGET_MPS[mode]
+    sections: List[SectionFlow] = []
+
+    def _mk_section(seg: PipeSegment, q_abs: float, hl: float,
+                    shared: bool, serving: List[str]) -> SectionFlow:
+        d_in = seg.inner_d_mm()
+        v = velocity_mps(q_abs, d_in)
+        return SectionFlow(
+            segment_id=seg.segment_id, from_node=seg.from_node, to_node=seg.to_node,
+            flow_lps=q_abs, effective_length_m=seg.effective_length_m,
+            head_loss_m=abs(hl), inner_diameter_mm=d_in, velocity_mps=v,
+            velocity_normative_limit_mps=norm_limit,
+            velocity_normative_ok=(None if v is None else v <= norm_limit),
+            velocity_design_limit_mps=design_limit,
+            velocity_design_ok=(None if v is None else v <= design_limit),
+            is_shared=shared, serving_cabinets=serving)
+
+    seg_by_id = {s.segment_id: s for s in net.segments}
+    all_pk = [b.cabinet_id for b in deco.branches]
+    for rf in ring.segments:
+        seg = seg_by_id[rf.segment_id]
+        # кольцевые участки общие: несут перераспределённый расход всех ПК
+        sections.append(_mk_section(seg, rf.abs_flow_lps, rf.head_loss_m,
+                                    shared=True, serving=sorted(all_pk)))
+    for b in deco.branches:
+        for seg in b.segments:
+            hl = seg.A * seg.effective_length_m * (b.flow_lps ** 2)
+            sections.append(_mk_section(seg, b.flow_lps, hl,
+                                        shared=False, serving=[b.cabinet_id]))
+    sections.sort(key=lambda s: -s.flow_lps)
+
+    return RingScenarioOutcome(
+        required_head_at_source_m=dic.required_head_at_source_m,
+        total_flow_lps=sum(flows_by_cabinet.get(c.cabinet_id, 0.0) for c in active_cabinets),
+        dictating_cabinet_id=dic.cabinet_id,
+        sections=sections, ring_result=ring, per_pk=per_pk,
+        warnings=list(ring.warnings))

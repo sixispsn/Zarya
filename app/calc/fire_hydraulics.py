@@ -742,11 +742,15 @@ def solve_fire_hydraulics_scenario(
         raise ValueError("required_jets must be >= 1")
 
     if require_acyclic and not net.is_acyclic():
+        # v3: одно кольцо → увязка Кросса, результат в едином section-формате.
+        ring_res = _try_ring_scenario(net, required_jets, backend, scenario_filter, mode)
+        if ring_res is not None:
+            return ring_res
         return ScenarioResult(
             None, 0.0, net.source.available_head_m, None, None,
-            warnings=["сеть содержит кольцо: section-агрегация этапа 2.2 работает "
-                      "только на дереве. Кольцевая увязка — этап 2.3. Расчёт не "
-                      "выполнен, чтобы не выдавать полуправду по одному плечу."])
+            warnings=["сеть содержит цикл, но не соответствует топологии v3 "
+                      "(одно кольцо, источник на кольце, ПК на тупиковых ветвях). "
+                      "Многокольцевые сети — future scope."])
 
     candidates = [c for c in net.cabinets if c.is_design_candidate]
     if len(candidates) < required_jets:
@@ -876,3 +880,81 @@ def _example() -> None:
 
 if __name__ == "__main__":
     _example()
+
+
+def _try_ring_scenario(net, required_jets, backend, scenario_filter, mode):
+    """Кольцевая ветка солвера (v3): перебор допустимых сочетаний активных ПК,
+    для каждого — увязка Кросса, выбор худшего. Результат в том же ScenarioResult:
+    аудит/отчёт/оркестратор работают без правок. None, если сеть не кольцевая
+    по топологии v3 (тогда вызывающий отдаст честный отказ)."""
+    from app.calc.ring_hydraulics import solve_ring_scenario, find_single_cycle
+    if find_single_cycle(net) is None:
+        return None   # не одно кольцо — не наш случай
+
+    candidates = [c for c in net.cabinets if c.is_design_candidate]
+    if not candidates:
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              warnings=["нет ПК-кандидатов"])
+    n = max(1, min(required_jets, len(candidates)))
+
+    worst_outcome = None
+    worst_combo = None
+    filtered_out = 0
+    for combo in combinations(candidates, n):
+        if scenario_filter is not None and not scenario_filter(combo):
+            filtered_out += 1
+            continue
+        flows, heads = {}, {}
+        ok = True
+        for cab in combo:
+            h, q, _ = _cabinet_required_head_and_flow(cab)
+            if q <= 0:
+                ok = False
+            flows[cab.cabinet_id] = q
+            heads[cab.cabinet_id] = h
+        if not ok:
+            continue
+        outcome = solve_ring_scenario(net, list(combo), flows, heads, mode)
+        if outcome is None or outcome.warnings and not outcome.sections:
+            continue
+        if worst_outcome is None or outcome.required_head_at_source_m > worst_outcome.required_head_at_source_m:
+            worst_outcome = outcome
+            worst_combo = combo
+
+    if worst_outcome is None:
+        msg = ("все сочетания ПК отсеяны фильтром допустимости"
+               if filtered_out else "кольцевой сценарий не рассчитан (топология?)")
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              warnings=[msg])
+
+    # упаковка в HydraulicScenario/ScenarioResult (единый формат конвейра)
+    scen_cabs = []
+    flows_final = {}
+    for cab in worst_combo:
+        _, q, _ = _cabinet_required_head_and_flow(cab)
+        flows_final[cab.cabinet_id] = q
+    for pk in worst_outcome.per_pk:
+        scen_cabs.append(ScenarioCabinet(
+            cabinet_id=pk.cabinet_id, node_id=pk.attach_node,
+            required_head_at_cabinet_m=pk.cabinet_head_m,
+            flow_lps=flows_final.get(pk.cabinet_id, 0.0),
+            geodesic_lift_m=pk.geodesic_lift_m,
+            path_head_loss_m=pk.ring_loss_m + pk.branch_loss_m,
+            required_head_at_source_m=pk.required_head_at_source_m,
+            path=[]))
+    scen = HydraulicScenario(
+        active_cabinet_ids=[c.cabinet_id for c in worst_combo],
+        required_head_at_source_m=worst_outcome.required_head_at_source_m,
+        total_flow_lps=worst_outcome.total_flow_lps,
+        sections=worst_outcome.sections,
+        cabinets=scen_cabs)
+
+    duty, avail, ok, needs_pump, pump_notes = _compute_pump_duty(
+        net, worst_outcome.required_head_at_source_m, worst_outcome.total_flow_lps)
+    return ScenarioResult(
+        dictating_scenario=scen,
+        required_head_at_source_m=worst_outcome.required_head_at_source_m,
+        available_head_m=avail, available_head_ok=ok, needs_pump=needs_pump,
+        pump_duty=duty, evaluated_scenarios=1,
+        warnings=["расчёт по кольцевой сети: увязка Хантера-Кросса (v3)"] +
+                 worst_outcome.warnings + pump_notes)

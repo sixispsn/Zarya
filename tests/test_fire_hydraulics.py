@@ -629,18 +629,46 @@ def test_combined_mode_stricter_limit():
 # ── валидация ацикличности / отказ на кольце ────────────────────────────────
 
 def test_ring_network_rejected():
+    # кольцо с ПК ПРЯМО на узле кольца — не топология v3 → честный отказ
     ring = FireNetwork(
         nodes={"src": HydraulicNode("src", 0.0), "a": HydraulicNode("a", 10),
                "b": HydraulicNode("b", 10)},
         segments=[PipeSegment("s1", "src", "a", length_m=10, A=0.01),
                   PipeSegment("s2", "a", "b", length_m=10, A=0.01),
                   PipeSegment("s3", "b", "src", length_m=10, A=0.01)],
-        cabinets=[FireCabinetNode("PK", "a")],
+        cabinets=[FireCabinetNode("PK", "a")],   # ПК на кольце — нарушение v3
         source=HydraulicSource("src"))
     assert ring.is_acyclic() is False
     r = solve_fire_hydraulics_scenario(ring, 1)
     assert r.dictating_scenario is None
-    assert any("кольцо" in w for w in r.warnings)
+    assert any("топологии v3" in w or "кольц" in w for w in r.warnings)
+
+
+def test_ring_v3_topology_is_solved():
+    # корректная v3-топология (ПК на тупиковых стояках) → кольцо СЧИТАЕТСЯ
+    net = FireNetwork(
+        nodes={"R0": HydraulicNode("R0", 0.0), "R1": HydraulicNode("R1", 0.0),
+               "R2": HydraulicNode("R2", 0.0), "R3": HydraulicNode("R3", 0.0),
+               "a": HydraulicNode("a", 27.5), "b": HydraulicNode("b", 27.5)},
+        segments=[
+            PipeSegment("L01", "R0", "R1", length_m=20, A=0.002, equiv_length_m=2, diameter_mm=100),
+            PipeSegment("L12", "R1", "R2", length_m=25, A=0.002, equiv_length_m=2, diameter_mm=100),
+            PipeSegment("L23", "R2", "R3", length_m=20, A=0.002, equiv_length_m=2, diameter_mm=100),
+            PipeSegment("L30", "R3", "R0", length_m=25, A=0.002, equiv_length_m=2, diameter_mm=100),
+            PipeSegment("rA", "R1", "a", length_m=27.5, A=0.011, equiv_length_m=4, diameter_mm=50),
+            PipeSegment("rB", "R2", "b", length_m=27.5, A=0.011, equiv_length_m=4, diameter_mm=50)],
+        cabinets=[FireCabinetNode("PK-A", "a", riser_id="R1"),
+                  FireCabinetNode("PK-B", "b", riser_id="R2")],
+        source=HydraulicSource("R0", kind=SourceKind.CITY_MAIN, available_head_m=45.0))
+    r = solve_fire_hydraulics_scenario(net, 2)
+    assert r.dictating_scenario is not None
+    assert any("Кросс" in w for w in r.warnings)   # помечен кольцевой расчёт
+    # кольцо дешевле дерева: та же пара на дереве требовала ~42.6
+    assert r.required_head_at_source_m < 42.0
+    # sections включают и кольцевые (общие), и стояки
+    shared = [s for s in r.dictating_scenario.sections if s.is_shared]
+    private = [s for s in r.dictating_scenario.sections if not s.is_shared]
+    assert len(shared) == 4 and len(private) == 2
 
 
 def test_tree_is_acyclic():
