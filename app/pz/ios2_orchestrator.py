@@ -80,6 +80,25 @@ def design_ios2(
     bundle = IOS2DesignBundle(project=project)
     fire = project.fire
 
+    # ── Автопостроение геометрии из спецификаций проекта (truly one-click) ──
+    # Явно переданные аргументы имеют приоритет; спеки используются, только
+    # если аргумента нет. Построение — чистая развёртка, без расчётов.
+    from app.pz import geometry_builder as _gb
+    if layout_inputs is None and _gb.project_has_layout_geometry(project):
+        try:
+            layout_inputs = _gb.build_layout_inputs(project)
+            bundle.status.append(
+                f"geometry: layout_inputs построены из project.fire_rooms "
+                f"({len(layout_inputs)} помещений)")
+        except ValueError as e:
+            bundle.warnings.append(f"geometry: fire_rooms не развёрнуты: {e}")
+    if network is None and _gb.project_has_network_geometry(project):
+        try:
+            network = _gb.build_network(project)
+            bundle.status.append("geometry: network построена из project.fire_network")
+        except ValueError as e:
+            bundle.warnings.append(f"geometry: fire_network не развёрнута: {e}")
+
     # ── Режим 1а: расчёт геометрии ПК (если есть layout_inputs) ──
     layout_results = None
     if layout_inputs:
