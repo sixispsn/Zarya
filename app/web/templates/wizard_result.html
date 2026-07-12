@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Заря — комплект ИОС2 готов</title>
+<style>
+  :root { --acc:#b45309; --ok:#15803d; --bg:#faf8f5; --line:#e5dfd5; }
+  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#1c1917; }
+  header { background:#292524; color:#fafaf9; padding:14px 28px; }
+  header h1 { margin:0; font-size:20px; }
+  main { max-width:820px; margin:26px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px 22px; margin-bottom:18px; }
+  h2 { margin:0 0 10px; font-size:17px; color:var(--acc); }
+  .kv { display:grid; grid-template-columns:230px 1fr; gap:5px 14px; font-size:15px; }
+  .kv b { color:#57534e; font-weight:500; }
+  ul.pdfs { list-style:none; margin:0; padding:0; }
+  ul.pdfs li { margin:8px 0; }
+  ul.pdfs a { display:inline-block; background:var(--acc); color:#fff; text-decoration:none;
+              padding:10px 20px; border-radius:7px; font-weight:600; }
+  ul.pdfs a:hover { background:#92400e; }
+  ul.log { font-size:13px; color:#57534e; margin:4px 0; padding-left:20px; }
+  .warn li { color:#b45309; }
+  .back { display:inline-block; margin-top:8px; color:var(--acc); }
+</style></head><body>
+<header><h1>Заря · комплект ИОС2 собран</h1></header>
+<main>
+
+<div class="card">
+  <h2>Результат расчёта В2</h2>
+  <div class="kv">
+    <b>Пожарных кранов (ПК)</b><span>{{ fire.pk_total }}</span>
+    <b>Требуемый напор на вводе</b><span>{{ "%.1f"|format(fire.required_head) }} м</span>
+    {% if fire.available_head is not none %}
+    <b>Доступный напор источника</b><span>{{ "%.1f"|format(fire.available_head) }} м</span>
+    {% endif %}
+    <b>Повысительная насосная</b>
+    <span>{% if fire.needs_pump %}требуется{% if pump_duty %} — рабочая точка
+      Q = {{ "%.1f"|format(pump_duty.flow_lps) }} л/с,
+      H = {{ "%.1f"|format(pump_duty.required_head_m) }} м{% endif %}
+      {% else %}не требуется{% endif %}</span>
+    <b>Диктующий сценарий</b><span>{{ fire.dictating }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Документы</h2>
+  <ul class="pdfs">
+    {% for p in pdfs %}
+    <li><a href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }} (PDF)</a></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2>Как это было собрано</h2>
+  <ul class="log">
+    {% for s in status %}<li>✓ {{ s }}</li>{% endfor %}
+  </ul>
+  {% if warnings %}
+  <ul class="log warn">
+    {% for w in warnings %}<li>! {{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<a class="back" href="/wizard">← новый расчёт</a>
+</main></body></html>

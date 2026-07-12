@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Заря — проектирование ИОС2</title>
+<style>
+  :root { --acc:#b45309; --bg:#faf8f5; --line:#e5dfd5; }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#1c1917; }
+  header { background:#292524; color:#fafaf9; padding:14px 28px; display:flex; align-items:baseline; gap:14px; }
+  header h1 { margin:0; font-size:20px; } header span { color:#d6d3d1; font-size:13px; }
+  main { max-width:980px; margin:24px auto; padding:0 16px; }
+  fieldset { border:1px solid var(--line); border-radius:8px; background:#fff; margin:0 0 18px; padding:16px 18px; }
+  legend { font-weight:600; padding:0 6px; color:var(--acc); }
+  .row { display:flex; flex-wrap:wrap; gap:10px 14px; margin-bottom:8px; }
+  label { display:flex; flex-direction:column; font-size:12px; color:#57534e; gap:3px; }
+  input, select { padding:6px 8px; border:1px solid #d6d3d1; border-radius:5px; font-size:14px; min-width:90px; }
+  input.w-l { min-width:240px; } input.w-m { min-width:150px; } input.w-s { width:80px; }
+  table.grid { border-collapse:collapse; font-size:13px; }
+  table.grid th, table.grid td { padding:3px 5px; }
+  table.grid input { min-width:64px; width:88px; }
+  .hint { font-size:12px; color:#78716c; margin:4px 0 10px; }
+  .errors { background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:12px 16px; margin-bottom:18px; }
+  .errors li { color:#b91c1c; font-size:14px; }
+  button.go { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:12px 34px;
+              font-size:17px; font-weight:600; cursor:pointer; }
+  button.go:hover { background:#92400e; }
+  .actions { text-align:center; padding:6px 0 40px; }
+</style></head><body>
+<header><h1>Заря</h1><span>внутренний противопожарный водопровод · комплект ИОС2 одним расчётом</span></header>
+<main>
+{% if errors %}
+<div class="errors"><b>Вход не принят:</b><ul>
+  {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+</ul></div>
+{% endif %}
+
+<form method="post" action="/wizard/design">
+
+<fieldset><legend>1 · Объект и реквизиты</legend>
+  <div class="row">
+    <label>Шифр комплекта<input class="w-m" name="cipher" value="2026-089-ИОС2" required></label>
+    <label>Наименование объекта<input class="w-l" name="object_name" value="Многоквартирный жилой дом, 16 этажей" required></label>
+    <label>Часть<input class="w-m" name="object_part" value="Секция 2"></label>
+    <label>Стадия<select name="stage"><option>П</option><option>Р</option></select></label>
+  </div>
+  <div class="row">
+    <label>Организация<input class="w-l" name="organization" value="ООО «ПроектСервис»" required></label>
+    <label>Адрес<input class="w-l" name="address" value="Московская обл."></label>
+  </div>
+  <div class="row">
+    <label>Разработал<input name="developer" value="Аникин А.В."></label>
+    <label>Проверил<input name="inspector" value="Белова Е.П."></label>
+    <label>Нач. отдела<input name="dept_head" value="Волков С.И."></label>
+    <label>ГИП<input name="gip" value="Громов Д.А."></label>
+    <label>Н. контроль<input name="norm_control" value="Дьякова О.М."></label>
+  </div>
+</fieldset>
+
+<fieldset><legend>2 · Здание</legend>
+  <div class="row">
+    <label>Тип<select name="building_type">
+      <option value="residential">Жилое (Ф1.3)</option>
+      <option value="public">Общественное</option>
+      <option value="industrial">Производственное</option>
+    </select></label>
+    <label>Этажей<input class="w-s" name="floors" value="16" required></label>
+    <label>Высота, м<input class="w-s" name="height" value="48" required></label>
+    <label>Зон водоснабжения<input class="w-s" name="zones" value="2"></label>
+    <label>Расчётных струй (пусто = по табл. 7.1)<input class="w-s" name="streams" value="2"></label>
+  </div>
+</fieldset>
+
+<fieldset><legend>3 · Помещение расстановки ПК</legend>
+  <div class="row">
+    <label>Наименование<input class="w-m" name="room_name" value="Коридор тип. этажа"></label>
+    <label>Длина, м<input class="w-s" name="room_len" value="42"></label>
+    <label>Ширина, м<input class="w-s" name="room_wid" value="2.4"></label>
+    <label>Высота, м<input class="w-s" name="room_h" value="3.0"></label>
+    <label>Тип<select name="room_kind">
+      <option value="corridor">коридор</option><option value="room">помещение</option>
+      <option value="hall">зал</option><option value="storage">склад</option>
+    </select></label>
+    <label>Расстановка<select name="room_place">
+      <option value="two_opposite_sides">с двух сторон</option>
+      <option value="one_side">с одной стороны</option>
+    </select></label>
+  </div>
+</fieldset>
+
+<fieldset><legend>4 · Магистраль В2 (до 6 участков; кольцо — замкните узлы)</legend>
+  <table class="grid"><tr><th></th><th>от узла</th><th>до узла</th><th>L, м</th><th>Ду</th><th>L экв, м</th></tr>
+  {% set runs = [("К1","К2","36","100","6"),("К2","К3","15","100","4"),("К3","К4","36","100","6"),("К4","К1","15","100","4"),("","","","",""),("","","","","")] %}
+  {% for r in runs %}
+  <tr><td>{{ loop.index }}</td>
+    <td><input name="run{{ loop.index }}_from" value="{{ r[0] }}"></td>
+    <td><input name="run{{ loop.index }}_to" value="{{ r[1] }}"></td>
+    <td><input name="run{{ loop.index }}_len" value="{{ r[2] }}"></td>
+    <td><input name="run{{ loop.index }}_dn" value="{{ r[3] }}"></td>
+    <td><input name="run{{ loop.index }}_leq" value="{{ r[4] }}"></td></tr>
+  {% endfor %}
+  </table>
+</fieldset>
+
+<fieldset><legend>5 · Стояки с ПК (до 4)</legend>
+  <table class="grid"><tr><th></th><th>имя</th><th>узел</th><th>длина, м</th><th>отм. ПК, м</th><th>Ду</th><th>L экв, м</th></tr>
+  {% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6"),("СТ-В2-2","К2","46.5","45.6","65","6"),("СТ-В2-3","К3","46.5","45.6","65","6"),("СТ-В2-4","К4","46.5","45.6","65","6")] %}
+  {% for r in rs %}
+  <tr><td>{{ loop.index }}</td>
+    <td><input name="riser{{ loop.index }}_name" value="{{ r[0] }}"></td>
+    <td><input name="riser{{ loop.index }}_node" value="{{ r[1] }}"></td>
+    <td><input name="riser{{ loop.index }}_h" value="{{ r[2] }}"></td>
+    <td><input name="riser{{ loop.index }}_elev" value="{{ r[3] }}"></td>
+    <td><input name="riser{{ loop.index }}_dn" value="{{ r[4] }}"></td>
+    <td><input name="riser{{ loop.index }}_leq" value="{{ r[5] }}"></td></tr>
+  {% endfor %}
+  </table>
+</fieldset>
+
+<fieldset><legend>6 · Источник</legend>
+  <div class="row">
+    <label>Узел ввода<input class="w-s" name="source_node" value="К1"></label>
+    <label>Тип источника<select name="source_kind">
+      <option value="city_main">городская сеть</option>
+      <option value="reservoir">резервуар</option>
+      <option value="pond">водоём</option>
+      <option value="well">скважина</option>
+    </select></label>
+    <label>Гарант. напор города, м<input class="w-s" name="available_head" value="32"></label>
+    <label>Уровень воды, м (резервуар)<input class="w-s" name="water_level" value=""></label>
+    <label>Потери всаса, м<input class="w-s" name="suction_loss" value="0"></label>
+  </div>
+  <p class="hint">Напор пуст → принят 0 (уточнить у водоканала), насос на весь требуемый напор.</p>
+</fieldset>
+
+<div class="actions"><button class="go" type="submit">Рассчитать и собрать комплект ИОС2</button></div>
+</form>
+</main></body></html>

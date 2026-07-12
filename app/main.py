@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import fire, insulation, irrigation, pumps, storm, water_demand, water_meters
+from app.web import wizard
 
 app = FastAPI(
     title="Заря API",
@@ -28,6 +29,7 @@ app.include_router(irrigation.router)
 app.include_router(storm.router)
 app.include_router(water_meters.router)
 app.include_router(fire.router)
+app.include_router(wizard.router)
 app.include_router(insulation.router)
 app.include_router(pumps.router)
 
