@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" preserveAspectRatio="none">
+<!-- периметр: поле подшивки 20 слева, по 5 сверху/справа/снизу (ГОСТ 21.101) -->
+<rect x="20" y="5" width="185" height="287" fill="none" stroke="black" stroke-width="0.5"/>
+<!-- боковые дополнительные графы (левое поле, высота листа 297) -->
+<rect x="8" y="207" width="5" height="25" fill="none" stroke="black" stroke-width="0.3"/>
+<rect x="13" y="207" width="7" height="25" fill="none" stroke="black" stroke-width="0.3"/>
+<text x="10.5" y="219.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 10.5 219.5)" font-family="serif">Взам. инв. №</text>
+<rect x="8" y="232" width="5" height="35" fill="none" stroke="black" stroke-width="0.3"/>
+<rect x="13" y="232" width="7" height="35" fill="none" stroke="black" stroke-width="0.3"/>
+<text x="10.5" y="249.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 10.5 249.5)" font-family="serif">Подп. и дата</text>
+<rect x="8" y="267" width="5" height="25" fill="none" stroke="black" stroke-width="0.3"/>
+<rect x="13" y="267" width="7" height="25" fill="none" stroke="black" stroke-width="0.3"/>
+<text x="10.5" y="279.5" font-size="2.7" text-anchor="middle" transform="rotate(-90 10.5 279.5)" font-family="serif">Инв. № подл.</text>
+<text x="205" y="295.5" font-size="2.5" text-anchor="end" font-family="serif">Формат А4</text>
+</svg>

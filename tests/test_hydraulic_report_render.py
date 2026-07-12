@@ -83,3 +83,17 @@ def test_pdf_created(tmp_path):
     out = str(tmp_path / "hydr.pdf")
     generate_hydraulic_report_pdf(p, report, out)
     assert os.path.exists(out) and os.path.getsize(out) > 1000
+
+
+def test_hydraulic_page_has_a4_frame(tmp_path):
+    """Гидролист несёт ГОСТ-рамку А4 (SVG-обвод подключён в CSS)."""
+    import os
+    css = open("app/pz/templates/hydraulic.css", encoding="utf-8").read()
+    assert "frame-bg-a4.svg" in css          # рамка подключена
+    assert os.path.exists("app/pz/templates/frame-bg-a4.svg")   # файл есть
+
+
+def test_frame_svg_is_a4_portrait():
+    svg = open("app/pz/templates/frame-bg-a4.svg", encoding="utf-8").read()
+    assert 'viewBox="0 0 210 297"' in svg     # А4 книжная
+    assert "Формат А4" in svg
