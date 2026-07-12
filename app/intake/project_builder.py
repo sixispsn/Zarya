@@ -1,0 +1,103 @@
+# -*- coding: utf-8 -*-
+"""
+app/intake/project_builder.py — Project Builder (слой 2 цепочки ввода).
+
+ЕДИНСТВЕННОЕ место, где из намерения (IOS2Request) рождается Project.
+Все входы (Wizard, YAML, Excel, IFC, REST, CLI) собирают IOS2Request,
+Builder делает остальное. UI и форматы не знают модель Project вообще.
+
+Builder:
+  • маппит термины проектировщика в модель (residential → BuildingPurpose...);
+  • разворачивает namespace сети (runs/risers → FireNetworkSpec);
+  • НЕ считает (расчёт — в design_ios2) и НЕ выдумывает (чего нет — ошибка).
+"""
+from __future__ import annotations
+
+from typing import List
+
+from app.intake.request_dto import IOS2Request
+from app.pz.project import (
+    Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
+    PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
+    MainNodeSpec, MainSegmentSpec, RiserSpec,
+)
+
+
+class RequestValidationError(ValueError):
+    """Намерение не прошло валидацию — список проблем в args[0]."""
+    def __init__(self, problems: List[str]):
+        super().__init__("вход не пригоден для сборки Project:\n  - " +
+                         "\n  - ".join(problems))
+        self.problems = problems
+
+
+_BUILDING_MAP = {
+    "residential": BuildingPurpose.RESIDENTIAL,
+    "public": BuildingPurpose.PUBLIC,
+    "industrial": BuildingPurpose.INDUSTRIAL,
+}
+
+
+def build_project(req: IOS2Request) -> Project:
+    """IOS2Request → Project. Валидация намерения → маппинг → сборка.
+
+    streams: если None — оставляем 0 в FireSystem (задел: авто по табл. 7.1
+    через категорию; сейчас honest-поведение — билдер геометрии потребует
+    streams явно, см. geometry_builder.build_layout_inputs).
+    """
+    problems = req.validate()
+    if problems:
+        raise RequestValidationError(problems)
+
+    p = Project()
+
+    d = req.document
+    p.document = DocumentInfo(
+        cipher=d.cipher, object_name=d.object_name, object_address=d.object_address,
+        object_part=d.object_part, stage=d.stage, organization=d.organization,
+        developer_name=d.developer, inspector_name=d.inspector,
+        dept_head_name=d.dept_head, gip_name=d.gip, norm_control_name=d.norm_control,
+        sheet_no="1", sheet_total="1")
+
+    p.building = BuildingFlags(
+        purpose=_BUILDING_MAP[req.building_type],
+        floors_above=req.floors, height_m=req.building_height_m, zones=req.zones)
+
+    streams = req.streams if req.streams is not None else 0
+    q_total = round(streams * req.q_per_stream_lps, 3) if streams else 0.0
+    p.fire = FireSystem(
+        required=True, streams=streams, q_per_stream=req.q_per_stream_lps,
+        q_total=q_total, nozzle_dn=req.cabinet_dn, hose_length_m=req.hose_length_m)
+
+    p.pumps = PumpSystem(required=req.needs_booster_pumps)
+    p.flows = FlowsData()
+
+    # помещения ПК
+    p.fire_rooms = [
+        FireRoomSpec(r.name, length_m=r.length_m, width_m=r.width_m,
+                     height_m=r.height_m, space_kind=r.space_kind,
+                     placement_mode=r.placement)
+        for r in req.rooms]
+
+    # сеть В2: узлы собираются из участков (namespace runs), отметки из карты
+    if req.network is not None:
+        n = req.network
+        node_ids = sorted({x for r in n.runs for x in (r.from_node, r.to_node)})
+        nodes = [MainNodeSpec(nid, float(n.node_elevations.get(nid, 0.0)))
+                 for nid in node_ids]
+        segments = [
+            MainSegmentSpec(f"М{i+1}", r.from_node, r.to_node, length_m=r.length_m,
+                            A=r.A, dn=r.dn, equiv_length_m=r.equiv_length_m)
+            for i, r in enumerate(n.runs)]
+        risers = [
+            RiserSpec(r.name, r.at_node, length_m=r.height_m,
+                      cabinet_elevation_m=r.cabinet_elevation_m, A=r.A,
+                      dn=r.dn, equiv_length_m=r.equiv_length_m)
+            for r in n.risers]
+        p.fire_network = FireNetworkSpec(
+            nodes=nodes, segments=segments, risers=risers,
+            source_node=n.source_node, source_kind=n.source_kind,
+            available_head_m=n.available_head_m, water_level_m=n.water_level_m,
+            suction_head_loss_m=n.suction_head_loss_m)
+
+    return p
