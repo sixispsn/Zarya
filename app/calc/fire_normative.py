@@ -103,6 +103,12 @@ class FireNormativeContext:
     placement_mode: PlacementMode = PlacementMode.ONE_SIDE
 
     required_jets_override: Optional[int] = None
+    # --- автоопределение по табл. 7.1 (если override не задан) ---
+    table71_category: Optional["object"] = None   # Table71Category
+    floors_above: Optional[int] = None
+    corridor_length_m: Optional[float] = None     # общая ДЛИНА коридора (п. 6.2.2, табл. 7.1)
+    hall_seats: Optional[int] = None
+    total_area_m2: Optional[float] = None
 
     jet_radius_mode: FireJetRadiusMode = FireJetRadiusMode.TABLE_7_15_MINIMUM
     nozzle_diameter_mm: Optional[FireJetNozzleDiameterMM] = None
@@ -253,14 +259,33 @@ def resolve_compact_jet_radius(ctx: FireNormativeContext) -> tuple[float, List[s
 # ============================================================
 
 def resolve_required_jets_from_context(ctx: FireNormativeContext) -> tuple[int, List[str]]:
-    """Число расчётных ПК: override, иначе NotImplemented (табл. 7.1 не выдумываем)."""
+    """Число расчётных ПК: override приоритетен; иначе табл. 7.1 (при заданной
+    категории); иначе NotImplementedError (не выдумываем)."""
     notes: List[str] = []
     if ctx.required_jets_override is not None:
         notes.append(f"required_jets из override: {ctx.required_jets_override}.")
         return ctx.required_jets_override, notes
+    if ctx.table71_category is not None:
+        from app.calc.fire_table_7_1 import resolve_table_7_1
+        res = resolve_table_7_1(
+            ctx.table71_category, floors=ctx.floors_above,
+            height_m=ctx.building_height_m,
+            corridor_length_m=ctx.corridor_length_m,
+            hall_seats=ctx.hall_seats, total_area_m2=ctx.total_area_m2)
+        notes.extend(res.notes)
+        if not res.vpv_required:
+            raise ValueError("По табл. 7.1 ВПВ для объекта не требуется: " +
+                             "; ".join(res.notes))
+        if res.manual_review:
+            notes.append("ТРЕБУЕТСЯ ручная проверка числа ПК (см. примечание выше).")
+        if res.jets not in (1, 2):
+            raise ValueError(f"табл. 7.1/7.2 дала {res.jets} ПК — конвейр MVP "
+                             "поддерживает 1–2 (расширение: solve-сценарии умеют N, "
+                             "но покрытие layout ограничено).")
+        return res.jets, notes
     raise NotImplementedError(
-        "Автоопределение required_jets по табл. 7.1 не реализовано. "
-        "Передайте required_jets_override или реализуйте проектный резолвер табл. 7.1."
+        "Автоопределение required_jets: передайте required_jets_override либо "
+        "table71_category (+этажность/высоту/длину коридора) для табл. 7.1."
     )
 
 
@@ -285,18 +310,30 @@ def resolve_required_jets(ctx: FireNormativeContext) -> ResolvedJetMultiplicity:
             notes=notes)
 
     if ctx.space_kind == FireSpaceKind.CORRIDOR:
-        if ctx.room_width_m is None:
-            notes.append("Коридор, но ширина не задана; п. 6.2.2 не применён точно. "
-                         "Fallback: require_different_risers=False, нужна ручная проверка.")
+        # П. 6.2.2 нормирует общую ДЛИНУ коридора. corridor_length_m — правильный
+        # вход; room_width_m — исторический fallback (семантически неверный),
+        # оставлен для совместимости с явной пометкой.
+        corridor_metric = ctx.corridor_length_m
+        metric_note = "по общей длине коридора"
+        if corridor_metric is None:
+            corridor_metric = ctx.room_width_m
+            metric_note = ("ВНИМАНИЕ: длина коридора не задана, использована ширина "
+                           "помещения как замена — задайте corridor_length_m")
+        if corridor_metric is None:
+            notes.append("Коридор, но ни длина, ни ширина не заданы; п. 6.2.2 не "
+                         "применён точно. Fallback: require_different_risers=False, "
+                         "нужна ручная проверка.")
             return ResolvedJetMultiplicity(
                 required_jets=2, require_different_risers=False, manual_review_required=True,
                 source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
-        if ctx.room_width_m > 10.0:
-            notes.append("П. 6.2.2: коридор >10 м — каждая точка из двух ПК на разных стояках.")
+        if corridor_metric > 10.0:
+            notes.append(f"П. 6.2.2 ({metric_note}): коридор >10 м — каждая точка "
+                         "из двух ПК на разных стояках.")
             return ResolvedJetMultiplicity(
                 required_jets=2, require_different_risers=True, manual_review_required=False,
                 source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
-        notes.append("П. 6.2.2: коридор ≤10 м — два ПК допускаются на одном стояке.")
+        notes.append(f"П. 6.2.2 ({metric_note}): коридор ≤10 м — два ПК допускаются "
+                     "на одном стояке.")
         return ResolvedJetMultiplicity(
             required_jets=2, require_different_risers=False, manual_review_required=False,
             source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
