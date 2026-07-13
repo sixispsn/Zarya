@@ -213,3 +213,69 @@ def generate_scheme_pdf(project: Project, output_path: str,
     svg = _svg_to_a1_mm(generate_scheme_svg(project, params))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
+
+
+# ── ГИДРАВЛИЧЕСКИЙ РАСЧЁТ В2 (лист расчёта, ГОСТ 21.110) ────────────────────
+
+def _conclusion_to_html(report) -> str:
+    """Текст заключения (блок 5 отчёта) → HTML-абзацы."""
+    from app.calc.fire_hydraulic_report import FireHydraulicReport  # noqa
+    text = report._render_conclusion()
+    # первая строка — заголовок ЗАКЛЮЧЕНИЕ, дальше абзацы
+    lines = [l for l in text.split("\n")[1:] if l.strip()]
+    return "".join(f"<p>{l}</p>" for l in lines)
+
+
+def generate_hydraulic_report_html(project: Project, report) -> str:
+    """HTML листа гидравлического расчёта В2 из готового FireHydraulicReport.
+
+    report: FireHydraulicReport (сборка из результатов гидравлики + аудита).
+    Генератор НЕ считает — только рендерит переданный отчёт.
+    """
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".ГР") else cipher + ".ГР"),
+        sheet_title="Гидравлический расчёт В2",
+    )
+    return env.get_template("hydraulic_document.html").render(
+        doc=doc, h=report.header, segments=report.segments,
+        dictating_paths=report.dictating_paths,
+        conclusion_html=_conclusion_to_html(report),
+    )
+
+
+def generate_hydraulic_report_pdf(project: Project, report, output_path: str) -> str:
+    """PDF листа гидравлического расчёта В2. CSS: hydraulic.css (А4 книжная)."""
+    html_str = generate_hydraulic_report_html(project, report)
+    stylesheets = [CSS(filename=str(TEMPLATES_DIR / "hydraulic.css"),
+                       base_url=str(TEMPLATES_DIR))]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets)
+    return output_path
+
+
+# ── ЛИСТ ПРОВЕРКИ ЖИВУЧЕСТИ КОЛЬЦА В2 ───────────────────────────────────────
+
+def generate_resilience_html(project: Project, resilience_report) -> str:
+    """HTML листа живучести из готового RingResilienceReport (не считает)."""
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".ЖВ") else cipher + ".ЖВ"),
+        sheet_title="Проверка живучести сети В2")
+    return env.get_template("resilience_document.html").render(
+        doc=doc, rep=resilience_report)
+
+
+def generate_resilience_pdf(project: Project, resilience_report,
+                            output_path: str) -> str:
+    """PDF листа живучести (А4, рамка+штамп — колея гидролиста)."""
+    html_str = generate_resilience_html(project, resilience_report)
+    stylesheets = [CSS(filename=str(TEMPLATES_DIR / "resilience.css"),
+                       base_url=str(TEMPLATES_DIR))]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets)
+    return output_path

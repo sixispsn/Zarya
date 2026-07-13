@@ -4,7 +4,7 @@
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 
 class BuildingPurpose(str, Enum):
@@ -158,6 +158,82 @@ class FireSystem:
     available_head_m: Optional[float] = None  # доступный напор источника, м
     needs_pump: Optional[bool] = None         # нужна ли повысительная насосная В2
     dictating_cabinet_id: Optional[str] = None  # диктующий ПК (или диктующая пара)
+
+
+# ============================================================
+# СПЕЦИФИКАЦИИ ГЕОМЕТРИИ ВПВ (автопостроение layout/network)
+# ============================================================
+# Высокоуровневое инженерное описание: проектировщик задаёт помещения, стояки
+# и магистраль в СВОИХ терминах; geometry_builder разворачивает это в
+# (ctx, room) для layout и FireNetwork для гидравлики. Спеки — только данные,
+# никакой расчётной логики.
+
+@dataclass
+class FireRoomSpec:
+    """Помещение для расстановки ПК (разворачивается в ctx + RectangularRoom).
+
+    space_kind: "corridor" / "room" / "hall" / "storage" (FireSpaceKind).
+    placement_mode: "one_side" / "two_opposite_sides".
+    """
+    room_id: str
+    length_m: float
+    width_m: float
+    height_m: float
+    space_kind: str = "corridor"
+    placement_mode: str = "two_opposite_sides"
+
+
+@dataclass
+class MainNodeSpec:
+    """Узел магистрали В2 (кольца или тупиковой)."""
+    node_id: str
+    elevation_m: float = 0.0
+
+
+@dataclass
+class MainSegmentSpec:
+    """Участок магистрали между узлами."""
+    segment_id: str
+    from_node: str
+    to_node: str
+    length_m: float
+    A: float                      # удельное сопротивление (h = A·L_eff·Q²)
+    dn: int = 100
+    equiv_length_m: float = 0.0
+
+
+@dataclass
+class RiserSpec:
+    """Стояк В2: тупиковая ветвь от узла магистрали до ПК наверху.
+
+    Разворачивается в участок(и) + FireCabinetNode. jet_m — высота компактной
+    части струи для табл. 7.3 (обычно = нормативный Rk).
+    """
+    riser_id: str
+    attach_node: str              # узел магистрали
+    length_m: float               # длина стояка (обычно = высота подъёма)
+    cabinet_elevation_m: float    # отметка ПК
+    A: float = 0.011
+    dn: int = 50
+    equiv_length_m: float = 0.0
+    cabinet_id: str = ""          # пусто → riser_id + "-PK"
+    jet_m: int = 6
+
+
+@dataclass
+class FireNetworkSpec:
+    """Сеть В2 целиком: магистраль (кольцевая или тупиковая — топологию граф
+    покажет сам) + стояки + источник."""
+    nodes: List[MainNodeSpec] = field(default_factory=list)
+    segments: List[MainSegmentSpec] = field(default_factory=list)
+    risers: List[RiserSpec] = field(default_factory=list)
+    source_node: str = ""
+    source_kind: str = "city_main"          # city_main/reservoir/pond/well
+    available_head_m: Optional[float] = None
+    second_source_node: str = ""            # второй ввод (MultiSource)
+    second_available_head_m: Optional[float] = None
+    water_level_m: Optional[float] = None
+    suction_head_loss_m: float = 0.0
 
 
 # ── СЧЁТЧИКИ (детальный подбор, таблица 5.1.13 ГОСТ 21.619-2023) ──
@@ -337,3 +413,6 @@ class Project:
     pumps: PumpSystem = field(default_factory=PumpSystem)
     balance: BalanceData = field(default_factory=BalanceData)
     fixtures: list = field(default_factory=list)  # список FixtureGroup (от АР)
+    # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---
+    fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
+    fire_network: Optional["FireNetworkSpec"] = None

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"></head><body>
+<div class="stamp3">
+  <table>
+    <colgroup>
+      <col style="width:7mm"><col style="width:10mm"><col style="width:8mm">
+      <col style="width:12mm"><col style="width:16mm"><col style="width:12mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+    </colgroup>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td>
+    </tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td>
+    </tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td></tr>
+    <tr>
+      <td colspan="2" class="lbll">Разраб.</td><td colspan="2">{{ doc.developer_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="part">{{ doc.object_part or '' }}</td>
+      <td class="lblsm">Стадия</td><td class="lblsm">Лист</td><td class="lblsm">Листов</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="2">{{ doc.stage or 'П' }}</td><td rowspan="2">{{ doc.sheet_no or '1' }}</td><td rowspan="2">{{ doc.sheet_total or '—' }}</td>
+    </tr>
+    <tr><td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+    <tr>
+      <td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="ttl">Проверка живучести сети В2</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+    </tr>
+    <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+  </table>
+</div>
+
+<h1 class="section-title">Проверка живучести кольцевой сети В2<br>
+<span class="subtitle">(поверочный расчёт при одиночном отказе участка кольца)</span></h1>
+
+<p class="intro">Кольцевая магистраль В2 предусмотрена для резервирования подачи:
+при отказе любого участка кольца вода к пожарным кранам поступает по второму
+плечу. Ниже — поверочный расчёт всех одиночных отказов участков кольца.
+Расчёт справочный, выполняется в дополнение к основному гидравлическому расчёту.</p>
+
+<table class="hdr">
+  <tr><td class="k">Штатный режим (кольцо целое)</td>
+      <td>требуемый напор {{ "%.1f"|format(rep.normal_required_head_m) }} м</td></tr>
+</table>
+
+<h2 class="sub">Одиночные отказы участков кольца</h2>
+<table class="hydr">
+  <thead>
+    <tr><th>Отказавший участок</th><th>Требуемый напор, м</th>
+        <th>Ухудшение, м</th><th>Источник держит</th></tr>
+  </thead>
+  <tbody>
+  {% for c in rep.cases %}
+    {% if c.solved %}
+    <tr class="{{ 'fail' if c.available_head_ok == false else '' }}">
+      <td>{{ c.failed_segment_id }}</td>
+      <td>{{ "%.1f"|format(c.required_head_at_source_m) }}</td>
+      <td>+{{ "%.1f"|format(c.head_penalty_m) }}</td>
+      <td>{{ '—' if c.available_head_ok is none else ('да' if c.available_head_ok else 'НЕТ') }}</td>
+    </tr>
+    {% else %}
+    <tr class="fail"><td>{{ c.failed_segment_id }}</td>
+      <td colspan="3">расчёт не состоялся: {{ c.warnings|join('; ') }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if rep.worst_case and rep.worst_case.solved %}
+<h2 class="sub">Худший случай</h2>
+<p>Отказ участка <b>{{ rep.worst_case.failed_segment_id }}</b>:
+требуемый напор {{ "%.1f"|format(rep.worst_case.required_head_at_source_m) }} м
+(+{{ "%.1f"|format(rep.worst_case.head_penalty_m) }} м к штатному режиму).</p>
+{% endif %}
+
+<h2 class="sub">Заключение</h2>
+<div class="concl">
+{% if rep.survives_worst_case %}
+<p>Сеть В2 сохраняет работоспособность при любом одиночном отказе участка
+кольцевой магистрали: диктующие пожарные краны обеспечиваются расчётным
+расходом и напором по резервному плечу кольца.</p>
+{% elif rep.survives_worst_case == false %}
+<p><b>Внимание:</b> при худшем отказе участка кольца доступного напора источника
+недостаточно. Требуется предусмотреть резерв: повысительную насосную установку
+с запасом по напору либо второй ввод.</p>
+{% else %}
+<p>Вердикт живучести не определён (см. предупреждения по случаям выше).</p>
+{% endif %}
+</div>
+
+</body></html>

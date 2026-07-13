@@ -1,0 +1,5 @@
+/* resilience.css — лист живучести В2: наследует hydraulic.css + мелкие добавки */
+@import url("hydraulic.css");
+h1.section-title .subtitle { font-size:10pt; font-weight:normal; }
+p.intro { font-size:9.5pt; text-align:justify; margin:4pt 0 8pt; color:#222; }
+table.hydr td:first-child { text-align:left; padding-left:4pt; }

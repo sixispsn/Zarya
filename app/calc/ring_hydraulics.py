@@ -899,3 +899,139 @@ def solve_two_source_loop_with_check_valves(
         warnings=sres.warnings + [
             f"обратный клапан: ввод {weak} закрыт (реверс при чистой увязке), "
             f"сеть питается только от {strong}"])
+
+
+# ============================================================
+# ДВУХВВОДНЫЙ СЦЕНАРИЙ ДЛЯ КОНВЕЙРА (sections-формат)
+# ============================================================
+# Отличие постановки от одновводной: напоры ОБОИХ вводов заданы (граничные
+# условия), поэтому вопрос не «какой напор нужен на вводе», а «ДЕРЖАТ ли
+# заданные вводы диктующий ПК»: фактический напор у ПК (напор узла из увязки
+# − потери стояка − геодезия) сравнивается с требуемым H_ПК (табл. 7.3).
+
+@dataclass
+class TwoSourcePKCheck:
+    """Проверка одного ПК при двух активных вводах."""
+    cabinet_id: str
+    attach_node: str
+    node_head_m: float             # напор в узле кольца (из увязки)
+    branch_loss_m: float
+    geodesic_lift_m: float
+    actual_head_at_pk_m: float     # что реально доходит до ПК
+    required_head_at_pk_m: float   # H_ПК по табл. 7.3
+    ok: bool
+    margin_m: float                # запас (+) / дефицит (−)
+
+
+@dataclass
+class TwoSourceScenarioOutcome:
+    """Результат двухвводного сценария в формате конвейра."""
+    total_flow_lps: float
+    supply1_lps: float
+    supply2_lps: float
+    dictating_cabinet_id: str      # ПК с минимальным запасом
+    all_pk_ok: bool
+    sections: List[SectionFlow]
+    per_pk: List[TwoSourcePKCheck]
+    solve: TwoSourceSolveResult
+    warnings: List[str] = field(default_factory=list)
+
+
+def solve_two_source_scenario(
+    net,                                        # FireNetwork с second_source
+    active_cabinets: List[FireCabinetNode],
+    flows_by_cabinet: Dict[str, float],
+    heads_by_cabinet: Dict[str, float],
+    mode: NetworkMode = NetworkMode.PURE_FIRE,
+) -> Optional[TwoSourceScenarioOutcome]:
+    """Двухвводный сценарий: разбор сети → двухконтурная увязка (с клапанами)
+    → проверка напора у каждого ПК → sections. None, если топология не v3."""
+    deco = decompose_ring_network(net, active_cabinets, flows_by_cabinet,
+                                  heads_by_cabinet)
+    if deco.problems or not deco.loop_nodes:
+        return None
+    s1, s2 = net.source, net.second_source
+    if s2 is None or s2.node_id not in deco.loop_nodes:
+        return None
+    if s1.available_head_m is None or s2.available_head_m is None:
+        return None   # двухвводная постановка требует напоров обоих вводов
+
+    problem = TwoSourceLoopProblem(
+        source1_node=s1.node_id, source1_head_m=s1.available_head_m,
+        source2_node=s2.node_id, source2_head_m=s2.available_head_m,
+        loop_nodes=deco.loop_nodes, loop_segments=deco.loop_segments,
+        node_demands=deco.branch_demands_by_node)
+    solve = solve_two_source_loop_with_check_valves(problem)
+    if not solve.converged:
+        return TwoSourceScenarioOutcome(
+            0.0, 0.0, 0.0, "", False, [], [], solve,
+            warnings=solve.warnings + ["двухвводная увязка не сошлась"])
+
+    src_elev = net.nodes[s1.node_id].elevation_m
+    # напоры узлов: в клапанном фолбэке node_head_m пуст — достроим от offset
+    node_head = dict(solve.node_head_m)
+    if not node_head:
+        # односорсный фолбэк: напор узла = H_сильного − потери до узла
+        strong = s1 if solve.supply1_lps > 0 else s2
+        base = SingleLoopProblem(strong.node_id, deco.loop_nodes,
+                                 deco.loop_segments, deco.branch_demands_by_node)
+        sres = solve_single_loop(base)
+        node_head = {n: strong.available_head_m - off
+                     for n, off in sres.node_head_offset_m.items()}
+
+    checks: List[TwoSourcePKCheck] = []
+    for b in deco.branches:
+        nh = node_head.get(b.attach_node, 0.0)
+        bl = sum(seg.A * seg.effective_length_m * (b.flow_lps ** 2)
+                 for seg in b.segments)
+        dz = b.cabinet_elevation_m - src_elev
+        actual = nh - bl - dz
+        checks.append(TwoSourcePKCheck(
+            cabinet_id=b.cabinet_id, attach_node=b.attach_node,
+            node_head_m=nh, branch_loss_m=bl, geodesic_lift_m=dz,
+            actual_head_at_pk_m=actual,
+            required_head_at_pk_m=b.cabinet_head_m,
+            ok=(actual + 1e-9 >= b.cabinet_head_m),
+            margin_m=actual - b.cabinet_head_m))
+
+    dictating = min(checks, key=lambda c: c.margin_m) if checks else None
+    if dictating is None:
+        return None
+
+    # sections в едином формате (как solve_ring_scenario)
+    norm_limit = NORMATIVE_VELOCITY_LIMIT_MPS[mode]
+    design_limit = DESIGN_VELOCITY_TARGET_MPS[mode]
+    seg_by_id = {s.segment_id: s for s in net.segments}
+    all_pk = [b.cabinet_id for b in deco.branches]
+    sections: List[SectionFlow] = []
+
+    def _mk(seg, q_abs, hl, shared, serving):
+        d_in = seg.inner_d_mm()
+        v = velocity_mps(q_abs, d_in)
+        return SectionFlow(
+            segment_id=seg.segment_id, from_node=seg.from_node, to_node=seg.to_node,
+            flow_lps=q_abs, effective_length_m=seg.effective_length_m,
+            head_loss_m=abs(hl), inner_diameter_mm=d_in, velocity_mps=v,
+            velocity_normative_limit_mps=norm_limit,
+            velocity_normative_ok=(None if v is None else v <= norm_limit),
+            velocity_design_limit_mps=design_limit,
+            velocity_design_ok=(None if v is None else v <= design_limit),
+            is_shared=shared, serving_cabinets=serving)
+
+    for rf in solve.segments:
+        sections.append(_mk(seg_by_id[rf.segment_id], rf.abs_flow_lps,
+                            rf.head_loss_m, True, sorted(all_pk)))
+    for b in deco.branches:
+        for seg in b.segments:
+            hl = seg.A * seg.effective_length_m * (b.flow_lps ** 2)
+            sections.append(_mk(seg, b.flow_lps, hl, False, [b.cabinet_id]))
+    sections.sort(key=lambda s: -s.flow_lps)
+
+    return TwoSourceScenarioOutcome(
+        total_flow_lps=sum(flows_by_cabinet.get(c.cabinet_id, 0.0)
+                           for c in active_cabinets),
+        supply1_lps=solve.supply1_lps, supply2_lps=solve.supply2_lps,
+        dictating_cabinet_id=dictating.cabinet_id,
+        all_pk_ok=all(c.ok for c in checks),
+        sections=sections, per_pk=checks, solve=solve,
+        warnings=list(solve.warnings))

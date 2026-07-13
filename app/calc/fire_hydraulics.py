@@ -208,6 +208,7 @@ class FireNetwork:
     segments: List[PipeSegment]
     cabinets: List[FireCabinetNode]
     source: HydraulicSource
+    second_source: Optional[HydraulicSource] = None   # второй ввод (MultiSource, v3+)
 
     def validate(self) -> List[str]:
         """Проверяет ссылочную целостность и связность. Возвращает список проблем
@@ -742,6 +743,12 @@ def solve_fire_hydraulics_scenario(
         raise ValueError("required_jets must be >= 1")
 
     if require_acyclic and not net.is_acyclic():
+        # v3+: два ввода на кольце → двухвводная увязка (клапаны)
+        if net.second_source is not None:
+            ts = _try_two_source_scenario(net, required_jets, backend,
+                                          scenario_filter, mode)
+            if ts is not None:
+                return ts
         # v3: одно кольцо → увязка Кросса, результат в едином section-формате.
         ring_res = _try_ring_scenario(net, required_jets, backend, scenario_filter, mode)
         if ring_res is not None:
@@ -958,3 +965,89 @@ def _try_ring_scenario(net, required_jets, backend, scenario_filter, mode):
         pump_duty=duty, evaluated_scenarios=1,
         warnings=["расчёт по кольцевой сети: увязка Хантера-Кросса (v3)"] +
                  worst_outcome.warnings + pump_notes)
+
+
+def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode):
+    """Двухвводная ветка солвера: перебор сочетаний ПК, для каждого —
+    двухвводная увязка с клапанами, диктующий = минимальный запас напора.
+    Упаковка в единый ScenarioResult. None → не двухвводная v3-топология.
+
+    Семантика полей результата в двухвводной постановке:
+      required_head_at_source_m — фактически требуемый напор ввода 1, чтобы
+        диктующий ПК получил своё (= H1 − margin диктующего);
+      available_head_m — заданный напор ввода 1;
+      needs_pump — True, если запаса нет (margin < 0).
+    """
+    from app.calc.ring_hydraulics import solve_two_source_scenario, find_single_cycle
+    if find_single_cycle(net) is None or net.second_source is None:
+        return None
+
+    candidates = [c for c in net.cabinets if c.is_design_candidate]
+    if not candidates:
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              warnings=["нет ПК-кандидатов"])
+    n = max(1, min(required_jets, len(candidates)))
+
+    worst = None
+    worst_combo = None
+    for combo in combinations(candidates, n):
+        if scenario_filter is not None and not scenario_filter(combo):
+            continue
+        flows, heads = {}, {}
+        ok = True
+        for cab in combo:
+            h, q, _ = _cabinet_required_head_and_flow(cab)
+            if q <= 0:
+                ok = False
+            flows[cab.cabinet_id] = q
+            heads[cab.cabinet_id] = h
+        if not ok:
+            continue
+        outcome = solve_two_source_scenario(net, list(combo), flows, heads, mode)
+        if outcome is None or not outcome.per_pk:
+            continue
+        margin = min(c.margin_m for c in outcome.per_pk)
+        if worst is None or margin < worst[0]:
+            worst = (margin, outcome)
+            worst_combo = combo
+
+    if worst is None:
+        return None
+    margin, outcome = worst
+
+    h1 = net.source.available_head_m
+    scen_cabs = []
+    flows_final = {}
+    for cab in worst_combo:
+        _, q, _ = _cabinet_required_head_and_flow(cab)
+        flows_final[cab.cabinet_id] = q
+    for c in outcome.per_pk:
+        scen_cabs.append(ScenarioCabinet(
+            cabinet_id=c.cabinet_id, node_id=c.attach_node,
+            required_head_at_cabinet_m=c.required_head_at_pk_m,
+            flow_lps=flows_final.get(c.cabinet_id, 0.0),
+            geodesic_lift_m=c.geodesic_lift_m,
+            path_head_loss_m=c.branch_loss_m,
+            required_head_at_source_m=h1 - c.margin_m,
+            path=[]))
+
+    scen = HydraulicScenario(
+        active_cabinet_ids=[c.cabinet_id for c in worst_combo],
+        required_head_at_source_m=h1 - margin,
+        total_flow_lps=outcome.total_flow_lps,
+        sections=outcome.sections, cabinets=scen_cabs)
+
+    supplies = (f"подача вводов: №1 {outcome.supply1_lps:.1f} л/с "
+                f"({net.source.node_id}), №2 {outcome.supply2_lps:.1f} л/с "
+                f"({net.second_source.node_id})")
+    return ScenarioResult(
+        dictating_scenario=scen,
+        required_head_at_source_m=h1 - margin,
+        available_head_m=h1,
+        available_head_ok=(margin >= 0),
+        needs_pump=(margin < 0),
+        pump_duty=None,   # рабочую точку при двух вводах не назначаем автоматически
+        evaluated_scenarios=1,
+        warnings=["расчёт по кольцевой сети с ДВУМЯ вводами: двухконтурная "
+                  "увязка Хантера-Кросса, обратные клапаны на вводах",
+                  supplies] + outcome.warnings)

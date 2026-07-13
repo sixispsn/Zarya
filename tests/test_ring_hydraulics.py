@@ -2,7 +2,8 @@
 """Тесты app/calc/ring_hydraulics.py — увязка одного кольца методом Хантера-Кросса."""
 import pytest
 
-from app.calc.fire_hydraulics import PipeSegment
+from app.calc.fire_hydraulics import (PipeSegment, NetworkMode,
+    solve_fire_hydraulics_scenario)
 from app.calc.ring_hydraulics import (
     SingleLoopProblem, RingSolveResult, build_loop_problem, solve_single_loop,
 )
@@ -366,3 +367,74 @@ def test_two_source_loop_residual_zero():
     r = solve_two_source_loop(_two_src(53.0, 49.0))
     total = sum(s.head_loss_m for s in r.segments)
     assert abs(total) < 1e-3
+
+
+# ============================================================
+# ДВУХВВОДНЫЙ СЦЕНАРИЙ В КОНВЕЙРЕ (через общий солвер)
+# ============================================================
+
+def _two_inlet_net(h1=62.0, h2=62.0):
+    from app.calc.fire_hydraulics import (
+        FireNetwork, HydraulicNode, PipeSegment, FireCabinetNode,
+        HydraulicSource, SourceKind)
+    return FireNetwork(
+        nodes={"К1": HydraulicNode("К1", 0.0), "К2": HydraulicNode("К2", 0.0),
+               "К3": HydraulicNode("К3", 0.0), "К4": HydraulicNode("К4", 0.0),
+               "t1": HydraulicNode("t1", 45.6), "t3": HydraulicNode("t3", 45.6)},
+        segments=[
+            PipeSegment("М1-2", "К1", "К2", length_m=36, A=0.0023, equiv_length_m=6, diameter_mm=100),
+            PipeSegment("М2-3", "К2", "К3", length_m=15, A=0.0023, equiv_length_m=4, diameter_mm=100),
+            PipeSegment("М3-4", "К3", "К4", length_m=36, A=0.0023, equiv_length_m=6, diameter_mm=100),
+            PipeSegment("М4-1", "К4", "К1", length_m=15, A=0.0023, equiv_length_m=4, diameter_mm=100),
+            PipeSegment("с1", "К1", "t1", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65),
+            PipeSegment("с3", "К3", "t3", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65)],
+        cabinets=[FireCabinetNode("ПК-1", "t1", riser_id="R1"),
+                  FireCabinetNode("ПК-3", "t3", riser_id="R3")],
+        source=HydraulicSource("К1", kind=SourceKind.CITY_MAIN, available_head_m=h1),
+        second_source=HydraulicSource("К3", kind=SourceKind.CITY_MAIN,
+                                      available_head_m=h2))
+
+
+def test_two_inlet_solved_via_common_solver():
+    r = solve_fire_hydraulics_scenario(_two_inlet_net(), 2)
+    assert r.dictating_scenario is not None
+    assert any("ДВУМЯ вводами" in w for w in r.warnings)
+
+
+def test_two_inlet_equal_heads_split_supply():
+    r = solve_fire_hydraulics_scenario(_two_inlet_net(62.0, 62.0), 2)
+    line = next(w for w in r.warnings if "подача вводов" in w)
+    assert "№1 2.6" in line and "№2 2.6" in line
+
+
+def test_two_inlet_strong_enough_no_pump():
+    r = solve_fire_hydraulics_scenario(_two_inlet_net(62.0, 60.0), 2)
+    assert r.available_head_ok is True
+    assert r.needs_pump is False
+
+
+def test_two_inlet_weak_flags_deficit():
+    r = solve_fire_hydraulics_scenario(_two_inlet_net(55.0, 54.0), 2)
+    assert r.available_head_ok is False
+    assert r.needs_pump is True
+    assert r.required_head_at_source_m > 55.0
+
+
+def test_two_inlet_sections_feed_audit_and_report():
+    from app.calc.diameter_audit import audit_sections
+    from app.calc.fire_hydraulic_report import build_hydraulic_report
+    r = solve_fire_hydraulics_scenario(_two_inlet_net(), 2)
+    audit = audit_sections(r.dictating_scenario.sections, NetworkMode.PURE_FIRE,
+                           dn_by_segment={"М1-2": 100, "М2-3": 100, "М3-4": 100,
+                                          "М4-1": 100, "с1": 65, "с3": 65})
+    rep = build_hydraulic_report(r, audit)
+    assert rep is not None and len(rep.segments) == 6
+
+
+def test_single_source_ring_still_works():
+    # регресс: без second_source кольцо идёт старой веткой v3
+    net = _two_inlet_net()
+    net.second_source = None
+    r = solve_fire_hydraulics_scenario(net, 2)
+    assert r.dictating_scenario is not None
+    assert any("Кросса (v3)" in w for w in r.warnings)

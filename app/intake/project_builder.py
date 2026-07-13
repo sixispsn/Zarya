@@ -98,6 +98,8 @@ def build_project(req: IOS2Request) -> Project:
             nodes=nodes, segments=segments, risers=risers,
             source_node=n.source_node, source_kind=n.source_kind,
             available_head_m=n.available_head_m, water_level_m=n.water_level_m,
-            suction_head_loss_m=n.suction_head_loss_m)
+            suction_head_loss_m=n.suction_head_loss_m,
+            second_source_node=n.second_source_node,
+            second_available_head_m=n.second_available_head_m)
 
     return p

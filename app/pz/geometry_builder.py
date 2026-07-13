@@ -123,7 +123,13 @@ def build_network(project: Project) -> object:
         water_level_m=spec.water_level_m,
         suction_head_loss_m=spec.suction_head_loss_m)
 
-    net = FireNetwork(nodes=nodes, segments=segments, cabinets=cabinets, source=source)
+    second = None
+    if spec.second_source_node:
+        second = HydraulicSource(
+            node_id=spec.second_source_node, kind=SourceKind(spec.source_kind),
+            available_head_m=spec.second_available_head_m)
+    net = FireNetwork(nodes=nodes, segments=segments, cabinets=cabinets,
+                      source=source, second_source=second)
     problems = net.validate()
     if problems:
         raise ValueError("построенная сеть невалидна: " + "; ".join(problems))

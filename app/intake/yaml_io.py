@@ -153,6 +153,10 @@ def load_request(text: str) -> IOS2Request:
             water_level_m=(float(src["water_level_m"])
                            if src.get("water_level_m") is not None else None),
             suction_head_loss_m=float(src.get("suction_head_loss_m", 0)),
+            second_source_node=str((net_s.get("source2") or {}).get("node", "")),
+            second_available_head_m=(float((net_s.get("source2") or {})["available_head_m"])
+                                     if (net_s.get("source2") or {}).get("available_head_m")
+                                     is not None else None),
             node_elevations={str(k): float(v) for k, v in
                              (net_s.get("node_elevations") or {}).items()})
 
@@ -219,8 +223,14 @@ def dump_request(req: IOS2Request) -> str:
             src["water_level_m"] = n.water_level_m
         if n.suction_head_loss_m:
             src["suction_head_loss_m"] = n.suction_head_loss_m
+        s2: Dict[str, Any] = {}
+        if n.second_source_node:
+            s2 = {"node": n.second_source_node}
+            if n.second_available_head_m is not None:
+                s2["available_head_m"] = n.second_available_head_m
         data["network"] = {
             "source": src,
+            **({"source2": s2} if s2 else {}),
             "runs": [{"from": r.from_node, "to": r.to_node, "length_m": r.length_m,
                       "dn": r.dn, "equiv_length_m": r.equiv_length_m, "A": r.A}
                      for r in n.runs],

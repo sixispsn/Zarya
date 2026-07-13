@@ -90,6 +90,8 @@ class NetworkRequest:
     source_node: str = ""
     source_kind: str = "city_main"               # SOURCE_KINDS
     available_head_m: Optional[float] = None     # напор города (None → 0, уточнить)
+    second_source_node: str = ""                 # второй ввод (пусто = один ввод)
+    second_available_head_m: Optional[float] = None
     water_level_m: Optional[float] = None        # для резервуара/водоёма
     suction_head_loss_m: float = 0.0
     node_elevations: dict = field(default_factory=dict)   # {узел: отметка}, дефолт 0
@@ -152,6 +154,13 @@ class IOS2Request:
             for i, r in enumerate(n.risers):
                 if r.at_node not in run_nodes:
                     p.append(f"risers[{i}] '{r.name}': узел '{r.at_node}' не в магистрали")
+            if n.second_source_node:
+                if n.second_source_node not in run_nodes:
+                    p.append(f"второй ввод '{n.second_source_node}' не в магистрали")
+                if n.second_source_node == n.source_node:
+                    p.append("второй ввод совпадает с первым — уберите или переставьте")
+                if n.second_available_head_m is None:
+                    p.append("для второго ввода нужен его напор (second_available_head_m)")
             # ── связность: вся магистраль достижима от источника (BFS) ──
             if n.source_node in run_nodes and n.runs:
                 adj: dict = {}

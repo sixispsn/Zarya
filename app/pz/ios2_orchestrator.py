@@ -45,6 +45,8 @@ class IOS2DesignBundle:
     spec_pdf: Optional[str] = None
     scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
+    resilience_report: Optional[object] = None
+    resilience_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
     status: List[str] = field(default_factory=list)
 
@@ -148,6 +150,22 @@ def design_ios2(
 
     bundle.hydraulic_report = report
 
+    # ── Живучесть кольца: только если сеть кольцевая и гидравлика решена ──
+    if network is not None and hydraulic_result is not None \
+            and hydraulic_result.dictating_scenario is not None:
+        from app.calc.ring_hydraulics import analyze_ring_resilience
+        try:
+            resilience = analyze_ring_resilience(network, required_jets,
+                                                 mode=network_mode,
+                                                 scenario_filter=scenario_filter)
+        except Exception as e:
+            resilience = None
+            bundle.warnings.append(f"resilience: анализ не выполнен ({e})")
+        if resilience is not None:
+            bundle.resilience_report = resilience
+            bundle.status.append(
+                "ring_resilience: проверены одиночные отказы участков кольца")
+
     # ── Мост: обогащаем FireSystem результатами (только если что-то посчитано) ──
     if layout_results or hydraulic_result:
         enriched = enrich_fire_from_layout_and_hydraulics(
@@ -181,5 +199,12 @@ def design_ios2(
         bundle.status.append("Гидравлический_расчет.pdf собран")
     else:
         bundle.warnings.append("hydraulic report PDF skipped: no hydraulic report available")
+
+    if bundle.resilience_report is not None:
+        from app.pz.generator import generate_resilience_pdf
+        bundle.resilience_pdf = generate_resilience_pdf(
+            project, bundle.resilience_report,
+            os.path.join(output_dir, "Проверка_живучести.pdf"))
+        bundle.status.append("Проверка_живучести.pdf собрана")
 
     return bundle
