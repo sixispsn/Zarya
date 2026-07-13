@@ -131,3 +131,39 @@ def test_end_to_end_dto_to_pdfs(tmp_path):
     assert b.project.fire.needs_pump is True     # 32 м на 16 этажей не хватит
     assert b.pz_pdf and b.spec_pdf and b.scheme_pdf and b.hydraulic_pdf
     assert not any("skipped" in w for w in b.warnings)
+
+
+# ── валидация связности сети (заход: до расчёта, человеческим языком) ────────
+
+def test_disconnected_main_caught():
+    r = _req()
+    r.network.runs = [MainRunRequest("К1", "К2", 30), MainRunRequest("К3", "К4", 30)]
+    r.network.risers = [RiserRequest("СТ-1", "К1", 46.5, 45.6)]
+    probs = r.validate()
+    assert any("разорвана" in p and "К3" in p for p in probs)
+
+
+def test_riser_on_unreachable_node_caught():
+    r = _req()
+    r.network.runs = [MainRunRequest("К1", "К2", 30), MainRunRequest("К3", "К4", 30)]
+    r.network.risers = [RiserRequest("СТ-X", "К3", 46.5, 45.6)]
+    probs = r.validate()
+    assert any("СТ-X" in p and "не дойдёт" in p for p in probs)
+
+
+def test_duplicate_run_caught():
+    r = _req()
+    r.network.runs = list(r.network.runs) + [MainRunRequest("К2", "К1", 99)]
+    # К1-К2 уже есть (в любом направлении — та же пара)
+    assert any("дублирующиеся" in p for p in r.validate())
+
+
+def test_duplicate_riser_names_caught():
+    r = _req()
+    r.network.risers = [RiserRequest("СТ-1", "К1", 46.5, 45.6),
+                        RiserRequest("СТ-1", "К2", 46.5, 45.6)]
+    assert any("повторяются" in p for p in r.validate())
+
+
+def test_connected_ring_passes():
+    assert _req().validate() == []   # базовое кольцо связно — чисто

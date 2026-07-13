@@ -692,3 +692,210 @@ def analyze_ring_resilience(
     return RingResilienceReport(
         normal_required_head_m=h0, cases=cases, worst_case=worst,
         all_cases_solved=all_solved, survives_worst_case=survives)
+
+
+# ============================================================
+# ДВА ВВОДА КОЛЬЦА (MultiSource, штатный режим двух активных вводов)
+# ============================================================
+# Обобщение Кросса на два источника: реальный контур (кольцо) + фиктивный
+# контур через разность располагаемых напоров вводов (ΔH = H1 − H2).
+# Поправка реального контура увязывает потери по кольцу; поправка фиктивного —
+# перераспределяет ПОДАЧУ между вводами до согласования напоров:
+#     невязка фиктивного контура = Σh(путь ввод1→ввод2 по кольцу) − (H1 − H2)
+# Итерации обоих контуров до сходимости обеих невязок.
+#
+# MVP-границы: ровно два ввода, оба на узлах одного кольца; ПК на тупиках
+# (как v3). Отказ ввода → выключил и решил обычной односорсной задачей.
+
+@dataclass
+class TwoSourceLoopProblem:
+    """Кольцо с двумя активными вводами."""
+    source1_node: str
+    source1_head_m: float                # располагаемый напор ввода 1
+    source2_node: str
+    source2_head_m: float
+    loop_nodes: List[str]                # обход кольца
+    loop_segments: List[PipeSegment]     # по обходу
+    node_demands: Dict[str, float]       # отборы стояков
+
+    def validate(self) -> List[str]:
+        pr: List[str] = []
+        n = len(self.loop_nodes)
+        if n < 3:
+            pr.append("кольцо должно иметь ≥3 узла")
+        if len(self.loop_segments) != n:
+            pr.append("число участков должно равняться числу узлов кольца")
+        for s in (self.source1_node, self.source2_node):
+            if s not in self.loop_nodes:
+                pr.append(f"ввод {s} не на кольце")
+        if self.source1_node == self.source2_node:
+            pr.append("вводы должны быть в разных узлах")
+        total = sum(self.node_demands.get(nd, 0.0) for nd in self.loop_nodes)
+        if total <= 0:
+            pr.append("суммарный отбор кольца = 0")
+        for i, seg in enumerate(self.loop_segments):
+            a, b = self.loop_nodes[i], self.loop_nodes[(i + 1) % n]
+            if {seg.from_node, seg.to_node} != {a, b}:
+                pr.append(f"участок {seg.segment_id} не соединяет {a}–{b}")
+        return pr
+
+
+@dataclass
+class TwoSourceSolveResult:
+    converged: bool
+    iterations: int
+    residual_loop_m: float               # невязка реального контура
+    residual_pseudo_m: float             # невязка фиктивного контура
+    segments: List[RingSegmentFlow] = field(default_factory=list)
+    supply1_lps: float = 0.0             # подача ввода 1
+    supply2_lps: float = 0.0             # подача ввода 2
+    node_head_m: Dict[str, float] = field(default_factory=dict)  # напор в узлах
+    warnings: List[str] = field(default_factory=list)
+
+
+def solve_two_source_loop(
+    problem: TwoSourceLoopProblem,
+    *,
+    tolerance_m: float = 1e-4,
+    max_iterations: int = 200,
+) -> TwoSourceSolveResult:
+    """Увязка кольца с двумя вводами (двухконтурный Кросс).
+
+    Реальный контур: Σ(A·L·Q|Q|) по кольцу → 0.
+    Фиктивный: Σh по пути ввод1→ввод2 (по обходу) − (H1−H2) → 0; его поправка
+    прикладывается к участкам этого пути (перераспределение подачи вводов).
+    """
+    probs = problem.validate()
+    if probs:
+        return TwoSourceSolveResult(False, 0, 0.0, 0.0,
+                                    warnings=["невалидная задача: " + "; ".join(probs)])
+
+    nodes = problem.loop_nodes
+    segs = problem.loop_segments
+    n = len(segs)
+    i1 = nodes.index(problem.source1_node)
+    i2 = nodes.index(problem.source2_node)
+    dH = problem.source1_head_m - problem.source2_head_m
+    total = sum(problem.node_demands.get(nd, 0.0) for nd in nodes)
+
+    # путь фиктивного контура: участки от ввода1 до ввода2 по направлению обхода
+    pseudo_path = []
+    k = i1
+    while k != i2:
+        pseudo_path.append(k)          # индекс участка nodes[k] → nodes[k+1]
+        k = (k + 1) % n
+
+    # начальное распределение: ввод1 подаёт всё (как односорсное), ввод2 — 0;
+    # фиктивный контур перераспределит.
+    base = SingleLoopProblem(problem.source1_node, nodes, segs, problem.node_demands)
+    Q = _initial_distribution(base)
+
+    def _k(i):  # сопротивление участка
+        return segs[i].A * segs[i].effective_length_m
+
+    res_loop = res_pseudo = 0.0
+    it = 0
+    for it in range(1, max_iterations + 1):
+        # контур 1 — реальное кольцо
+        numer = sum(_k(i) * Q[i] * abs(Q[i]) for i in range(n))
+        denom = sum(2.0 * _k(i) * abs(Q[i]) for i in range(n))
+        res_loop = abs(numer)
+        if denom > 1e-12:
+            dQ = -numer / denom
+            for i in range(n):
+                Q[i] += dQ
+        # контур 2 — фиктивный (ввод1 → ввод2), невязка с учётом ΔH
+        numer2 = sum(_k(i) * Q[i] * abs(Q[i]) for i in pseudo_path) - dH
+        denom2 = sum(2.0 * _k(i) * abs(Q[i]) for i in pseudo_path)
+        res_pseudo = abs(numer2)
+        if denom2 > 1e-12:
+            dQ2 = -numer2 / denom2
+            for i in pseudo_path:
+                Q[i] += dQ2
+        if res_loop < tolerance_m and res_pseudo < tolerance_m:
+            break
+
+    # подачи вводов из узловых балансов:
+    # в узле ввода: подача = Σ(уход по инцидентным участкам) − Σ(приход) + отбор
+    def _supply(idx: int) -> float:
+        out_seg = idx                    # участок nodes[idx] → nodes[idx+1]
+        in_seg = (idx - 1) % n           # участок nodes[idx-1] → nodes[idx]
+        return Q[out_seg] - Q[in_seg] + problem.node_demands.get(nodes[idx], 0.0)
+
+    s1 = _supply(i1)
+    s2 = _supply(i2)
+
+    # напоры в узлах: от ввода1 (H1) по обходу с учётом знака потерь
+    node_head: Dict[str, float] = {nodes[i1]: problem.source1_head_m}
+    cum = problem.source1_head_m
+    k = i1
+    for _ in range(n):
+        hl = _k(k) * Q[k] * abs(Q[k])
+        cum -= hl                        # по направлению обхода напор падает на hl
+        nxt = nodes[(k + 1) % n]
+        node_head.setdefault(nxt, cum)
+        k = (k + 1) % n
+
+    seg_flows = [RingSegmentFlow(
+        segment_id=segs[i].segment_id, from_node=segs[i].from_node,
+        to_node=segs[i].to_node, flow_lps=Q[i], abs_flow_lps=abs(Q[i]),
+        head_loss_m=_k(i) * Q[i] * abs(Q[i])) for i in range(n)]
+
+    converged = res_loop < tolerance_m and res_pseudo < tolerance_m
+    warns: List[str] = []
+    if not converged:
+        warns.append(f"двухконтурная увязка не сошлась за {max_iterations} итераций")
+    if s1 < -1e-6 or s2 < -1e-6:
+        warns.append(f"подача ввода отрицательна (S1={s1:.2f}, S2={s2:.2f}): "
+                     "слабый ввод принимает воду — проверьте напоры вводов")
+    # контроль: сумма подач = суммарный отбор
+    if abs((s1 + s2) - total) > 1e-6:
+        warns.append(f"баланс подач нарушен: S1+S2={s1+s2:.3f} ≠ отбор {total:.3f}")
+
+    return TwoSourceSolveResult(
+        converged=converged, iterations=it,
+        residual_loop_m=res_loop, residual_pseudo_m=res_pseudo,
+        segments=seg_flows, supply1_lps=s1, supply2_lps=s2,
+        node_head_m=node_head, warnings=warns)
+
+
+def solve_two_source_loop_with_check_valves(
+    problem: TwoSourceLoopProblem,
+    *,
+    tolerance_m: float = 1e-4,
+    max_iterations: int = 200,
+) -> TwoSourceSolveResult:
+    """Двухвводная увязка с ОБРАТНЫМИ КЛАПАНАМИ на вводах (инженерный режим).
+
+    Реальный ввод не принимает воду обратно в сеть города. Если чистая
+    двухвводная увязка даёт отрицательную подачу какого-то ввода — его
+    обратный клапан закрывается, и сеть честно пересчитывается как
+    ОДНОСОРСНАЯ от оставшегося ввода (с пометкой в warnings).
+    """
+    res = solve_two_source_loop(problem, tolerance_m=tolerance_m,
+                                max_iterations=max_iterations)
+    if not res.converged:
+        return res
+    if res.supply1_lps >= -1e-6 and res.supply2_lps >= -1e-6:
+        return res   # оба подают — штатный двухвводный режим
+
+    # реверс: закрываем слабый ввод, решаем односорсно от сильного
+    strong = (problem.source1_node if res.supply1_lps > res.supply2_lps
+              else problem.source2_node)
+    weak = (problem.source2_node if strong == problem.source1_node
+            else problem.source1_node)
+    single = SingleLoopProblem(strong, problem.loop_nodes,
+                               problem.loop_segments, problem.node_demands)
+    sres = solve_single_loop(single, tolerance_m=tolerance_m,
+                             max_iterations=max_iterations)
+    total = sum(problem.node_demands.get(nd, 0.0) for nd in problem.loop_nodes)
+    return TwoSourceSolveResult(
+        converged=sres.converged, iterations=sres.iterations,
+        residual_loop_m=sres.final_residual_m, residual_pseudo_m=0.0,
+        segments=sres.segments,
+        supply1_lps=(total if strong == problem.source1_node else 0.0),
+        supply2_lps=(total if strong == problem.source2_node else 0.0),
+        node_head_m={},   # напоры не считаем в одновводном фолбэке (offset в sres)
+        warnings=sres.warnings + [
+            f"обратный клапан: ввод {weak} закрыт (реверс при чистой увязке), "
+            f"сеть питается только от {strong}"])

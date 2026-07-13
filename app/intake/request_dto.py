@@ -152,4 +152,32 @@ class IOS2Request:
             for i, r in enumerate(n.risers):
                 if r.at_node not in run_nodes:
                     p.append(f"risers[{i}] '{r.name}': узел '{r.at_node}' не в магистрали")
+            # ── связность: вся магистраль достижима от источника (BFS) ──
+            if n.source_node in run_nodes and n.runs:
+                adj: dict = {}
+                for r in n.runs:
+                    adj.setdefault(r.from_node, set()).add(r.to_node)
+                    adj.setdefault(r.to_node, set()).add(r.from_node)
+                seen = {n.source_node}
+                stack = [n.source_node]
+                while stack:
+                    for nb in adj.get(stack.pop(), ()):
+                        if nb not in seen:
+                            seen.add(nb)
+                            stack.append(nb)
+                orphans = sorted(run_nodes - seen)
+                if orphans:
+                    p.append(f"магистраль разорвана: узлы {', '.join(orphans)} не связаны "
+                             f"с источником '{n.source_node}' — проверьте участки (runs)")
+                for r in n.risers:
+                    if r.at_node in run_nodes and r.at_node not in seen:
+                        p.append(f"стояк '{r.name}' висит на недостижимом узле "
+                                 f"'{r.at_node}' — вода до него не дойдёт")
+            # ── дубли ──
+            pairs = [frozenset((r.from_node, r.to_node)) for r in n.runs]
+            if len(set(pairs)) < len(pairs):
+                p.append("в магистрали есть дублирующиеся участки (одна и та же пара узлов)")
+            names = [r.name for r in n.risers]
+            if len(set(names)) < len(names):
+                p.append("имена стояков повторяются — должны быть уникальны")
         return p

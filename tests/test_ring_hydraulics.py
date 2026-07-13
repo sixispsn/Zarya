@@ -281,3 +281,88 @@ def test_render_text_readable():
     assert "ЖИВУЧЕСТИ" in txt
     assert "Худший отказ" in txt
     assert "сохраняет работоспособность" in txt
+
+
+# ============================================================
+# ДВА ВВОДА (MultiSource): двухконтурный Кросс
+# ============================================================
+
+from app.calc.ring_hydraulics import (
+    TwoSourceLoopProblem, solve_two_source_loop,
+    solve_two_source_loop_with_check_valves,
+)
+
+
+def _two_src(h1=50.0, h2=50.0, demands=None):
+    segs = [PipeSegment("L01", "R0", "R1", length_m=20, A=0.002, equiv_length_m=2),
+            PipeSegment("L12", "R1", "R2", length_m=20, A=0.002, equiv_length_m=2),
+            PipeSegment("L23", "R2", "R3", length_m=20, A=0.002, equiv_length_m=2),
+            PipeSegment("L30", "R3", "R0", length_m=20, A=0.002, equiv_length_m=2)]
+    return TwoSourceLoopProblem(
+        source1_node="R0", source1_head_m=h1,
+        source2_node="R2", source2_head_m=h2,
+        loop_nodes=["R0", "R1", "R2", "R3"], loop_segments=segs,
+        node_demands=demands or {"R1": 2.6, "R3": 2.6})
+
+
+def test_two_source_symmetric_splits_evenly():
+    r = solve_two_source_loop(_two_src(50.0, 50.0))
+    assert r.converged
+    assert r.supply1_lps == pytest.approx(2.6, abs=1e-3)
+    assert r.supply2_lps == pytest.approx(2.6, abs=1e-3)
+
+
+def test_two_source_supply_balance():
+    # сумма подач = суммарный отбор (закон сохранения)
+    for h2 in (50.0, 48.0, 45.0):
+        r = solve_two_source_loop(_two_src(50.0, h2))
+        assert r.supply1_lps + r.supply2_lps == pytest.approx(5.2, abs=1e-6)
+
+
+def test_two_source_boundary_heads_consistent():
+    # ключ метода: напор из обхода в узле ввода 2 = его граничный напор
+    r = solve_two_source_loop(_two_src(55.0, 48.0))
+    assert r.converged
+    assert r.node_head_m["R2"] == pytest.approx(48.0, abs=1e-3)
+    assert r.node_head_m["R0"] == pytest.approx(55.0)
+
+
+def test_two_source_stronger_supplies_more():
+    r = solve_two_source_loop(_two_src(51.0, 49.0))
+    assert r.supply1_lps > r.supply2_lps
+
+
+def test_two_source_reverse_flagged():
+    # сильный перекос → слабый ввод принимает воду → warning
+    r = solve_two_source_loop(_two_src(60.0, 40.0))
+    assert r.supply2_lps < 0
+    assert any("отрицательна" in w for w in r.warnings)
+
+
+def test_check_valves_close_weak_source():
+    r = solve_two_source_loop_with_check_valves(_two_src(60.0, 40.0))
+    assert r.converged
+    assert r.supply2_lps == 0.0
+    assert r.supply1_lps == pytest.approx(5.2)
+    assert any("клапан" in w for w in r.warnings)
+
+
+def test_check_valves_keep_both_when_balanced():
+    r = solve_two_source_loop_with_check_valves(_two_src(50.0, 50.0))
+    assert r.supply1_lps > 0 and r.supply2_lps > 0
+    assert not any("клапан" in w for w in r.warnings)
+
+
+def test_two_source_invalid_same_node():
+    p = _two_src()
+    p.source2_node = "R0"
+    r = solve_two_source_loop(p)
+    assert r.converged is False
+    assert any("разных узлах" in w for w in r.warnings)
+
+
+def test_two_source_loop_residual_zero():
+    # инвариант Кросса держится и в двухвводном: Σh по кольцу ≈ 0
+    r = solve_two_source_loop(_two_src(53.0, 49.0))
+    total = sum(s.head_loss_m for s in r.segments)
+    assert abs(total) < 1e-3
