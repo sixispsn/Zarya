@@ -564,3 +564,131 @@ def solve_ring_scenario(
         dictating_cabinet_id=dic.cabinet_id,
         sections=sections, ring_result=ring, per_pk=per_pk,
         warnings=list(ring.warnings))
+
+
+# ============================================================
+# АВАРИЙНЫЕ РЕЖИМЫ КОЛЬЦА (живучесть): отказ участка
+# ============================================================
+# Смысл кольца — резервирование: при отказе участка вода приходит по второму
+# плечу. Проверка: для каждого участка кольца по очереди выключаем его,
+# оставшаяся сеть (разомкнутое кольцо = дерево) гонится тем же сценарным
+# солвером; фиксируем требуемый напор. Худший отказ = максимальный напор.
+#
+# Границы (осознанно): один ввод (MultiSource — отдельная задача); отказы
+# только участков КОЛЬЦА (отказ стояка-тупика меняет сам сценарий ПК);
+# результат — справка живучести для проектировщика, не замена штатного расчёта.
+
+@dataclass
+class SegmentFailureCase:
+    """Итог одного аварийного случая: отключён участок failed_segment_id."""
+    failed_segment_id: str
+    solved: bool                              # расчёт состоялся на остатке сети
+    required_head_at_source_m: Optional[float]
+    head_penalty_m: Optional[float]           # ухудшение против штатного режима
+    available_head_ok: Optional[bool]
+    needs_pump: Optional[bool]
+    warnings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class RingResilienceReport:
+    """Сводка живучести кольца по одиночным отказам участков."""
+    normal_required_head_m: float             # штатный режим (кольцо целое)
+    cases: List[SegmentFailureCase] = field(default_factory=list)
+    worst_case: Optional[SegmentFailureCase] = None
+    all_cases_solved: bool = False
+    survives_worst_case: Optional[bool] = None   # доступный напор/насос держит худшее
+
+    def render_text(self) -> str:
+        L = ["ПРОВЕРКА ЖИВУЧЕСТИ КОЛЬЦА (одиночный отказ участка)",
+             f"Штатный режим (кольцо целое): требуемый напор "
+             f"{self.normal_required_head_m:.1f} м."]
+        for c in self.cases:
+            if not c.solved:
+                L.append(f"  отказ {c.failed_segment_id}: расчёт не состоялся "
+                         f"({'; '.join(c.warnings) or 'нет решения'})")
+                continue
+            L.append(f"  отказ {c.failed_segment_id}: напор "
+                     f"{c.required_head_at_source_m:.1f} м "
+                     f"(+{c.head_penalty_m:.1f} к штатному)"
+                     + ("" if c.available_head_ok is None else
+                        f", источник {'держит' if c.available_head_ok else 'НЕ держит'}"))
+        if self.worst_case and self.worst_case.solved:
+            L.append(f"Худший отказ: {self.worst_case.failed_segment_id} — "
+                     f"{self.worst_case.required_head_at_source_m:.1f} м.")
+        if self.survives_worst_case is True:
+            L.append("Вывод: сеть сохраняет работоспособность при любом одиночном "
+                     "отказе участка кольца.")
+        elif self.survives_worst_case is False:
+            L.append("Вывод: при худшем отказе доступного напора НЕДОСТАТОЧНО — "
+                     "требуется резерв (насос с запасом / второй ввод).")
+        return "\n".join(L)
+
+
+def analyze_ring_resilience(
+    net,                                   # FireNetwork с кольцом (топология v3)
+    required_jets: int,
+    *,
+    mode=None,
+    scenario_filter=None,
+) -> Optional[RingResilienceReport]:
+    """Живучесть кольца: поочерёдный отказ каждого участка кольца.
+
+    Для каждого отказа строится сеть без участка (разомкнутое кольцо = дерево)
+    и гонится ТОТ ЖЕ сценарный солвер. Возвращает None, если сеть не кольцевая
+    по v3 (нечего анализировать).
+    """
+    from dataclasses import replace as _dc_replace
+    from app.calc.fire_hydraulics import (
+        FireNetwork, NetworkMode, solve_fire_hydraulics_scenario)
+
+    _mode = mode or NetworkMode.PURE_FIRE
+    cyc = find_single_cycle(net)
+    if cyc is None:
+        return None
+    _, loop_segs = cyc
+    loop_ids = [s.segment_id for s in loop_segs]
+
+    # штатный режим — кольцо целое (через общий солвер: увязка Кросса)
+    normal = solve_fire_hydraulics_scenario(
+        net, required_jets, mode=_mode, scenario_filter=scenario_filter)
+    if normal.dictating_scenario is None:
+        return None
+    h0 = normal.required_head_at_source_m
+
+    cases: List[SegmentFailureCase] = []
+    for seg_id in loop_ids:
+        cut = FireNetwork(
+            nodes=dict(net.nodes),
+            segments=[s for s in net.segments if s.segment_id != seg_id],
+            cabinets=list(net.cabinets),
+            source=net.source)
+        res = solve_fire_hydraulics_scenario(
+            cut, required_jets, mode=_mode, scenario_filter=scenario_filter)
+        if res.dictating_scenario is None:
+            cases.append(SegmentFailureCase(
+                failed_segment_id=seg_id, solved=False,
+                required_head_at_source_m=None, head_penalty_m=None,
+                available_head_ok=None, needs_pump=None,
+                warnings=list(res.warnings)))
+            continue
+        cases.append(SegmentFailureCase(
+            failed_segment_id=seg_id, solved=True,
+            required_head_at_source_m=res.required_head_at_source_m,
+            head_penalty_m=res.required_head_at_source_m - h0,
+            available_head_ok=res.available_head_ok,
+            needs_pump=res.needs_pump,
+            warnings=list(res.warnings)))
+
+    solved = [c for c in cases if c.solved]
+    worst = max(solved, key=lambda c: c.required_head_at_source_m) if solved else None
+    all_solved = len(solved) == len(cases) and bool(cases)
+    survives: Optional[bool] = None
+    if worst is not None and worst.available_head_ok is not None:
+        # выжила, если все случаи решены и худший держится источником
+        # (либо насос закрывает — needs_pump=True само по себе не провал)
+        survives = all_solved and (worst.available_head_ok or bool(worst.needs_pump))
+
+    return RingResilienceReport(
+        normal_required_head_m=h0, cases=cases, worst_case=worst,
+        all_cases_solved=all_solved, survives_worst_case=survives)

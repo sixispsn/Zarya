@@ -25,8 +25,9 @@
   button.go:hover { background:#92400e; }
   .actions { text-align:center; padding:6px 0 40px; }
 </style></head><body>
-<header><h1>Заря</h1><span>внутренний противопожарный водопровод · комплект ИОС2 одним расчётом</span></header>
+<header><h1>Заря</h1><span>внутренний противопожарный водопровод · комплект ИОС2 одним расчётом</span><a href="/wizard/projects" style="margin-left:auto;color:#fbbf24;text-decoration:none;font-size:14px;">мои проекты →</a></header>
 <main>
+{% set d = prefill.document if prefill else none %}
 {% if errors %}
 <div class="errors"><b>Вход не принят:</b><ul>
   {% for e in errors %}<li>{{ e }}</li>{% endfor %}
@@ -34,24 +35,25 @@
 {% endif %}
 
 <form method="post" action="/wizard/design">
+{% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
 
 <fieldset><legend>1 · Объект и реквизиты</legend>
   <div class="row">
-    <label>Шифр комплекта<input class="w-m" name="cipher" value="2026-089-ИОС2" required></label>
-    <label>Наименование объекта<input class="w-l" name="object_name" value="Многоквартирный жилой дом, 16 этажей" required></label>
-    <label>Часть<input class="w-m" name="object_part" value="Секция 2"></label>
+    <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '2026-089-ИОС2' }}" required></label>
+    <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else 'Многоквартирный жилой дом, 16 этажей' }}" required></label>
+    <label>Часть<input class="w-m" name="object_part" value="{{ d.object_part if d else 'Секция 2' }}"></label>
     <label>Стадия<select name="stage"><option>П</option><option>Р</option></select></label>
   </div>
   <div class="row">
-    <label>Организация<input class="w-l" name="organization" value="ООО «ПроектСервис»" required></label>
-    <label>Адрес<input class="w-l" name="address" value="Московская обл."></label>
+    <label>Организация<input class="w-l" name="organization" value="{{ d.organization if d else 'ООО «ПроектСервис»' }}" required></label>
+    <label>Адрес<input class="w-l" name="address" value="{{ d.object_address if d else 'Московская обл.' }}"></label>
   </div>
   <div class="row">
-    <label>Разработал<input name="developer" value="Аникин А.В."></label>
-    <label>Проверил<input name="inspector" value="Белова Е.П."></label>
-    <label>Нач. отдела<input name="dept_head" value="Волков С.И."></label>
-    <label>ГИП<input name="gip" value="Громов Д.А."></label>
-    <label>Н. контроль<input name="norm_control" value="Дьякова О.М."></label>
+    <label>Разработал<input name="developer" value="{{ d.developer if d else 'Аникин А.В.' }}"></label>
+    <label>Проверил<input name="inspector" value="{{ d.inspector if d else 'Белова Е.П.' }}"></label>
+    <label>Нач. отдела<input name="dept_head" value="{{ d.dept_head if d else 'Волков С.И.' }}"></label>
+    <label>ГИП<input name="gip" value="{{ d.gip if d else 'Громов Д.А.' }}"></label>
+    <label>Н. контроль<input name="norm_control" value="{{ d.norm_control if d else 'Дьякова О.М.' }}"></label>
   </div>
 </fieldset>
 
@@ -62,19 +64,19 @@
       <option value="public">Общественное</option>
       <option value="industrial">Производственное</option>
     </select></label>
-    <label>Этажей<input class="w-s" name="floors" value="16" required></label>
-    <label>Высота, м<input class="w-s" name="height" value="48" required></label>
-    <label>Зон водоснабжения<input class="w-s" name="zones" value="2"></label>
-    <label>Расчётных струй (пусто = по табл. 7.1)<input class="w-s" name="streams" value="2"></label>
+    <label>Этажей<input class="w-s" name="floors" value="{{ prefill.floors if prefill else 16 }}" required></label>
+    <label>Высота, м<input class="w-s" name="height" value="{{ prefill.building_height_m if prefill else 48 }}" required></label>
+    <label>Зон водоснабжения<input class="w-s" name="zones" value="{{ prefill.zones if prefill else 2 }}"></label>
+    <label>Расчётных струй (пусто = по табл. 7.1)<input class="w-s" name="streams" value="{{ prefill.streams if prefill and prefill.streams is not none else ('' if prefill else 2) }}"></label>
   </div>
 </fieldset>
 
 <fieldset><legend>3 · Помещение расстановки ПК</legend>
   <div class="row">
-    <label>Наименование<input class="w-m" name="room_name" value="Коридор тип. этажа"></label>
-    <label>Длина, м<input class="w-s" name="room_len" value="42"></label>
-    <label>Ширина, м<input class="w-s" name="room_wid" value="2.4"></label>
-    <label>Высота, м<input class="w-s" name="room_h" value="3.0"></label>
+    <label>Наименование<input class="w-m" name="room_name" value="{{ prefill.rooms[0].name if prefill and prefill.rooms else 'Коридор тип. этажа' }}"></label>
+    <label>Длина, м<input class="w-s" name="room_len" value="{{ prefill.rooms[0].length_m if prefill and prefill.rooms else 42 }}"></label>
+    <label>Ширина, м<input class="w-s" name="room_wid" value="{{ prefill.rooms[0].width_m if prefill and prefill.rooms else 2.4 }}"></label>
+    <label>Высота, м<input class="w-s" name="room_h" value="{{ prefill.rooms[0].height_m if prefill and prefill.rooms else 3.0 }}"></label>
     <label>Тип<select name="room_kind">
       <option value="corridor">коридор</option><option value="room">помещение</option>
       <option value="hall">зал</option><option value="storage">склад</option>
@@ -88,7 +90,7 @@
 
 <fieldset><legend>4 · Магистраль В2 (до 6 участков; кольцо — замкните узлы)</legend>
   <table class="grid"><tr><th></th><th>от узла</th><th>до узла</th><th>L, м</th><th>Ду</th><th>L экв, м</th></tr>
-  {% set runs = [("К1","К2","36","100","6"),("К2","К3","15","100","4"),("К3","К4","36","100","6"),("К4","К1","15","100","4"),("","","","",""),("","","","","")] %}
+  {% if prefill and prefill.network %}{% set _r = prefill.network.runs %}{% set runs = [] %}{% for i in range(6) %}{% if i < _r|length %}{% set runs = runs.append((_r[i].from_node, _r[i].to_node, _r[i].length_m, _r[i].dn, _r[i].equiv_length_m)) or runs %}{% else %}{% set runs = runs.append(("","","","","")) or runs %}{% endif %}{% endfor %}{% else %}{% set runs = [("К1","К2","36","100","6"),("К2","К3","15","100","4"),("К3","К4","36","100","6"),("К4","К1","15","100","4"),("","","","",""),("","","","","")] %}{% endif %}
   {% for r in runs %}
   <tr><td>{{ loop.index }}</td>
     <td><input name="run{{ loop.index }}_from" value="{{ r[0] }}"></td>
@@ -102,7 +104,7 @@
 
 <fieldset><legend>5 · Стояки с ПК (до 4)</legend>
   <table class="grid"><tr><th></th><th>имя</th><th>узел</th><th>длина, м</th><th>отм. ПК, м</th><th>Ду</th><th>L экв, м</th></tr>
-  {% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6"),("СТ-В2-2","К2","46.5","45.6","65","6"),("СТ-В2-3","К3","46.5","45.6","65","6"),("СТ-В2-4","К4","46.5","45.6","65","6")] %}
+  {% if prefill and prefill.network %}{% set _s = prefill.network.risers %}{% set rs = [] %}{% for i in range(4) %}{% if i < _s|length %}{% set rs = rs.append((_s[i].name, _s[i].at_node, _s[i].height_m, _s[i].cabinet_elevation_m, _s[i].dn, _s[i].equiv_length_m)) or rs %}{% else %}{% set rs = rs.append(("","","","","","")) or rs %}{% endif %}{% endfor %}{% else %}{% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6"),("СТ-В2-2","К2","46.5","45.6","65","6"),("СТ-В2-3","К3","46.5","45.6","65","6"),("СТ-В2-4","К4","46.5","45.6","65","6")] %}{% endif %}
   {% for r in rs %}
   <tr><td>{{ loop.index }}</td>
     <td><input name="riser{{ loop.index }}_name" value="{{ r[0] }}"></td>
@@ -117,16 +119,16 @@
 
 <fieldset><legend>6 · Источник</legend>
   <div class="row">
-    <label>Узел ввода<input class="w-s" name="source_node" value="К1"></label>
+    <label>Узел ввода<input class="w-s" name="source_node" value="{{ prefill.network.source_node if prefill and prefill.network else 'К1' }}"></label>
     <label>Тип источника<select name="source_kind">
       <option value="city_main">городская сеть</option>
       <option value="reservoir">резервуар</option>
       <option value="pond">водоём</option>
       <option value="well">скважина</option>
     </select></label>
-    <label>Гарант. напор города, м<input class="w-s" name="available_head" value="32"></label>
+    <label>Гарант. напор города, м<input class="w-s" name="available_head" value="{{ prefill.network.available_head_m if prefill and prefill.network and prefill.network.available_head_m is not none else ('' if prefill else 32) }}"></label>
     <label>Уровень воды, м (резервуар)<input class="w-s" name="water_level" value=""></label>
-    <label>Потери всаса, м<input class="w-s" name="suction_loss" value="0"></label>
+    <label>Потери всаса, м<input class="w-s" name="suction_loss" value="{{ prefill.network.suction_head_loss_m if prefill and prefill.network else 0 }}"></label>
   </div>
   <p class="hint">Напор пуст → принят 0 (уточнить у водоканала), насос на весь требуемый напор.</p>
 </fieldset>

@@ -197,3 +197,87 @@ def test_empty_branches():
     ring, _ = _ring_with_risers()
     dic, heads = dictating_pk_via_ring(ring, [])
     assert dic is None and heads == []
+
+
+# ============================================================
+# АВАРИЙНЫЕ РЕЖИМЫ: живучесть при отказе участка кольца
+# ============================================================
+
+from app.calc.ring_hydraulics import analyze_ring_resilience
+
+
+def _resilience_net(available=70.0):
+    from app.calc.fire_hydraulics import (
+        FireNetwork, HydraulicNode, PipeSegment, FireCabinetNode,
+        HydraulicSource, SourceKind)
+    return FireNetwork(
+        nodes={"К1": HydraulicNode("К1", 0.0), "К2": HydraulicNode("К2", 0.0),
+               "К3": HydraulicNode("К3", 0.0), "К4": HydraulicNode("К4", 0.0),
+               "t1": HydraulicNode("t1", 45.6), "t2": HydraulicNode("t2", 45.6),
+               "t3": HydraulicNode("t3", 45.6), "t4": HydraulicNode("t4", 45.6)},
+        segments=[
+            PipeSegment("М1-2", "К1", "К2", length_m=36, A=0.0023, equiv_length_m=6, diameter_mm=100),
+            PipeSegment("М2-3", "К2", "К3", length_m=15, A=0.0023, equiv_length_m=4, diameter_mm=100),
+            PipeSegment("М3-4", "К3", "К4", length_m=36, A=0.0023, equiv_length_m=6, diameter_mm=100),
+            PipeSegment("М4-1", "К4", "К1", length_m=15, A=0.0023, equiv_length_m=4, diameter_mm=100),
+            PipeSegment("с1", "К1", "t1", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65),
+            PipeSegment("с2", "К2", "t2", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65),
+            PipeSegment("с3", "К3", "t3", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65),
+            PipeSegment("с4", "К4", "t4", length_m=46.5, A=0.011, equiv_length_m=6, diameter_mm=65)],
+        cabinets=[FireCabinetNode("ПК-1", "t1", riser_id="R1"),
+                  FireCabinetNode("ПК-2", "t2", riser_id="R2"),
+                  FireCabinetNode("ПК-3", "t3", riser_id="R3"),
+                  FireCabinetNode("ПК-4", "t4", riser_id="R4")],
+        source=HydraulicSource("К1", kind=SourceKind.CITY_MAIN,
+                               available_head_m=available))
+
+
+def test_resilience_covers_every_loop_segment():
+    rep = analyze_ring_resilience(_resilience_net(), 2)
+    assert rep is not None
+    assert {c.failed_segment_id for c in rep.cases} == {"М1-2", "М2-3", "М3-4", "М4-1"}
+    assert rep.all_cases_solved
+
+
+def test_failure_is_worse_than_normal():
+    # любой отказ участка кольца ухудшает (или не улучшает) напор
+    rep = analyze_ring_resilience(_resilience_net(), 2)
+    for c in rep.cases:
+        assert c.head_penalty_m >= -1e-6
+
+
+def test_worst_case_is_max():
+    rep = analyze_ring_resilience(_resilience_net(), 2)
+    worst = max(c.required_head_at_source_m for c in rep.cases)
+    assert rep.worst_case.required_head_at_source_m == pytest.approx(worst)
+
+
+def test_survives_with_strong_source():
+    rep = analyze_ring_resilience(_resilience_net(available=70.0), 2)
+    assert rep.survives_worst_case is True
+
+
+def test_weak_source_flagged():
+    # 61 м: штатный режим (60.5) держит, худшую аварию (64+) — нет
+    rep = analyze_ring_resilience(_resilience_net(available=61.0), 2)
+    assert rep.worst_case.available_head_ok is False
+    # но насос закрывает → формально выживает с насосом
+    assert rep.worst_case.needs_pump is True
+
+
+def test_non_ring_returns_none():
+    from app.calc.fire_hydraulics import (
+        FireNetwork, HydraulicNode, PipeSegment, FireCabinetNode, HydraulicSource)
+    tree = FireNetwork(
+        nodes={"a": HydraulicNode("a", 0.0), "b": HydraulicNode("b", 10.0)},
+        segments=[PipeSegment("s", "a", "b", length_m=10, A=0.01)],
+        cabinets=[FireCabinetNode("ПК", "b")],
+        source=HydraulicSource("a"))
+    assert analyze_ring_resilience(tree, 1) is None
+
+
+def test_render_text_readable():
+    txt = analyze_ring_resilience(_resilience_net(), 2).render_text()
+    assert "ЖИВУЧЕСТИ" in txt
+    assert "Худший отказ" in txt
+    assert "сохраняет работоспособность" in txt

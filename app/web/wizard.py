@@ -31,6 +31,7 @@ from app.intake.request_dto import (
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.pz.ios2_orchestrator import design_ios2
+from app.intake.project_store import ProjectStore
 
 router = APIRouter(prefix="/wizard", tags=["wizard"])
 _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -38,6 +39,7 @@ _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templa
 # run_id → {"bundle": IOS2DesignBundle, "outdir": str}
 _RUNS: Dict[str, dict] = {}
 _OUT_ROOT = "/tmp/zarya_wizard_runs"
+_STORE = ProjectStore()
 
 
 @router.get("", response_class=HTMLResponse)
@@ -117,10 +119,14 @@ async def wizard_design(request: Request):
         return _TPL.TemplateResponse(request, "wizard_form.html",
                                      {"errors": e.problems})
 
+    # персистентность: намерение сохраняется (source of truth — вход)
+    pid = fv("project_id") or None
+    project_id = _STORE.save(req, project_id=(pid if pid and _STORE.exists(pid) else None))
+
     run_id = uuid.uuid4().hex[:10]
     outdir = os.path.join(_OUT_ROOT, run_id)
     bundle = design_ios2(project, output_dir=outdir)
-    _RUNS[run_id] = {"bundle": bundle, "outdir": outdir}
+    _RUNS[run_id] = {"bundle": bundle, "outdir": outdir, "project_id": project_id}
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
 
@@ -139,7 +145,7 @@ def wizard_result(request: Request, run_id: str):
             pdfs.append({"label": label, "name": os.path.basename(path)})
     f = b.project.fire
     return _TPL.TemplateResponse(request, "wizard_result.html", {
-        "run_id": run_id, "pdfs": pdfs,
+        "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
         "status": b.status, "warnings": b.warnings,
         "fire": {
             "pk_total": f.pk_total,
@@ -162,3 +168,32 @@ def wizard_file(run_id: str, name: str):
     if not os.path.isfile(path) or os.path.dirname(os.path.abspath(path)) != os.path.abspath(run["outdir"]):
         return HTMLResponse("нет файла", status_code=404)
     return FileResponse(path, media_type="application/pdf", filename=name)
+
+
+# ── МОИ ПРОЕКТЫ (персистентность поверх YAML-стора) ─────────────────────────
+
+@router.get("/projects", response_class=HTMLResponse)
+def wizard_projects(request: Request):
+    """Список сохранённых проектов."""
+    return _TPL.TemplateResponse(request, "wizard_projects.html",
+                                 {"projects": _STORE.list()})
+
+
+@router.get("/open/{project_id}", response_class=HTMLResponse)
+def wizard_open(request: Request, project_id: str):
+    """Открыть сохранённый проект: форма, предзаполненная из YAML."""
+    try:
+        req_dto = _STORE.load(project_id)
+    except (FileNotFoundError, ValueError):
+        return HTMLResponse("<h2>Проект не найден</h2>", status_code=404)
+    return _TPL.TemplateResponse(request, "wizard_form.html", {
+        "errors": [], "prefill": req_dto, "project_id": project_id})
+
+
+@router.post("/projects/{project_id}/delete")
+def wizard_delete(project_id: str):
+    try:
+        _STORE.delete(project_id)
+    except ValueError:
+        pass
+    return RedirectResponse(url="/wizard/projects", status_code=303)
