@@ -598,6 +598,7 @@ class RingResilienceReport:
     worst_case: Optional[SegmentFailureCase] = None
     all_cases_solved: bool = False
     survives_worst_case: Optional[bool] = None   # доступный напор/насос держит худшее
+    survives_by_pump: bool = False               # выживание обеспечивает НАСОС, не источник
 
     def render_text(self) -> str:
         L = ["ПРОВЕРКА ЖИВУЧЕСТИ КОЛЬЦА (одиночный отказ участка)",
@@ -684,14 +685,17 @@ def analyze_ring_resilience(
     worst = max(solved, key=lambda c: c.required_head_at_source_m) if solved else None
     all_solved = len(solved) == len(cases) and bool(cases)
     survives: Optional[bool] = None
+    survives_by_pump = False
     if worst is not None and worst.available_head_ok is not None:
         # выжила, если все случаи решены и худший держится источником
-        # (либо насос закрывает — needs_pump=True само по себе не провал)
-        survives = all_solved and (worst.available_head_ok or bool(worst.needs_pump))
+        # (либо насос закрывает — но тогда это явно отмечается)
+        survives_by_pump = (not worst.available_head_ok) and bool(worst.needs_pump)
+        survives = all_solved and (worst.available_head_ok or survives_by_pump)
 
     return RingResilienceReport(
         normal_required_head_m=h0, cases=cases, worst_case=worst,
-        all_cases_solved=all_solved, survives_worst_case=survives)
+        all_cases_solved=all_solved, survives_worst_case=survives,
+        survives_by_pump=survives_by_pump)
 
 
 # ============================================================

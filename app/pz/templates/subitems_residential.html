@@ -28,8 +28,8 @@
 <p class="subitem">В здании запроектированы системы: хозяйственно-питьевого водопровода (В1),
 горячего водоснабжения с циркуляцией (Т3, Т4){% if fire_net %}, внутреннего противопожарного водопровода (В2){% endif %}.
 Здание {{ building.floors_above }}-этажное{% if building.floors_below %} с подземным этажом{% endif %},
-высотой {{ building.height_m|num(1) }} м{% if building.fire_class %}, класс Ф{{ building.fire_class }}{% endif %};
-{{ building.apartments }} квартир, расчётное число жителей — {{ building.residents }} чел.</p>
+высотой {{ building.height_m|num(1) }} м{% if building.fire_class %}, класс Ф{{ building.fire_class }}{% endif %}{% if building.apartments %};
+{{ building.apartments }} квартир, расчётное число жителей — {{ building.residents }} чел.{% else %}.{% endif %}</p>
 {% if building.zones > 1 %}
 <p class="subitem">Для стабилизации давления система хозяйственно-питьевого водопровода принята
 {{ building.zones }}-зонной{% if building.zone_split_note %} ({{ building.zone_split_note }}){% endif %}.
@@ -46,8 +46,9 @@
 {% endif %}
 {% if fire_net %}
 <p class="subitem">{{ fire_net.summary }}
-{% if fire.streams %}Расчётный расход на внутреннее пожаротушение — {{ fire.streams }} струя
-производительностью {{ fire.q_per_stream|num(1) }} л/с (СП 10.13130.2020).{% endif %}
+{% if fire.streams %}Расчётный расход на внутреннее пожаротушение — {{ fire.streams }} {{ 'струя' if fire.streams == 1 else 'струи' }}
+производительностью {{ fire.q_per_stream|num(1) }} л/с каждая (СП 10.13130.2020).{% endif %}
+{% if fire.required_head_m %}Требуемый напор на вводе В2 по гидравлическому расчёту — {{ fire.required_head_m|num(1) }} м{% if fire.available_head_m %} при гарантированном напоре наружной сети {{ fire.available_head_m|num(1) }} м{% endif %}.{% endif %}
 Пожарные краны размещаются в коммуникационных нишах на лестничных клетках.</p>
 {% endif %}
 
@@ -191,8 +192,8 @@ H = {{ pumps.head_m|num(1) }} м, N = {{ pumps.power_kw|num(2) }} кВт{% endif
 и далее на диспетчерский пункт.{% endif %}</p>
 
 <p class="subhead">т_3) сведения о типе и количестве установок, потребляющих воду, горячую воду для нужд горячего водоснабжения.</p>
-<p class="subitem">Потребителями воды являются санитарно-технические приборы квартир
-({{ building.apartments }} квартир, {{ building.residents }} жителей){% if building.built_in_units %},
+<p class="subitem">Потребителями воды являются санитарно-технические приборы квартир{% if building.apartments %}
+({{ building.apartments }} квартир, {{ building.residents }} жителей){% endif %}{% if building.built_in_units %},
 а также санитарные приборы встроенных помещений{% endif %}. Режим потребления —
 с суточной и часовой неравномерностью, учтённой коэффициентами по СП 30.13330.2020.</p>
 

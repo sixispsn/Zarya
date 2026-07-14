@@ -140,7 +140,8 @@ def wizard_result(request: Request, run_id: str):
     for label, path in (("Пояснительная записка", b.pz_pdf),
                         ("Спецификация", b.spec_pdf),
                         ("Схема", b.scheme_pdf),
-                        ("Гидравлический расчёт", b.hydraulic_pdf)):
+                        ("Гидравлический расчёт", b.hydraulic_pdf),
+                        ("Проверка живучести кольца", getattr(b, "resilience_pdf", None))):
         if path:
             pdfs.append({"label": label, "name": os.path.basename(path)})
     f = b.project.fire

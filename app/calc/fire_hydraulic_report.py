@@ -188,6 +188,11 @@ class FireHydraulicReport:
             L.append(f"{avail.capitalize()}предусматривается повысительная насосная "
                      f"установка с рабочей точкой Q = {h.pump_duty.flow_lps:.1f} л/с, "
                      f"H = {h.pump_duty.required_head_m:.1f} м.")
+        elif h.needs_pump is True:
+            deficit = h.required_head_at_source_m - (h.available_head_m or 0.0)
+            L.append(f"Доступного напора недостаточно (дефицит {deficit:.1f} м) — "
+                     "предусматривается повысительная насосная установка В2; "
+                     "рабочую точку принять по аварийному режиму.")
         elif h.needs_pump is False:
             L.append(f"Доступного напора источника ({h.available_head_m:.1f} м) достаточно; "
                      "повысительная насосная установка не требуется.")

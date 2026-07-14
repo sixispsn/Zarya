@@ -63,6 +63,8 @@
   {% endif %}
   {% if h.needs_pump and h.pump_duty %}
   <tr><td class="k">Насосная установка В2</td><td>требуется: Q = {{ '%.1f'|format(h.pump_duty.flow_lps) }} л/с, H = {{ '%.1f'|format(h.pump_duty.required_head_m) }} м</td></tr>
+  {% elif h.needs_pump %}
+  <tr><td class="k">Насосная установка В2</td><td>требуется: дефицит напора {{ '%.1f'|format(h.required_head_at_source_m - (h.available_head_m or 0)) }} м (рабочую точку принять по аварийному режиму, см. лист живучести)</td></tr>
   {% elif h.needs_pump == false %}
   <tr><td class="k">Насосная установка В2</td><td>не требуется</td></tr>
   {% endif %}
