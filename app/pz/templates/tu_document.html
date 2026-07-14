@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"></head><body>
+<div class="stamp3">
+  <table>
+    <colgroup>
+      <col style="width:7mm"><col style="width:10mm"><col style="width:8mm">
+      <col style="width:12mm"><col style="width:16mm"><col style="width:12mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+    </colgroup>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td></tr>
+    <tr><td colspan="2" class="lbll">Разраб.</td><td colspan="2">{{ doc.developer_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="part">{{ doc.object_part or '' }}</td>
+      <td class="lblsm">Стадия</td><td class="lblsm">Лист</td><td class="lblsm">Листов</td></tr>
+    <tr><td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="2">{{ doc.stage or 'П' }}</td><td rowspan="2">{{ doc.sheet_no or '1' }}</td><td rowspan="2">{{ doc.sheet_total or '—' }}</td></tr>
+    <tr><td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+    <tr><td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="ttl">Исходные данные (ТУ)</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
+    <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+  </table>
+</div>
+
+<h1 class="section-title">ИСХОДНЫЕ ДАННЫЕ ДЛЯ ПРОЕКТИРОВАНИЯ<br>
+<span class="subtitle">технические условия на подключение к сетям водоснабжения</span></h1>
+
+<p class="intro">Лист систематизирует исходные данные, полученные от
+ресурсоснабжающей организации, для гидравлического расчёта системы В2.
+Технические условия выдаются водоснабжающей организацией; настоящий лист
+переносит их параметры в состав проектной документации.</p>
+
+<table class="tz">
+  <tr><td class="n">1</td><td class="k">Документ (ТУ)</td>
+      <td>{% if sd.tu_number %}№ {{ sd.tu_number }}{% if sd.tu_date %} от {{ sd.tu_date }}{% endif %}{% else %}⟦№ и дата ТУ⟧{% endif %}</td></tr>
+  <tr><td class="n">2</td><td class="k">Выдавшая организация</td>
+      <td>{{ sd.tu_org or '⟦ресурсоснабжающая организация⟧' }}</td></tr>
+  <tr><td class="n">3</td><td class="k">Объект подключения</td><td>{{ doc.object_name or '—' }}</td></tr>
+  <tr><td class="n">4</td><td class="k">Точка подключения</td>
+      <td>{{ src.connection_point or '⟦точка врезки в городскую сеть⟧' }}</td></tr>
+  <tr><td class="n">5</td><td class="k">Гарантированный напор в точке подключения</td>
+      <td>{% if src.guaranteed_head_m %}{{ src.guaranteed_head_m|num(1) }} м вод. ст.{% else %}⟦не указан — уточнить у водоканала⟧{% endif %}</td></tr>
+  <tr><td class="n">6</td><td class="k">Диаметр городского водовода в точке врезки</td>
+      <td>{% if sd.water_main_dn %}Ду{{ sd.water_main_dn }}{% else %}⟦Ду⟧{% endif %}</td></tr>
+  <tr><td class="n">7</td><td class="k">Разрешённый лимит водопотребления</td>
+      <td>{% if sd.tu_limit_q_day %}{{ sd.tu_limit_q_day|num(1) }} м³/сут{% else %}⟦по ТУ⟧{% endif %}</td></tr>
+  <tr><td class="n">8</td><td class="k">Наружное пожаротушение</td>
+      <td>{% if sd.tu_fire_outdoor_l_s %}{{ sd.tu_fire_outdoor_l_s|num(1) }} л/с (обеспечивается городской сетью / пож. гидрантами){% else %}⟦по ТУ⟧{% endif %}</td></tr>
+  <tr><td class="n">9</td><td class="k">Категория надёжности подачи воды</td>
+      <td>{% if zones > 1 or src.guaranteed_head_m %}Определяется по СП 30.13330.2020{% else %}⟦по ТУ⟧{% endif %}</td></tr>
+</table>
+
+<h2 class="sub">Использование в расчёте</h2>
+<p class="note">Гарантированный напор в точке подключения принят исходной
+величиной доступного напора на вводе В2. При недостаточности гарантированного
+напора для обеспечения диктующего пожарного крана проектом предусматривается
+повысительная насосная установка. Наружное пожаротушение обеспечивается
+отдельно и в расчёт внутреннего противопожарного водопровода не входит.</p>
+
+<div class="signs">
+  <div class="sc"><span class="sl">Внёс данные (ГИП)</span><span class="sf"></span>
+    <span class="sn">{{ doc.gip_name or '' }}</span></div>
+  <div class="sc"><span class="sl">Проверил (Н. контроль)</span><span class="sf"></span>
+    <span class="sn">{{ doc.norm_control_name or '' }}</span></div>
+</div>
+
+</body></html>

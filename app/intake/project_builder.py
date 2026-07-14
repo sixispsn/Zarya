@@ -63,6 +63,16 @@ def build_project(req: IOS2Request) -> Project:
         purpose=_BUILDING_MAP[req.building_type],
         floors_above=req.floors, height_m=req.building_height_m, zones=req.zones)
 
+    from app.pz.project import WaterSource
+    sd = req.source_data
+    if sd is not None:
+        p.source = WaterSource(
+            description=sd.customer, connection_point=sd.connection_point,
+            tu_number=sd.tu_number, tu_date=sd.tu_date,
+            guaranteed_head_m=sd.guaranteed_head_m,
+            tu_limit_q_day=sd.tu_limit_q_day,
+            tu_fire_outdoor_l_s=sd.tu_fire_outdoor_l_s)
+
     streams = req.streams if req.streams is not None else 0
     q_total = round(streams * req.q_per_stream_lps, 3) if streams else 0.0
     p.fire = FireSystem(

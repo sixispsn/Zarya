@@ -1,0 +1,13 @@
+/* tz.css — листы ТЗ и ТУ (А4, наследуют рамку/штамп гидролиста) */
+@import url("hydraulic.css");
+h1.section-title .subtitle { font-size:10pt; font-weight:normal; }
+p.intro { font-size:9.5pt; text-align:justify; margin:4pt 0 8pt; color:#222; }
+table.tz { width:100%; border-collapse:collapse; font-size:10pt; margin:4pt 0 8pt; }
+table.tz td { border:0.3mm solid #000; padding:3pt 5pt; vertical-align:top; }
+table.tz td.n { width:8mm; text-align:center; }
+table.tz td.k { width:62mm; font-weight:600; }
+p.note { font-size:9.5pt; text-align:justify; margin:2pt 0 10pt; }
+.signs { display:flex; gap:30mm; margin-top:14pt; }
+.sc { display:flex; flex-direction:column; font-size:9.5pt; }
+.sl { color:#444; } .sf { border-bottom:0.3mm solid #000; width:55mm; height:14pt; }
+.sn { font-size:8.5pt; color:#333; margin-top:2pt; }

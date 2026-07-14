@@ -279,3 +279,42 @@ def generate_resilience_pdf(project: Project, resilience_report,
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets)
     return output_path
+
+
+# ── ТЗ и ТУ (исходные документы проекта) ─────────────────────────────────────
+
+def _tz_ctx(project, sd):
+    """Общий контекст для листов ТЗ/ТУ."""
+    from app.intake.request_dto import SourceDataRequest
+    return dict(
+        doc=project.document, b=project.building, building=project.building,
+        fire=project.fire, src=project.source, zones=project.building.zones,
+        sd=(sd or SourceDataRequest()))
+
+
+def generate_tz_pdf(project, output_path, source_data=None):
+    """PDF задания на проектирование В2 (А4, рамка+штамп)."""
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(project.document,
+                  cipher=(cipher if cipher.endswith(".ТЗ") else cipher + ".ТЗ"))
+    ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
+    html_str = env.get_template("tz_document.html").render(**ctx)
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=[CSS(filename=str(TEMPLATES_DIR / "tz.css"),
+                                      base_url=str(TEMPLATES_DIR))])
+    return output_path
+
+
+def generate_tu_pdf(project, output_path, source_data=None):
+    """PDF листа исходных данных (ТУ на подключение) (А4, рамка+штамп)."""
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(project.document,
+                  cipher=(cipher if cipher.endswith(".ИД") else cipher + ".ИД"))
+    ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
+    html_str = env.get_template("tu_document.html").render(**ctx)
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=[CSS(filename=str(TEMPLATES_DIR / "tz.css"),
+                                      base_url=str(TEMPLATES_DIR))])
+    return output_path

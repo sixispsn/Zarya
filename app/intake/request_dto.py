@@ -49,6 +49,24 @@ class DocumentRequest:
 
 
 @dataclass
+class SourceDataRequest:
+    """Исходные данные проектирования: заказчик, основание, ТУ на подключение.
+    Всё — то, что проектировщик получает НА ВХОДЕ (не считает сам)."""
+    customer: str = ""                 # заказчик
+    designer_org: str = ""             # проектная организация (генпроектировщик)
+    basis: str = ""                    # основание (договор №, дата)
+    design_stage: str = "Проектная документация (П)"
+    # ТУ на подключение к водопроводу
+    tu_org: str = ""                   # кто выдал ТУ (водоканал)
+    tu_number: str = ""
+    tu_date: str = ""
+    connection_point: str = ""         # точка подключения
+    guaranteed_head_m: Optional[float] = None   # гарантированный напор, м
+    tu_limit_q_day: Optional[float] = None      # лимит, м³/сут
+    tu_fire_outdoor_l_s: Optional[float] = None # наружное пожаротушение, л/с
+    water_main_dn: int = 0             # диаметр городского водовода
+
+@dataclass
 class RoomRequest:
     """Помещение, где расставляются ПК (в терминах проектировщика)."""
     name: str
@@ -114,6 +132,7 @@ class IOS2Request:
     # прочее
     zones: int = 1
     needs_booster_pumps: bool = True
+    source_data: Optional[SourceDataRequest] = None
 
     def validate(self) -> List[str]:
         """Первичная валидация намерения (типы/диапазоны/обязательность).

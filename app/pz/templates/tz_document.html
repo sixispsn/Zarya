@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"></head><body>
+<div class="stamp3">
+  <table>
+    <colgroup>
+      <col style="width:7mm"><col style="width:10mm"><col style="width:8mm">
+      <col style="width:12mm"><col style="width:16mm"><col style="width:12mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+    </colgroup>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td></tr>
+    <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td></tr>
+    <tr><td colspan="2" class="lbll">Разраб.</td><td colspan="2">{{ doc.developer_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="part">{{ doc.object_part or '' }}</td>
+      <td class="lblsm">Стадия</td><td class="lblsm">Лист</td><td class="lblsm">Листов</td></tr>
+    <tr><td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="2">{{ doc.stage or 'П' }}</td><td rowspan="2">{{ doc.sheet_no or '1' }}</td><td rowspan="2">{{ doc.sheet_total or '—' }}</td></tr>
+    <tr><td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+    <tr><td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="ttl">Задание на проектирование В2</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
+    <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
+    <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
+  </table>
+</div>
+
+<h1 class="section-title">ЗАДАНИЕ НА ПРОЕКТИРОВАНИЕ<br>
+<span class="subtitle">системы внутреннего противопожарного водопровода (В2)</span></h1>
+
+<table class="tz">
+  <tr><td class="n">1</td><td class="k">Наименование объекта</td><td>{{ doc.object_name or '—' }}</td></tr>
+  <tr><td class="n">2</td><td class="k">Адрес объекта</td><td>{{ doc.object_address or '—' }}</td></tr>
+  <tr><td class="n">3</td><td class="k">Заказчик</td><td>{{ sd.customer or '—' }}</td></tr>
+  <tr><td class="n">4</td><td class="k">Проектная организация</td><td>{{ sd.designer_org or doc.organization or '—' }}</td></tr>
+  <tr><td class="n">5</td><td class="k">Основание для проектирования</td><td>{{ sd.basis or '—' }}</td></tr>
+  <tr><td class="n">6</td><td class="k">Стадия проектирования</td><td>{{ sd.design_stage or 'Проектная документация' }}</td></tr>
+  <tr><td class="n">7</td><td class="k">Характеристика здания</td>
+      <td>{{ b.floors_above }}-этажное{% if b.floors_below %} с подземной частью{% endif %},
+          высотой {{ b.height_m|num(1) }} м{% if zones > 1 %}, {{ zones }}-зонная система водоснабжения{% endif %}</td></tr>
+  <tr><td class="n">8</td><td class="k">Проектируемая система</td>
+      <td>Внутренний противопожарный водопровод (В2) по СП 10.13130.2020</td></tr>
+  <tr><td class="n">9</td><td class="k">Расчётный расход на внутреннее пожаротушение</td>
+      <td>{{ fire.streams }} {{ 'струя' if fire.streams == 1 else 'струи' }} × {{ fire.q_per_stream|num(1) }} л/с
+          {% if fire.q_total %}(суммарно {{ fire.q_total|num(1) }} л/с){% endif %}</td></tr>
+  <tr><td class="n">10</td><td class="k">Тип пожарных кранов</td>
+      <td>ПК Ду{{ fire.nozzle_dn }}, рукав {{ fire.hose_length_m }} м</td></tr>
+  <tr><td class="n">11</td><td class="k">Источник водоснабжения</td>
+      <td>{% if src.connection_point %}Городская водопроводная сеть, {{ src.connection_point }}{% else %}Городская водопроводная сеть{% endif %}
+          {% if src.guaranteed_head_m %}; гарантированный напор {{ src.guaranteed_head_m|num(1) }} м{% endif %}</td></tr>
+  <tr><td class="n">12</td><td class="k">Требования к оформлению</td>
+      <td>Комплект документации раздела ИОС2 (СП): пояснительная записка,
+          гидравлический расчёт, спецификация оборудования и материалов,
+          принципиальная схема. Оформление по ГОСТ 21.101.</td></tr>
+  <tr><td class="n">13</td><td class="k">Нормативная база</td>
+      <td>СП 10.13130.2020, СП 30.13330.2020, ГОСТ 21.101, ГОСТ 21.601</td></tr>
+</table>
+
+<h2 class="sub">Особые указания</h2>
+<p class="note">Проектирование выполнить в объёме, достаточном для прохождения
+экспертизы проектной документации. Диаметры трубопроводов и напор насосной
+установки определить гидравлическим расчётом. При кольцевой трассировке
+магистрали предусмотреть проверку работоспособности сети при отказе участка.</p>
+
+<div class="signs">
+  <div class="sc"><span class="sl">Составил (ГИП)</span><span class="sf"></span>
+    <span class="sn">{{ doc.gip_name or '' }}</span></div>
+  <div class="sc"><span class="sl">Согласовано (заказчик)</span><span class="sf"></span>
+    <span class="sn">{{ sd.customer or '' }}</span></div>
+</div>
+
+</body></html>
