@@ -106,6 +106,7 @@ def generate_pz_html(project: Project) -> str:
         fire_net=fire_net,
         head=head,
         tu_check=tu_check,
+        v1_hydraulics=project.v1_hydraulic_result,
     )
 
     doc_tpl = env.get_template("document.html")

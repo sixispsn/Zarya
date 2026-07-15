@@ -195,6 +195,36 @@ def design_ios2(
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
 
+        # ── Гидравлика диктующего направления В1 ──
+        if getattr(project, "v1_sections", None):
+            from app.calc.v1_hydraulics import V1SectionInput, calculate_v1_hydraulics
+            try:
+                v1_result = calculate_v1_hydraulics([
+                    V1SectionInput(**vars(section)) for section in project.v1_sections
+                ])
+                project.v1_hydraulic_result = v1_result
+                # Готовые суммы уже содержат местные сопротивления по формуле (15),
+                # поэтому кладём их в ready-поля, не применяя k_l второй раз.
+                project.source.il_dict_m = None
+                project.source.h_il_m = v1_result.internal_loss_m
+                project.source.il_vvod_m = None
+                project.source.h_vvod_m = v1_result.input_loss_m
+                bundle.status.append(
+                    f"v1_hydraulics: {len(v1_result.sections)} участков; "
+                    f"ΣHil={v1_result.internal_loss_m:.3f} м; "
+                    f"Hlввод={v1_result.input_loss_m:.3f} м; "
+                    f"vmax={v1_result.max_velocity_mps:.2f} м/с")
+                if not v1_result.all_velocities_ok:
+                    bad = ", ".join(s.section_id for s in v1_result.sections if not s.velocity_ok)
+                    bundle.warnings.append(
+                        f"v1_hydraulics: превышена допустимая скорость на участках {bad}")
+            except Exception as e:
+                bundle.warnings.append(f"v1_hydraulics: расчёт не выполнен ({e})")
+        else:
+            bundle.warnings.append(
+                "v1_hydraulics: участки диктующего направления не заданы; "
+                "потери В1 принимаются только из явных исходных данных")
+
         # ── Водомер → Hтр → насос В1. Порядок важен: потери в водомере
         # входят в формулу (14) п. 8.27 СП 30.13330.2020. ──
         try:

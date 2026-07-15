@@ -138,6 +138,20 @@ class ConsumerGroupRequest:
 
 
 @dataclass
+class V1SectionRequest:
+    """Участок диктующего направления хозяйственно-питьевого водопровода."""
+    section_id: str
+    length_m: float
+    inner_diameter_mm: float
+    flow_lps: float
+    roughness_mm: float
+    role: str = "internal"            # internal / input
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -156,6 +170,7 @@ class IOS2Request:
     needs_booster_pumps: bool = True
     source_data: Optional[SourceDataRequest] = None
     consumers: List[ConsumerGroupRequest] = field(default_factory=list)
+    v1_sections: List[V1SectionRequest] = field(default_factory=list)
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
 
@@ -173,6 +188,17 @@ class IOS2Request:
             p.append(f"streams={self.streams}: поддерживается 1 или 2")
         if self.sewage_max_fixture_lps < 0:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
+        seen_v1 = set()
+        for i, s in enumerate(self.v1_sections):
+            if not s.section_id or s.section_id in seen_v1:
+                p.append(f"v1_sections[{i}]: обозначение пустое или повторяется")
+            seen_v1.add(s.section_id)
+            if min(s.length_m, s.inner_diameter_mm, s.flow_lps, s.velocity_limit_mps) <= 0:
+                p.append(f"v1_sections[{i}]: L, dвн, q и предел скорости должны быть > 0")
+            if s.roughness_mm < 0 or (s.local_loss_factor is not None and s.local_loss_factor < 0):
+                p.append(f"v1_sections[{i}]: шероховатость и k_l не могут быть отрицательными")
+            if s.role not in ("internal", "input"):
+                p.append(f"v1_sections[{i}].role должен быть internal или input")
         if not self.document.cipher:
             p.append("document.cipher обязателен")
         if not self.document.object_name:

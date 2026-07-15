@@ -1,0 +1,26 @@
+<table class="equip">
+  <thead>
+    <tr>
+      <th>Участок</th><th>Назначение</th><th>L, м</th><th>d<sub>вн</sub>, мм</th>
+      <th>q, л/с</th><th>v, м/с</th><th>Re</th><th>lambda</th>
+      <th>i, м/м</th><th>k<sub>l</sub></th><th>H<sub>il</sub>, м</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in v1_hydraulics.sections %}
+    <tr>
+      <td>{{ s.section_id }}</td>
+      <td>{{ 'ввод' if s.role == 'input' else 'внутренняя сеть' }}{% if s.material %}, {{ s.material }}{% endif %}</td>
+      <td>{{ s.length_m|num(2) }}</td><td>{{ s.inner_diameter_mm|num(1) }}</td>
+      <td>{{ s.flow_lps|num(3) }}</td>
+      <td class="{{ 'ok' if s.velocity_ok else 'bad' }}">{{ s.velocity_mps|num(3) }} / {{ s.velocity_limit_mps|num(2) }}</td>
+      <td>{{ s.reynolds|num(0) }}</td><td>{{ s.friction_factor|num(5) }}</td>
+      <td>{{ s.specific_loss_m_per_m|num(5) }}</td><td>{{ s.local_loss_factor|num(2) }}</td>
+      <td>{{ s.total_loss_m|num(3) }}</td>
+    </tr>
+  {% endfor %}
+    <tr><td colspan="10"><b>Потери внутренней сети ΣH<sub>il</sub></b></td><td><b>{{ v1_hydraulics.internal_loss_m|num(3) }}</b></td></tr>
+    <tr><td colspan="10"><b>Потери на вводе H<sub>l ввод</sub></b></td><td><b>{{ v1_hydraulics.input_loss_m|num(3) }}</b></td></tr>
+  </tbody>
+</table>
+<p class="equip-verdict">Расчёт выполнен по максимальному секундному расходу. Удельные потери определены по Darcy-Weisbach с учётом заданной шероховатости; местные потери учтены коэффициентом k<sub>l</sub> по формуле (15) п. 8.28 СП 30.13330.2020. В графе скорости показано v / v<sub>доп</sub>.</p>

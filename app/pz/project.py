@@ -408,6 +408,19 @@ class FixtureGroup:
 
 
 @dataclass
+class V1SectionSpec:
+    section_id: str
+    length_m: float
+    inner_diameter_mm: float
+    flow_lps: float
+    roughness_mm: float
+    role: str = "internal"
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+
+
+@dataclass
 class Project:
     document: DocumentInfo = field(default_factory=DocumentInfo)
     building: BuildingFlags = field(default_factory=BuildingFlags)
@@ -422,6 +435,8 @@ class Project:
     # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---
     fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
     consumer_groups: List[tuple] = field(default_factory=list)  # [(код, кол-во)] расходы В1
+    v1_sections: List[V1SectionSpec] = field(default_factory=list)
+    v1_hydraulic_result: Optional[object] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None

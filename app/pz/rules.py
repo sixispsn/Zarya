@@ -204,13 +204,19 @@ def calc_required_head(source: WaterSource, *, h_vod_m: Optional[float] = None) 
     else:
         h_vvod = source.h_vvod_m
 
+    h_il_label = (f"∑Hil — потери по диктующему направлению, i·l·(1+{km:.1f})"
+                  if source.il_dict_m is not None
+                  else "∑Hil — расчетная сумма потерь по участкам диктующего направления")
+    h_vvod_label = ("Hlввод — потери на вводе, i·L·1,1"
+                    if source.il_vvod_m is not None
+                    else "Hlввод — расчетные потери на участках ввода")
     parts = [
         ("Hgeom — геом. высота диктующего прибора над точкой подключения", h_geom),
-        (f"∑Hil — потери по диктующему направлению, i·l·(1+{km:.1f})", h_il),
+        (h_il_label, h_il),
         ("Hпр — свободный напор перед прибором (п.8.21)", h_pr),
         ("∑Hвод — потери в узле учёта, h=S·q² (п.12.15)", h_vod),
         ("Hтепл — потери в теплообменнике/ИТП", h_tepl if h_tepl else None),
-        ("Hlввод — потери на вводе, i·L·1,1", h_vvod),
+        (h_vvod_label, h_vvod),
     ]
     components = [(name, val) for name, val in parts if val is not None]
 

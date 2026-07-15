@@ -19,7 +19,7 @@ from app.intake.request_dto import IOS2Request
 from app.pz.project import (
     Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
-    MainNodeSpec, MainSegmentSpec, RiserSpec,
+    MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
 )
 
 
@@ -119,6 +119,7 @@ def build_project(req: IOS2Request) -> Project:
             second_available_head_m=n.second_available_head_m)
 
     p.consumer_groups = [(g.code, g.count) for g in req.consumers]
+    p.v1_sections = [V1SectionSpec(**vars(s)) for s in req.v1_sections]
     p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
     p.storm_city = req.storm_city
 
