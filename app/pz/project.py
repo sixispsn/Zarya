@@ -415,4 +415,6 @@ class Project:
     fixtures: list = field(default_factory=list)  # список FixtureGroup (от АР)
     # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---
     fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
+    consumer_groups: List[tuple] = field(default_factory=list)  # [(код, кол-во)] расходы В1
+    storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None

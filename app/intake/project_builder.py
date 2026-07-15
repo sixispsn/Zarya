@@ -112,4 +112,7 @@ def build_project(req: IOS2Request) -> Project:
             second_source_node=n.second_source_node,
             second_available_head_m=n.second_available_head_m)
 
+    p.consumer_groups = [(g.code, g.count) for g in req.consumers]
+    p.storm_city = req.storm_city
+
     return p

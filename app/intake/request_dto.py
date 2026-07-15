@@ -116,6 +116,13 @@ class NetworkRequest:
 
 
 @dataclass
+class ConsumerGroupRequest:
+    """Группа водопотребителей для расчёта расходов В1/Т3 (СП 30, табл. А.2)."""
+    code: str                          # код типа потребителя (residential_central_hw и т.п.)
+    count: int                         # число потребителей (жителей/мест/...)
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -133,6 +140,8 @@ class IOS2Request:
     zones: int = 1
     needs_booster_pumps: bool = True
     source_data: Optional[SourceDataRequest] = None
+    consumers: List[ConsumerGroupRequest] = field(default_factory=list)
+    storm_city: str = ""           # город для расчёта дождевого стока (К2)
 
     def validate(self) -> List[str]:
         """Первичная валидация намерения (типы/диапазоны/обязательность).

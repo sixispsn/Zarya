@@ -180,6 +180,22 @@ def design_ios2(
     # ── Документы: всегда собираются из текущего project ──
     doc_cipher = (project.document.cipher or "ИОС2")
 
+    # ── Расходы В1/Т3 из групп потребителей (СП 30, метод α) ──
+    if getattr(project, "consumer_groups", None):
+        from app.pz.demand_bridge import compute_flows
+        try:
+            project.flows = compute_flows(project.consumer_groups)
+            bundle.status.append(
+                f"water_demand: расходы В1/Т3 рассчитаны "
+                f"(q_сут={project.flows.q_day_tot:.1f} м³/сут, "
+                f"q_сек={project.flows.q_sec_tot:.2f} л/с)")
+        except Exception as e:
+            bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
+    else:
+        bundle.warnings.append(
+            "water_demand: группы потребителей не заданы — расходы В1 нулевые, "
+            "ПЗ покажет прочерки (задайте consumers в запросе)")
+
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")
 
