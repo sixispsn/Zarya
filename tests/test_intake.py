@@ -4,7 +4,7 @@ import pytest
 
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
-    MainRunRequest, RiserRequest,
+    MainRunRequest, RiserRequest, SourceDataRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.pz.project import BuildingPurpose
@@ -65,6 +65,16 @@ def test_validation_collects_all_problems():
     assert len(bad.validate()) >= 4   # все проблемы разом, не первая
 
 
+def test_head_elevations_must_be_a_pair():
+    r = _req(source_data=SourceDataRequest(elev_header_m=0.0))
+    assert any("задаются парой" in p for p in r.validate())
+
+
+def test_negative_head_component_rejected():
+    r = _req(source_data=SourceDataRequest(h_il_m=-1.0))
+    assert any("h_il_m" in p and "отрицательным" in p for p in r.validate())
+
+
 # ── Builder: маппинг намерения в модель ──────────────────────────────────────
 
 def test_builder_raises_on_invalid():
@@ -119,6 +129,26 @@ def test_builder_node_elevations():
 def test_builder_no_network():
     p = build_project(_req(network=None))
     assert p.fire_network is None
+
+
+def test_builder_maps_head_and_meter_inputs():
+    sd = SourceDataRequest(
+        guaranteed_head_m=27.0,
+        elev_header_m=-0.3,
+        elev_fixture_m=32.7,
+        il_dict_m=2.4,
+        h_vvod_m=0.8,
+        water_use_period_h=12.0,
+        inputs_count=2,
+        npsh_available_m=7.5,
+    )
+    source = build_project(_req(source_data=sd)).source
+    assert source.elev_fixture_m - source.elev_header_m == pytest.approx(33.0)
+    assert source.il_dict_m == pytest.approx(2.4)
+    assert source.h_vvod_m == pytest.approx(0.8)
+    assert source.water_use_period_h == pytest.approx(12.0)
+    assert source.inputs_count == 2
+    assert source.npsh_available_m == pytest.approx(7.5)
 
 
 # ── сквозная цепочка: намерение → комплект ───────────────────────────────────

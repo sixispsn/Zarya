@@ -65,6 +65,21 @@ class SourceDataRequest:
     tu_limit_q_day: Optional[float] = None      # лимит, м³/сут
     tu_fire_outdoor_l_s: Optional[float] = None # наружное пожаротушение, л/с
     water_main_dn: int = 0             # диаметр городского водовода
+    # Расчёт требуемого напора В1 (формула (14) п. 8.27 СП 30.13330.2020).
+    # Это исходные/расчётные величины проектировщика; Builder их не придумывает.
+    elev_header_m: Optional[float] = None   # отметка оси ввода/напорного коллектора
+    elev_fixture_m: Optional[float] = None  # отметка излива диктующего прибора
+    h_geom_m: Optional[float] = None        # Hgeom напрямую, если отметок нет
+    il_dict_m: Optional[float] = None       # i*l внутренней сети до учёта местных потерь
+    h_il_m: Optional[float] = None          # готовая сумма потерь внутренней сети
+    network_kind: str = "domestic"         # domestic / combined / fire
+    h_pr_m: float = 20.0                    # свободный напор перед прибором
+    h_tepl_m: float = 0.0                   # потери в теплообменнике/ИТП
+    il_vvod_m: Optional[float] = None       # i*L ввода до коэффициента 1,1
+    h_vvod_m: Optional[float] = None        # готовые потери на вводе
+    water_use_period_h: float = 24.0        # период водопотребления для водомера
+    inputs_count: int = 1                   # число вводов водопровода
+    npsh_available_m: Optional[float] = None  # располагаемый кавитационный запас
 
 @dataclass
 class RoomRequest:
@@ -159,6 +174,28 @@ class IOS2Request:
             p.append("document.cipher обязателен")
         if not self.document.object_name:
             p.append("document.object_name обязателен")
+        sd = self.source_data
+        if sd is not None:
+            if (sd.elev_header_m is None) != (sd.elev_fixture_m is None):
+                p.append("source_data: отметки elev_header_m и elev_fixture_m задаются парой")
+            if (sd.elev_header_m is not None and sd.elev_fixture_m is not None
+                    and sd.elev_fixture_m < sd.elev_header_m):
+                p.append("source_data: отметка диктующего прибора ниже отметки ввода")
+            if sd.network_kind not in ("domestic", "combined", "fire"):
+                p.append("source_data.network_kind должен быть domestic, combined или fire")
+            if sd.water_use_period_h <= 0:
+                p.append("source_data.water_use_period_h должно быть > 0")
+            if sd.inputs_count <= 0:
+                p.append("source_data.inputs_count должно быть > 0")
+            nonnegative = {
+                "h_geom_m": sd.h_geom_m, "il_dict_m": sd.il_dict_m,
+                "h_il_m": sd.h_il_m, "h_pr_m": sd.h_pr_m,
+                "h_tepl_m": sd.h_tepl_m, "il_vvod_m": sd.il_vvod_m,
+                "h_vvod_m": sd.h_vvod_m, "npsh_available_m": sd.npsh_available_m,
+            }
+            for name, value in nonnegative.items():
+                if value is not None and value < 0:
+                    p.append(f"source_data.{name} не может быть отрицательным")
         for i, r in enumerate(self.rooms):
             if r.space_kind not in SPACE_KINDS:
                 p.append(f"rooms[{i}].space_kind '{r.space_kind}' не из {SPACE_KINDS}")

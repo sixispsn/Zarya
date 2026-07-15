@@ -55,7 +55,7 @@ class TestSelection:
         """Кандидаты отсортированы по убыванию score."""
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost",
-            h_geom_manual=25,
+            h_geom_manual=25, h_gar=20,
         ))
         scores = [c.score for c in r.candidates]
         assert scores == sorted(scores, reverse=True)
@@ -71,7 +71,8 @@ class TestSelection:
 
     def test_curve_returned(self):
         """Для построения графика возвращается кривая насоса."""
-        r = calculate_pump(PumpInput(q_design_m3h=5, pump_type="boost", h_geom_manual=25))
+        r = calculate_pump(PumpInput(
+            q_design_m3h=5, pump_type="boost", h_geom_manual=25, h_gar=20))
         assert len(r.candidates[0].eff_curve) > 0
 
 
@@ -81,14 +82,14 @@ class TestModes:
     def test_parallel_mode(self):
         r = calculate_pump(PumpInput(
             q_design_m3h=10, pump_type="boost", mode="2p",
-            h_geom_manual=25,
+            h_geom_manual=25, h_gar=20,
         ))
         assert r.h_required >= 0
 
     def test_series_mode(self):
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost", mode="2s",
-            h_geom_manual=50,
+            h_geom_manual=50, h_gar=20,
         ))
         assert r.h_required >= 0
 
@@ -97,3 +98,8 @@ class TestValidation:
     def test_zero_flow_raises(self):
         with pytest.raises(ValueError, match="расход"):
             calculate_pump(PumpInput(q_design_m3h=0, pump_type="boost"))
+
+    def test_missing_guaranteed_head_raises(self):
+        with pytest.raises(ValueError, match="Hгар"):
+            calculate_pump(PumpInput(
+                q_design_m3h=5, pump_type="boost", h_geom_manual=25))

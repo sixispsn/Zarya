@@ -10,7 +10,9 @@
       <th rowspan="2" class="m-name">Назначение узла</th>
       <th rowspan="2" class="m-dn">Ду,<br>мм</th>
       <th rowspan="2" class="m-type">Тип</th>
+      <th rowspan="2" class="m-q">Диапазон<br>Q<sub>min</sub>–Q<sub>max</sub>, м³/ч</th>
       <th rowspan="2" class="m-q">Q<sub>экспл</sub>,<br>м³/ч</th>
+      <th rowspan="2" class="m-q">S,<br>м/(л/с)²</th>
       <th colspan="2">а) при q<sub>с</sub></th>
       <th colspan="2">б) при q<sub>с</sub>+Q<sub>пож</sub></th>
       <th class="m-v">в)</th>
@@ -30,7 +32,9 @@
         <td class="m-name">{{ r.label }}</td>
         <td class="m-dn">{{ r.dn }}</td>
         <td class="m-type">{{ r.type_label }}</td>
+        <td class="m-q">{{ r.q_meter_min | num(3) }}–{{ r.qmax | num(1) }}</td>
         <td class="m-q">{{ r.qexpl | num(1) }}</td>
+        <td class="m-q">{{ r.s_resist | num(5) }}</td>
         {# проверка а) #}
         <td class="m-h {{ 'ok' if r.ok_a else 'bad' }}">{{ r.h_a | num(2) }}</td>
         <td class="m-lim">≤{{ r.lim_a | num(1) }}{{ ' ✓' if r.ok_a else ' ✗' }}</td>
@@ -42,7 +46,7 @@
           <td class="m-h">—</td><td class="m-lim">—</td>
         {% endif %}
         {# проверка в) #}
-        <td class="m-v {{ 'ok' if r.ok_v else 'warn' }}">{{ r.qmin | num(3) }}{{ ' ✓' if r.ok_v else ' !' }}</td>
+        <td class="m-v {{ 'ok' if r.ok_v else 'warn' }}">{{ r.qmin | num(3) }} ≤ {{ r.q_hr | num(3) }}{{ ' ✓' if r.ok_v else ' !' }}</td>
         {# вывод #}
         <td class="m-out">
           {%- if r.need_bypass %}+ обводная (12.10, 12.11)

@@ -75,6 +75,9 @@ class WaterSource:
     # Hlввод = i·Lввод·1,1: il_vvod_m — линейные i·l ввода, ×1,1 (стадия П). h_vvod_m — готовой суммой.
     il_vvod_m: Optional[float] = None       # линейные i·l ввода, м
     h_vvod_m: Optional[float] = None        # Hlввод готовой суммой (если задан — используется как есть)
+    water_use_period_h: float = 24.0        # период водопотребления для подбора счётчика
+    inputs_count: int = 1                   # количество вводов
+    npsh_available_m: Optional[float] = None  # располагаемый кавитационный запас насоса
     # --- лимиты присоединения по ТУ (дебит), для проверки соответствия ---
     tu_limit_q_day: Optional[float] = None      # лимит суточного расхода ХВС, м³/сут
     tu_limit_q_sec: Optional[float] = None      # лимит секундного расхода ХВС, л/с
@@ -247,6 +250,8 @@ class MeterRow:
     type_label: str = ""       # «крыльчатый» / «турбинный»
     s_resist: float = 0.0      # S, м/(л/с)²
     qexpl: float = 0.0         # эксплуатационный расход, м³/ч
+    q_meter_min: float = 0.0   # минимальный расход счётчика, м³/ч
+    qmax: float = 0.0          # максимальный расход счётчика, м³/ч
     qmin: float = 0.0          # порог чувствительности qthr, м³/ч
     # проверка а): потери при расчётном секундном расходе
     h_a: float = 0.0

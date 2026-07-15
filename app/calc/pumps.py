@@ -31,8 +31,8 @@ class PumpInput:
     floor_height: float = 3.0
     h_losses: float = 5.0        # ΣH_l, потери в сети, м
     h_pr: float = 20.0           # свободный напор у прибора, м
-    h_gar: float = 20.0          # гарантированный напор сети, м
-    npsh_a: float = 8.0          # кавитационный запас системы, м
+    h_gar: Optional[float] = None  # гарантированный напор сети из ТУ, м
+    npsh_a: Optional[float] = None  # располагаемый кавитационный запас системы, м
 
 
 @dataclass
@@ -49,7 +49,7 @@ class PumpCandidate:
     score: int
     h_excess_pct: float
     q_ratio: float
-    npsh_ok: bool
+    npsh_ok: Optional[bool]
     reasons: list[str] = field(default_factory=list)
     eff_curve: list[PumpCurvePoint] = field(default_factory=list)
 
@@ -106,6 +106,8 @@ def calculate_pump(data: PumpInput) -> PumpResult:
     """Подбор насосов с расчётом рабочей точки и скорингом Top-3."""
     if data.q_design_m3h <= 0:
         raise ValueError("Расчётный расход должен быть больше 0")
+    if data.h_gar is None:
+        raise ValueError("Гарантированный напор Hгар должен быть задан по ТУ")
 
     # H_geom
     if data.h_geom_manual is not None:
@@ -116,8 +118,12 @@ def calculate_pump(data: PumpInput) -> PumpResult:
     hp = h_geom + data.h_losses + data.h_pr - data.h_gar
     hp = max(hp, 0.0)
 
-    h_stat = data.h_gar if data.h_gar > 0 else 0.0
-    k_sys = (hp - h_stat) / (data.q_design_m3h ** 2) if hp > h_stat and data.q_design_m3h > 0 else 0.1
+    # Кривая системы именно для повысительного насоса:
+    # Hнас(Q) = max(Hgeom + Hпр - Hгар, 0) + ΣHдинамич(Q).
+    # В расчётной точке она проходит через Hp = Hтр - Hгар.
+    h_stat = max(h_geom + data.h_pr - data.h_gar, 0.0)
+    h_dynamic = max(data.h_losses, 0.0)
+    k_sys = h_dynamic / (data.q_design_m3h ** 2)
 
     candidates_raw = list_pumps(data.pump_type)
     results: list[PumpCandidate] = []
@@ -162,8 +168,8 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         elif q_err < 0.2:
             score += 10
 
-        npsh_ok = data.npsh_a >= pump.npshr + 0.5
-        if not npsh_ok:
+        npsh_ok = (data.npsh_a >= pump.npshr + 0.5) if data.npsh_a is not None else None
+        if npsh_ok is False:
             score -= 50
 
         # Пояснения
@@ -184,10 +190,12 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         else:
             reasons.append("✗ напора недостаточно")
 
-        if not npsh_ok:
+        if npsh_ok is False:
             reasons.append(f"✗ КАВИТАЦИЯ: NPSHa={data.npsh_a}м < NPSHr+0.5={pump.npshr + 0.5:.1f}м")
-        else:
+        elif npsh_ok is True:
             reasons.append(f"✓ кавитации нет: NPSHa={data.npsh_a}м > {pump.npshr + 0.5:.1f}м")
+        else:
+            reasons.append("⚠ NPSHa не задан — кавитационную проверку выполнить по данным изготовителя и схеме всасывания")
 
         if data.mode == "2p":
             reasons.append("↔ параллельная схема — увеличен расход")

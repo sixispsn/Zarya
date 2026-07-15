@@ -71,7 +71,13 @@ def build_project(req: IOS2Request) -> Project:
             tu_number=sd.tu_number, tu_date=sd.tu_date,
             guaranteed_head_m=sd.guaranteed_head_m,
             tu_limit_q_day=sd.tu_limit_q_day,
-            tu_fire_outdoor_l_s=sd.tu_fire_outdoor_l_s)
+            tu_fire_outdoor_l_s=sd.tu_fire_outdoor_l_s,
+            elev_header_m=sd.elev_header_m, elev_fixture_m=sd.elev_fixture_m,
+            h_geom_m=sd.h_geom_m, il_dict_m=sd.il_dict_m, h_il_m=sd.h_il_m,
+            network_kind=sd.network_kind, h_pr_m=sd.h_pr_m,
+            h_tepl_m=sd.h_tepl_m, il_vvod_m=sd.il_vvod_m,
+            h_vvod_m=sd.h_vvod_m, water_use_period_h=sd.water_use_period_h,
+            inputs_count=sd.inputs_count, npsh_available_m=sd.npsh_available_m)
 
     streams = req.streams if req.streams is not None else 0
     q_total = round(streams * req.q_per_stream_lps, 3) if streams else 0.0

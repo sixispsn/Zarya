@@ -78,7 +78,7 @@
 <p class="subitem">Гарантированный (фактический) напор в точке подключения составляет
 {% if head.h_guaranteed_m is not none %}{{ head.h_guaranteed_m|num(1) }}{% else %}<span class="fill">⟦ГАРАНТИРОВАННЫЙ НАПОР, м⟧</span>{% endif %} м вод. ст.
 {% if source.pressure_note %}{{ source.pressure_note }}{% endif %}</p>
-{% if head.components %}
+{% if head.h_required_m is not none %}
 <p class="subitem">Требуемый напор Hтр определён по формуле (14) п.8.27 СП 30.13330.2020:</p>
 <table class="data">
   <tr><th>Составляющая</th><th>Значение, м вод. ст.</th></tr>
@@ -99,6 +99,7 @@
 <p class="subitem">Для обеспечения требуемого напора предусмотрена повысительная насосная установка
 {{ fill(pumps.model, 'МОДЕЛЬ НАСОСА') }}{% if pumps.q_m3h %}, Q = {{ pumps.q_m3h|num(1) }} м³/ч,
 H = {{ pumps.head_m|num(1) }} м, N = {{ pumps.power_kw|num(2) }} кВт{% endif %}{% if pumps.count_note %} ({{ pumps.count_note }}){% endif %}.</p>
+{% include "pump_table.html" %}
 {% endif %}
 
 <p class="subhead">ж) сведения о материале труб систем водоснабжения и мерах по их защите от агрессивного воздействия грунтов и грунтовых вод.</p>
@@ -130,6 +131,7 @@ H = {{ pumps.head_m|num(1) }} м, N = {{ pumps.power_kw|num(2) }} кВт{% endif
 со счётчиками с импульсным выходом для подключения к системе АСКУЭ{% endif %}.{% endif %}
 Учёт горячей воды для нужд ГВС — в ИТП.
 {% if meters.notes %}{{ meters.notes }}{% endif %}</p>
+{% if meters.rows %}{% include "meter_table.html" %}{% endif %}
 
 <p class="subhead">м) описание системы автоматизации водоснабжения.</p>
 <p class="subitem">{% if pumps.required %}Автоматизация насосных установок: поддержание давления,

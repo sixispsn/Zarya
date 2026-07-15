@@ -149,12 +149,15 @@ def meters_from_calc(res) -> MetersSystem:
             type_label=_meter_type_label(m),
             s_resist=float(_g(m, "s", "s_resist", default=0) or 0),
             qexpl=float(_g(m, "q_expl", "qexpl", "q_nom", default=0) or 0),
+            q_meter_min=float(_g(m, "q_min", default=0) or 0),
+            qmax=float(_g(m, "q_max", default=0) or 0),
             qmin=float(_g(m, "q_threshold", "qthr", "qmin", default=0) or 0),
             h_a=ch.h_normal, lim_a=ch.h_limit_normal, ok_a=ch.pass_normal,
             h_b=ch.h_fire,
             lim_b=(ch.h_limit_fire or 0),
             ok_b=(ch.pass_fire if ch.pass_fire is not None else True),
             need_bypass=ch.need_bypass,
+            q_hr=float(getattr(ch, "q_hr_m3_per_h", 0) or 0),
             ok_v=ch.pass_sensitivity, need_combo=ch.need_combo,
         ))
     # примечание про обводную при 1 вводе — если ядро его выдало

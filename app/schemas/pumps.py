@@ -13,8 +13,8 @@ class PumpRequest(BaseModel):
     floor_height: float = Field(default=3.0, gt=0, description="Высота этажа, м")
     h_losses: float = Field(default=5.0, ge=0, description="Потери в сети ΣH_l, м")
     h_pr: float = Field(default=20.0, ge=0, description="Свободный напор у прибора, м")
-    h_gar: float = Field(default=20.0, ge=0, description="Гарантированный напор сети, м")
-    npsh_a: float = Field(default=8.0, ge=0, description="Кавитационный запас системы, м")
+    h_gar: float = Field(..., ge=0, description="Гарантированный напор сети по ТУ, м")
+    npsh_a: Optional[float] = Field(default=None, ge=0, description="Располагаемый кавитационный запас системы, м")
 
 
 class CurvePointOutput(BaseModel):
@@ -46,7 +46,7 @@ class PumpCandidateOutput(BaseModel):
     score: int
     h_excess_pct: float
     q_ratio: float
-    npsh_ok: bool
+    npsh_ok: Optional[bool]
     reasons: list[str]
     curve: list[CurvePointOutput]  # для построения графика на фронте
 

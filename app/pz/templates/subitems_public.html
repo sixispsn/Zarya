@@ -62,7 +62,7 @@
 <p class="subitem">Гарантированный (фактический) напор в точке подключения составляет
 {% if head.h_guaranteed_m is not none %}{{ head.h_guaranteed_m|num(1) }}{% else %}<span class="fill">⟦ГАРАНТИРОВАННЫЙ НАПОР, м⟧</span>{% endif %} м вод. ст.
 {% if source.pressure_note %}{{ source.pressure_note }}{% endif %}</p>
-{% if head.components %}
+{% if head.h_required_m is not none %}
 <p class="subitem">Требуемый напор Hтр на хозяйственно-питьевые нужды определён по формуле (14) п.8.27 СП 30.13330.2020:</p>
 <table class="data">
   <tr><th>Составляющая</th><th>Значение, м вод. ст.</th></tr>

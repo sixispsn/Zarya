@@ -192,36 +192,76 @@ def design_ios2(
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
 
-        # ── Насос В1 + требуемый напор (от расчётного q хоз-питьевого) ──
+        # ── Водомер → Hтр → насос В1. Порядок важен: потери в водомере
+        # входят в формулу (14) п. 8.27 СП 30.13330.2020. ──
         try:
-            from app.pz.pump_bridge import compute_pump, head_components
-            q_m3h = project.flows.q_sec_tot * 3.6      # л/с → м³/ч
-            floors = project.building.floors_above or 9
-            h_gar = (project.source.guaranteed_head_m
-                     if project.source and project.source.guaranteed_head_m else 20.0)
-            ps, h_req = compute_pump(
-                q_design_m3h=q_m3h, floors=floors,
-                floor_height_m=3.0, h_losses_m=8.0, h_pr_m=20.0, h_gar_m=h_gar)
-            if ps.required and ps.model:
-                project.pumps = ps
-                # компоненты напора → source, чтобы таблица H_тр в ПЗ собралась
-                hc = head_components(q_design_m3h=q_m3h, floors=floors,
-                                     h_losses_m=8.0, h_pr_m=20.0, h_gar_m=h_gar)
-                if project.source is not None:
-                    project.source.h_geom_m = hc["h_geom_m"]
-                    project.source.h_vod_m = hc["h_losses_m"]
-                    project.source.h_pr_m = hc["h_pr_m"]
-                    project.source.h_il_m = 0.0
-                    project.source.h_vvod_m = 0.0
-                    project.source.h_tepl_m = 0.0
-                    if project.source.guaranteed_head_m is None:
-                        project.source.guaranteed_head_m = h_gar
+            from app.calc.water_meters import MeterInput, calculate_meters
+            from app.pz.flows_bridge import meters_from_calc
+            from app.pz.rules import calc_required_head
+            from app.pz.pump_bridge import compute_pump_from_head
+
+            hws = getattr(project.building.hws_type, "value", project.building.hws_type)
+            hws_type = "local" if hws == "local" else "central"
+            meter_res = calculate_meters(MeterInput(
+                hws_type=hws_type,
+                period_hours=project.source.water_use_period_h,
+                q_fire_l_per_s=project.fire.q_total if project.fire.required else 0.0,
+                inputs_count=project.source.inputs_count,
+                q_sec_tot=project.flows.q_sec_tot,
+                q_sec_c=project.flows.q_sec_c,
+                q_sec_h=project.flows.q_sec_h,
+                q_day_tot=project.flows.q_day_tot,
+                q_day_c=project.flows.q_day_c,
+                q_day_h=project.flows.q_day_h,
+                q_hr_c=project.flows.q_hr_c,
+                q_hr_h=project.flows.q_hr_h,
+            ))
+            project.meters = meters_from_calc(meter_res)
+            # Для local это общий ввод, для central — узел ХВС.
+            head_meter = next((m for m in meter_res.meters
+                               if ("ввод" in m.label.lower() if hws_type == "local"
+                                   else "хвс" in m.label.lower())), None)
+            h_vod = head_meter.h_normal if head_meter is not None else None
+            project.source.h_vod_m = h_vod
+            bundle.status.append(
+                f"meters: подобрано узлов {len(project.meters.rows)}; "
+                f"потери диктующего узла {h_vod:.3f} м" if h_vod is not None
+                else f"meters: подобрано узлов {len(project.meters.rows)}")
+
+            head = calc_required_head(project.source, h_vod_m=h_vod)
+            if head.h_required_m is None:
+                bundle.warnings.append(
+                    "head: H_тр не рассчитан — задайте Hgeom (отметки), потери "
+                    "внутренней сети и потери на вводе; условные значения не подставляются")
+                project.pumps = replace(project.pumps, required=False)
+            elif head.h_guaranteed_m is None:
+                bundle.warnings.append(
+                    f"head: H_тр={head.h_required_m:.2f} м, но H_гар по ТУ не задан — "
+                    "необходимость и рабочая точка насоса не определены")
+                project.pumps = replace(project.pumps, required=False)
+            else:
                 bundle.status.append(
-                    f"pump: подобран {ps.model} "
-                    f"(рабочая точка Q={ps.wp_q:.1f} м³/ч, H={ps.wp_h:.1f} м; "
-                    f"H_тр={h_req:.1f} м)")
+                    f"head: H_тр={head.h_required_m:.2f} м; "
+                    f"H_гар={head.h_guaranteed_m:.2f} м")
+                q_sec = (project.flows.q_sec_tot if hws_type == "local"
+                         else project.flows.q_sec_c)
+                ps = compute_pump_from_head(
+                    q_design_m3h=q_sec * 3.6,
+                    head=head,
+                    npsh_a_m=project.source.npsh_available_m,
+                )
+                project.pumps = ps
+                if ps.required and ps.model:
+                    bundle.status.append(
+                        f"pump: подобран {ps.model} "
+                        f"(рабочая точка Q={ps.wp_q:.1f} м³/ч, H={ps.wp_h:.1f} м)")
+                elif head.pump_needed:
+                    bundle.warnings.append(
+                        "pump: повысительная установка требуется, но каталог не дал кандидата")
+                else:
+                    bundle.status.append("pump: H_гар достаточен, повысительная установка не требуется")
         except Exception as e:
-            bundle.warnings.append(f"pump: подбор насоса не выполнен ({e})")
+            bundle.warnings.append(f"meters/head/pump: расчётная цепочка не выполнена ({e})")
     else:
         bundle.warnings.append(
             "water_demand: группы потребителей не заданы — расходы В1 нулевые, "

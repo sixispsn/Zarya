@@ -67,6 +67,7 @@ class MeterCheck:
     # Проверка (в) - чувствительность
     pass_sensitivity: bool           # прошла ли (в)
     need_combo: bool                 # рекомендовать комбинированный
+    q_hr_m3_per_h: float             # расчётный часовой расход для проверки (в)
     # Доп. флаги
     has_fire_check: bool             # применяется ли проверка (б)
 
@@ -138,6 +139,7 @@ def _check_meter(
         need_bypass=need_bypass,
         pass_sensitivity=pass_sensitivity,
         need_combo=need_combo,
+        q_hr_m3_per_h=round(q_hr_m3_per_h, 3),
         has_fire_check=has_fire_check and q_fire_l_per_s > 0,
     )
 

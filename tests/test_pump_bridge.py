@@ -4,7 +4,7 @@ from app.pz.pump_bridge import compute_pump, head_components
 
 
 def test_zero_flow_no_pump():
-    ps, h = compute_pump(q_design_m3h=0, floors=12)
+    ps, h = compute_pump(q_design_m3h=0, floors=12, h_gar_m=20.0)
     assert ps.required is False and h == 0.0
 
 
@@ -18,13 +18,13 @@ def test_pump_selected_with_working_point():
 
 
 def test_pump_curve_is_tuples():
-    ps, _ = compute_pump(q_design_m3h=6.57, floors=12)
+    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_gar_m=35.0)
     assert ps.curve
     assert all(len(pt) == 2 for pt in ps.curve)
 
 
 def test_pump_has_system_curve():
-    ps, _ = compute_pump(q_design_m3h=6.57, floors=12)
+    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_gar_m=35.0)
     assert ps.k_sys > 0
     assert ps.h_stat > 0
 
@@ -38,18 +38,38 @@ def test_head_components_sum():
 
 def _request():
     from app.intake.request_dto import (IOS2Request, DocumentRequest, RoomRequest,
-        NetworkRequest, MainRunRequest, RiserRequest, ConsumerGroupRequest)
+        NetworkRequest, MainRunRequest, RiserRequest, ConsumerGroupRequest,
+        SourceDataRequest)
     return IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
         building_type="residential", floors=12, building_height_m=36.0, streams=2,
         rooms=[RoomRequest("Коридор", 24, 2.4, 3.0)],
         consumers=[ConsumerGroupRequest("residential_central_hw", 260)],
+        source_data=SourceDataRequest(
+            guaranteed_head_m=30.0,
+            h_geom_m=34.0,
+            il_dict_m=2.0,
+            h_vvod_m=1.0,
+            npsh_available_m=8.0,
+        ),
         network=NetworkRequest(
             runs=[MainRunRequest("У1", "У2", 22), MainRunRequest("У2", "У3", 12),
                   MainRunRequest("У3", "У4", 22), MainRunRequest("У4", "У1", 12)],
             risers=[RiserRequest("Ст-1", "У1", 35, 33.5),
                     RiserRequest("Ст-2", "У3", 35, 33.5)],
             source_node="У1", available_head_m=30.0))
+
+
+def test_orchestrator_does_not_invent_head_inputs(tmp_path):
+    from dataclasses import replace
+    from app.intake.project_builder import build_project
+    from app.pz.ios2_orchestrator import design_ios2
+
+    req = _request()
+    req = replace(req, source_data=None)
+    bundle = design_ios2(build_project(req), output_dir=str(tmp_path))
+    assert bundle.project.pumps.required is False
+    assert any("условные значения не подставляются" in w for w in bundle.warnings)
 
 
 def test_orchestrator_fills_pump_and_head(tmp_path):
