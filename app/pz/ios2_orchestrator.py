@@ -191,6 +191,37 @@ def design_ios2(
                 f"q_сек={project.flows.q_sec_tot:.2f} л/с)")
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
+
+        # ── Насос В1 + требуемый напор (от расчётного q хоз-питьевого) ──
+        try:
+            from app.pz.pump_bridge import compute_pump, head_components
+            q_m3h = project.flows.q_sec_tot * 3.6      # л/с → м³/ч
+            floors = project.building.floors_above or 9
+            h_gar = (project.source.guaranteed_head_m
+                     if project.source and project.source.guaranteed_head_m else 20.0)
+            ps, h_req = compute_pump(
+                q_design_m3h=q_m3h, floors=floors,
+                floor_height_m=3.0, h_losses_m=8.0, h_pr_m=20.0, h_gar_m=h_gar)
+            if ps.required and ps.model:
+                project.pumps = ps
+                # компоненты напора → source, чтобы таблица H_тр в ПЗ собралась
+                hc = head_components(q_design_m3h=q_m3h, floors=floors,
+                                     h_losses_m=8.0, h_pr_m=20.0, h_gar_m=h_gar)
+                if project.source is not None:
+                    project.source.h_geom_m = hc["h_geom_m"]
+                    project.source.h_vod_m = hc["h_losses_m"]
+                    project.source.h_pr_m = hc["h_pr_m"]
+                    project.source.h_il_m = 0.0
+                    project.source.h_vvod_m = 0.0
+                    project.source.h_tepl_m = 0.0
+                    if project.source.guaranteed_head_m is None:
+                        project.source.guaranteed_head_m = h_gar
+                bundle.status.append(
+                    f"pump: подобран {ps.model} "
+                    f"(рабочая точка Q={ps.wp_q:.1f} м³/ч, H={ps.wp_h:.1f} м; "
+                    f"H_тр={h_req:.1f} м)")
+        except Exception as e:
+            bundle.warnings.append(f"pump: подбор насоса не выполнен ({e})")
     else:
         bundle.warnings.append(
             "water_demand: группы потребителей не заданы — расходы В1 нулевые, "
