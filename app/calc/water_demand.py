@@ -28,7 +28,8 @@
     q0_c — отдельная величина из таблицы (НЕ tot - h)
 
   СТОКИ:
-    q_sewage = q_sec_tot + 1.6  (всегда +1.6)
+    q_sewage = q_sec_tot + q_0s  (п. 5.5, формула (5)); q_0s задаётся
+    по фактическому прибору с максимальным водоотведением из таблицы А.1.
 
   ТЕПЛО ГВС:
     Q_max = 1.16 × q_hr_hot × (65 - 5)              кВт
@@ -68,6 +69,7 @@ class WaterDemandResult:
     cold: FlowResult        # холодная вода
     hot: FlowResult         # горячая вода
     sewage_flow: float      # расход хозяйственно-бытовых стоков, л/с
+    sewage_fixture_discharge: float  # q_0s диктующего прибора, л/с
     heat_max_kw: float      # максимальный тепловой поток на ГВС, кВт
     heat_avg_kw: float      # среднечасовой тепловой поток на ГВС, кВт
     groups: list[ConsumerGroup] = field(default_factory=list)
@@ -142,6 +144,7 @@ def _calc_block(
 def calculate_water_demand(
     groups: list[ConsumerGroup],
     apply_k06: bool = False,
+    sewage_max_fixture_lps: float = 1.6,
 ) -> WaterDemandResult:
     """
     Главная функция расчёта водопотребления.
@@ -210,7 +213,8 @@ def calculate_water_demand(
     day_c = day_tot - day_h
 
     # === Стоки и тепло ===
-    sewage = tot[0] + 1.6  # tot[0] = q_sec_tot, всегда +1.6
+    from app.calc.sewage import calculate_domestic_sewage
+    sewage_calc = calculate_domestic_sewage(tot[0], sewage_max_fixture_lps)
     heat_max = 1.16 * hot[1] * (65 - 5)  # hot[1] = q_hr_hot
     heat_avg = 1.16 * (day_h / 24.0) * (65 - 5)
 
@@ -233,7 +237,8 @@ def calculate_water_demand(
         total=round_flow(tot, day_tot),
         cold=round_flow(cld, day_c),
         hot=round_flow(hot, day_h),
-        sewage_flow=round(sewage, 3),
+        sewage_flow=sewage_calc.q_sewage_lps,
+        sewage_fixture_discharge=sewage_calc.q_fixture_max_lps,
         heat_max_kw=round(heat_max, 1),
         heat_avg_kw=round(heat_avg, 1),
         groups=eff_groups,

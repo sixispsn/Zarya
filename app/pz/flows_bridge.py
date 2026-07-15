@@ -35,6 +35,7 @@ def flows_from_demand(
         q_hr_c=result.cold.q_hr,
         q_hr_h=result.hot.q_hr,
         sewage_l_per_s=result.sewage_flow,
+        sewage_q0s_l_per_s=result.sewage_fixture_discharge,
         heat_max_kw=result.heat_max_kw,
         irrigation_m3_day=irrigation_m3_day,
         q_year_m3=q_year_m3,

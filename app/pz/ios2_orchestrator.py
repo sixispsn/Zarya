@@ -184,7 +184,10 @@ def design_ios2(
     if getattr(project, "consumer_groups", None):
         from app.pz.demand_bridge import compute_flows
         try:
-            project.flows = compute_flows(project.consumer_groups)
+            project.flows = compute_flows(
+                project.consumer_groups,
+                sewage_max_fixture_lps=project.sewage_max_fixture_lps,
+            )
             bundle.status.append(
                 f"water_demand: расходы В1/Т3 рассчитаны "
                 f"(q_сут={project.flows.q_day_tot:.1f} м³/сут, "

@@ -109,6 +109,7 @@ class FlowsData:
     q_hr_c: float = 0.0
     q_hr_h: float = 0.0
     sewage_l_per_s: float = 0.0
+    sewage_q0s_l_per_s: float = 1.6
     heat_max_kw: float = 0.0
     irrigation_m3_day: float = 0.0
     q_year_m3: float = 0.0
@@ -421,5 +422,6 @@ class Project:
     # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---
     fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
     consumer_groups: List[tuple] = field(default_factory=list)  # [(код, кол-во)] расходы В1
+    sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None

@@ -156,6 +156,7 @@ class IOS2Request:
     needs_booster_pumps: bool = True
     source_data: Optional[SourceDataRequest] = None
     consumers: List[ConsumerGroupRequest] = field(default_factory=list)
+    sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
 
     def validate(self) -> List[str]:
@@ -170,6 +171,8 @@ class IOS2Request:
             p.append("building_height_m должно быть > 0 (нужно для Rk п. 7.15)")
         if self.streams is not None and self.streams not in (1, 2):
             p.append(f"streams={self.streams}: поддерживается 1 или 2")
+        if self.sewage_max_fixture_lps < 0:
+            p.append("sewage_max_fixture_lps не может быть отрицательным")
         if not self.document.cipher:
             p.append("document.cipher обязателен")
         if not self.document.object_name:

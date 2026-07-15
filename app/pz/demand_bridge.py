@@ -17,7 +17,7 @@ from app.calc.water_demand import ConsumerGroup, calculate_water_demand
 from app.pz.project import FlowsData
 
 
-def compute_flows(consumer_groups: List[Tuple[str, int]]) -> FlowsData:
+def compute_flows(consumer_groups: List[Tuple[str, int]], *, sewage_max_fixture_lps: float = 1.6) -> FlowsData:
     """[(код, количество), ...] → FlowsData (расходы В1/Т3/К1 по СП 30).
 
     Пустой список → нулевой FlowsData (честно: не задано — не посчитано).
@@ -29,7 +29,7 @@ def compute_flows(consumer_groups: List[Tuple[str, int]]) -> FlowsData:
     if not groups:
         return FlowsData()
 
-    r = calculate_water_demand(groups)
+    r = calculate_water_demand(groups, sewage_max_fixture_lps=sewage_max_fixture_lps)
     tot, cold, hot = r.total, r.cold, r.hot
 
     return FlowsData(
@@ -40,6 +40,7 @@ def compute_flows(consumer_groups: List[Tuple[str, int]]) -> FlowsData:
         q_hr_tot=round(tot.q_hr, 3), q_hr_c=round(cold.q_hr, 3),
         q_hr_h=round(hot.q_hr, 3),
         sewage_l_per_s=round(getattr(r, "sewage_flow", tot.q_sec), 3),
+        sewage_q0s_l_per_s=round(r.sewage_fixture_discharge, 3),
         heat_max_kw=round(getattr(r, "heat_max_kw", 0.0), 1),
         q_year_m3=round(tot.q_day * 365, 1))
 

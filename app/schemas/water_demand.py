@@ -21,6 +21,11 @@ class WaterDemandRequest(BaseModel):
         default=False,
         description="Применить коэффициент 0.6 (для бытового корпуса промпредприятия)",
     )
+    sewage_max_fixture_lps: float = Field(
+        default=1.6,
+        ge=0,
+        description="q_0s прибора с максимальным водоотведением по таблице А.1, л/с",
+    )
 
 
 class FlowOutput(BaseModel):
@@ -42,6 +47,7 @@ class WaterDemandResponse(BaseModel):
     cold: FlowOutput = Field(..., description="Холодная вода")
     hot: FlowOutput = Field(..., description="Горячая вода")
     sewage_flow: float = Field(..., description="Расход хоз.-бытовых стоков, л/с")
+    sewage_fixture_discharge: float = Field(..., description="q_0s диктующего прибора, л/с")
     heat_max_kw: float = Field(..., description="Максимальный тепловой поток на ГВС, кВт")
     heat_avg_kw: float = Field(..., description="Среднечасовой тепловой поток на ГВС, кВт")
 

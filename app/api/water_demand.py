@@ -44,6 +44,7 @@ def calculate(request: WaterDemandRequest):
         result = calculate_water_demand(
             groups=groups,
             apply_k06=request.apply_k06,
+            sewage_max_fixture_lps=request.sewage_max_fixture_lps,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -53,6 +54,7 @@ def calculate(request: WaterDemandRequest):
         cold=FlowOutput(**result.cold.__dict__),
         hot=FlowOutput(**result.hot.__dict__),
         sewage_flow=result.sewage_flow,
+        sewage_fixture_discharge=result.sewage_fixture_discharge,
         heat_max_kw=result.heat_max_kw,
         heat_avg_kw=result.heat_avg_kw,
     )

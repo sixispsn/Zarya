@@ -119,6 +119,7 @@ def build_project(req: IOS2Request) -> Project:
             second_available_head_m=n.second_available_head_m)
 
     p.consumer_groups = [(g.code, g.count) for g in req.consumers]
+    p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
     p.storm_city = req.storm_city
 
     return p
