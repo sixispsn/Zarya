@@ -20,6 +20,7 @@ from app.pz.project import (
     Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
+    V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec,
 )
 
 
@@ -120,6 +121,26 @@ def build_project(req: IOS2Request) -> Project:
 
     p.consumer_groups = [(g.code, g.count) for g in req.consumers]
     p.v1_sections = [V1SectionSpec(**vars(s)) for s in req.v1_sections]
+    if req.v1_network is not None:
+        p.v1_network = V1NetworkSpec(
+            source_node=req.v1_network.source_node,
+            nodes=[V1NodeSpec(
+                node_id=n.node_id,
+                elevation_m=n.elevation_m,
+                consumer_groups=[(g.code, g.count) for g in n.consumers],
+                direct_demand_lps=n.direct_demand_lps,
+                h_pr_m=n.h_pr_m,
+            ) for n in req.v1_network.nodes],
+            sections=[V1NetworkSectionSpec(**vars(s)) for s in req.v1_network.sections],
+        )
+        # Топология является источником состава потребителей для общего расхода:
+        # это исключает расхождение расхода водомера и корневого участка сети.
+        counts = {}
+        for node in req.v1_network.nodes:
+            for group in node.consumers:
+                counts[group.code] = counts.get(group.code, 0) + group.count
+        if counts:
+            p.consumer_groups = list(counts.items())
     p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
     p.storm_city = req.storm_city
 

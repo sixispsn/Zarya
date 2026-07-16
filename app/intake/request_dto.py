@@ -152,6 +152,38 @@ class V1SectionRequest:
 
 
 @dataclass
+class V1NodeRequest:
+    """Узел дерева В1 с отметкой и подключёнными потребителями."""
+    node_id: str
+    elevation_m: float
+    consumers: List[ConsumerGroupRequest] = field(default_factory=list)
+    direct_demand_lps: float = 0.0
+    h_pr_m: float = 20.0
+
+
+@dataclass
+class V1NetworkSectionRequest:
+    """Ориентированный участок В1; расход определяется по поддереву."""
+    section_id: str
+    from_node: str
+    to_node: str
+    length_m: float
+    inner_diameter_mm: float
+    roughness_mm: float
+    role: str = "internal"
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+
+
+@dataclass
+class V1NetworkRequest:
+    source_node: str
+    nodes: List[V1NodeRequest] = field(default_factory=list)
+    sections: List[V1NetworkSectionRequest] = field(default_factory=list)
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -171,6 +203,7 @@ class IOS2Request:
     source_data: Optional[SourceDataRequest] = None
     consumers: List[ConsumerGroupRequest] = field(default_factory=list)
     v1_sections: List[V1SectionRequest] = field(default_factory=list)
+    v1_network: Optional[V1NetworkRequest] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
 
@@ -199,6 +232,42 @@ class IOS2Request:
                 p.append(f"v1_sections[{i}]: шероховатость и k_l не могут быть отрицательными")
             if s.role not in ("internal", "input"):
                 p.append(f"v1_sections[{i}].role должен быть internal или input")
+        vn = self.v1_network
+        if vn is not None:
+            node_ids = [n.node_id for n in vn.nodes]
+            if not vn.source_node:
+                p.append("v1_network.source_node обязателен")
+            if not vn.nodes:
+                p.append("v1_network.nodes пуст")
+            if not vn.sections:
+                p.append("v1_network.sections пуст")
+            if len(set(node_ids)) != len(node_ids) or any(not x for x in node_ids):
+                p.append("v1_network: обозначения узлов должны быть непустыми и уникальными")
+            if vn.source_node and vn.source_node not in node_ids:
+                p.append(f"v1_network.source_node '{vn.source_node}' отсутствует в узлах")
+            for i, node in enumerate(vn.nodes):
+                if node.direct_demand_lps < 0 or node.h_pr_m < 0:
+                    p.append(f"v1_network.nodes[{i}]: расход и Hпр не могут быть отрицательными")
+                for j, group in enumerate(node.consumers):
+                    if not group.code or group.count <= 0:
+                        p.append(f"v1_network.nodes[{i}].consumers[{j}]: нужен код и количество > 0")
+            section_ids = set()
+            for i, section in enumerate(vn.sections):
+                if not section.section_id or section.section_id in section_ids:
+                    p.append(f"v1_network.sections[{i}]: обозначение пустое или повторяется")
+                section_ids.add(section.section_id)
+                if section.from_node not in node_ids or section.to_node not in node_ids:
+                    p.append(f"v1_network.sections[{i}]: начальный или конечный узел отсутствует")
+                if section.from_node == section.to_node:
+                    p.append(f"v1_network.sections[{i}]: начало и конец совпадают")
+                if min(section.length_m, section.inner_diameter_mm,
+                       section.velocity_limit_mps) <= 0:
+                    p.append(f"v1_network.sections[{i}]: L, dвн и предел скорости должны быть > 0")
+                if (section.roughness_mm < 0 or
+                        (section.local_loss_factor is not None and section.local_loss_factor < 0)):
+                    p.append(f"v1_network.sections[{i}]: шероховатость и k_l не могут быть отрицательными")
+                if section.role not in ("internal", "input"):
+                    p.append(f"v1_network.sections[{i}].role должен быть internal или input")
         if not self.document.cipher:
             p.append("document.cipher обязателен")
         if not self.document.object_name:

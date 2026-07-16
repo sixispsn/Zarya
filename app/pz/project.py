@@ -421,6 +421,36 @@ class V1SectionSpec:
 
 
 @dataclass
+class V1NodeSpec:
+    node_id: str
+    elevation_m: float
+    consumer_groups: List[tuple] = field(default_factory=list)
+    direct_demand_lps: float = 0.0
+    h_pr_m: float = 20.0
+
+
+@dataclass
+class V1NetworkSectionSpec:
+    section_id: str
+    from_node: str
+    to_node: str
+    length_m: float
+    inner_diameter_mm: float
+    roughness_mm: float
+    role: str = "internal"
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+
+
+@dataclass
+class V1NetworkSpec:
+    source_node: str
+    nodes: List[V1NodeSpec] = field(default_factory=list)
+    sections: List[V1NetworkSectionSpec] = field(default_factory=list)
+
+
+@dataclass
 class Project:
     document: DocumentInfo = field(default_factory=DocumentInfo)
     building: BuildingFlags = field(default_factory=BuildingFlags)
@@ -436,6 +466,7 @@ class Project:
     fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
     consumer_groups: List[tuple] = field(default_factory=list)  # [(код, кол-во)] расходы В1
     v1_sections: List[V1SectionSpec] = field(default_factory=list)
+    v1_network: Optional[V1NetworkSpec] = None
     v1_hydraulic_result: Optional[object] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)

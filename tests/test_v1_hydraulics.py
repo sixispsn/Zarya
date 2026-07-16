@@ -2,7 +2,10 @@ import math
 
 import pytest
 
-from app.calc.v1_hydraulics import V1SectionInput, calculate_v1_hydraulics
+from app.calc.v1_hydraulics import (
+    V1NetworkSectionInput, V1NodeInput, V1SectionInput,
+    calculate_v1_hydraulics, calculate_v1_network,
+)
 
 
 def test_darcy_weisbach_section_and_formula_15():
@@ -40,6 +43,51 @@ def test_velocity_limit_audit():
     ])
     assert result.all_velocities_ok is False
     assert result.sections[0].velocity_ok is False
+
+
+def test_network_distributes_subtree_flows_and_selects_dictating_node():
+    result = calculate_v1_network(
+        nodes=[
+            V1NodeInput("Ввод", 0.0),
+            V1NodeInput("Тройник", 1.0),
+            V1NodeInput("Кв-1", 12.0, [("residential_central_hw", 40)]),
+            V1NodeInput("Кв-2", 30.0, [("residential_central_hw", 60)]),
+        ],
+        sections=[
+            V1NetworkSectionInput("Ввод-Т", "Ввод", "Тройник", 12, 40, 0.1,
+                                  role="input"),
+            V1NetworkSectionInput("Т-К1", "Тройник", "Кв-1", 18, 32, 0.01),
+            V1NetworkSectionInput("Т-К2", "Тройник", "Кв-2", 35, 32, 0.01),
+        ],
+        source_node="Ввод",
+    )
+    by_id = {s.section_id: s for s in result.sections}
+    assert by_id["Ввод-Т"].flow_lps == result.source_flow_lps
+    assert by_id["Ввод-Т"].flow_lps > by_id["Т-К1"].flow_lps
+    assert by_id["Ввод-Т"].flow_lps > by_id["Т-К2"].flow_lps
+    # Вероятностный максимум общего поддерева не равен сумме максимумов ветвей.
+    assert by_id["Ввод-Т"].flow_lps < (
+        by_id["Т-К1"].flow_lps + by_id["Т-К2"].flow_lps)
+    assert result.dictating_node_id == "Кв-2"
+    assert result.dictating_path == ["Ввод-Т", "Т-К2"]
+    assert result.input_loss_m == by_id["Ввод-Т"].total_loss_m
+    assert result.internal_loss_m == by_id["Т-К2"].total_loss_m
+    dictating = next(x for x in result.node_checks if x.node_id == "Кв-2")
+    assert dictating.h_pr_m == 20.0
+    assert dictating.required_before_common_m == pytest.approx(
+        dictating.h_geom_m + dictating.internal_loss_m
+        + dictating.input_loss_m + 20.0, abs=0.001)
+
+
+def test_network_rejects_disconnected_nodes():
+    with pytest.raises(ValueError, match="не достижимы"):
+        calculate_v1_network(
+            [V1NodeInput("S", 0), V1NodeInput("A", 1, direct_demand_lps=0.2),
+             V1NodeInput("X", 1), V1NodeInput("Y", 1, direct_demand_lps=0.2)],
+            [V1NetworkSectionInput("S-A", "S", "A", 5, 20, 0.01),
+             V1NetworkSectionInput("X-Y", "X", "Y", 5, 20, 0.01)],
+            "S",
+        )
 
 
 @pytest.mark.parametrize("field,value", [
@@ -80,3 +128,44 @@ def test_orchestrator_puts_v1_losses_into_required_head(tmp_path):
     assert bundle.project.source.h_il_m == result.internal_loss_m
     assert bundle.project.source.h_vvod_m == result.input_loss_m
     assert any("v1_hydraulics:" in status for status in bundle.status)
+
+
+def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
+    from app.intake.project_builder import build_project
+    from app.intake.request_dto import (
+        ConsumerGroupRequest, DocumentRequest, IOS2Request, SourceDataRequest,
+        V1NetworkRequest, V1NetworkSectionRequest, V1NodeRequest,
+    )
+    from app.pz.ios2_orchestrator import design_ios2
+
+    request = IOS2Request(
+        document=DocumentRequest(cipher="В1-АВТО", object_name="Проверка", organization="Заря"),
+        building_type="residential", floors=9, building_height_m=27,
+        streams=2,
+        source_data=SourceDataRequest(guaranteed_head_m=30),
+        v1_network=V1NetworkRequest(
+            source_node="Ввод",
+            nodes=[
+                V1NodeRequest("Ввод", 0),
+                V1NodeRequest("Этаж-3", 9, [ConsumerGroupRequest(
+                    "residential_central_hw", 30)]),
+                V1NodeRequest("Этаж-9", 27, [ConsumerGroupRequest(
+                    "residential_central_hw", 70)]),
+            ],
+            sections=[
+                V1NetworkSectionRequest("1", "Ввод", "Этаж-3", 15, 40, 0.1,
+                                        role="input"),
+                V1NetworkSectionRequest("2", "Этаж-3", "Этаж-9", 25, 32, 0.01),
+            ],
+        ),
+    )
+    bundle = design_ios2(build_project(request), output_dir=str(tmp_path))
+    result = bundle.project.v1_hydraulic_result
+    assert result.dictating_node_id == "Этаж-9"
+    assert bundle.project.source.elev_header_m == 0
+    assert bundle.project.source.elev_fixture_m == 27
+    assert bundle.project.source.h_pr_m == 20
+    assert bundle.project.source.h_il_m == result.internal_loss_m
+    assert bundle.project.source.h_vvod_m == result.input_loss_m
+    assert any(status.startswith("head: H_тр=") for status in bundle.status)
+    assert any("диктующий узел Этаж-9" in status for status in bundle.status)

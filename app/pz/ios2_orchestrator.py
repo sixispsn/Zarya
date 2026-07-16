@@ -181,7 +181,8 @@ def design_ios2(
     doc_cipher = (project.document.cipher or "ИОС2")
 
     # ── Расходы В1/Т3 из групп потребителей (СП 30, метод α) ──
-    if getattr(project, "consumer_groups", None):
+    if (getattr(project, "consumer_groups", None)
+            or getattr(project, "v1_network", None)):
         from app.pz.demand_bridge import compute_flows
         try:
             project.flows = compute_flows(
@@ -195,8 +196,58 @@ def design_ios2(
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
 
-        # ── Гидравлика диктующего направления В1 ──
-        if getattr(project, "v1_sections", None):
+        # ── Гидравлика В1: топология приоритетна, ручной путь — резерв ──
+        if getattr(project, "v1_network", None):
+            from app.calc.v1_hydraulics import (
+                V1NetworkSectionInput, V1NodeInput, calculate_v1_network,
+            )
+            try:
+                network = project.v1_network
+                hws = getattr(project.building.hws_type, "value", project.building.hws_type)
+                v1_result = calculate_v1_network(
+                    [V1NodeInput(**vars(node)) for node in network.nodes],
+                    [V1NetworkSectionInput(**vars(section)) for section in network.sections],
+                    network.source_node,
+                    flow_kind="total" if hws == "local" else "cold",
+                )
+                project.v1_hydraulic_result = v1_result
+                direct_q = sum(node.direct_demand_lps for node in network.nodes)
+                if direct_q:
+                    # Прямой технологический/приборный расход входит и в расход
+                    # корневого участка, и в расчётный секундный расход водомера.
+                    if hws == "local":
+                        project.flows = replace(
+                            project.flows, q_sec_tot=v1_result.source_flow_lps)
+                    else:
+                        project.flows = replace(
+                            project.flows,
+                            q_sec_c=v1_result.source_flow_lps,
+                            q_sec_tot=round(project.flows.q_sec_tot + direct_q, 3),
+                        )
+                dictating = next(x for x in v1_result.node_checks
+                                 if x.node_id == v1_result.dictating_node_id)
+                source_node = next(x for x in network.nodes if x.node_id == network.source_node)
+                project.source.elev_header_m = source_node.elevation_m
+                project.source.elev_fixture_m = dictating.elevation_m
+                project.source.h_geom_m = None
+                project.source.h_pr_m = dictating.h_pr_m
+                project.source.il_dict_m = None
+                project.source.h_il_m = v1_result.internal_loss_m
+                project.source.il_vvod_m = None
+                project.source.h_vvod_m = v1_result.input_loss_m
+                bundle.status.append(
+                    f"v1_hydraulics: топология {len(v1_result.sections)} участков; "
+                    f"диктующий узел {v1_result.dictating_node_id}; "
+                    f"ΣHil={v1_result.internal_loss_m:.3f} м; "
+                    f"Hlввод={v1_result.input_loss_m:.3f} м; "
+                    f"vmax={v1_result.max_velocity_mps:.2f} м/с")
+                if not v1_result.all_velocities_ok:
+                    bad = ", ".join(s.section_id for s in v1_result.sections if not s.velocity_ok)
+                    bundle.warnings.append(
+                        f"v1_hydraulics: превышена допустимая скорость на участках {bad}")
+            except Exception as e:
+                bundle.warnings.append(f"v1_hydraulics: расчёт не выполнен ({e})")
+        elif getattr(project, "v1_sections", None):
             from app.calc.v1_hydraulics import V1SectionInput, calculate_v1_hydraulics
             try:
                 v1_result = calculate_v1_hydraulics([
@@ -210,7 +261,7 @@ def design_ios2(
                 project.source.il_vvod_m = None
                 project.source.h_vvod_m = v1_result.input_loss_m
                 bundle.status.append(
-                    f"v1_hydraulics: {len(v1_result.sections)} участков; "
+                    f"v1_hydraulics: ручной путь, {len(v1_result.sections)} участков; "
                     f"ΣHil={v1_result.internal_loss_m:.3f} м; "
                     f"Hlввод={v1_result.input_loss_m:.3f} м; "
                     f"vmax={v1_result.max_velocity_mps:.2f} м/с")
