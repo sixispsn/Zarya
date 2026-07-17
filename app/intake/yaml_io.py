@@ -133,7 +133,8 @@ def load_request(text: str) -> IOS2Request:
                     length_m=float(r.get("length_m", 0)),
                     dn=int(r.get("dn", 100)),
                     equiv_length_m=float(r.get("equiv_length_m", 0)),
-                    A=float(r.get("A", 0.0023)))
+                    A=float(r.get("A", 0.0023)),
+                    repair_section_id=str(r.get("repair_section_id", "")))
                 for r in runs_s if isinstance(r, dict)]
         risers = [RiserRequest(
                       name=str(r.get("name", f"СТ-{i+1}")),
@@ -142,7 +143,8 @@ def load_request(text: str) -> IOS2Request:
                       cabinet_elevation_m=float(r.get("cabinet_elevation_m", 0)),
                       dn=int(r.get("dn", 65)),
                       equiv_length_m=float(r.get("equiv_length_m", 0)),
-                      A=float(r.get("A", 0.011)))
+                      A=float(r.get("A", 0.011)),
+                      repair_section_id=str(r.get("repair_section_id", "")))
                   for i, r in enumerate(risers_s) if isinstance(r, dict)]
         network = NetworkRequest(
             runs=runs, risers=risers,
@@ -232,11 +234,15 @@ def dump_request(req: IOS2Request) -> str:
             "source": src,
             **({"source2": s2} if s2 else {}),
             "runs": [{"from": r.from_node, "to": r.to_node, "length_m": r.length_m,
-                      "dn": r.dn, "equiv_length_m": r.equiv_length_m, "A": r.A}
+                      "dn": r.dn, "equiv_length_m": r.equiv_length_m, "A": r.A,
+                      **({"repair_section_id": r.repair_section_id}
+                         if r.repair_section_id else {})}
                      for r in n.runs],
             "risers": [{"name": r.name, "at": r.at_node, "height_m": r.height_m,
                         "cabinet_elevation_m": r.cabinet_elevation_m,
-                        "dn": r.dn, "equiv_length_m": r.equiv_length_m, "A": r.A}
+                        "dn": r.dn, "equiv_length_m": r.equiv_length_m, "A": r.A,
+                        **({"repair_section_id": r.repair_section_id}
+                           if r.repair_section_id else {})}
                        for r in n.risers],
             **({"node_elevations": n.node_elevations} if n.node_elevations else {}),
         }

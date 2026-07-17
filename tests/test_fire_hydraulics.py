@@ -689,6 +689,12 @@ def test_ring_allowed_when_require_acyclic_false():
     assert r.dictating_scenario is not None   # посчитал по BFS-пути
 
 
+def test_second_source_node_must_exist():
+    net = _simple_net()
+    net.second_source = HydraulicSource("missing", available_head_m=50.0)
+    assert any("второй источник" in p for p in net.validate())
+
+
 def test_inner_diameter_table():
     assert STEEL_INNER_DIAMETER_MM[50] == 53.0
     assert STEEL_INNER_DIAMETER_MM[65] == 68.0

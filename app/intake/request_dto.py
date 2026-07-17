@@ -103,6 +103,7 @@ class RiserRequest:
     dn: int = 65
     equiv_length_m: float = 0.0
     A: float = 0.011
+    repair_section_id: str = ""   # ремонтная секция кольца
 
 
 @dataclass
@@ -114,6 +115,7 @@ class MainRunRequest:
     dn: int = 100
     equiv_length_m: float = 0.0
     A: float = 0.0023
+    repair_section_id: str = ""       # секция между запорными устройствами
 
 
 @dataclass

@@ -85,6 +85,23 @@ def test_symmetric_ring_splits_evenly():
     assert q["L01"] == pytest.approx(q["L30"], rel=1e-3)   # 2.5 / 2.5
 
 
+def test_node_heads_use_signed_losses_on_return_arm():
+    """На обратном плече обход идёт против потока: модуль потерь суммировать нельзя."""
+    segs = _ring_segments()
+    for seg in segs:
+        seg.length_m = 20.0
+        seg.equiv_length_m = 0.0
+    problem = SingleLoopProblem(
+        "R0", ["R0", "R1", "R2", "R3"], segs, {"R2": 5.2},
+    )
+    res = solve_single_loop(problem)
+    # Симметрия: R1 и R3 равноудалены от ввода по гидравлическим плечам.
+    assert res.node_head_offset_m["R1"] == pytest.approx(
+        res.node_head_offset_m["R3"], abs=1e-9,
+    )
+    assert res.node_head_offset_m["R3"] == pytest.approx(0.2704, abs=1e-6)
+
+
 # ── смещение напора по узлам ─────────────────────────────────────────────────
 
 def test_node_head_offsets():
@@ -233,6 +250,15 @@ def _resilience_net(available=70.0):
                                available_head_m=available))
 
 
+def _with_repair_sections(net):
+    loop = net.segments[:4]
+    for seg in loop:
+        seg.repair_section_id = f"РС-{seg.segment_id}"
+    for i, cabinet in enumerate(net.cabinets):
+        cabinet.repair_section_id = loop[i % len(loop)].repair_section_id
+    return net
+
+
 def test_resilience_covers_every_loop_segment():
     rep = analyze_ring_resilience(_resilience_net(), 2)
     assert rep is not None
@@ -254,16 +280,33 @@ def test_worst_case_is_max():
 
 
 def test_survives_with_strong_source():
-    rep = analyze_ring_resilience(_resilience_net(available=70.0), 2)
+    rep = analyze_ring_resilience(_with_repair_sections(
+        _resilience_net(available=70.0)), 2)
     assert rep.survives_worst_case is True
 
 
 def test_weak_source_flagged():
     # 61 м: штатный режим (60.5) держит, худшую аварию (64+) — нет
-    rep = analyze_ring_resilience(_resilience_net(available=61.0), 2)
+    rep = analyze_ring_resilience(_with_repair_sections(
+        _resilience_net(available=61.0)), 2)
     assert rep.worst_case.available_head_ok is False
-    # но насос закрывает → формально выживает с насосом
     assert rep.worst_case.needs_pump is True
+    # Наличие дефицита не доказывает наличие подходящего насоса.
+    assert rep.survives_worst_case is False
+    assert rep.survives_by_pump is False
+
+
+def test_verified_pump_may_cover_worst_failure():
+    base = analyze_ring_resilience(_with_repair_sections(
+        _resilience_net(available=61.0)), 2)
+    booster_head = base.worst_case.required_head_at_source_m - 61.0
+    rep = analyze_ring_resilience(
+        _with_repair_sections(_resilience_net(available=61.0)), 2,
+        verified_pump_head_m=booster_head,
+        verified_pump_flow_lps=5.2,
+    )
+    assert rep.survives_worst_case is True
+    assert rep.survives_by_pump is True
 
 
 def test_non_ring_returns_none():
@@ -278,7 +321,9 @@ def test_non_ring_returns_none():
 
 
 def test_render_text_readable():
-    txt = analyze_ring_resilience(_resilience_net(), 2).render_text()
+    txt = analyze_ring_resilience(
+        _with_repair_sections(_resilience_net()), 2,
+    ).render_text()
     assert "ЖИВУЧЕСТИ" in txt
     assert "Худший отказ" in txt
     assert "сохраняет работоспособность" in txt
@@ -429,6 +474,62 @@ def test_two_inlet_sections_feed_audit_and_report():
                                           "М4-1": 100, "с1": 65, "с3": 65})
     rep = build_hydraulic_report(r, audit)
     assert rep is not None and len(rep.segments) == 6
+
+
+def test_two_inlet_uses_total_piezometric_heads_at_different_elevations():
+    net = _two_inlet_net(62.0, 52.0)
+    net.nodes["К3"].elevation_m = 10.0
+    # Полные напоры равны: 62+0 = 52+10. Каждый ввод питает свой отбор.
+    r = solve_fire_hydraulics_scenario(net, 2)
+    line = next(w for w in r.warnings if "подача вводов" in w)
+    assert "№1 2.6" in line and "№2 2.6" in line
+
+
+def test_resilience_uses_explicit_repair_sections():
+    net = _resilience_net()
+    for seg in net.segments[:4]:
+        seg.repair_section_id = f"РС-{seg.segment_id}"
+    for cabinet, section_id in zip(
+        net.cabinets,
+        ("РС-М1-2", "РС-М2-3", "РС-М3-4", "РС-М4-1"),
+    ):
+        cabinet.repair_section_id = section_id
+    rep = analyze_ring_resilience(net, 2)
+    assert rep.explicit_repair_sections is True
+    assert rep.normative_warnings == []
+    assert {c.failed_segment_id for c in rep.cases} == {
+        "РС-М1-2", "РС-М2-3", "РС-М3-4", "РС-М4-1",
+    }
+    assert all(c.failure_kind == "repair_section" for c in rep.cases)
+
+
+def test_repair_section_over_half_ring_is_flagged():
+    net = _resilience_net()
+    for i, seg in enumerate(net.segments[:4]):
+        seg.repair_section_id = "РС-большая" if i < 3 else "РС-малая"
+    for cabinet in net.cabinets:
+        cabinet.repair_section_id = "РС-малая"
+    rep = analyze_ring_resilience(net, 2)
+    assert any("более полукольца" in w for w in rep.normative_warnings)
+
+
+def test_unmarked_sections_are_only_preliminary():
+    rep = analyze_ring_resilience(_resilience_net(), 2)
+    assert rep.explicit_repair_sections is False
+    assert any("предварительная" in w for w in rep.normative_warnings)
+    assert rep.survives_worst_case is None
+
+
+def test_two_inlet_resilience_checks_each_inlet_outage():
+    net = _two_inlet_net(70.0, 70.0)
+    rep = analyze_ring_resilience(net, 2)
+    assert {c.failed_segment_id for c in rep.source_failure_cases} == {
+        "ввод К1", "ввод К3",
+    }
+    failed_first = next(c for c in rep.source_failure_cases
+                        if c.failed_segment_id == "ввод К1")
+    assert failed_first.source_used_id == "К3"
+    assert failed_first.solved is True
 
 
 def test_single_source_ring_still_works():

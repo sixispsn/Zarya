@@ -90,6 +90,15 @@ def test_network_is_ring():
     assert net.is_acyclic() is False   # кольцевая магистраль
 
 
+def test_network_preserves_repair_section_links():
+    p = _project()
+    p.fire_network.segments[0].repair_section_id = "РС-1"
+    p.fire_network.risers[0].repair_section_id = "РС-1"
+    net = build_network(p)
+    assert net.segments[0].repair_section_id == "РС-1"
+    assert net.cabinets[0].repair_section_id == "РС-1"
+
+
 def test_network_cabinet_params_from_fire():
     p = _project()
     p.fire.nozzle_dn = 50

@@ -53,6 +53,15 @@ def test_roundtrip_preserves_optional_fields():
     assert req2.network.node_elevations == {"К2": -1.5}
 
 
+def test_roundtrip_preserves_repair_sections():
+    req = load_request(GOOD)
+    req.network.runs[0].repair_section_id = "РС-1"
+    req.network.risers[0].repair_section_id = "РС-1"
+    req2 = load_request(dump_request(req))
+    assert req2.network.runs[0].repair_section_id == "РС-1"
+    assert req2.network.risers[0].repair_section_id == "РС-1"
+
+
 def test_bad_yaml_syntax():
     with pytest.raises(YamlFormatError, match="синтаксис"):
         load_request("document: [unclosed")

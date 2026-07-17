@@ -114,6 +114,7 @@ class PipeSegment:
     valves: List[Valve] = field(default_factory=list)
     diameter_mm: Optional[int] = None            # Ду (номинал, для отчёта)
     inner_diameter_mm: Optional[float] = None    # внутренний Ø для скорости
+    repair_section_id: Optional[str] = None      # участок между запорными устройствами
 
     def inner_d_mm(self) -> Optional[float]:
         """Внутренний диаметр для расчёта скорости: явный inner_diameter_mm, либо
@@ -153,6 +154,7 @@ class FireCabinetNode:
     jet_m: int = 6
     is_design_candidate: bool = True
     riser_id: Optional[str] = None
+    repair_section_id: Optional[str] = None  # секция кольца, питающая стояк
 
 
 class SourceKind(str, Enum):
@@ -228,6 +230,10 @@ class FireNetwork:
                 problems.append(f"ПК {cab.cabinet_id}: узел {cab.node_id} не найден")
         if self.source.node_id not in node_ids:
             problems.append(f"источник: узел {self.source.node_id} не найден")
+        if self.second_source is not None and self.second_source.node_id not in node_ids:
+            problems.append(
+                f"второй источник: узел {self.second_source.node_id} не найден"
+            )
 
         # висячие узлы (не участвуют ни в одном ребре)
         used = {n for seg in self.segments for n in (seg.from_node, seg.to_node)}

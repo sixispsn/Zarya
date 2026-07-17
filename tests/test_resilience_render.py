@@ -12,7 +12,7 @@ def _net(available=70.0):
     from app.calc.fire_hydraulics import (
         FireNetwork, HydraulicNode, PipeSegment, FireCabinetNode,
         HydraulicSource, SourceKind)
-    return FireNetwork(
+    net = FireNetwork(
         nodes={"К1": HydraulicNode("К1", 0.0), "К2": HydraulicNode("К2", 0.0),
                "К3": HydraulicNode("К3", 0.0), "К4": HydraulicNode("К4", 0.0),
                "t1": HydraulicNode("t1", 45.6), "t3": HydraulicNode("t3", 45.6)},
@@ -26,6 +26,11 @@ def _net(available=70.0):
         cabinets=[FireCabinetNode("ПК-1", "t1", riser_id="R1"),
                   FireCabinetNode("ПК-3", "t3", riser_id="R3")],
         source=HydraulicSource("К1", kind=SourceKind.CITY_MAIN, available_head_m=available))
+    for seg in net.segments[:4]:
+        seg.repair_section_id = f"РС-{seg.segment_id}"
+    for cabinet, seg in zip(net.cabinets, net.segments[:2]):
+        cabinet.repair_section_id = seg.repair_section_id
+    return net
 
 
 def _proj():
@@ -50,12 +55,9 @@ def test_html_positive_verdict():
 
 
 def test_html_negative_verdict():
-    rep = analyze_ring_resilience(_net(61.0), 2)
-    # 61 держит штатный, но не худшую аварию; насос закрывает → survives True.
-    # Для негативного вердикта отключим насосный зачёт вручную:
-    rep.survives_worst_case = False
+    rep = analyze_ring_resilience(_net(60.0), 2)
     html = generate_resilience_html(_proj(), rep)
-    assert "недостаточно" in html
+    assert "не подтверждает работоспособность" in html
 
 
 def test_pdf_is_a4(tmp_path):

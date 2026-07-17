@@ -105,12 +105,14 @@ def build_project(req: IOS2Request) -> Project:
                  for nid in node_ids]
         segments = [
             MainSegmentSpec(f"М{i+1}", r.from_node, r.to_node, length_m=r.length_m,
-                            A=r.A, dn=r.dn, equiv_length_m=r.equiv_length_m)
+                            A=r.A, dn=r.dn, equiv_length_m=r.equiv_length_m,
+                            repair_section_id=r.repair_section_id)
             for i, r in enumerate(n.runs)]
         risers = [
             RiserSpec(r.name, r.at_node, length_m=r.height_m,
                       cabinet_elevation_m=r.cabinet_elevation_m, A=r.A,
-                      dn=r.dn, equiv_length_m=r.equiv_length_m)
+                      dn=r.dn, equiv_length_m=r.equiv_length_m,
+                      repair_section_id=r.repair_section_id)
             for r in n.risers]
         p.fire_network = FireNetworkSpec(
             nodes=nodes, segments=segments, risers=risers,

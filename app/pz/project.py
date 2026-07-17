@@ -205,6 +205,7 @@ class MainSegmentSpec:
     A: float                      # удельное сопротивление (h = A·L_eff·Q²)
     dn: int = 100
     equiv_length_m: float = 0.0
+    repair_section_id: str = ""       # секция между запорными устройствами СП 10
 
 
 @dataclass
@@ -223,6 +224,7 @@ class RiserSpec:
     equiv_length_m: float = 0.0
     cabinet_id: str = ""          # пусто → riser_id + "-PK"
     jet_m: int = 6
+    repair_section_id: str = ""   # ремонтная секция кольца по СП 10
 
 
 @dataclass

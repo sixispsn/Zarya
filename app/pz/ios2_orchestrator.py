@@ -163,8 +163,12 @@ def design_ios2(
             bundle.warnings.append(f"resilience: анализ не выполнен ({e})")
         if resilience is not None:
             bundle.resilience_report = resilience
-            bundle.status.append(
-                "ring_resilience: проверены одиночные отказы участков кольца")
+            if resilience.explicit_repair_sections and not resilience.normative_warnings:
+                bundle.status.append(
+                    "ring_resilience: проверены ремонтные секции и отказы вводов")
+            else:
+                bundle.status.append(
+                    "ring_resilience: предварительно, требуется секционирование СП 10")
 
     # ── Мост: обогащаем FireSystem результатами (только если что-то посчитано) ──
     if layout_results or hydraulic_result:

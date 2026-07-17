@@ -2,30 +2,29 @@
 """
 app/calc/ring_hydraulics.py — увязка одного кольца В2 методом Хантера-Кросса (v3).
 
-Hydraulic Engine v3 MVP. Топология (жёстко зафиксирована):
+Hydraulic Engine v3. Топология (жёстко зафиксирована):
   • ровно один независимый цикл в графе;
-  • ровно один активный источник в узле кольца;
+  • один или два активных источника в узлах кольца;
   • все ПК — вне кольца, на тупиковых стояках/ветвях, подключённых к узлам кольца;
   • на участках кольца нет ПК и промежуточных отборов;
-  • штатный режим одного активного ввода.
+  • штатный режим целого кольца.
 
-Смысл кольца — резервирование: при аварии на участке ПК питается по второму
-плечу; два ввода дают запасной источник. В v3 считается ШТАТНЫЙ режим (один
-активный ввод, оба плеча в работе). Аварийный режим и второй ввод — см. future
-scope ниже (не реализовано, чтобы не выдумывать).
+Смысл кольца — резервирование: при отключении ремонтной секции ПК питаются по
+оставшемуся плечу. Поддержаны один или два ввода, отказ ремонтной секции и отказ
+каждого ввода. Двухвводный аварийный режим проверяется консервативно: полный
+расход от каждого оставшегося ввода по отдельности.
 
 Метод Хантера-Кросса для потерь h = A·L_eff·Q²:
   невязка по контуру   Δh = Σ (A·L_eff·Q·|Q|)      (Q со знаком по обходу)
   поправка расхода     ΔQ = −Δh / (2·Σ A·L_eff·|Q|)
   Q_i ← Q_i + ΔQ  для всех участков кольца, до |Δh| < ε.
 
-================================ FUTURE SCOPE ================================
-НЕ реализовано в v3 (следующий слой поверх того же аппарата):
-  • MultiSourceLoopProblem — основной + резервный ввод (два граничных условия);
-  • сценарий отказа участка / плеча кольца (аварийный режим);
-  • проверка подачи от второго ввода, живучесть сети;
-  • сравнение нормального и аварийного режимов.
-=============================================================================
+Границы реализации:
+  • ровно одно независимое кольцо;
+  • ремонтные секции и принадлежность стояков задаются явно;
+  • многокольцевые сети и точный совместный двухвводный режим при разомкнутом
+    кольце не рассчитываются;
+  • насос считается подтверждённым только при переданной проверенной точке Q/H.
 """
 from __future__ import annotations
 
@@ -189,15 +188,17 @@ def solve_single_loop(
             segment_id=seg.segment_id, from_node=seg.from_node, to_node=seg.to_node,
             flow_lps=Q[i], abs_flow_lps=abs(Q[i]), head_loss_m=hl))
 
-    # смещение напора по узлам относительно источника: идём по обходу, накапливая
-    # потери |h| по направлению фактического течения.
+    # Смещение пьезометрического напора по узлам относительно источника.
+    # При обходе ПРОТИВ фактического течения знаковая потеря отрицательна:
+    # давление по направлению обхода возрастает. Суммировать модули нельзя —
+    # это завышает потери на обратном плече кольца.
     node_offset: Dict[str, float] = {problem.source_node: 0.0}
     src_idx = problem.loop_nodes.index(problem.source_node)
     cum = 0.0
     for step in range(n):
         seg_i = (src_idx + step) % n
-        # потеря напора вдоль участка по направлению обхода = A·L·Q·|Q| (со знаком)
-        cum += abs(seg_flows[seg_i].head_loss_m) * (1 if Q[seg_i] >= 0 else 1)
+        # потеря по направлению обхода = A·L·Q·|Q| со знаком
+        cum += seg_flows[seg_i].head_loss_m
         node = problem.loop_nodes[(src_idx + step + 1) % n]
         if node not in node_offset:
             node_offset[node] = cum
@@ -570,41 +571,46 @@ def solve_ring_scenario(
 # АВАРИЙНЫЕ РЕЖИМЫ КОЛЬЦА (живучесть): отказ участка
 # ============================================================
 # Смысл кольца — резервирование: при отказе участка вода приходит по второму
-# плечу. Проверка: для каждого участка кольца по очереди выключаем его,
-# оставшаяся сеть (разомкнутое кольцо = дерево) гонится тем же сценарным
-# солвером; фиксируем требуемый напор. Худший отказ = максимальный напор.
-#
-# Границы (осознанно): один ввод (MultiSource — отдельная задача); отказы
-# только участков КОЛЬЦА (отказ стояка-тупика меняет сам сценарий ПК);
-# результат — справка живучести для проектировщика, не замена штатного расчёта.
+# плечу. Проверка выполняется по ремонтным секциям между запорными устройствами.
+# Если секции явно не размечены, допускается только предварительная сегментная
+# проверка с обязательным предупреждением. Для двух вводов дополнительно
+# проверяется отказ каждого ввода и консервативная работа от любого одного ввода.
 
 @dataclass
 class SegmentFailureCase:
-    """Итог одного аварийного случая: отключён участок failed_segment_id."""
+    """Итог одного отказа ремонтной секции или источника."""
     failed_segment_id: str
     solved: bool                              # расчёт состоялся на остатке сети
     required_head_at_source_m: Optional[float]
     head_penalty_m: Optional[float]           # ухудшение против штатного режима
     available_head_ok: Optional[bool]
     needs_pump: Optional[bool]
+    available_head_m: Optional[float] = None
+    failed_segment_ids: List[str] = field(default_factory=list)
+    failure_kind: str = "repair_section"       # repair_section / segment / source
+    source_used_id: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
 
 
 @dataclass
 class RingResilienceReport:
-    """Сводка живучести кольца по одиночным отказам участков."""
+    """Сводка живучести кольца по ремонтным секциям и отказам вводов."""
     normal_required_head_m: float             # штатный режим (кольцо целое)
     cases: List[SegmentFailureCase] = field(default_factory=list)
     worst_case: Optional[SegmentFailureCase] = None
     all_cases_solved: bool = False
     survives_worst_case: Optional[bool] = None   # доступный напор/насос держит худшее
     survives_by_pump: bool = False               # выживание обеспечивает НАСОС, не источник
+    source_failure_cases: List[SegmentFailureCase] = field(default_factory=list)
+    explicit_repair_sections: bool = False
+    normative_warnings: List[str] = field(default_factory=list)
 
     def render_text(self) -> str:
-        L = ["ПРОВЕРКА ЖИВУЧЕСТИ КОЛЬЦА (одиночный отказ участка)",
+        L = ["ПРОВЕРКА ЖИВУЧЕСТИ КОЛЬЦА (одиночный отказ)",
              f"Штатный режим (кольцо целое): требуемый напор "
              f"{self.normal_required_head_m:.1f} м."]
-        for c in self.cases:
+        L.extend(f"ВНИМАНИЕ: {w}" for w in self.normative_warnings)
+        for c in self.cases + self.source_failure_cases:
             if not c.solved:
                 L.append(f"  отказ {c.failed_segment_id}: расчёт не состоялся "
                          f"({'; '.join(c.warnings) or 'нет решения'})")
@@ -618,11 +624,12 @@ class RingResilienceReport:
             L.append(f"Худший отказ: {self.worst_case.failed_segment_id} — "
                      f"{self.worst_case.required_head_at_source_m:.1f} м.")
         if self.survives_worst_case is True:
-            L.append("Вывод: сеть сохраняет работоспособность при любом одиночном "
-                     "отказе участка кольца.")
+            L.append("Вывод: сеть сохраняет работоспособность при проверенных "
+                     "отказах ремонтных секций и вводов.")
         elif self.survives_worst_case is False:
             L.append("Вывод: при худшем отказе доступного напора НЕДОСТАТОЧНО — "
-                     "требуется резерв (насос с запасом / второй ввод).")
+                     "требуется проверить реальную рабочую точку рабочего и "
+                     "резервного насосов либо иной подтверждённый источник.")
         return "\n".join(L)
 
 
@@ -632,14 +639,10 @@ def analyze_ring_resilience(
     *,
     mode=None,
     scenario_filter=None,
+    verified_pump_head_m: Optional[float] = None,
+    verified_pump_flow_lps: Optional[float] = None,
 ) -> Optional[RingResilienceReport]:
-    """Живучесть кольца: поочерёдный отказ каждого участка кольца.
-
-    Для каждого отказа строится сеть без участка (разомкнутое кольцо = дерево)
-    и гонится ТОТ ЖЕ сценарный солвер. Возвращает None, если сеть не кольцевая
-    по v3 (нечего анализировать).
-    """
-    from dataclasses import replace as _dc_replace
+    """Живучесть кольца по ремонтным секциям и, при наличии, отказам вводов."""
     from app.calc.fire_hydraulics import (
         FireNetwork, NetworkMode, solve_fire_hydraulics_scenario)
 
@@ -648,7 +651,58 @@ def analyze_ring_resilience(
     if cyc is None:
         return None
     _, loop_segs = cyc
-    loop_ids = [s.segment_id for s in loop_segs]
+    explicit_sections = all(bool(s.repair_section_id) for s in loop_segs)
+    mixed_sections = any(bool(s.repair_section_id) for s in loop_segs) and not explicit_sections
+    section_groups: Dict[str, List[str]] = {}
+    if explicit_sections:
+        for seg in loop_segs:
+            section_groups.setdefault(seg.repair_section_id, []).append(seg.segment_id)
+    else:
+        section_groups = {seg.segment_id: [seg.segment_id] for seg in loop_segs}
+    normative_warnings: List[str] = []
+    if not explicit_sections:
+        detail = ("часть участков размечена, часть нет" if mixed_sections
+                  else "repair_section_id не задан")
+        normative_warnings.append(
+            f"Ремонтные секции между запорными устройствами не определены ({detail}); "
+            "выполнена только предварительная проверка отдельных сегментов. "
+            "Для выпуска проверить п. 6.1.12 и 13.1 СП 10."
+        )
+    else:
+        half_ring = len(loop_segs) / 2.0
+        for section_id, segment_ids in section_groups.items():
+            if len(segment_ids) > half_ring:
+                normative_warnings.append(
+                    f"Ремонтная секция {section_id} включает {len(segment_ids)} "
+                    f"из {len(loop_segs)} участков — более полукольца (п. 13.1 СП 10)."
+                )
+        missing_riser_sections = [
+            c.riser_id or c.cabinet_id for c in net.cabinets
+            if not c.repair_section_id
+        ]
+        if missing_riser_sections:
+            normative_warnings.append(
+                "Не задана ремонтная секция для стояков: "
+                + ", ".join(missing_riser_sections)
+                + "; лимит пяти стояков по п. 6.1.12 СП 10 не подтверждён."
+            )
+        counts: Dict[str, int] = {}
+        for cabinet in net.cabinets:
+            if not cabinet.repair_section_id:
+                continue
+            if cabinet.repair_section_id not in section_groups:
+                normative_warnings.append(
+                    f"Стояк {cabinet.riser_id or cabinet.cabinet_id} ссылается на "
+                    f"неизвестную секцию {cabinet.repair_section_id}."
+                )
+                continue
+            counts[cabinet.repair_section_id] = counts.get(cabinet.repair_section_id, 0) + 1
+        for section_id, count in counts.items():
+            if count > 5:
+                normative_warnings.append(
+                    f"Ремонтная секция {section_id} питает {count} стояков — "
+                    "более пяти (п. 6.1.12 СП 10)."
+                )
 
     # штатный режим — кольцо целое (через общий солвер: увязка Кросса)
     normal = solve_fire_hydraulics_scenario(
@@ -657,45 +711,129 @@ def analyze_ring_resilience(
         return None
     h0 = normal.required_head_at_source_m
 
-    cases: List[SegmentFailureCase] = []
-    for seg_id in loop_ids:
-        cut = FireNetwork(
+    sources = [net.source] + ([net.second_source] if net.second_source is not None else [])
+
+    def _solve_from_source(segments, source):
+        single = FireNetwork(
             nodes=dict(net.nodes),
-            segments=[s for s in net.segments if s.segment_id != seg_id],
+            segments=list(segments),
             cabinets=list(net.cabinets),
-            source=net.source)
-        res = solve_fire_hydraulics_scenario(
-            cut, required_jets, mode=_mode, scenario_filter=scenario_filter)
-        if res.dictating_scenario is None:
-            cases.append(SegmentFailureCase(
-                failed_segment_id=seg_id, solved=False,
+            source=source,
+            second_source=None,
+        )
+        return solve_fire_hydraulics_scenario(
+            single, required_jets, mode=_mode, scenario_filter=scenario_filter)
+
+    def _best_single_source(segments, candidates):
+        solved = []
+        for source in candidates:
+            res = _solve_from_source(segments, source)
+            if res.dictating_scenario is None:
+                continue
+            margin = (None if source.available_head_m is None else
+                      source.available_head_m - res.required_head_at_source_m)
+            solved.append((margin, res, source))
+        if not solved:
+            return None
+        # Доказательная консервативная проверка: достаточно, чтобы полный расход
+        # обеспечивал хотя бы один из доступных вводов самостоятельно.
+        return max(solved, key=lambda x: float("-inf") if x[0] is None else x[0])
+
+    def _case(label, failed_ids, kind, remaining_sources, segments):
+        selected = _best_single_source(segments, remaining_sources)
+        if selected is None:
+            return SegmentFailureCase(
+                failed_segment_id=label, solved=False,
                 required_head_at_source_m=None, head_penalty_m=None,
                 available_head_ok=None, needs_pump=None,
-                warnings=list(res.warnings)))
-            continue
-        cases.append(SegmentFailureCase(
-            failed_segment_id=seg_id, solved=True,
+                failed_segment_ids=list(failed_ids), failure_kind=kind,
+                warnings=["ни один оставшийся ввод не обеспечил расчётный сценарий"],
+            )
+        _margin, res, source = selected
+        extra = []
+        if len(remaining_sources) > 1:
+            extra.append(
+                "двухвводный аварийный режим проверен консервативно: полный "
+                "расход от каждого ввода по отдельности; принят лучший доказанный вариант"
+            )
+        return SegmentFailureCase(
+            failed_segment_id=label, solved=True,
             required_head_at_source_m=res.required_head_at_source_m,
             head_penalty_m=res.required_head_at_source_m - h0,
             available_head_ok=res.available_head_ok,
             needs_pump=res.needs_pump,
-            warnings=list(res.warnings)))
+            available_head_m=source.available_head_m,
+            failed_segment_ids=list(failed_ids), failure_kind=kind,
+            source_used_id=source.node_id,
+            warnings=extra + list(res.warnings),
+        )
 
-    solved = [c for c in cases if c.solved]
-    worst = max(solved, key=lambda c: c.required_head_at_source_m) if solved else None
-    all_solved = len(solved) == len(cases) and bool(cases)
+    cases: List[SegmentFailureCase] = []
+    for section_id, failed_ids in section_groups.items():
+        cut_segments = [s for s in net.segments if s.segment_id not in failed_ids]
+        cases.append(_case(
+            section_id, failed_ids,
+            "repair_section" if explicit_sections else "segment",
+            sources, cut_segments,
+        ))
+
+    source_cases: List[SegmentFailureCase] = []
+    if net.second_source is not None:
+        source_cases.append(_case(
+            f"ввод {net.source.node_id}", [], "source",
+            [net.second_source], net.segments,
+        ))
+        source_cases.append(_case(
+            f"ввод {net.second_source.node_id}", [], "source",
+            [net.source], net.segments,
+        ))
+
+    all_cases = cases + source_cases
+    solved = [c for c in all_cases if c.solved]
+    known_margin = [c for c in solved if c.available_head_m is not None]
+    if known_margin:
+        worst = min(
+            known_margin,
+            key=lambda c: c.available_head_m - c.required_head_at_source_m,
+        )
+    else:
+        worst = max(solved, key=lambda c: c.required_head_at_source_m) if solved else None
+    all_solved = len(solved) == len(all_cases) and bool(all_cases)
     survives: Optional[bool] = None
     survives_by_pump = False
-    if worst is not None and worst.available_head_ok is not None:
-        # выжила, если все случаи решены и худший держится источником
-        # (либо насос закрывает — но тогда это явно отмечается)
-        survives_by_pump = (not worst.available_head_ok) and bool(worst.needs_pump)
-        survives = all_solved and (worst.available_head_ok or survives_by_pump)
+    if worst is not None and all(c.available_head_ok is not None for c in solved):
+        source_holds_all = all(c.available_head_ok is True for c in solved)
+        total_flow = normal.dictating_scenario.total_flow_lps
+        pump_covers_all = (
+            verified_pump_head_m is not None
+            and verified_pump_flow_lps is not None
+            and verified_pump_flow_lps >= total_flow
+            and all(
+                c.available_head_ok is True or (
+                    c.available_head_m is not None
+                    and c.available_head_m + verified_pump_head_m
+                    >= c.required_head_at_source_m
+                )
+                for c in solved
+            )
+        )
+        survives_by_pump = not source_holds_all and pump_covers_all
+        survives = all_solved and (source_holds_all or pump_covers_all)
+
+    # Гидравлическая сходимость не заменяет нормативное описание секционирования.
+    # При любом замечании по ремонтным секциям выпускной вердикт снимается.
+    if normative_warnings:
+        survives = None
+        survives_by_pump = False
 
     return RingResilienceReport(
         normal_required_head_m=h0, cases=cases, worst_case=worst,
         all_cases_solved=all_solved, survives_worst_case=survives,
-        survives_by_pump=survives_by_pump)
+        survives_by_pump=survives_by_pump,
+        source_failure_cases=source_cases,
+        explicit_repair_sections=explicit_sections,
+        normative_warnings=normative_warnings,
+    )
 
 
 # ============================================================
@@ -960,9 +1098,13 @@ def solve_two_source_scenario(
     if s1.available_head_m is None or s2.available_head_m is None:
         return None   # двухвводная постановка требует напоров обоих вводов
 
+    # Граничное условие Кросса — полный пьезометрический напор H = p/ρg + z,
+    # а available_head_m хранит манометрический напор на отметке ввода.
+    h1_total = s1.available_head_m + net.nodes[s1.node_id].elevation_m
+    h2_total = s2.available_head_m + net.nodes[s2.node_id].elevation_m
     problem = TwoSourceLoopProblem(
-        source1_node=s1.node_id, source1_head_m=s1.available_head_m,
-        source2_node=s2.node_id, source2_head_m=s2.available_head_m,
+        source1_node=s1.node_id, source1_head_m=h1_total,
+        source2_node=s2.node_id, source2_head_m=h2_total,
         loop_nodes=deco.loop_nodes, loop_segments=deco.loop_segments,
         node_demands=deco.branch_demands_by_node)
     solve = solve_two_source_loop_with_check_valves(problem)
@@ -980,7 +1122,9 @@ def solve_two_source_scenario(
         base = SingleLoopProblem(strong.node_id, deco.loop_nodes,
                                  deco.loop_segments, deco.branch_demands_by_node)
         sres = solve_single_loop(base)
-        node_head = {n: strong.available_head_m - off
+        strong_total = (strong.available_head_m
+                        + net.nodes[strong.node_id].elevation_m)
+        node_head = {n: strong_total - off
                      for n, off in sres.node_head_offset_m.items()}
 
     checks: List[TwoSourcePKCheck] = []
@@ -989,7 +1133,8 @@ def solve_two_source_scenario(
         bl = sum(seg.A * seg.effective_length_m * (b.flow_lps ** 2)
                  for seg in b.segments)
         dz = b.cabinet_elevation_m - src_elev
-        actual = nh - bl - dz
+        # nh — полный пьезометрический напор; у ПК нужен манометрический.
+        actual = nh - bl - b.cabinet_elevation_m
         checks.append(TwoSourcePKCheck(
             cabinet_id=b.cabinet_id, attach_node=b.attach_node,
             node_head_m=nh, branch_loss_m=bl, geodesic_lift_m=dz,

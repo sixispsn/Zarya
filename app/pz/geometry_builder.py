@@ -96,7 +96,8 @@ def build_network(project: Project) -> object:
     segments: List[PipeSegment] = [
         PipeSegment(s.segment_id, s.from_node, s.to_node,
                     length_m=s.length_m, A=s.A,
-                    equiv_length_m=s.equiv_length_m, diameter_mm=s.dn)
+                    equiv_length_m=s.equiv_length_m, diameter_mm=s.dn,
+                    repair_section_id=(s.repair_section_id or None))
         for s in spec.segments]
 
     cabinets: List[FireCabinetNode] = []
@@ -114,7 +115,8 @@ def build_network(project: Project) -> object:
         cabinets.append(FireCabinetNode(
             cabinet_id=cab_id, node_id=pk_node,
             dn=fire.nozzle_dn, hose_m=fire.hose_length_m,
-            jet_m=r.jet_m, riser_id=r.riser_id))
+            jet_m=r.jet_m, riser_id=r.riser_id,
+            repair_section_id=(r.repair_section_id or None)))
 
     source = HydraulicSource(
         node_id=spec.source_node,
