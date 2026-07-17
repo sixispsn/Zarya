@@ -73,6 +73,10 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     fire_on = bool(project.fire and project.fire.required)
     pump_on = bool(project.pumps and project.pumps.required)
     two_zones = (b.zones or 1) >= 2
+    zone_regulators = list(getattr(
+        getattr(project, "v1_hydraulic_result", None), "zone_regulators", []) or [])
+    if (b.zones or 1) > 2:
+        warns.append("расчётных зон больше двух: на принципиальной схеме показаны две характерные зоны")
     plk_on = bool(project.flows and project.flows.irrigation_m3_day > 0)
     n = max(1, b.floors_above or 1)
     fh = (b.height_m / n) if (b.height_m or 0) > 0 else 3.0
@@ -516,12 +520,38 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         txt(xc, yr_t + 42, "см. принципиальную схему", 10, reg=False)
 
     yj = y_gb + 22
+
+    def draw_zone_regulator(index, x, y, *, vertical=True):
+        if index >= len(zone_regulators):
+            return
+        regulator = zone_regulators[index]
+        if not (regulator.required and regulator.topology_feasible):
+            return
+        if regulator.hydraulic_reserve_available is False:
+            anchor = "end" if index == 0 and two_zones else "start"
+            tx = x - 12 if anchor == "end" else x + 12
+            txt(tx, y + 35, f"Зона {index + 1}:", 9, anchor, reg=False)
+            txt(tx, y + 49, "отдельная НС", 9, anchor, reg=False)
+            return
+        if vertical:
+            redv_v(x, y)
+            anchor = "end" if index == 0 and two_zones else "start"
+            tx = x - 16 if anchor == "end" else x + 16
+            txt(tx, y - 5, f"РД-В1-{index + 1}", 10, anchor, reg=False)
+            txt(tx, y + 9, f"Hвых={regulator.outlet_setpoint_m:.1f} м", 9,
+                anchor, reg=False)
+        else:
+            redv_h(x, y)
+            txt(x, y - 15, f"РД-В1-{index + 1}; Hвых={regulator.outlet_setpoint_m:.1f} м",
+                9, "middle", reg=False)
+
     if pump_on:
         xpoz = xA + 360; pump_room(xpoz, 300, "Насосная станция ПОЗ")
         pv(xpoz, y_low, yr_t + 118); dot(xpoz, y_low); tilde(xpoz, yr_t + 118)
         outs = ((xpoz - 70, "lo"), (xpoz + 70, "hi")) if two_zones else ((xpoz + 70, "hi"),)
-        for xo, tag in outs:
+        for index, (xo, tag) in enumerate(outs):
             tilde(xo, yr_t + 96); pv(xo, yr_t + 96, yj if tag == "lo" else yj - 16)
+            draw_zone_regulator(index, xo, yr_t + 62, vertical=True)
         if two_zones:
             ph(xpoz - 70, LO1, yj); pv(LO1, yj, y_gb - 2)
         ph(xpoz + 70, HI1, yj - 16); dot(HI1, yj - 16); ph(HI1, HI2, yj - 16)
@@ -530,7 +560,9 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         # без повысительной установки — магистраль напрямую к стоякам
         if two_zones:
             ph(xA + 38, LO1, yj); pv(LO1, yj, y_gb - 2); dot(LO1, yj)
+            draw_zone_regulator(0, xA + 105, yj, vertical=False)
         ph(xA + 38, HI1, yj - 16); dot(HI1, yj - 16); ph(HI1, HI2, yj - 16)
+        draw_zone_regulator(1 if two_zones else 0, xA + 145, yj - 16, vertical=False)
         pv(HI1, yj - 16, y_gb - 2); pv(HI2, yj - 16, y_gb - 2)
     if fire_on:
         xpt = (xA + 360 + 640) if pump_on else (xA + 700)

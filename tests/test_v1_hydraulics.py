@@ -137,6 +137,42 @@ def test_pressure_audit_checks_minimum_maximum_and_splits_zones():
     assert result.all_maximum_pressures_ok is False
     assert len(result.pressure_zones) == 2
     assert all(zone.valid for zone in result.pressure_zones)
+    regulators = {x.zone_id: x for x in result.zone_regulators}
+    assert regulators["Зона 1"].section_id == "S-L"
+    assert regulators["Зона 1"].required is True
+    assert regulators["Зона 1"].topology_feasible is True
+    assert regulators["Зона 1"].outlet_setpoint_m is not None
+    assert regulators["Зона 1"].hydraulic_reserve_available is True
+    assert regulators["Зона 1"].required_kv_m3h is not None
+    assert regulators["Зона 2"].section_id == "S-H"
+    assert regulators["Зона 2"].required is False
+
+
+def test_zone_regulator_requires_separate_branch_for_pass_through_riser():
+    hydraulic = calculate_v1_network(
+        [V1NodeInput("S", 0),
+         V1NodeInput("Низ", 5, direct_demand_lps=0.3),
+         V1NodeInput("Верх", 60, direct_demand_lps=0.3)],
+        [V1NetworkSectionInput("S-L", "S", "Низ", 10, 32, 0.01),
+         V1NetworkSectionInput("L-H", "Низ", "Верх", 55, 32, 0.01)],
+        "S",
+    )
+    dictating = next(x for x in hydraulic.node_checks
+                     if x.node_id == hydraulic.dictating_node_id)
+    result = audit_v1_pressures(
+        hydraulic,
+        required_source_head_m=dictating.required_before_common_m + 5,
+        common_dynamic_loss_m=5,
+        static_source_head_m=100,
+    )
+    assert len(result.pressure_zones) == 2
+    low = next(x for x in result.zone_regulators if x.zone_id == "Зона 1")
+    high = next(x for x in result.zone_regulators if x.zone_id == "Зона 2")
+    assert low.required is True
+    assert low.topology_feasible is False
+    assert "разделение трасс" in low.note
+    assert high.section_id == "L-H"
+    assert high.topology_feasible is True
 
 
 def test_network_rejects_disconnected_nodes():
@@ -237,7 +273,12 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
     assert result.all_minimum_pressures_ok is True
     assert result.all_maximum_pressures_ok is False
     assert result.pressure_zones
+    assert result.zone_regulators
     assert any(status.startswith("head: H_тр=") for status in bundle.status)
     assert any("диктующий узел Этаж-9" in status for status in bundle.status)
     assert any("превышен максимальный статический напор" in warning
                for warning in bundle.warnings)
+    from app.pz.generator import generate_scheme_svg
+    scheme = generate_scheme_svg(bundle.project)
+    assert "отдельная НС" in scheme
+    assert "РД-В1-1" not in scheme

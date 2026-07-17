@@ -76,6 +76,24 @@
   {% endfor %}
   </tbody>
 </table>
+{% if v1_hydraulics.zone_regulators %}
+<p><b>Привязка регуляторов давления к ветвям</b></p>
+<table class="equip">
+  <thead><tr><th>Зона</th><th>Требуется</th><th>Участок / узел установки</th><th>q, л/с</th><th>Уставка после регулятора, м</th><th>Расчётный перепад, м</th><th>Kv не менее, м³/ч</th><th>Результат</th></tr></thead>
+  <tbody>
+  {% for r in v1_hydraulics.zone_regulators %}
+    <tr><td>{{ r.zone_id }}</td>
+      <td>{% if r.required is none %}уточнить{% else %}{{ 'да' if r.required else 'нет' }}{% endif %}</td>
+      <td>{% if r.section_id %}{{ r.section_id }} / {{ r.install_node }}{% else %}—{% endif %}</td>
+      <td>{{ r.design_flow_lps|num(3) if r.topology_feasible else '—' }}</td>
+      <td>{{ r.outlet_setpoint_m|num(3) if r.outlet_setpoint_m is not none else '—' }}</td>
+      <td>{{ r.design_pressure_drop_m|num(3) if r.design_pressure_drop_m is not none else '—' }}</td>
+      <td>{{ r.required_kv_m3h|num(3) if r.required_kv_m3h is not none else '—' }}</td>
+      <td class="{{ 'bad' if not r.topology_feasible or r.hydraulic_reserve_available is false else 'ok' }}">{{ r.note }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 <p class="equip-verdict">Разделение является гидравлической рекомендацией. Места установки регуляторов давления либо границы отдельных насосных зон назначаются по трассировке сети и отражаются на принципиальной схеме.</p>
 {% endif %}
 {% endif %}

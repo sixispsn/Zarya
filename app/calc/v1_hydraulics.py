@@ -122,6 +122,21 @@ class V1PressureZone:
 
 
 @dataclass(frozen=True)
+class V1ZoneRegulator:
+    zone_id: str
+    required: Optional[bool]
+    section_id: str
+    install_node: str
+    design_flow_lps: float
+    outlet_setpoint_m: Optional[float]
+    design_pressure_drop_m: Optional[float]
+    required_kv_m3h: Optional[float]
+    topology_feasible: bool
+    hydraulic_reserve_available: Optional[bool]
+    note: str
+
+
+@dataclass(frozen=True)
 class V1HydraulicResult:
     sections: list[V1SectionResult] = field(default_factory=list)
     internal_loss_m: float = 0.0
@@ -135,6 +150,9 @@ class V1HydraulicResult:
     source_flow_lps: float = 0.0
     pressure_checks: list[V1PressureCheck] = field(default_factory=list)
     pressure_zones: list[V1PressureZone] = field(default_factory=list)
+    zone_regulators: list[V1ZoneRegulator] = field(default_factory=list)
+    node_elevations_m: dict[str, float] = field(default_factory=dict)
+    source_node_id: str = ""
     static_source_head_m: Optional[float] = None
     all_minimum_pressures_ok: Optional[bool] = None
     all_maximum_pressures_ok: Optional[bool] = None
@@ -433,6 +451,8 @@ def calculate_v1_network(
         node_checks=checks,
         source_flow_lps=round(demand_lps(subtree_groups[source_node],
                                         subtree_direct[source_node]), 3),
+        node_elevations_m={node.node_id: round(node.elevation_m, 3) for node in nodes},
+        source_node_id=source_node,
     )
 
 
@@ -512,11 +532,92 @@ def audit_v1_pressures(
             valid=zone_fits(items),
         ))
 
+    section_by_id = {x.section_id: x for x in result.sections}
+    node_check_by_id = {x.node_id: x for x in result.node_checks}
+    pressure_by_id = {x.node_id: x for x in checks}
+    all_paths = {x.node_id: x.path for x in result.node_checks}
+    regulators: list[V1ZoneRegulator] = []
+    for zone in zones:
+        zone_nodes = set(zone.node_ids)
+        zone_paths = [all_paths[node_id] for node_id in zone.node_ids]
+        common_sections = [sid for sid in zone_paths[0]
+                           if all(sid in path for path in zone_paths[1:])]
+        outside_paths = [path for node_id, path in all_paths.items()
+                         if node_id not in zone_nodes]
+        exclusive_sections = [sid for sid in common_sections
+                              if not any(sid in path for path in outside_paths)]
+        required_values = [pressure_by_id[node_id].maximum_ok for node_id in zone.node_ids]
+        required = (None if all(x is None for x in required_values)
+                    else any(x is False for x in required_values))
+        if not exclusive_sections:
+            regulators.append(V1ZoneRegulator(
+                zone_id=zone.zone_id,
+                required=required,
+                section_id="",
+                install_node="",
+                design_flow_lps=0.0,
+                outlet_setpoint_m=None,
+                design_pressure_drop_m=None,
+                required_kv_m3h=None,
+                topology_feasible=False,
+                hydraulic_reserve_available=None,
+                note="нет эксклюзивной питающей ветви; требуется разделение трасс зон",
+            ))
+            continue
+
+        section_id = exclusive_sections[0]
+        boundary = section_by_id[section_id]
+        reference_path = zone_paths[0]
+        boundary_index = reference_path.index(section_id)
+        prefix = reference_path[:boundary_index]
+        prefix_loss = sum(section_by_id[sid].total_loss_m for sid in prefix)
+        from_elevation = result.node_elevations_m[boundary.from_node]
+        from_h_geom = (from_elevation
+                       - result.node_elevations_m[result.source_node_id])
+        outlet_requirements = []
+        for node_id in zone.node_ids:
+            node = node_check_by_id[node_id]
+            path = all_paths[node_id]
+            start = path.index(section_id)
+            downstream_loss = sum(section_by_id[sid].total_loss_m
+                                  for sid in path[start:])
+            outlet_requirements.append(
+                node.h_geom_m - from_h_geom + downstream_loss + node.h_pr_m)
+        setpoint = max(outlet_requirements)
+        upstream = (required_source_head_m - common_dynamic_loss_m
+                    - from_h_geom - prefix_loss)
+        pressure_drop = max(upstream - setpoint, 0.0)
+        reserve_available = (None if required is not True else pressure_drop > 0.01)
+        required_kv = None
+        if required and pressure_drop > 0.01:
+            delta_p_bar = pressure_drop * 0.0980665
+            required_kv = boundary.flow_lps * 3.6 / math.sqrt(delta_p_bar)
+        if required and reserve_available:
+            note = "установить на начале эксклюзивной ветви; марку проверить по Kv и диапазону настройки"
+        elif required:
+            note = "нет динамического запаса на потери регулятора; требуется отдельная насосная зона или перерасчёт"
+        else:
+            note = "эксклюзивная ветвь определена; регулятор по проверке не требуется"
+        regulators.append(V1ZoneRegulator(
+            zone_id=zone.zone_id,
+            required=required,
+            section_id=section_id,
+            install_node=boundary.from_node,
+            design_flow_lps=boundary.flow_lps,
+            outlet_setpoint_m=round(setpoint, 3),
+            design_pressure_drop_m=round(pressure_drop, 3),
+            required_kv_m3h=(None if required_kv is None else round(required_kv, 3)),
+            topology_feasible=True,
+            hydraulic_reserve_available=reserve_available,
+            note=note,
+        ))
+
     maximum_results = [x.maximum_ok for x in checks if x.maximum_ok is not None]
     return replace(
         result,
         pressure_checks=checks,
         pressure_zones=zones,
+        zone_regulators=regulators,
         static_source_head_m=(None if static_source_head_m is None
                               else round(static_source_head_m, 3)),
         all_minimum_pressures_ok=all(x.minimum_ok for x in checks),

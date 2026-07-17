@@ -368,9 +368,21 @@ def design_ios2(
                     static_source_head_m=static_source_head,
                 )
                 project.v1_hydraulic_result = pressure_result
+                project.building = replace(
+                    project.building,
+                    zones=max(project.building.zones,
+                              len(pressure_result.pressure_zones)),
+                )
                 bundle.status.append(
                     f"v1_pressure_zones: проверено {len(pressure_result.pressure_checks)} "
-                    f"узлов; рекомендовано зон {len(pressure_result.pressure_zones)}")
+                    f"узлов; рекомендовано зон {len(pressure_result.pressure_zones)}; "
+                    f"привязано ветвей {sum(x.topology_feasible for x in pressure_result.zone_regulators)}")
+                infeasible = [x.zone_id for x in pressure_result.zone_regulators
+                              if x.required and not x.topology_feasible]
+                if infeasible:
+                    bundle.warnings.append(
+                        "v1_pressure_zones: для зон " + ", ".join(infeasible)
+                        + " нет отдельной питающей ветви; требуется разделить трассы")
                 if not pressure_result.all_minimum_pressures_ok:
                     bad = ", ".join(x.node_id for x in pressure_result.pressure_checks
                                     if not x.minimum_ok)
