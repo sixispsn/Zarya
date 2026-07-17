@@ -238,6 +238,8 @@ def design_ios2(
                 bundle.status.append(
                     f"v1_hydraulics: топология {len(v1_result.sections)} участков; "
                     f"диктующий узел {v1_result.dictating_node_id}; "
+                    f"автоподбор dвн на "
+                    f"{sum(s.diameter_selection == 'auto' for s in v1_result.sections)} участках; "
                     f"ΣHil={v1_result.internal_loss_m:.3f} м; "
                     f"Hlввод={v1_result.input_loss_m:.3f} м; "
                     f"vmax={v1_result.max_velocity_mps:.2f} м/с")

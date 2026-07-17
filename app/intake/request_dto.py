@@ -168,12 +168,14 @@ class V1NetworkSectionRequest:
     from_node: str
     to_node: str
     length_m: float
-    inner_diameter_mm: float
+    inner_diameter_mm: Optional[float]
     roughness_mm: float
     role: str = "internal"
     local_loss_factor: Optional[float] = None
     velocity_limit_mps: float = 1.5
     material: str = ""
+    candidate_inner_diameters_mm: List[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
 
 
 @dataclass
@@ -260,12 +262,23 @@ class IOS2Request:
                     p.append(f"v1_network.sections[{i}]: начальный или конечный узел отсутствует")
                 if section.from_node == section.to_node:
                     p.append(f"v1_network.sections[{i}]: начало и конец совпадают")
-                if min(section.length_m, section.inner_diameter_mm,
-                       section.velocity_limit_mps) <= 0:
-                    p.append(f"v1_network.sections[{i}]: L, dвн и предел скорости должны быть > 0")
+                if min(section.length_m, section.velocity_limit_mps) <= 0:
+                    p.append(f"v1_network.sections[{i}]: L и предел скорости должны быть > 0")
+                if section.inner_diameter_mm is not None and section.inner_diameter_mm <= 0:
+                    p.append(f"v1_network.sections[{i}].inner_diameter_mm должен быть > 0")
+                if section.inner_diameter_mm is None:
+                    if (not section.candidate_inner_diameters_mm
+                            or any(d <= 0 for d in section.candidate_inner_diameters_mm)):
+                        p.append(f"v1_network.sections[{i}]: для автоподбора нужен положительный сортамент dвн")
+                    if (section.max_specific_loss_m_per_m is None
+                            or section.max_specific_loss_m_per_m <= 0):
+                        p.append(f"v1_network.sections[{i}]: для автоподбора нужен iдоп > 0")
                 if (section.roughness_mm < 0 or
                         (section.local_loss_factor is not None and section.local_loss_factor < 0)):
                     p.append(f"v1_network.sections[{i}]: шероховатость и k_l не могут быть отрицательными")
+                if (section.max_specific_loss_m_per_m is not None
+                        and section.max_specific_loss_m_per_m <= 0):
+                    p.append(f"v1_network.sections[{i}].max_specific_loss_m_per_m должен быть > 0")
                 if section.role not in ("internal", "input"):
                     p.append(f"v1_network.sections[{i}].role должен быть internal или input")
         if not self.document.cipher:

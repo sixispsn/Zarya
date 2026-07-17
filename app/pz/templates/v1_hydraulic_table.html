@@ -16,11 +16,11 @@
     <tr>
       <td>{{ s.section_id }}{% if s.from_node %}<br>{{ s.from_node }} → {{ s.to_node }}{% endif %}</td>
       <td>{{ 'ввод' if s.role == 'input' else 'внутренняя сеть' }}{% if s.material %}, {{ s.material }}{% endif %}</td>
-      <td>{{ s.length_m|num(2) }}</td><td>{{ s.inner_diameter_mm|num(1) }}</td>
+      <td>{{ s.length_m|num(2) }}</td><td>{{ s.inner_diameter_mm|num(1) }}{% if s.diameter_selection == 'auto' %} (авто){% endif %}</td>
       <td>{{ s.flow_lps|num(3) }}</td>
       <td class="{{ 'ok' if s.velocity_ok else 'bad' }}">{{ s.velocity_mps|num(3) }} / {{ s.velocity_limit_mps|num(2) }}</td>
       <td>{{ s.reynolds|num(0) }}</td><td>{{ s.friction_factor|num(5) }}</td>
-      <td>{{ s.specific_loss_m_per_m|num(5) }}</td><td>{{ s.local_loss_factor|num(2) }}</td>
+      <td>{{ s.specific_loss_m_per_m|num(5) }}{% if s.specific_loss_limit_m_per_m %} / {{ s.specific_loss_limit_m_per_m|num(5) }}{% endif %}</td><td>{{ s.local_loss_factor|num(2) }}</td>
       <td>{{ s.total_loss_m|num(3) }}</td>
     </tr>
   {% endfor %}
@@ -45,4 +45,4 @@
   </tbody>
 </table>
 {% endif %}
-<p class="equip-verdict">Расчёт выполнен по максимальному секундному расходу. Удельные потери определены по Darcy-Weisbach с учётом заданной шероховатости; местные потери учтены коэффициентом k<sub>l</sub> по формуле (15) п. 8.28 СП 30.13330.2020. В графе скорости показано v / v<sub>доп</sub>.</p>
+<p class="equip-verdict">Расчёт выполнен по максимальному секундному расходу. Удельные потери определены по Darcy-Weisbach с учётом заданной шероховатости; местные потери учтены коэффициентом k<sub>l</sub> по формуле (15) п. 8.28 СП 30.13330.2020. В графах показано v / v<sub>доп</sub> и, при автоматическом подборе, i / i<sub>доп</sub>. Пометка «авто» означает минимальный внутренний диаметр из заданного сортамента, удовлетворяющий обоим ограничениям.</p>

@@ -435,12 +435,14 @@ class V1NetworkSectionSpec:
     from_node: str
     to_node: str
     length_m: float
-    inner_diameter_mm: float
+    inner_diameter_mm: Optional[float]
     roughness_mm: float
     role: str = "internal"
     local_loss_factor: Optional[float] = None
     velocity_limit_mps: float = 1.5
     material: str = ""
+    candidate_inner_diameters_mm: List[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
 
 
 @dataclass

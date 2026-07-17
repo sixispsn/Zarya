@@ -52,6 +52,8 @@ class V1SectionResult:
     total_loss_m: float
     from_node: str = ""
     to_node: str = ""
+    diameter_selection: str = "fixed"
+    specific_loss_limit_m_per_m: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -71,12 +73,14 @@ class V1NetworkSectionInput:
     from_node: str
     to_node: str
     length_m: float
-    inner_diameter_mm: float
+    inner_diameter_mm: Optional[float]
     roughness_mm: float
     role: SectionRole = "internal"
     local_loss_factor: Optional[float] = None
     velocity_limit_mps: float = 1.5
     material: str = ""
+    candidate_inner_diameters_mm: list[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -297,18 +301,53 @@ def calculate_v1_network(
         q = demand_lps(subtree_groups[section.to_node], subtree_direct[section.to_node])
         if q <= 0:
             raise ValueError(f"Участок {section.section_id}: в поддереве нет расчётного расхода")
-        calculated = calculate_v1_hydraulics([V1SectionInput(
-            section_id=section.section_id,
-            length_m=section.length_m,
-            inner_diameter_mm=section.inner_diameter_mm,
-            flow_lps=q,
-            roughness_mm=section.roughness_mm,
-            role=section.role,
-            local_loss_factor=section.local_loss_factor,
-            velocity_limit_mps=section.velocity_limit_mps,
-            material=section.material,
-        )], water_temperature_c=water_temperature_c).sections[0]
-        calculated = replace(calculated, from_node=section.from_node, to_node=section.to_node)
+
+        def calculate_at(diameter_mm: float) -> V1SectionResult:
+            return calculate_v1_hydraulics([V1SectionInput(
+                section_id=section.section_id,
+                length_m=section.length_m,
+                inner_diameter_mm=diameter_mm,
+                flow_lps=q,
+                roughness_mm=section.roughness_mm,
+                role=section.role,
+                local_loss_factor=section.local_loss_factor,
+                velocity_limit_mps=section.velocity_limit_mps,
+                material=section.material,
+            )], water_temperature_c=water_temperature_c).sections[0]
+
+        if section.inner_diameter_mm is not None:
+            calculated = calculate_at(section.inner_diameter_mm)
+            selection = "fixed"
+        else:
+            candidates = sorted(set(section.candidate_inner_diameters_mm))
+            if not candidates or any(d <= 0 for d in candidates):
+                raise ValueError(
+                    f"Участок {section.section_id}: для автоподбора нужен положительный сортамент dвн")
+            if (section.max_specific_loss_m_per_m is None
+                    or section.max_specific_loss_m_per_m <= 0):
+                raise ValueError(
+                    f"Участок {section.section_id}: для автоподбора задайте iдоп > 0")
+            variants = [calculate_at(d) for d in candidates]
+            calculated = next((variant for variant in variants
+                               if variant.velocity_ok
+                               and variant.specific_loss_m_per_m
+                               <= section.max_specific_loss_m_per_m), None)
+            if calculated is None:
+                largest = variants[-1]
+                raise ValueError(
+                    f"Участок {section.section_id}: сортамент до {candidates[-1]:g} мм "
+                    f"не обеспечивает v≤{section.velocity_limit_mps:g} м/с и "
+                    f"i≤{section.max_specific_loss_m_per_m:g} м/м "
+                    f"(при максимальном dвн: v={largest.velocity_mps:g}, "
+                    f"i={largest.specific_loss_m_per_m:g})")
+            selection = "auto"
+        calculated = replace(
+            calculated,
+            from_node=section.from_node,
+            to_node=section.to_node,
+            diameter_selection=selection,
+            specific_loss_limit_m_per_m=section.max_specific_loss_m_per_m,
+        )
         section_results.append(calculated)
         result_by_id[section.section_id] = calculated
 

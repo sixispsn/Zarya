@@ -79,6 +79,37 @@ def test_network_distributes_subtree_flows_and_selects_dictating_node():
         + dictating.input_loss_m + 20.0, abs=0.001)
 
 
+def test_network_auto_selects_smallest_diameter_by_velocity_and_specific_loss():
+    result = calculate_v1_network(
+        [V1NodeInput("S", 0), V1NodeInput(
+            "A", 10, [("residential_central_hw", 100)])],
+        [V1NetworkSectionInput(
+            "S-A", "S", "A", 20, None, 0.01,
+            candidate_inner_diameters_mm=[40, 25, 32],
+            max_specific_loss_m_per_m=0.03,
+        )],
+        "S",
+    )
+    section = result.sections[0]
+    assert section.inner_diameter_mm == 32
+    assert section.diameter_selection == "auto"
+    assert section.velocity_mps <= section.velocity_limit_mps
+    assert section.specific_loss_m_per_m <= 0.03
+
+
+def test_network_auto_diameter_rejects_insufficient_series():
+    with pytest.raises(ValueError, match="сортамент до 20 мм не обеспечивает"):
+        calculate_v1_network(
+            [V1NodeInput("S", 0), V1NodeInput("A", 1, direct_demand_lps=1.0)],
+            [V1NetworkSectionInput(
+                "S-A", "S", "A", 10, None, 0.01,
+                candidate_inner_diameters_mm=[15, 20],
+                max_specific_loss_m_per_m=0.03,
+            )],
+            "S",
+        )
+
+
 def test_network_rejects_disconnected_nodes():
     with pytest.raises(ValueError, match="не достижимы"):
         calculate_v1_network(
@@ -155,7 +186,11 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
             sections=[
                 V1NetworkSectionRequest("1", "Ввод", "Этаж-3", 15, 40, 0.1,
                                         role="input"),
-                V1NetworkSectionRequest("2", "Этаж-3", "Этаж-9", 25, 32, 0.01),
+                V1NetworkSectionRequest(
+                    "2", "Этаж-3", "Этаж-9", 25, None, 0.01,
+                    candidate_inner_diameters_mm=[25, 32, 40],
+                    max_specific_loss_m_per_m=0.03,
+                ),
             ],
         ),
     )
@@ -167,5 +202,7 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
     assert bundle.project.source.h_pr_m == 20
     assert bundle.project.source.h_il_m == result.internal_loss_m
     assert bundle.project.source.h_vvod_m == result.input_loss_m
+    assert next(s for s in result.sections if s.section_id == "2").diameter_selection == "auto"
+    assert next(s for s in result.sections if s.section_id == "2").inner_diameter_mm == 32
     assert any(status.startswith("head: H_тр=") for status in bundle.status)
     assert any("диктующий узел Этаж-9" in status for status in bundle.status)
