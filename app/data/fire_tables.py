@@ -45,6 +45,7 @@ FIRE_NOZZLE_TABLE: dict[tuple[int, int, int, int], FireNozzleData] = {
     (65, 13, 10, 14): FireNozzleData(2.8, 0.230), (65, 13, 15, 14): FireNozzleData(2.8, 0.231), (65, 13, 20, 14): FireNozzleData(2.8, 0.233),
     (65, 13, 10, 16): FireNozzleData(3.2, 0.310), (65, 13, 15, 16): FireNozzleData(3.2, 0.313), (65, 13, 20, 16): FireNozzleData(3.2, 0.315),
     (65, 13, 10, 18): FireNozzleData(3.6, 0.380), (65, 13, 15, 18): FireNozzleData(3.6, 0.383), (65, 13, 20, 18): FireNozzleData(3.6, 0.385),
+    (65, 13, 10, 20): FireNozzleData(4.0, 0.464), (65, 13, 15, 20): FireNozzleData(4.0, 0.467), (65, 13, 20, 20): FireNozzleData(4.0, 0.470),
     # DN65, ствол 16 мм
     (65, 16, 10, 6): FireNozzleData(2.6, 0.088), (65, 16, 15, 6): FireNozzleData(2.6, 0.089), (65, 16, 20, 6): FireNozzleData(2.6, 0.090),
     (65, 16, 10, 8): FireNozzleData(2.9, 0.110), (65, 16, 15, 8): FireNozzleData(2.9, 0.112), (65, 16, 20, 8): FireNozzleData(2.9, 0.114),

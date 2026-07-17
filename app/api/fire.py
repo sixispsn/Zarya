@@ -21,6 +21,7 @@ def calculate(request: FireRequest):
         result = calculate_fire(FireInput(
             building_type=request.building_type,
             floors=request.floors,
+            height_m=request.height_m,
             corridor_length_m=request.corridor_length_m,
             seats=request.seats,
             area_m2=request.area_m2,
@@ -44,5 +45,6 @@ def calculate(request: FireRequest):
         pressure_mpa=result.pressure_mpa,
         table_used=result.table_used,
         nozzle_found=result.nozzle_found,
+        pressure_control_required=result.pressure_control_required,
         message=result.message,
     )

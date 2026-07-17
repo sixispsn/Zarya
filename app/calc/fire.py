@@ -1,7 +1,10 @@
 """
 Расчёт расхода на внутреннее пожаротушение (ВПВ) по СП 10.13130.2020.
 
-Алгоритм 1-в-1 из legacy/sp30_calculator.html (функции getFireT71, getFireT72, calcFire).
+Числовая таблица 7.3 перенесена 1-в-1 из legacy/sp30_calculator.html. Область
+применения и нормативные минимумы проверяются по СП 10.13130.2020: legacy
+использует 2,6 л/с как удобную базу выбранного ПК, тогда как таблицы 7.1/7.2
+задают минимум 2,5 л/с, а фактический расход определяется таблицей 7.3.
 
 Логика:
   1. По типу здания и его параметрам определяем число струй n и базовый расход q
@@ -14,7 +17,12 @@
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-from app.data.fire_tables import FireNozzleData, get_nozzle_data
+from app.calc.fire_table_7_1 import (
+    Table71Category,
+    resolve_table_7_1,
+    resolve_table_7_2,
+)
+from app.data.fire_tables import get_nozzle_data
 
 
 # Типы зданий (соответствуют HTML)
@@ -36,10 +44,11 @@ class FireInput:
     """Входные данные расчёта ВПВ."""
     building_type: BuildingType
     floors: int = 1                     # этажность
+    height_m: Optional[float] = None     # высота здания; определяющая по сноске **
     # Доп. параметры (нужны для отдельных типов)
-    corridor_length_m: float = 0.0      # длина коридора (для Ф1.3)
-    seats: int = 0                      # вместимость зала (для Ф2.1 театры)
-    area_m2: float = 0.0                # общая площадь (для Ф2.1 библ. / Ф2.2)
+    corridor_length_m: Optional[float] = None  # длина коридора (для Ф1.3)
+    seats: Optional[int] = None               # вместимость зала (для Ф2.1 театры)
+    area_m2: Optional[float] = None            # общая площадь (для Ф2.1 библ.)
     # Параметры производственных зданий (Ф5)
     fire_degree: str = "I_II"           # степень огнестойкости: I_II / III / IV / V
     category: str = "V"                 # категория: AB / V / GD
@@ -62,69 +71,48 @@ class FireResult:
     pressure_mpa: Optional[float] = None    # давление у клапана, МПа
     table_used: str = ""                    # "7.1" или "7.2"
     nozzle_found: bool = True               # найдена ли комбинация в табл. 7.3
+    pressure_control_required: bool = False # диафрагма/регулятор по п. 7.5
     message: str = ""                       # пояснение
 
 
 def _get_t71(
     building_type: str,
     floors: int,
-    corridor_length: float,
-    seats: int,
-    area: float,
+    corridor_length: Optional[float],
+    seats: Optional[int],
+    area: Optional[float],
+    height_m: Optional[float] = None,
 ) -> Optional[tuple[int, float]]:
     """
     Таблица 7.1 — жилые и общественные здания.
     Возвращает (число_струй, базовый_расход) или None если ВПВ не требуется.
     """
-    if building_type == "f13":
-        # Многоквартирные жилые Ф1.3
-        if floors < 12:
-            return None  # ВПВ не требуется
-        if floors <= 16:
-            return (2, 2.6) if corridor_length > 10 else (1, 2.6)
-        return (2, 2.6)  # 17-25 и выше
-
-    if building_type == "f_office":
-        if floors < 6:
-            return None
-        if floors <= 10:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f12_hotel":
-        if floors < 6:
-            return None
-        if floors <= 10:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f12_hostel":
-        if floors <= 10:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f11":
-        # Больницы, дома престарелых — независимо от объёма
-        if floors <= 3:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f21_theater":
-        if seats <= 300:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f21_lib":
-        if area <= 2500:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    if building_type == "f22":
-        if floors <= 3:
-            return (1, 2.6)
-        return (2, 2.6)
-
-    return None
+    categories = {
+        "f13": Table71Category.RESIDENTIAL_F13,
+        "f_office": Table71Category.OFFICE_PUBLIC,
+        "f12_hotel": Table71Category.OFFICE_PUBLIC,
+        "f12_hostel": Table71Category.DORMITORY_F12,
+        "f11": Table71Category.HOSPITAL_F11,
+        "f21_theater": Table71Category.THEATRE_F21,
+        "f21_lib": Table71Category.LIBRARY_SPORT,
+        "f22": Table71Category.MUSEUM_TRADE,
+    }
+    category = categories.get(building_type)
+    if category is None:
+        return None
+    result = resolve_table_7_1(
+        category,
+        floors=floors,
+        height_m=height_m,
+        corridor_length_m=corridor_length,
+        hall_seats=seats,
+        total_area_m2=area,
+    )
+    if result.manual_review:
+        raise ValueError("Требуется ручная проверка по СП 10: " + "; ".join(result.notes))
+    if not result.vpv_required:
+        return None
+    return result.jets, result.q_per_jet_lps
 
 
 def _get_t72(
@@ -132,46 +120,37 @@ def _get_t72(
     category: str,
     construction_class: str,
     volume_thousand_m3: float,
+    height_m: Optional[float] = None,
 ) -> Optional[tuple[int, float]]:
     """
     Таблица 7.2 — производственные и складские здания.
     Возвращает (число_струй, базовый_расход) или None.
     """
-    big = volume_thousand_m3 > 150
-
-    if fire_degree == "I_II":
-        if category in ("AB", "V"):
-            if construction_class in ("C0", "C1"):
-                return (3, 2.6) if big else (2, 2.6)
-        if category == "GD":
-            return None
-
-    if fire_degree == "III":
-        if category in ("AB", "V"):
-            if construction_class == "C0":
-                return (3, 2.6) if big else (2, 2.6)
-        if category == "GD":
-            if construction_class in ("C0", "C1"):
-                return (2, 2.6) if big else None
-
-    if fire_degree == "IV":
-        if category == "AB" and construction_class == "C0":
-            return (3, 2.6) if big else (2, 2.6)
-        if category == "V":
-            if construction_class in ("C0", "C1"):
-                return (2, 5.0) if big else (2, 2.6)
-            if construction_class in ("C2", "C3"):
-                return (4, 2.6) if big else (3, 2.6)
-        if category == "GD":
-            return (2, 2.6) if big else None
-
-    if fire_degree == "V":
-        if category == "V":
-            return (2, 5.0) if big else (2, 2.6)
-        if category == "GD":
-            return (2, 2.6) if big else (1, 2.6)
-
-    return None
+    if height_m is None:
+        raise ValueError(
+            "Для производственного/складского здания задайте высоту: "
+            "таблица 7.2 СП 10 применима только до 50 м включительно"
+        )
+    if height_m > 50.0:
+        if volume_thousand_m3 > 150.0:
+            return 4, 5.0  # п. 7.13 СП 10
+        raise ValueError(
+            "Производственное здание выше 50 м при объёме не более 150 тыс. м³ "
+            "находится вне таблицы 7.2 и условия п. 7.13 СП 10"
+        )
+    if fire_degree == "I_II" and category == "GD":
+        return None  # правило canonical legacy для отсутствующей строки таблицы
+    degree = "I" if fire_degree == "I_II" else fire_degree
+    hazard = {"AB": "А", "V": "В", "GD": "Г"}[category]
+    structural = construction_class.replace("C", "С")
+    result = resolve_table_7_2(
+        degree, hazard, structural, volume_thousand_m3,
+    )
+    if result.manual_review:
+        raise ValueError("Требуется ручная проверка по СП 10: " + "; ".join(result.notes))
+    if not result.vpv_required:
+        return None
+    return result.jets, result.q_per_jet_lps
 
 
 def calculate_fire(data: FireInput) -> FireResult:
@@ -185,13 +164,16 @@ def calculate_fire(data: FireInput) -> FireResult:
     if data.building_type == "f5":
         res = _get_t72(
             data.fire_degree, data.category,
-            data.construction_class, data.volume_thousand_m3,
+            data.construction_class, data.volume_thousand_m3, data.height_m,
         )
-        table_used = "7.2"
+        table_used = (
+            "п. 7.13" if (data.height_m or 0) > 50 and data.volume_thousand_m3 > 150
+            else "7.2"
+        )
     else:
         res = _get_t71(
             data.building_type, data.floors,
-            data.corridor_length_m, data.seats, data.area_m2,
+            data.corridor_length_m, data.seats, data.area_m2, data.height_m,
         )
         table_used = "7.1"
 
@@ -204,6 +186,21 @@ def calculate_fire(data: FireInput) -> FireResult:
         )
 
     n_streams, q_base = res
+
+    if data.height_m is None:
+        raise ValueError(
+            "Для проверки высоты компактной части струи по п. 7.15 СП 10 "
+            "задайте высоту здания"
+        )
+    if data.height_m > 50.0:
+        minimum_jet_m = 8 if data.building_type == "f13" else 16
+    else:
+        minimum_jet_m = 6
+    if data.jet_m < minimum_jet_m:
+        raise ValueError(
+            f"Высота компактной части струи {data.jet_m} м меньше минимума "
+            f"{minimum_jet_m} м по п. 7.15 СП 10"
+        )
 
     # Данные диктующего ПК из таблицы 7.3
     nozzle = get_nozzle_data(data.dn, data.nozzle_mm, data.hose_m, data.jet_m)
@@ -224,7 +221,18 @@ def calculate_fire(data: FireInput) -> FireResult:
 
     # Расход диктующего ПК и итог
     q_dikt = nozzle.q
+    if q_dikt < q_base:
+        raise ValueError(
+            f"Выбранный ПК даёт {q_dikt:g} л/с, что меньше нормативного минимума "
+            f"{q_base:g} л/с по {table_used} СП 10; выберите другое оборудование"
+        )
     q_total = n_streams * q_dikt
+    pressure_control_required = nozzle.p > 0.45
+    pressure_note = (
+        "; давление у ПК более 0,45 МПа — требуется диафрагма или регулятор "
+        "давления по п. 7.5 СП 10"
+        if pressure_control_required else ""
+    )
 
     return FireResult(
         required=True,
@@ -234,7 +242,8 @@ def calculate_fire(data: FireInput) -> FireResult:
         pressure_mpa=nozzle.p,
         table_used=table_used,
         nozzle_found=True,
-        message="ВПВ: {} струи × {} л/с = {} л/с".format(
-            n_streams, q_dikt, round(q_total, 2)
+        pressure_control_required=pressure_control_required,
+        message="ВПВ: {} струи × {} л/с = {} л/с{}".format(
+            n_streams, q_dikt, round(q_total, 2), pressure_note,
         ),
     )

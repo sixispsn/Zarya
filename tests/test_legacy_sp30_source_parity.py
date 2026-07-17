@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.data.sp30_tables import ALPHA_TABLE, CONSUMER_NORMS
 from app.data.pumps import PUMPS
+from app.data.fire_tables import FIRE_NOZZLE_TABLE
 
 
 LEGACY = Path(__file__).parents[1] / "legacy" / "sp30_calculator.html"
@@ -35,6 +36,21 @@ def test_every_alpha_table_pair_is_present_in_legacy():
     parsed = [(float(x), float(y)) for x, y in re.findall(
         r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]", block)]
     assert parsed == ALPHA_TABLE
+
+
+def test_every_fire_nozzle_row_matches_legacy_source():
+    source = LEGACY.read_text(encoding="utf-8")
+    block = source.split("const T73 = {", 1)[1].split("};", 1)[0]
+    parsed = {
+        tuple(map(int, key.split("_"))): (float(q), float(p))
+        for key, q, p in re.findall(
+            r"'([0-9_]+)'\s*:\s*\{q:\s*([0-9.]+),\s*p:\s*([0-9.]+)\}",
+            block,
+        )
+    }
+    expected = {key: (row.q, row.p) for key, row in FIRE_NOZZLE_TABLE.items()}
+    assert len(parsed) == 108
+    assert parsed == expected
 
 
 def test_every_pump_and_curve_point_matches_legacy_source():

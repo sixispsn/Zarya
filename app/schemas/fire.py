@@ -13,9 +13,10 @@ class FireRequest(BaseModel):
         "f21_theater", "f21_lib", "f22", "f_office", "f5",
     ] = Field(..., description="Тип здания по СП 10")
     floors: int = Field(default=1, ge=1, le=100, description="Этажность")
-    corridor_length_m: float = Field(default=0.0, ge=0, description="Длина коридора (Ф1.3), м")
-    seats: int = Field(default=0, ge=0, description="Вместимость зала (Ф2.1 театры)")
-    area_m2: float = Field(default=0.0, ge=0, description="Площадь (Ф2.1 библ./Ф2.2), м²")
+    height_m: Optional[float] = Field(default=None, gt=0, description="Высота здания, м")
+    corridor_length_m: Optional[float] = Field(default=None, ge=0, description="Длина коридора (Ф1.3), м")
+    seats: Optional[int] = Field(default=None, ge=0, description="Вместимость зала (Ф2.1 театры)")
+    area_m2: Optional[float] = Field(default=None, ge=0, description="Площадь (Ф2.1 библ./Ф2.2), м²")
     fire_degree: Literal["I_II", "III", "IV", "V"] = Field(default="I_II", description="Степень огнестойкости")
     category: Literal["AB", "V", "GD"] = Field(default="V", description="Категория пож. опасности")
     construction_class: Literal["C0", "C1", "C2", "C3"] = Field(default="C0", description="Класс констр. опасности")
@@ -35,4 +36,7 @@ class FireResponse(BaseModel):
     pressure_mpa: Optional[float] = Field(None, description="Давление у клапана, МПа")
     table_used: str = Field(..., description="Использованная таблица (7.1 / 7.2)")
     nozzle_found: bool = Field(..., description="Найдена ли комбинация в табл. 7.3")
+    pressure_control_required: bool = Field(
+        ..., description="Нужна диафрагма/регулятор при давлении более 0,45 МПа",
+    )
     message: str = Field(..., description="Пояснение")
