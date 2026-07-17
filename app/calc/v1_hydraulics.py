@@ -64,6 +64,7 @@ class V1NodeInput:
     consumer_groups: list[tuple[str, int]] = field(default_factory=list)
     direct_demand_lps: float = 0.0
     h_pr_m: float = 20.0
+    max_static_head_m: float = 45.0
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,31 @@ class V1NodeHeadCheck:
     internal_loss_m: float
     input_loss_m: float
     h_pr_m: float
+    max_static_head_m: float
     required_before_common_m: float
+
+
+@dataclass(frozen=True)
+class V1PressureCheck:
+    node_id: str
+    elevation_m: float
+    dynamic_head_m: float
+    minimum_head_m: float
+    minimum_ok: bool
+    static_head_m: Optional[float]
+    maximum_static_head_m: float
+    maximum_ok: Optional[bool]
+
+
+@dataclass(frozen=True)
+class V1PressureZone:
+    zone_id: str
+    node_ids: list[str]
+    elevation_min_m: float
+    elevation_max_m: float
+    target_source_head_m: float
+    estimated_max_static_head_m: float
+    valid: bool
 
 
 @dataclass(frozen=True)
@@ -108,6 +133,11 @@ class V1HydraulicResult:
     dictating_path: list[str] = field(default_factory=list)
     node_checks: list[V1NodeHeadCheck] = field(default_factory=list)
     source_flow_lps: float = 0.0
+    pressure_checks: list[V1PressureCheck] = field(default_factory=list)
+    pressure_zones: list[V1PressureZone] = field(default_factory=list)
+    static_source_head_m: Optional[float] = None
+    all_minimum_pressures_ok: Optional[bool] = None
+    all_maximum_pressures_ok: Optional[bool] = None
 
 
 def _friction_factor(reynolds: float, roughness_m: float, diameter_m: float) -> float:
@@ -219,6 +249,8 @@ def calculate_v1_network(
             raise ValueError("Обозначения узлов В1 должны быть непустыми и уникальными")
         if node.direct_demand_lps < 0 or node.h_pr_m < 0:
             raise ValueError(f"Узел {node_id}: расход и Hпр не могут быть отрицательными")
+        if node.max_static_head_m <= 0:
+            raise ValueError(f"Узел {node_id}: максимальный статический напор должен быть > 0")
         for code, count in node.consumer_groups:
             if not code or count <= 0:
                 raise ValueError(f"Узел {node_id}: код потребителя должен быть задан, количество > 0")
@@ -382,6 +414,7 @@ def calculate_v1_network(
             internal_loss_m=round(internal, 3),
             input_loss_m=round(input_loss, 3),
             h_pr_m=round(node.h_pr_m, 2),
+            max_static_head_m=round(node.max_static_head_m, 2),
             required_before_common_m=round(required, 3),
         ))
     if not checks:
@@ -400,4 +433,92 @@ def calculate_v1_network(
         node_checks=checks,
         source_flow_lps=round(demand_lps(subtree_groups[source_node],
                                         subtree_direct[source_node]), 3),
+    )
+
+
+def audit_v1_pressures(
+    result: V1HydraulicResult,
+    *,
+    required_source_head_m: float,
+    common_dynamic_loss_m: float,
+    static_source_head_m: Optional[float],
+) -> V1HydraulicResult:
+    """Проверить давления в узлах и предложить регулируемые зоны В1.
+
+    Динамический напор считается при расчётном расходе. Статический напор
+    проверяется только при наличии максимального напора наружной сети; для
+    насосной схемы вызывающий код добавляет напор насоса при Q=0.
+    """
+    if not result.node_checks:
+        raise ValueError("Для зонного расчёта отсутствуют потребляющие узлы В1")
+    if required_source_head_m <= 0 or common_dynamic_loss_m < 0:
+        raise ValueError("Напор источника должен быть > 0, общие потери неотрицательны")
+    if static_source_head_m is not None and static_source_head_m < 0:
+        raise ValueError("Статический напор источника не может быть отрицательным")
+
+    checks: list[V1PressureCheck] = []
+    for node in result.node_checks:
+        dynamic = (required_source_head_m - common_dynamic_loss_m
+                   - node.h_geom_m - node.internal_loss_m - node.input_loss_m)
+        # Hтр и составляющие ПЗ округляются раздельно; устраняем только
+        # микроневязку округления до сантиметра водяного столба.
+        if abs(dynamic - node.h_pr_m) <= 0.01:
+            dynamic = node.h_pr_m
+        static = (None if static_source_head_m is None
+                  else static_source_head_m - node.h_geom_m)
+        checks.append(V1PressureCheck(
+            node_id=node.node_id,
+            elevation_m=node.elevation_m,
+            dynamic_head_m=round(dynamic, 3),
+            minimum_head_m=node.h_pr_m,
+            minimum_ok=dynamic >= node.h_pr_m,
+            static_head_m=None if static is None else round(static, 3),
+            maximum_static_head_m=node.max_static_head_m,
+            maximum_ok=(None if static is None
+                        else static <= node.max_static_head_m + 0.001),
+        ))
+
+    # Концептуальное разбиение на регулируемые зоны. Для каждой зоны на входе
+    # принимается минимальная уставка, обеспечивающая её диктующий узел.
+    ordered = sorted(result.node_checks, key=lambda x: (x.h_geom_m, x.node_id))
+    groups: list[list[V1NodeHeadCheck]] = []
+    current: list[V1NodeHeadCheck] = []
+
+    def zone_fits(items: list[V1NodeHeadCheck]) -> bool:
+        target = max(x.required_before_common_m + common_dynamic_loss_m for x in items)
+        return all(target - x.h_geom_m <= x.max_static_head_m + 0.001 for x in items)
+
+    for node in ordered:
+        proposed = current + [node]
+        if current and not zone_fits(proposed):
+            groups.append(current)
+            current = [node]
+        else:
+            current = proposed
+    if current:
+        groups.append(current)
+
+    zones: list[V1PressureZone] = []
+    for index, items in enumerate(groups, 1):
+        target = max(x.required_before_common_m + common_dynamic_loss_m for x in items)
+        estimated = max(target - x.h_geom_m for x in items)
+        zones.append(V1PressureZone(
+            zone_id=f"Зона {index}",
+            node_ids=[x.node_id for x in items],
+            elevation_min_m=round(min(x.elevation_m for x in items), 2),
+            elevation_max_m=round(max(x.elevation_m for x in items), 2),
+            target_source_head_m=round(target, 3),
+            estimated_max_static_head_m=round(estimated, 3),
+            valid=zone_fits(items),
+        ))
+
+    maximum_results = [x.maximum_ok for x in checks if x.maximum_ok is not None]
+    return replace(
+        result,
+        pressure_checks=checks,
+        pressure_zones=zones,
+        static_source_head_m=(None if static_source_head_m is None
+                              else round(static_source_head_m, 3)),
+        all_minimum_pressures_ok=all(x.minimum_ok for x in checks),
+        all_maximum_pressures_ok=(None if not maximum_results else all(maximum_results)),
     )

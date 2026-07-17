@@ -346,6 +346,46 @@ def design_ios2(
                         "pump: повысительная установка требуется, но каталог не дал кандидата")
                 else:
                     bundle.status.append("pump: H_гар достаточен, повысительная установка не требуется")
+
+            v1_pressure_result = project.v1_hydraulic_result
+            if (getattr(v1_pressure_result, "node_checks", None)
+                    and head.h_required_m is not None):
+                from app.calc.v1_hydraulics import audit_v1_pressures
+                static_source_head = None
+                if project.source.maximum_head_m is not None:
+                    if project.pumps.required:
+                        if project.pumps.curve:
+                            static_source_head = (
+                                project.source.maximum_head_m
+                                + max(point[1] for point in project.pumps.curve))
+                    else:
+                        static_source_head = project.source.maximum_head_m
+                common_dynamic_loss = (h_vod or 0.0) + project.source.h_tepl_m
+                pressure_result = audit_v1_pressures(
+                    v1_pressure_result,
+                    required_source_head_m=head.h_required_m,
+                    common_dynamic_loss_m=common_dynamic_loss,
+                    static_source_head_m=static_source_head,
+                )
+                project.v1_hydraulic_result = pressure_result
+                bundle.status.append(
+                    f"v1_pressure_zones: проверено {len(pressure_result.pressure_checks)} "
+                    f"узлов; рекомендовано зон {len(pressure_result.pressure_zones)}")
+                if not pressure_result.all_minimum_pressures_ok:
+                    bad = ", ".join(x.node_id for x in pressure_result.pressure_checks
+                                    if not x.minimum_ok)
+                    bundle.warnings.append(
+                        f"v1_pressure_zones: недостаточный динамический напор в узлах {bad}")
+                if pressure_result.all_maximum_pressures_ok is None:
+                    bundle.warnings.append(
+                        "v1_pressure_zones: максимальный статический напор не проверен — "
+                        "задайте source_data.maximum_head_m по ТУ")
+                elif not pressure_result.all_maximum_pressures_ok:
+                    bad = ", ".join(x.node_id for x in pressure_result.pressure_checks
+                                    if x.maximum_ok is False)
+                    bundle.warnings.append(
+                        f"v1_pressure_zones: превышен максимальный статический напор "
+                        f"в узлах {bad}; требуется зонирование/регулирование давления")
         except Exception as e:
             bundle.warnings.append(f"meters/head/pump: расчётная цепочка не выполнена ({e})")
     else:

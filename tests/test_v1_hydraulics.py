@@ -4,7 +4,7 @@ import pytest
 
 from app.calc.v1_hydraulics import (
     V1NetworkSectionInput, V1NodeInput, V1SectionInput,
-    calculate_v1_hydraulics, calculate_v1_network,
+    audit_v1_pressures, calculate_v1_hydraulics, calculate_v1_network,
 )
 
 
@@ -110,6 +110,35 @@ def test_network_auto_diameter_rejects_insufficient_series():
         )
 
 
+def test_pressure_audit_checks_minimum_maximum_and_splits_zones():
+    hydraulic = calculate_v1_network(
+        [V1NodeInput("S", 0),
+         V1NodeInput("Низ", 5, direct_demand_lps=0.3),
+         V1NodeInput("Верх", 60, direct_demand_lps=0.3)],
+        [V1NetworkSectionInput("S-L", "S", "Низ", 10, 32, 0.01),
+         V1NetworkSectionInput("S-H", "S", "Верх", 70, 32, 0.01)],
+        "S",
+    )
+    dictating = next(x for x in hydraulic.node_checks
+                     if x.node_id == hydraulic.dictating_node_id)
+    result = audit_v1_pressures(
+        hydraulic,
+        required_source_head_m=dictating.required_before_common_m + 5,
+        common_dynamic_loss_m=5,
+        static_source_head_m=100,
+    )
+    by_node = {x.node_id: x for x in result.pressure_checks}
+    assert by_node["Верх"].dynamic_head_m == pytest.approx(20, abs=0.002)
+    assert by_node["Верх"].minimum_ok is True
+    assert by_node["Низ"].static_head_m == 95
+    assert by_node["Низ"].maximum_ok is False
+    assert by_node["Верх"].maximum_ok is True
+    assert result.all_minimum_pressures_ok is True
+    assert result.all_maximum_pressures_ok is False
+    assert len(result.pressure_zones) == 2
+    assert all(zone.valid for zone in result.pressure_zones)
+
+
 def test_network_rejects_disconnected_nodes():
     with pytest.raises(ValueError, match="не достижимы"):
         calculate_v1_network(
@@ -173,7 +202,7 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
         document=DocumentRequest(cipher="В1-АВТО", object_name="Проверка", organization="Заря"),
         building_type="residential", floors=9, building_height_m=27,
         streams=2,
-        source_data=SourceDataRequest(guaranteed_head_m=30),
+        source_data=SourceDataRequest(guaranteed_head_m=30, maximum_head_m=35),
         v1_network=V1NetworkRequest(
             source_node="Ввод",
             nodes=[
@@ -204,5 +233,11 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
     assert bundle.project.source.h_vvod_m == result.input_loss_m
     assert next(s for s in result.sections if s.section_id == "2").diameter_selection == "auto"
     assert next(s for s in result.sections if s.section_id == "2").inner_diameter_mm == 32
+    assert result.pressure_checks
+    assert result.all_minimum_pressures_ok is True
+    assert result.all_maximum_pressures_ok is False
+    assert result.pressure_zones
     assert any(status.startswith("head: H_тр=") for status in bundle.status)
     assert any("диктующий узел Этаж-9" in status for status in bundle.status)
+    assert any("превышен максимальный статический напор" in warning
+               for warning in bundle.warnings)

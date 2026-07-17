@@ -48,6 +48,8 @@ h1.section-title { text-align: center; font-weight: bold; font-size: 13pt; margi
 table.data { border-collapse: collapse; margin: 6pt 0 6pt 1.25cm; font-size: 10pt; }
 table.data td, table.data th { border: 0.3mm solid #000; padding: 2pt 6pt; text-align: left; }
 table.data th { font-weight: bold; background: #f0f0f0; }
+table.data.head-summary { break-inside: avoid; page-break-inside: avoid; }
+table.data.head-summary tr { break-inside: avoid; page-break-inside: avoid; }
 
 /* ── Штамп форма 3 — первый лист (40 мм) ── */
 .stamp3 { position: running(stamp3); width: 185mm; }

@@ -68,7 +68,7 @@
 <p class="subitem">Гидравлический расчёт диктующего направления В1:</p>
 {% include "v1_hydraulic_table.html" %}
 {% endif %}
-<table class="data">
+<table class="data head-summary">
   <tr><th>Составляющая</th><th>Значение, м вод. ст.</th></tr>
 {% for name, val in head.components %}
   <tr><td>{{ name }}</td><td>{{ val|num(2) }}</td></tr>

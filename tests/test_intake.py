@@ -75,6 +75,12 @@ def test_negative_head_component_rejected():
     assert any("h_il_m" in p and "отрицательным" in p for p in r.validate())
 
 
+def test_maximum_head_cannot_be_below_guaranteed_head():
+    r = _req(source_data=SourceDataRequest(
+        guaranteed_head_m=30.0, maximum_head_m=25.0))
+    assert any("maximum_head_m" in p for p in r.validate())
+
+
 # ── Builder: маппинг намерения в модель ──────────────────────────────────────
 
 def test_builder_raises_on_invalid():
@@ -134,6 +140,7 @@ def test_builder_no_network():
 def test_builder_maps_head_and_meter_inputs():
     sd = SourceDataRequest(
         guaranteed_head_m=27.0,
+        maximum_head_m=42.0,
         elev_header_m=-0.3,
         elev_fixture_m=32.7,
         il_dict_m=2.4,
@@ -144,6 +151,7 @@ def test_builder_maps_head_and_meter_inputs():
     )
     source = build_project(_req(source_data=sd)).source
     assert source.elev_fixture_m - source.elev_header_m == pytest.approx(33.0)
+    assert source.maximum_head_m == pytest.approx(42.0)
     assert source.il_dict_m == pytest.approx(2.4)
     assert source.h_vvod_m == pytest.approx(0.8)
     assert source.water_use_period_h == pytest.approx(12.0)

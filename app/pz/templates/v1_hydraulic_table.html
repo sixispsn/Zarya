@@ -45,4 +45,38 @@
   </tbody>
 </table>
 {% endif %}
+{% if v1_hydraulics.pressure_checks %}
+<p><b>Проверка давления по узлам В1</b></p>
+<p>{% if v1_hydraulics.static_source_head_m is not none %}Максимальный статический напор у источника с учётом наружной сети и напора насоса при Q=0 составляет {{ v1_hydraulics.static_source_head_m|num(3) }} м.{% else %}Максимальный статический напор у источника не определён: требуется максимальный напор наружной сети по ТУ и, при наличии повысительной установки, характеристика насоса при Q=0.{% endif %} Минимальный свободный напор проверен по п. 8.21, максимальный гидростатический напор — по п. 8.22 СП 30.13330.2020.</p>
+<table class="equip">
+  <thead><tr><th>Узел</th><th>Отметка, м</th><th>H динамический, м</th><th>H минимум, м</th><th>Мин.</th><th>H статический, м</th><th>H максимум, м</th><th>Макс.</th></tr></thead>
+  <tbody>
+  {% for n in v1_hydraulics.pressure_checks %}
+    <tr>
+      <td>{{ n.node_id }}</td><td>{{ n.elevation_m|num(2) }}</td>
+      <td>{{ n.dynamic_head_m|num(3) }}</td><td>{{ n.minimum_head_m|num(2) }}</td>
+      <td class="{{ 'ok' if n.minimum_ok else 'bad' }}">{{ 'да' if n.minimum_ok else 'нет' }}</td>
+      <td>{% if n.static_head_m is not none %}{{ n.static_head_m|num(3) }}{% else %}не определён{% endif %}</td>
+      <td>{{ n.maximum_static_head_m|num(2) }}</td>
+      <td class="{{ 'ok' if n.maximum_ok else ('bad' if n.maximum_ok is not none else '') }}">{% if n.maximum_ok is none %}уточнить{% else %}{{ 'да' if n.maximum_ok else 'нет' }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if v1_hydraulics.pressure_zones %}
+<p><b>Расчётное разделение на регулируемые зоны</b></p>
+<table class="equip">
+  <thead><tr><th>Зона</th><th>Узлы</th><th>Диапазон отметок, м</th><th>Требуемый напор на входе, м</th><th>Макс. напор после регулирования, м</th><th>Проверка</th></tr></thead>
+  <tbody>
+  {% for z in v1_hydraulics.pressure_zones %}
+    <tr><td>{{ z.zone_id }}</td><td>{{ z.node_ids|join(', ') }}</td>
+      <td>{{ z.elevation_min_m|num(2) }}…{{ z.elevation_max_m|num(2) }}</td>
+      <td>{{ z.target_source_head_m|num(3) }}</td><td>{{ z.estimated_max_static_head_m|num(3) }}</td>
+      <td class="{{ 'ok' if z.valid else 'bad' }}">{{ 'проходит' if z.valid else 'не проходит' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="equip-verdict">Разделение является гидравлической рекомендацией. Места установки регуляторов давления либо границы отдельных насосных зон назначаются по трассировке сети и отражаются на принципиальной схеме.</p>
+{% endif %}
+{% endif %}
 <p class="equip-verdict">Расчёт выполнен по максимальному секундному расходу. Удельные потери определены по Darcy-Weisbach с учётом заданной шероховатости; местные потери учтены коэффициентом k<sub>l</sub> по формуле (15) п. 8.28 СП 30.13330.2020. В графах показано v / v<sub>доп</sub> и, при автоматическом подборе, i / i<sub>доп</sub>. Пометка «авто» означает минимальный внутренний диаметр из заданного сортамента, удовлетворяющий обоим ограничениям.</p>

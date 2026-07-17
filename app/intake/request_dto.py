@@ -62,6 +62,7 @@ class SourceDataRequest:
     tu_date: str = ""
     connection_point: str = ""         # точка подключения
     guaranteed_head_m: Optional[float] = None   # гарантированный напор, м
+    maximum_head_m: Optional[float] = None      # максимальный статический напор по ТУ, м
     tu_limit_q_day: Optional[float] = None      # лимит, м³/сут
     tu_fire_outdoor_l_s: Optional[float] = None # наружное пожаротушение, л/с
     water_main_dn: int = 0             # диаметр городского водовода
@@ -159,6 +160,7 @@ class V1NodeRequest:
     consumers: List[ConsumerGroupRequest] = field(default_factory=list)
     direct_demand_lps: float = 0.0
     h_pr_m: float = 20.0
+    max_static_head_m: float = 45.0
 
 
 @dataclass
@@ -250,6 +252,8 @@ class IOS2Request:
             for i, node in enumerate(vn.nodes):
                 if node.direct_demand_lps < 0 or node.h_pr_m < 0:
                     p.append(f"v1_network.nodes[{i}]: расход и Hпр не могут быть отрицательными")
+                if node.max_static_head_m <= 0:
+                    p.append(f"v1_network.nodes[{i}].max_static_head_m должен быть > 0")
                 for j, group in enumerate(node.consumers):
                     if not group.code or group.count <= 0:
                         p.append(f"v1_network.nodes[{i}].consumers[{j}]: нужен код и количество > 0")
@@ -303,10 +307,15 @@ class IOS2Request:
                 "h_il_m": sd.h_il_m, "h_pr_m": sd.h_pr_m,
                 "h_tepl_m": sd.h_tepl_m, "il_vvod_m": sd.il_vvod_m,
                 "h_vvod_m": sd.h_vvod_m, "npsh_available_m": sd.npsh_available_m,
+                "guaranteed_head_m": sd.guaranteed_head_m,
+                "maximum_head_m": sd.maximum_head_m,
             }
             for name, value in nonnegative.items():
                 if value is not None and value < 0:
                     p.append(f"source_data.{name} не может быть отрицательным")
+            if (sd.guaranteed_head_m is not None and sd.maximum_head_m is not None
+                    and sd.maximum_head_m < sd.guaranteed_head_m):
+                p.append("source_data.maximum_head_m не может быть меньше guaranteed_head_m")
         for i, r in enumerate(self.rooms):
             if r.space_kind not in SPACE_KINDS:
                 p.append(f"rooms[{i}].space_kind '{r.space_kind}' не из {SPACE_KINDS}")

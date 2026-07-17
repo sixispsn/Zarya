@@ -71,6 +71,7 @@ def build_project(req: IOS2Request) -> Project:
             description=sd.customer, connection_point=sd.connection_point,
             tu_number=sd.tu_number, tu_date=sd.tu_date,
             guaranteed_head_m=sd.guaranteed_head_m,
+            maximum_head_m=sd.maximum_head_m,
             tu_limit_q_day=sd.tu_limit_q_day,
             tu_fire_outdoor_l_s=sd.tu_fire_outdoor_l_s,
             elev_header_m=sd.elev_header_m, elev_fixture_m=sd.elev_fixture_m,
@@ -130,6 +131,7 @@ def build_project(req: IOS2Request) -> Project:
                 consumer_groups=[(g.code, g.count) for g in n.consumers],
                 direct_demand_lps=n.direct_demand_lps,
                 h_pr_m=n.h_pr_m,
+                max_static_head_m=n.max_static_head_m,
             ) for n in req.v1_network.nodes],
             sections=[V1NetworkSectionSpec(**vars(s)) for s in req.v1_network.sections],
         )

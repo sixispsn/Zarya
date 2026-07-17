@@ -56,6 +56,7 @@ class WaterSource:
     tu_number: str = ""
     tu_date: str = ""
     guaranteed_head_m: Optional[float] = None
+    maximum_head_m: Optional[float] = None
     pressure_note: str = ""
     # --- составляющие требуемого напора Hтр по формуле (14) п.8.27 СП 30.13330.2020 ---
     # Hтр = Hgeom + ∑Hil + Hпр + ∑Hвод + Hтепл + Hlввод
@@ -427,6 +428,7 @@ class V1NodeSpec:
     consumer_groups: List[tuple] = field(default_factory=list)
     direct_demand_lps: float = 0.0
     h_pr_m: float = 20.0
+    max_static_head_m: float = 45.0
 
 
 @dataclass
