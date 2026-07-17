@@ -57,6 +57,25 @@ def test_head_formula14():
     assert h.deficit_m == 36.0
 
 
+def test_head_deficit_is_same_aggregate_input_as_legacy_pump_calculator():
+    """В legacy все динамические потери входят одним полем ΣHl."""
+    from app.calc.pumps import PumpInput, calculate_pump
+
+    src = WaterSource(
+        guaranteed_head_m=28.0, h_geom_m=33.0, h_il_m=4.5,
+        h_pr_m=20.0, h_vod_m=1.5, h_tepl_m=3.0, h_vvod_m=2.0,
+    )
+    head = calc_required_head(src)
+    legacy_equivalent = calculate_pump(PumpInput(
+        q_design_m3h=5.0, h_geom_manual=head.h_geom_m,
+        h_losses=head.h_losses_dynamic_m, h_pr=head.h_pr_m,
+        h_gar=head.h_guaranteed_m,
+    ))
+    assert head.h_required_m == 64.0
+    assert head.h_pump_m == 36.0
+    assert legacy_equivalent.h_required == head.h_pump_m
+
+
 def test_head_pump_not_needed():
     src = WaterSource(guaranteed_head_m=70.0, h_geom_m=33.0, h_il_m=4.5,
                       h_pr_m=20.0, h_vod_m=1.5, h_tepl_m=3.0, h_vvod_m=2.0)

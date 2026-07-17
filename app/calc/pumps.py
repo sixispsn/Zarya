@@ -118,12 +118,11 @@ def calculate_pump(data: PumpInput) -> PumpResult:
     hp = h_geom + data.h_losses + data.h_pr - data.h_gar
     hp = max(hp, 0.0)
 
-    # Кривая системы именно для повысительного насоса:
-    # Hнас(Q) = max(Hgeom + Hпр - Hгар, 0) + ΣHдинамич(Q).
-    # В расчётной точке она проходит через Hp = Hтр - Hгар.
-    h_stat = max(h_geom + data.h_pr - data.h_gar, 0.0)
-    h_dynamic = max(data.h_losses, 0.0)
-    k_sys = h_dynamic / (data.q_design_m3h ** 2)
+    # Точно как calcPumpHead() в legacy/sp30_calculator.html.
+    # Не заменять инженерно «улучшенной» декомпозицией без решения пользователя.
+    h_stat = data.h_gar if data.h_gar > 0 else 0.0
+    k_sys = ((hp - h_stat) / (data.q_design_m3h ** 2)
+             if hp > h_stat else 0.1)
 
     candidates_raw = list_pumps(data.pump_type)
     results: list[PumpCandidate] = []

@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 from app.data.sp30_tables import ALPHA_TABLE, CONSUMER_NORMS
+from app.data.pumps import PUMPS
 
 
 LEGACY = Path(__file__).parents[1] / "legacy" / "sp30_calculator.html"
@@ -34,3 +35,43 @@ def test_every_alpha_table_pair_is_present_in_legacy():
     parsed = [(float(x), float(y)) for x, y in re.findall(
         r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]", block)]
     assert parsed == ALPHA_TABLE
+
+
+def test_every_pump_and_curve_point_matches_legacy_source():
+    source = LEGACY.read_text(encoding="utf-8")
+    block = source.split("const PUMP_CURVES = [", 1)[1].split("];", 1)[0]
+    pattern = re.compile(
+        r"model:\s*'([^']+)'.*?brand:\s*'([^']+)'.*?type:\s*'([^']+)'.*?"
+        r"P_kw:\s*([0-9.]+).*?P_max_bar:\s*([0-9.]+).*?T_max:\s*([0-9.]+).*?"
+        r"NPSHr:\s*([0-9.]+).*?Q_opt:\s*([0-9.]+).*?note:\s*'([^']+)'.*?"
+        r"curve:\s*\[(.*?)\]",
+        re.S,
+    )
+    parsed = {}
+    for match in pattern.finditer(block):
+        points = [(float(q), float(h)) for q, h in re.findall(
+            r"\{q:\s*([0-9.]+),\s*h:\s*([0-9.]+)\}", match.group(10))]
+        parsed[match.group(1)] = {
+            "brand": match.group(2), "type": match.group(3),
+            "p_kw": float(match.group(4)), "p_max_bar": float(match.group(5)),
+            "t_max": float(match.group(6)), "npshr": float(match.group(7)),
+            "q_opt": float(match.group(8)), "note": match.group(9), "curve": points,
+        }
+    assert len(parsed) == len(PUMPS)
+    for pump in PUMPS:
+        assert parsed[pump.model] == {
+            "brand": pump.brand, "type": pump.type, "p_kw": pump.p_kw,
+            "p_max_bar": pump.p_max_bar, "t_max": pump.t_max,
+            "npshr": pump.npshr, "q_opt": pump.q_opt, "note": pump.note,
+            "curve": [(point.q, point.h) for point in pump.curve],
+        }
+
+
+def test_python_pump_system_curve_formula_is_literal_legacy_formula():
+    source = LEGACY.read_text(encoding="utf-8")
+    function = source.split("function calcPumpHead()", 1)[1].split(
+        "// Подбор насосов", 1)[0]
+    compact = re.sub(r"\s+", " ", function)
+    assert "const Hp = H_geom + H_l + H_pr - H_gar;" in compact
+    assert "const H_stat = H_gar > 0 ? H_gar : 0;" in compact
+    assert "? (Hp_display - H_stat) / (Q_des * Q_des) : 0.1;" in compact

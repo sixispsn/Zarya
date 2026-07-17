@@ -38,6 +38,26 @@ class TestHead:
         ))
         assert r.h_required == 0.0
 
+    def test_system_curve_is_exact_legacy_formula(self):
+        """legacy: Hстат=Hгар; k=(Hp-Hстат)/Q² при Hp>Hстат."""
+        r = calculate_pump(PumpInput(
+            q_design_m3h=5, pump_type="boost",
+            h_geom_manual=25, h_losses=5, h_pr=20, h_gar=20,
+        ))
+        assert r.h_required == 30.0
+        assert r.h_stat == 20.0
+        assert r.k_sys == 0.4
+
+    def test_system_curve_legacy_fallback_k(self):
+        """legacy: если Hp не больше Hстат, используется k=0,1."""
+        r = calculate_pump(PumpInput(
+            q_design_m3h=5, pump_type="boost",
+            h_geom_manual=5, h_losses=2, h_pr=10, h_gar=20,
+        ))
+        assert r.h_required == 0.0
+        assert r.h_stat == 20.0
+        assert r.k_sys == 0.1
+
 
 class TestSelection:
     """Подбор насосов."""
@@ -74,6 +94,26 @@ class TestSelection:
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost", h_geom_manual=25, h_gar=20))
         assert len(r.candidates[0].eff_curve) > 0
+
+    @pytest.mark.parametrize("mode,q_design,h_geom,h_losses,h_gar,expected", [
+        ("1", 5.0, 25.0, 5.0, 20.0,
+         [("CR 10-4", 5.94, 34.1, 160), ("CR 5-8", 5.99, 34.1, 110)]),
+        ("2p", 10.0, 25.0, 5.0, 20.0,
+         [("CR 10-4", 11.88, 34.1, 160), ("CR 5-8", 11.97, 34.1, 110)]),
+        ("2s", 5.0, 50.0, 5.0, 20.0,
+         [("CR 10-4", 5.88, 68.3, 145), ("CR 5-8", 5.95, 69.0, 95)]),
+    ])
+    def test_candidates_match_legacy_golden_working_points(
+            self, mode, q_design, h_geom, h_losses, h_gar, expected):
+        """Golden получен выполнением JS-функций legacy без DOM-обвязки."""
+        result = calculate_pump(PumpInput(
+            q_design_m3h=q_design, pump_type="boost", mode=mode,
+            h_geom_manual=h_geom, h_losses=h_losses,
+            h_pr=20, h_gar=h_gar, npsh_a=8,
+        ))
+        actual = [(x.pump.model, x.working_point.q, x.working_point.h, x.score)
+                  for x in result.candidates]
+        assert actual == expected
 
 
 class TestModes:
