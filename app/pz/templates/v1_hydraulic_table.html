@@ -3,9 +3,28 @@
   <b>расчётный путь:</b> {{ v1_hydraulics.dictating_path|join(' → ') }};
   <b>расход у источника:</b> {{ v1_hydraulics.source_flow_lps|num(3) }} л/с.</p>
 {% endif %}
+{% if v1_hydraulics.topology_kind == 'single_ring' %}
+<p><b>Увязка кольцевой сети В1</b></p>
+<p>Потокораспределение в штатном режиме определено методом Хантера-Кросса по Darcy-Weisbach. Число итераций: {{ v1_hydraulics.ring_iterations }}; конечная невязка {{ v1_hydraulics.ring_residual_m|num(6) }} м.</p>
+<table class="equip">
+  <thead><tr><th>Участок кольца</th><th>Начало → конец</th><th>q, л/с</th><th>v / v<sub>доп</sub>, м/с</th><th>Потери, м</th></tr></thead>
+  <tbody>{% for s in v1_hydraulics.ring_normal_sections if s.section_id in v1_hydraulics.ring_section_ids %}
+    <tr><td>{{ s.section_id }}</td><td>{{ s.from_node }} → {{ s.to_node }}</td><td>{{ s.flow_lps|num(3) }}</td><td class="{{ 'ok' if s.velocity_ok else 'bad' }}">{{ s.velocity_mps|num(3) }} / {{ s.velocity_limit_mps|num(2) }}</td><td>{{ s.total_loss_m|num(3) }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+<p><b>Поверочные режимы при одиночном отказе участка кольца</b></p>
+<table class="equip">
+  <thead><tr><th>Отключённый участок</th><th>Диктующий узел</th><th>H до общих потерь, м</th><th>ΣH<sub>il</sub>, м</th><th>v<sub>max</sub>, м/с</th><th>Скорости</th></tr></thead>
+  <tbody>{% for s in v1_hydraulics.ring_scenarios %}
+    <tr class="{{ 'ok' if s.disabled_section_id == v1_hydraulics.dictating_outage_section_id else '' }}"><td>{{ s.disabled_section_id }}{% if s.disabled_section_id == v1_hydraulics.dictating_outage_section_id %} (дикт.){% endif %}</td><td>{{ s.dictating_node_id }}</td><td>{{ s.required_before_common_m|num(3) }}</td><td>{{ s.internal_loss_m|num(3) }}</td><td>{{ s.max_velocity_mps|num(3) }}</td><td class="{{ 'ok' if s.all_velocities_ok else 'bad' }}">{{ 'проходят' if s.all_velocities_ok else 'не проходят' }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+<p>Дальнейший расчёт требуемого напора выполнен по диктующему аварийному режиму: отключён участок {{ v1_hydraulics.dictating_outage_section_id }}.</p>
+{% endif %}
 {% if v1_hydraulics.inlet_checks %}
 <p><b>Проверка вводов при отключении одного ввода</b></p>
 <p>Каждый ввод проверен на пропуск 100% максимального секундного расхода в соответствии с п. 8.23 СП 30.13330.2020. Диктующим принят ввод {{ v1_hydraulics.dictating_inlet_id }}.</p>
+{% if v1_hydraulics.topology_kind == 'single_ring' %}<p><b>Гидравлика диктующего аварийного направления</b></p>{% endif %}
 <table class="equip">
   <thead><tr><th>Ввод</th><th>q (100%), л/с</th><th>H<sub>гар</sub>, м</th><th>H<sub>макс</sub>, м</th><th>d<sub>вн</sub>, мм</th><th>v / v<sub>доп</sub>, м/с</th><th>Потери, м</th><th>Потери − H<sub>гар</sub>, м</th><th>Результат</th></tr></thead>
   <tbody>

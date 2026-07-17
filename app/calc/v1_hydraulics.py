@@ -115,6 +115,16 @@ class V1InletCheck:
 
 
 @dataclass(frozen=True)
+class V1RingScenarioCheck:
+    disabled_section_id: str
+    dictating_node_id: str
+    required_before_common_m: float
+    internal_loss_m: float
+    max_velocity_mps: float
+    all_velocities_ok: bool
+
+
+@dataclass(frozen=True)
 class V1NodeHeadCheck:
     node_id: str
     path: list[str]
@@ -186,6 +196,14 @@ class V1HydraulicResult:
     inlet_checks: list[V1InletCheck] = field(default_factory=list)
     dictating_inlet_id: str = ""
     all_inlets_100_percent_ok: Optional[bool] = None
+    topology_kind: str = "tree"
+    ring_section_ids: list[str] = field(default_factory=list)
+    ring_converged: Optional[bool] = None
+    ring_iterations: int = 0
+    ring_residual_m: Optional[float] = None
+    ring_normal_sections: list[V1SectionResult] = field(default_factory=list)
+    ring_scenarios: list[V1RingScenarioCheck] = field(default_factory=list)
+    dictating_outage_section_id: str = ""
     static_source_head_m: Optional[float] = None
     all_minimum_pressures_ok: Optional[bool] = None
     all_maximum_pressures_ok: Optional[bool] = None
@@ -196,6 +214,15 @@ def _friction_factor(reynolds: float, roughness_m: float, diameter_m: float) -> 
         return 0.0
     if reynolds < 2300:
         return 64.0 / reynolds
+    if reynolds < 4000:
+        # Плавный переход устраняет нефизичный скачок между ламинарной и
+        # турбулентной формулами, критичный при увязке малых расходов кольца.
+        laminar_at_2300 = 64.0 / 2300.0
+        term_at_4000 = (roughness_m / (3.7 * diameter_m)
+                        + 5.74 / (4000.0 ** 0.9))
+        turbulent_at_4000 = 0.25 / (math.log10(term_at_4000) ** 2)
+        weight = (reynolds - 2300.0) / 1700.0
+        return laminar_at_2300 + weight * (turbulent_at_4000 - laminar_at_2300)
     # Swamee-Jain, инженерная явная аппроксимация Colebrook-White.
     term = roughness_m / (3.7 * diameter_m) + 5.74 / (reynolds ** 0.9)
     return 0.25 / (math.log10(term) ** 2)
@@ -273,7 +300,7 @@ def calculate_v1_hydraulics(
     )
 
 
-def calculate_v1_network(
+def _calculate_v1_tree_network(
     nodes: list[V1NodeInput],
     sections: list[V1NetworkSectionInput],
     source_node: str,
@@ -383,7 +410,32 @@ def calculate_v1_network(
     for section in sections:
         q = demand_lps(subtree_groups[section.to_node], subtree_direct[section.to_node])
         if q <= 0:
-            raise ValueError(f"Участок {section.section_id}: в поддереве нет расчётного расхода")
+            diameter = section.inner_diameter_mm
+            selection = "fixed"
+            if diameter is None:
+                candidates = sorted(set(section.candidate_inner_diameters_mm))
+                if not candidates or any(d <= 0 for d in candidates):
+                    raise ValueError(
+                        f"Участок {section.section_id}: для автоподбора нужен "
+                        "положительный сортамент dвн")
+                diameter = candidates[0]
+                selection = "auto"
+            calculated = V1SectionResult(
+                section_id=section.section_id, role=section.role,
+                material=section.material, length_m=section.length_m,
+                inner_diameter_mm=diameter, flow_lps=0.0, velocity_mps=0.0,
+                velocity_limit_mps=section.velocity_limit_mps, velocity_ok=True,
+                reynolds=0.0, friction_factor=0.0,
+                specific_loss_m_per_m=0.0, linear_loss_m=0.0,
+                local_loss_factor=(section.local_loss_factor
+                                   if section.local_loss_factor is not None else 0.3),
+                total_loss_m=0.0, from_node=section.from_node,
+                to_node=section.to_node, diameter_selection=selection,
+                specific_loss_limit_m_per_m=section.max_specific_loss_m_per_m,
+            )
+            section_results.append(calculated)
+            result_by_id[section.section_id] = calculated
+            continue
 
         def calculate_at(diameter_mm: float) -> V1SectionResult:
             return calculate_v1_hydraulics([V1SectionInput(
@@ -487,6 +539,270 @@ def calculate_v1_network(
         node_elevations_m={node.node_id: round(node.elevation_m, 3) for node in nodes},
         source_node_id=source_node,
     )
+
+
+def _v1_single_cycle(
+    node_ids: set[str], sections: list[V1NetworkSectionInput],
+) -> tuple[list[str], list[V1NetworkSectionInput]]:
+    """Вернуть единственный контур в порядке обхода либо пустые списки."""
+    adjacency: dict[str, list[tuple[str, V1NetworkSectionInput]]] = {
+        node_id: [] for node_id in node_ids
+    }
+    for section in sections:
+        adjacency[section.from_node].append((section.to_node, section))
+        adjacency[section.to_node].append((section.from_node, section))
+    degree = {node_id: len(rows) for node_id, rows in adjacency.items()}
+    queue = [node_id for node_id, value in degree.items() if value <= 1]
+    removed: set[str] = set()
+    while queue:
+        node_id = queue.pop()
+        if node_id in removed:
+            continue
+        removed.add(node_id)
+        for neighbour, _section in adjacency[node_id]:
+            if neighbour not in removed:
+                degree[neighbour] -= 1
+                if degree[neighbour] == 1:
+                    queue.append(neighbour)
+    cycle_nodes_set = node_ids - removed
+    if len(cycle_nodes_set) < 3:
+        return [], []
+    start = sorted(cycle_nodes_set)[0]
+    nodes_order = [start]
+    sections_order: list[V1NetworkSectionInput] = []
+    previous = ""
+    current = start
+    while True:
+        choices = [(node, section) for node, section in adjacency[current]
+                   if node in cycle_nodes_set and node != previous]
+        if not choices:
+            return [], []
+        next_node, section = next(
+            ((node, row) for node, row in choices
+             if node == start or node not in nodes_order), choices[0])
+        sections_order.append(section)
+        if next_node == start:
+            break
+        nodes_order.append(next_node)
+        previous, current = current, next_node
+        if len(nodes_order) > len(cycle_nodes_set):
+            return [], []
+    if len(nodes_order) != len(cycle_nodes_set):
+        return [], []
+    return nodes_order, sections_order
+
+
+def _orient_v1_tree(
+    node_ids: set[str], sections: list[V1NetworkSectionInput], source_node: str,
+) -> list[V1NetworkSectionInput]:
+    adjacency: dict[str, list[tuple[str, V1NetworkSectionInput]]] = {
+        node_id: [] for node_id in node_ids
+    }
+    for section in sections:
+        adjacency[section.from_node].append((section.to_node, section))
+        adjacency[section.to_node].append((section.from_node, section))
+    oriented: list[V1NetworkSectionInput] = []
+    seen = {source_node}
+    queue = [source_node]
+    while queue:
+        node_id = queue.pop(0)
+        for neighbour, section in adjacency[node_id]:
+            if neighbour in seen:
+                continue
+            seen.add(neighbour)
+            queue.append(neighbour)
+            oriented.append(replace(section, from_node=node_id, to_node=neighbour))
+    if seen != node_ids or len(oriented) != len(node_ids) - 1:
+        raise ValueError("После отключения участка сеть В1 не является связным деревом")
+    return oriented
+
+
+def _calculate_v1_ring_network(
+    nodes: list[V1NodeInput],
+    sections: list[V1NetworkSectionInput],
+    source_node: str,
+    *,
+    flow_kind: Literal["cold", "total"],
+    water_temperature_c: float,
+) -> V1HydraulicResult:
+    node_ids = {node.node_id for node in nodes}
+    if source_node not in node_ids:
+        raise ValueError(f"Исходный узел В1 '{source_node}' отсутствует")
+    if any(section.role != "internal" for section in sections):
+        raise ValueError("Участки кольцевой внутренней сети В1 должны иметь role=internal")
+    cycle_nodes, cycle_sections = _v1_single_cycle(node_ids, sections)
+    if not cycle_sections:
+        raise ValueError("Не удалось выделить единственное кольцо В1")
+    if source_node not in cycle_nodes:
+        raise ValueError("Исходный узел В1 должен находиться на кольце")
+    for section in cycle_sections:
+        if section.inner_diameter_mm is None:
+            raise ValueError(
+                f"Участок кольца {section.section_id}: для увязки задайте dвн; "
+                "автоподбор кольцевых участков выполняется после определения расходов")
+
+    # Начальное потокораспределение получаем размыканием одного участка.
+    break_section = cycle_sections[-1]
+    base_sections = [section for section in sections
+                     if section.section_id != break_section.section_id]
+    oriented = _orient_v1_tree(node_ids, base_sections, source_node)
+    base = _calculate_v1_tree_network(
+        nodes, oriented, source_node, flow_kind=flow_kind,
+        water_temperature_c=water_temperature_c)
+    base_rows = {row.section_id: row for row in base.sections}
+
+    q_cycle: list[float] = []
+    for index, section in enumerate(cycle_sections):
+        traversal_from = cycle_nodes[index]
+        traversal_to = cycle_nodes[(index + 1) % len(cycle_nodes)]
+        row = base_rows.get(section.section_id)
+        if row is None:
+            q_reference = 0.0
+        else:
+            q_reference = (row.flow_lps if (row.from_node, row.to_node)
+                           == (section.from_node, section.to_node) else -row.flow_lps)
+        q_cycle.append(q_reference if (section.from_node, section.to_node)
+                       == (traversal_from, traversal_to) else -q_reference)
+
+    def signed_loss(section: V1NetworkSectionInput, flow: float) -> float:
+        if abs(flow) < 1e-10:
+            return 0.0
+        diameter_m = section.inner_diameter_mm / 1000.0
+        flow_m3s = abs(flow) / 1000.0
+        velocity = flow_m3s / (math.pi * diameter_m ** 2 / 4.0)
+        nu = 1.307e-6 * math.exp(-0.0337 * (water_temperature_c - 10.0))
+        reynolds = velocity * diameter_m / nu
+        friction = _friction_factor(
+            reynolds, section.roughness_mm / 1000.0, diameter_m)
+        specific = friction * velocity ** 2 / (2.0 * 9.80665 * diameter_m)
+        local_factor = (0.3 if section.local_loss_factor is None
+                        else section.local_loss_factor)
+        loss = specific * section.length_m * (1.0 + local_factor)
+        return math.copysign(loss, flow)
+
+    residual = 0.0
+    iterations = 0
+    for iterations in range(1, 101):
+        losses = [signed_loss(section, flow)
+                  for section, flow in zip(cycle_sections, q_cycle)]
+        residual_signed = sum(losses)
+        residual = abs(residual_signed)
+        if residual < 1e-4:
+            break
+        derivative = 0.0
+        for section, flow in zip(cycle_sections, q_cycle):
+            step = max(abs(flow) * 1e-4, 1e-4)
+            derivative += ((signed_loss(section, flow + step)
+                            - signed_loss(section, flow - step)) / (2 * step))
+        if derivative <= 1e-12:
+            break
+        correction = -residual_signed / derivative
+        q_cycle = [flow + correction for flow in q_cycle]
+    converged = residual < 1e-4
+    if not converged:
+        raise ValueError(
+            f"Увязка кольца В1 не сошлась за {iterations} итераций; "
+            f"невязка {residual:.4g} м")
+
+    normal_rows = dict(base_rows)
+    for index, (section, flow) in enumerate(zip(cycle_sections, q_cycle)):
+        traversal = (cycle_nodes[index], cycle_nodes[(index + 1) % len(cycle_nodes)])
+        q_reference = flow if (section.from_node, section.to_node) == traversal else -flow
+        calculated = calculate_v1_hydraulics([V1SectionInput(
+            section.section_id, section.length_m, section.inner_diameter_mm,
+            abs(q_reference), section.roughness_mm, role="internal",
+            local_loss_factor=section.local_loss_factor,
+            velocity_limit_mps=section.velocity_limit_mps,
+            material=section.material,
+        )], water_temperature_c=water_temperature_c).sections[0]
+        normal_rows[section.section_id] = replace(
+            calculated,
+            from_node=(section.from_node if q_reference >= 0 else section.to_node),
+            to_node=(section.to_node if q_reference >= 0 else section.from_node),
+        )
+
+    normal_sections = [normal_rows[section.section_id] for section in sections]
+
+    # Каждый одиночный отказ участка кольца превращает сеть в дерево.
+    outage_results: list[tuple[str, V1HydraulicResult]] = []
+    scenario_checks: list[V1RingScenarioCheck] = []
+    for disabled in cycle_sections:
+        active = [section for section in sections
+                  if section.section_id != disabled.section_id]
+        outage = _calculate_v1_tree_network(
+            nodes, _orient_v1_tree(node_ids, active, source_node), source_node,
+            flow_kind=flow_kind, water_temperature_c=water_temperature_c)
+        dictating = next(row for row in outage.node_checks
+                         if row.node_id == outage.dictating_node_id)
+        outage_results.append((disabled.section_id, outage))
+        scenario_checks.append(V1RingScenarioCheck(
+            disabled_section_id=disabled.section_id,
+            dictating_node_id=outage.dictating_node_id,
+            required_before_common_m=dictating.required_before_common_m,
+            internal_loss_m=outage.internal_loss_m,
+            max_velocity_mps=outage.max_velocity_mps,
+            all_velocities_ok=outage.all_velocities_ok,
+        ))
+    disabled_id, worst = max(
+        outage_results,
+        key=lambda item: next(row.required_before_common_m
+                              for row in item[1].node_checks
+                              if row.node_id == item[1].dictating_node_id),
+    )
+    return replace(
+        worst,
+        topology_kind="single_ring",
+        ring_section_ids=[section.section_id for section in cycle_sections],
+        ring_converged=True,
+        ring_iterations=iterations,
+        ring_residual_m=round(residual, 6),
+        ring_normal_sections=normal_sections,
+        ring_scenarios=scenario_checks,
+        dictating_outage_section_id=disabled_id,
+    )
+
+
+def calculate_v1_network(
+    nodes: list[V1NodeInput],
+    sections: list[V1NetworkSectionInput],
+    source_node: str,
+    *,
+    flow_kind: Literal["cold", "total"] = "cold",
+    water_temperature_c: float = 10.0,
+) -> V1HydraulicResult:
+    """Рассчитать дерево либо сеть В1 с одним кольцом."""
+    node_ids = {node.node_id for node in nodes}
+    if not node_ids or not sections:
+        return _calculate_v1_tree_network(
+            nodes, sections, source_node, flow_kind=flow_kind,
+            water_temperature_c=water_temperature_c)
+    adjacency: dict[str, set[str]] = {node_id: set() for node_id in node_ids}
+    for section in sections:
+        if section.from_node in adjacency and section.to_node in adjacency:
+            adjacency[section.from_node].add(section.to_node)
+            adjacency[section.to_node].add(section.from_node)
+    seen = set()
+    stack = [source_node] if source_node in node_ids else []
+    while stack:
+        current = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        stack.extend(adjacency[current] - seen)
+    cycle_count = len(sections) - len(node_ids) + 1 if seen == node_ids else -1
+    if cycle_count == 0:
+        return _calculate_v1_tree_network(
+            nodes, sections, source_node, flow_kind=flow_kind,
+            water_temperature_c=water_temperature_c)
+    if cycle_count == 1:
+        return _calculate_v1_ring_network(
+            nodes, sections, source_node, flow_kind=flow_kind,
+            water_temperature_c=water_temperature_c)
+    if cycle_count < 0:
+        missing = sorted(node_ids - seen)
+        raise ValueError(
+            f"Узлы В1 не достижимы от источника {source_node}: {', '.join(missing)}")
+    raise ValueError("В1 поддерживает дерево или одно кольцо; многокольцевая сеть не поддержана")
 
 
 def apply_v1_inlets(

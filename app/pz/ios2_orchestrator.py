@@ -255,6 +255,12 @@ def design_ios2(
                     f"диктующий ввод {v1_result.dictating_inlet_id}"
                     if v1_result.inlet_checks else ""
                 )
+                ring_status = (
+                    f"; кольцо увязано за {v1_result.ring_iterations} ит.; "
+                    f"проверено отказов {len(v1_result.ring_scenarios)}; "
+                    f"диктующий отказ {v1_result.dictating_outage_section_id}"
+                    if v1_result.topology_kind == "single_ring" else ""
+                )
                 bundle.status.append(
                     f"v1_hydraulics: топология {len(v1_result.sections)} участков; "
                     f"диктующий узел {v1_result.dictating_node_id}; "
@@ -263,7 +269,7 @@ def design_ios2(
                     f"ΣHil={v1_result.internal_loss_m:.3f} м; "
                     f"Hlввод={v1_result.input_loss_m:.3f} м; "
                     f"vmax={v1_result.max_velocity_mps:.2f} м/с"
-                    f"{inlet_status}")
+                    f"{inlet_status}{ring_status}")
                 if not v1_result.all_velocities_ok:
                     bad = ", ".join(s.section_id for s in v1_result.sections if not s.velocity_ok)
                     bundle.warnings.append(

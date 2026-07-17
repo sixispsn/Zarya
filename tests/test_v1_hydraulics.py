@@ -221,6 +221,51 @@ def test_network_rejects_disconnected_nodes():
         )
 
 
+def test_single_ring_is_balanced_and_all_single_section_outages_are_checked():
+    result = calculate_v1_network(
+        [V1NodeInput("S", 0),
+         V1NodeInput("A", 5, direct_demand_lps=0.4),
+         V1NodeInput("B", 10),
+         V1NodeInput("C", 15, direct_demand_lps=0.6)],
+        [V1NetworkSectionInput("SA", "S", "A", 20, 40, 0.01),
+         V1NetworkSectionInput("AB", "A", "B", 20, 32, 0.01),
+         V1NetworkSectionInput("BC", "B", "C", 20, 32, 0.01),
+         V1NetworkSectionInput("CS", "C", "S", 20, 40, 0.01)],
+        "S",
+    )
+
+    assert result.topology_kind == "single_ring"
+    assert result.ring_converged is True
+    assert result.ring_residual_m < 0.0001
+    assert len(result.ring_section_ids) == 4
+    assert len(result.ring_scenarios) == 4
+    assert {x.disabled_section_id for x in result.ring_scenarios} == {
+        "SA", "AB", "BC", "CS"}
+    assert result.dictating_outage_section_id == max(
+        result.ring_scenarios, key=lambda x: x.required_before_common_m
+    ).disabled_section_id
+    normal = {x.section_id: x for x in result.ring_normal_sections}
+    assert normal["SA"].flow_lps + normal["CS"].flow_lps == pytest.approx(1.0, abs=0.002)
+    assert (normal["CS"].from_node, normal["CS"].to_node) == ("S", "C")
+    assert (normal["BC"].from_node, normal["BC"].to_node) == ("B", "C")
+    assert (normal["AB"].from_node, normal["AB"].to_node) == ("A", "B")
+    assert all(x.flow_lps >= 0 for x in result.ring_normal_sections)
+
+
+def test_ring_rejects_more_than_one_independent_cycle():
+    with pytest.raises(ValueError, match="многокольцевая"):
+        calculate_v1_network(
+            [V1NodeInput("S", 0), V1NodeInput("A", 1, direct_demand_lps=0.2),
+             V1NodeInput("B", 1), V1NodeInput("C", 1)],
+            [V1NetworkSectionInput("SA", "S", "A", 5, 25, 0.01),
+             V1NetworkSectionInput("AB", "A", "B", 5, 25, 0.01),
+             V1NetworkSectionInput("BS", "B", "S", 5, 25, 0.01),
+             V1NetworkSectionInput("AC", "A", "C", 5, 25, 0.01),
+             V1NetworkSectionInput("CS", "C", "S", 5, 25, 0.01)],
+            "S",
+        )
+
+
 @pytest.mark.parametrize("field,value", [
     ("length_m", 0), ("inner_diameter_mm", 0), ("flow_lps", 0),
     ("roughness_mm", -0.1), ("velocity_limit_mps", 0),
