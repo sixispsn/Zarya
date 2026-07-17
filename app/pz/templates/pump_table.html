@@ -6,6 +6,11 @@
        {% if pumps.required %}{% include "pump_table.html" %}{% endif %}
 =========================================================================== #}
 {% set accepted = pumps.top3[0] if pumps.top3 else none %}
+{% if pumps.q_design_m3h and pumps.h_design_m %}
+<p class="equip-verdict">Расчётная точка системы: Q<sub>расч</sub> = {{ pumps.q_design_m3h | num(2) }} м³/ч,
+H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
+{% endif %}
+{% if pumps.top3 %}
 <table class="equip">
   <thead>
     <tr>
@@ -34,10 +39,23 @@
     {% endfor %}
   </tbody>
 </table>
+{% else %}
+<p class="equip-verdict">Подходящая каталожная характеристика в подключённой базе не найдена;
+окончательную марку выбрать по указанной расчётной точке.</p>
+{% endif %}
+
+{% if accepted %}
+<p class="equip-verdict">Основные характеристики принятого варианта:
+Pмакс = {{ accepted.p_max_bar | num(1) }} бар; NPSHr = {{ accepted.npshr | num(1) }} м;
+расчётная мощность = {{ accepted.p2_kw | num(2) }} кВт.
+{% if accepted.archived %}Каталожная кривая архивная — марку, исполнение и актуальную характеристику подтвердить у изготовителя.{% endif %}</p>
+{% endif %}
 
 {% if accepted and accepted.reasons %}
 <p class="equip-verdict">Обоснование выбора (поз. 1): {{ accepted.reasons | join("; ") }}.</p>
 {% endif %}
+
+{% if pumps.selection_note %}<p class="equip-verdict">{{ pumps.selection_note }}</p>{% endif %}
 
 {% if pump_chart_svg %}
 <div class="figure">

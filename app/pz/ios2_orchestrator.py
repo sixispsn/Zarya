@@ -181,6 +181,25 @@ def design_ios2(
         bundle.warnings.append("documents built from pre-filled project.fire "
                                "(расчётные слои пропущены)")
 
+    # Пожарная насосная В2 — отдельный подбор по рабочей точке основного
+    # расчётного сценария. Ремонтный/аварийный режим кольца сюда не подмешивается.
+    if hydraulic_result is not None and hydraulic_result.pump_duty is not None:
+        from app.pz.pump_bridge import compute_fire_pump_from_duty
+        project.fire_pumps = compute_fire_pump_from_duty(
+            hydraulic_result.pump_duty,
+            npsh_a_m=project.source.npsh_available_m,
+        )
+        if project.fire_pumps.model:
+            bundle.status.append(
+                f"fire_pump: подобран {project.fire_pumps.model} "
+                f"(Q={project.fire_pumps.wp_q:.1f} м³/ч, "
+                f"H={project.fire_pumps.wp_h:.1f} м; 1 раб. + 1 рез.)")
+        else:
+            bundle.warnings.append(
+                "fire_pump: насос В2 требуется, но архивный каталог не дал "
+                "кандидата; в ПЗ сохранена расчётная точка")
+        bundle.project = project
+
     # ── Документы: всегда собираются из текущего project ──
     doc_cipher = (project.document.cipher or "ИОС2")
 

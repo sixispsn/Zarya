@@ -304,6 +304,7 @@ class PumpCandidate:
     npshr: float = 0.0
     score: float = 0.0
     reasons: list = field(default_factory=list)  # list[str] — обоснование
+    archived: bool = False        # архивная каталожная кривая, требует подтверждения
 
 
 @dataclass
@@ -316,6 +317,8 @@ class PumpSystem:
     head_m: float = 0.0
     power_kw: float = 0.0
     count_note: str = ""
+    q_design_m3h: float = 0.0                    # расчётная точка системы, Q
+    h_design_m: float = 0.0                      # расчётная точка системы, H насоса
     # --- детальный подбор (таблица 5.1.8) ---
     top3: list = field(default_factory=list)    # list[PumpCandidate]
     # --- данные графика Q-H принятого насоса (для pump_chart.render_*) ---
@@ -325,6 +328,7 @@ class PumpSystem:
     wp_q: float = 0.0                            # рабочая точка Q, м³/ч
     wp_h: float = 0.0                            # рабочая точка H, м
     q_opt: float = 0.0                           # BEP насоса, м³/ч
+    selection_note: str = ""                    # статус/границы каталожного подбора
 
 
 @dataclass
@@ -482,6 +486,7 @@ class Project:
     fire: FireSystem = field(default_factory=FireSystem)
     meters: MetersSystem = field(default_factory=MetersSystem)
     pumps: PumpSystem = field(default_factory=PumpSystem)
+    fire_pumps: PumpSystem = field(default_factory=PumpSystem)
     balance: BalanceData = field(default_factory=BalanceData)
     fixtures: list = field(default_factory=list)  # список FixtureGroup (от АР)
     # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---

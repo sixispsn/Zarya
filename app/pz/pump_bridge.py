@@ -110,6 +110,51 @@ def compute_pump_from_head(
     )
 
 
+def compute_fire_pump_from_duty(
+    pump_duty,
+    *,
+    npsh_a_m: float | None = None,
+) -> PumpSystem:
+    """Подобрать пожарную установку по рабочей точке основного режима В2.
+
+    ``pump_duty`` формирует гидравлика В2: расход всего расчётного сценария и
+    напор, который должен создать насос. Характеристика системы строится тем же
+    legacy-алгоритмом ``H=kQ²`` при Hст=0. Резервный агрегат не складывается с
+    рабочим: подбор выполняется по кривой одного рабочего насоса.
+    """
+    if pump_duty is None:
+        return PumpSystem(required=False)
+    q_lps = float(getattr(pump_duty, "flow_lps", 0.0) or 0.0)
+    head_m = float(getattr(pump_duty, "required_head_m", 0.0) or 0.0)
+    if q_lps <= 0 or head_m <= 0:
+        return PumpSystem(required=False)
+
+    res = calculate_pump(PumpInput(
+        q_design_m3h=q_lps * 3.6,
+        pump_type="fire",
+        mode="1",
+        h_geom_manual=head_m,
+        h_losses=0.0,
+        h_pr=0.0,
+        h_gar=0.0,
+        npsh_a=npsh_a_m,
+    ))
+    from app.pz.flows_bridge import pump_from_calc
+    ps = pump_from_calc(
+        res,
+        purpose="внутреннее пожаротушение В2",
+        type_label="пожарный",
+        scheme_note="1 рабочий + 1 резервный (СП 10.13130.2020, п. 12.3)",
+    )
+    if not res.candidates:
+        ps.selection_note = (
+            f"Каталог не содержит установки, перекрывающей расчётную точку "
+            f"Q={q_lps * 3.6:.2f} м³/ч, H={head_m:.1f} м; марку уточнить "
+            "по актуальным кривым изготовителя."
+        )
+    return ps
+
+
 def head_components(
     *,
     q_design_m3h: float,

@@ -418,6 +418,16 @@ def build_specification(project: Project) -> Specification:
     f = project.fire
     if f.required:
         sec = SpecSection(title="В2 — внутренний противопожарный водопровод")
+        fp = project.fire_pumps
+        if fp.required and fp.top3:
+            acc = fp.top3[0]
+            sec.rows.append(SpecRow(
+                next_pos(),
+                f"Установка пожарная насосная: Q={fp.wp_q:.2f} м³/ч, "
+                f"H={fp.wp_h:.1f} м, N={getattr(acc, 'p2_kw', 0):.2f} кВт",
+                type_mark=f"{getattr(acc, 'brand', '')} {getattr(acc, 'model', '')}".strip(),
+                manufacturer="по проекту", unit="компл.", qty=1,
+                note=fp.count_note or "1 рабочий + 1 резервный"))
         pk = getattr(f, "pk_total", 0) or 0
         ndn = getattr(f, "nozzle_dn", 50)
         hose = getattr(f, "hose_length_m", 20)

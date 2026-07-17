@@ -101,7 +101,11 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
                    scheme_note: str = "1 раб. + 1 рез.", mode: str = "1") -> PumpSystem:
     """PumpResult -> PumpSystem (с top3, кривой и данными графика Q-H)."""
     if not getattr(res, "candidates", None):
-        return PumpSystem(required=True, purpose=purpose, count_note="подбор не дал кандидатов")
+        return PumpSystem(
+            required=True, purpose=purpose, count_note="подбор не дал кандидатов",
+            q_design_m3h=float(getattr(res, "q_design", 0.0) or 0.0),
+            h_design_m=float(getattr(res, "h_required", 0.0) or 0.0),
+        )
 
     top3: list[PumpCandidate] = []
     for c in res.candidates:
@@ -118,6 +122,7 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
             npshr=float(_g(c.pump, "npshr", default=0) or 0),
             score=c.score,
             reasons=[_clean_reason(r) for r in (c.reasons or [])],
+            archived=bool(_g(c.pump, "archived", default=False)),
         ))
 
     acc = res.candidates[0]
@@ -128,12 +133,19 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
         model=f"{top3[0].brand} {top3[0].model}".strip(),
         q_m3h=acc.working_point.q, head_m=acc.working_point.h,
         power_kw=top3[0].p2_kw, count_note=scheme_note,
+        q_design_m3h=float(getattr(res, "q_design", 0.0) or 0.0),
+        h_design_m=float(getattr(res, "h_required", 0.0) or 0.0),
         # детальный подбор + график
         top3=top3,
         curve=[(p.q, p.h) for p in acc.eff_curve],
         h_stat=res.h_stat, k_sys=res.k_sys,
         wp_q=acc.working_point.q, wp_h=acc.working_point.h,
         q_opt=float(_g(acc.pump, "q_opt", default=0) or 0) * mode_factor,
+        selection_note=(
+            "Предварительный подбор по архивной каталожной кривой; "
+            "актуальную характеристику и исполнение подтвердить у изготовителя."
+            if bool(_g(acc.pump, "archived", default=False)) else ""
+        ),
     )
 
 

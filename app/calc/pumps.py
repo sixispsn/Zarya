@@ -56,6 +56,7 @@ class PumpCandidate:
 
 @dataclass
 class PumpResult:
+    q_design: float
     h_required: float
     h_geom: float
     h_stat: float
@@ -215,6 +216,7 @@ def calculate_pump(data: PumpInput) -> PumpResult:
     results.sort(key=lambda r: r.score, reverse=True)
 
     return PumpResult(
+        q_design=round(data.q_design_m3h, 2),
         h_required=round(hp, 1),
         h_geom=round(h_geom, 1),
         h_stat=round(h_stat, 1),

@@ -69,9 +69,8 @@ def _cold_meter_loss(meters) -> float | None:
     return None
 
 
-def _pump_chart_svg(project: Project) -> str:
+def _pump_chart_for(p) -> str:
     """SVG характеристики Q-H принятого насоса (пусто, если насос не нужен)."""
-    p = project.pumps
     if not (p.required and p.curve):
         return ""
     return render_pump_chart_svg(PumpChart(
@@ -82,6 +81,10 @@ def _pump_chart_svg(project: Project) -> str:
         q_opt=p.q_opt,
         title=p.model,
     ))
+
+
+def _pump_chart_svg(project: Project) -> str:
+    return _pump_chart_for(project.pumps)
 
 
 def generate_pz_html(project: Project) -> str:
@@ -101,8 +104,10 @@ def generate_pz_html(project: Project) -> str:
         fire=project.fire,
         meters=project.meters,
         pumps=project.pumps,
+        fire_pumps=project.fire_pumps,
         balance=project.balance,
         pump_chart_svg=_pump_chart_svg(project),
+        fire_pump_chart_svg=_pump_chart_for(project.fire_pumps),
         fire_net=fire_net,
         head=head,
         tu_check=tu_check,
