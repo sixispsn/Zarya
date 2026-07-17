@@ -3,6 +3,24 @@
   <b>расчётный путь:</b> {{ v1_hydraulics.dictating_path|join(' → ') }};
   <b>расход у источника:</b> {{ v1_hydraulics.source_flow_lps|num(3) }} л/с.</p>
 {% endif %}
+{% if v1_hydraulics.inlet_checks %}
+<p><b>Проверка вводов при отключении одного ввода</b></p>
+<p>Каждый ввод проверен на пропуск 100% максимального секундного расхода в соответствии с п. 8.23 СП 30.13330.2020. Диктующим принят ввод {{ v1_hydraulics.dictating_inlet_id }}.</p>
+<table class="equip">
+  <thead><tr><th>Ввод</th><th>q (100%), л/с</th><th>H<sub>гар</sub>, м</th><th>H<sub>макс</sub>, м</th><th>d<sub>вн</sub>, мм</th><th>v / v<sub>доп</sub>, м/с</th><th>Потери, м</th><th>Потери − H<sub>гар</sub>, м</th><th>Результат</th></tr></thead>
+  <tbody>
+  {% for i in v1_hydraulics.inlet_checks %}
+    <tr class="{{ 'ok' if i.inlet_id == v1_hydraulics.dictating_inlet_id else '' }}">
+      <td>{{ i.inlet_id }}{% if i.inlet_id == v1_hydraulics.dictating_inlet_id %} (дикт.){% endif %}</td>
+      <td>{{ i.flow_lps|num(3) }}</td><td>{{ i.guaranteed_head_m|num(2) }}</td><td>{{ i.maximum_head_m|num(2) }}</td>
+      <td>{{ i.inner_diameter_mm|num(1) }}{% if i.diameter_selection == 'auto' %} (авто){% endif %}</td>
+      <td>{{ i.velocity_mps|num(3) }} / {{ i.velocity_limit_mps|num(2) }}</td><td>{{ i.loss_m|num(3) }}</td><td>{{ i.deficit_index_m|num(3) }}</td>
+      <td class="{{ 'ok' if i.velocity_ok else 'bad' }}">{{ 'пропускает 100% расхода' if i.velocity_ok else 'не проходит по скорости' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 <table class="equip">
   <thead>
     <tr>
@@ -25,7 +43,7 @@
     </tr>
   {% endfor %}
     <tr><td colspan="10"><b>Потери внутренней сети ΣH<sub>il</sub></b></td><td><b>{{ v1_hydraulics.internal_loss_m|num(3) }}</b></td></tr>
-    <tr><td colspan="10"><b>Потери на вводе H<sub>l ввод</sub></b></td><td><b>{{ v1_hydraulics.input_loss_m|num(3) }}</b></td></tr>
+    <tr><td colspan="10"><b>Потери на {{ 'диктующем вводе' if v1_hydraulics.inlet_checks else 'вводе' }} H<sub>l ввод</sub></b></td><td><b>{{ v1_hydraulics.input_loss_m|num(3) }}</b></td></tr>
   </tbody>
 </table>
 {% if v1_hydraulics.node_checks %}

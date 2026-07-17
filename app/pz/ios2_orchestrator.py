@@ -199,7 +199,8 @@ def design_ios2(
         # ── Гидравлика В1: топология приоритетна, ручной путь — резерв ──
         if getattr(project, "v1_network", None):
             from app.calc.v1_hydraulics import (
-                V1NetworkSectionInput, V1NodeInput, calculate_v1_network,
+                V1InletInput, V1NetworkSectionInput, V1NodeInput,
+                apply_v1_inlets, calculate_v1_network,
             )
             try:
                 network = project.v1_network
@@ -210,6 +211,20 @@ def design_ios2(
                     network.source_node,
                     flow_kind="total" if hws == "local" else "cold",
                 )
+                if network.inlets:
+                    v1_result = apply_v1_inlets(
+                        v1_result,
+                        [V1InletInput(**vars(inlet)) for inlet in network.inlets],
+                    )
+                    dictating_inlet = next(
+                        x for x in v1_result.inlet_checks
+                        if x.inlet_id == v1_result.dictating_inlet_id
+                    )
+                    project.source.inputs_count = len(v1_result.inlet_checks)
+                    project.source.guaranteed_head_m = dictating_inlet.guaranteed_head_m
+                    project.source.maximum_head_m = max(
+                        x.maximum_head_m for x in v1_result.inlet_checks
+                    )
                 project.v1_hydraulic_result = v1_result
                 direct_q = sum(node.direct_demand_lps for node in network.nodes)
                 if direct_q:
@@ -235,6 +250,11 @@ def design_ios2(
                 project.source.h_il_m = v1_result.internal_loss_m
                 project.source.il_vvod_m = None
                 project.source.h_vvod_m = v1_result.input_loss_m
+                inlet_status = (
+                    f"; проверено вводов {len(v1_result.inlet_checks)} при 100% расходе; "
+                    f"диктующий ввод {v1_result.dictating_inlet_id}"
+                    if v1_result.inlet_checks else ""
+                )
                 bundle.status.append(
                     f"v1_hydraulics: топология {len(v1_result.sections)} участков; "
                     f"диктующий узел {v1_result.dictating_node_id}; "
@@ -242,7 +262,8 @@ def design_ios2(
                     f"{sum(s.diameter_selection == 'auto' for s in v1_result.sections)} участках; "
                     f"ΣHil={v1_result.internal_loss_m:.3f} м; "
                     f"Hlввод={v1_result.input_loss_m:.3f} м; "
-                    f"vmax={v1_result.max_velocity_mps:.2f} м/с")
+                    f"vmax={v1_result.max_velocity_mps:.2f} м/с"
+                    f"{inlet_status}")
                 if not v1_result.all_velocities_ok:
                     bad = ", ".join(s.section_id for s in v1_result.sections if not s.velocity_ok)
                     bundle.warnings.append(

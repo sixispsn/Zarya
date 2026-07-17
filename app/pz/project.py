@@ -448,10 +448,26 @@ class V1NetworkSectionSpec:
 
 
 @dataclass
+class V1InletSpec:
+    inlet_id: str
+    guaranteed_head_m: float
+    maximum_head_m: float
+    length_m: float
+    inner_diameter_mm: Optional[float]
+    roughness_mm: float
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+    candidate_inner_diameters_mm: List[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
+
+
+@dataclass
 class V1NetworkSpec:
     source_node: str
     nodes: List[V1NodeSpec] = field(default_factory=list)
     sections: List[V1NetworkSectionSpec] = field(default_factory=list)
+    inlets: List[V1InletSpec] = field(default_factory=list)
 
 
 @dataclass

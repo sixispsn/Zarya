@@ -3,8 +3,9 @@ import math
 import pytest
 
 from app.calc.v1_hydraulics import (
-    V1NetworkSectionInput, V1NodeInput, V1SectionInput,
-    audit_v1_pressures, calculate_v1_hydraulics, calculate_v1_network,
+    V1InletInput, V1NetworkSectionInput, V1NodeInput, V1SectionInput,
+    apply_v1_inlets, audit_v1_pressures, calculate_v1_hydraulics,
+    calculate_v1_network,
 )
 
 
@@ -107,6 +108,40 @@ def test_network_auto_diameter_rejects_insufficient_series():
                 max_specific_loss_m_per_m=0.03,
             )],
             "S",
+        )
+
+
+def test_two_inlets_each_carry_full_flow_and_worst_available_head_dictates():
+    internal = calculate_v1_network(
+        [V1NodeInput("S", 0), V1NodeInput("A", 12, direct_demand_lps=1.0)],
+        [V1NetworkSectionInput("S-A", "S", "A", 25, 35, 0.01)],
+        "S",
+    )
+    result = apply_v1_inlets(internal, [
+        V1InletInput("Ввод-1", 30, 42, 20, 40, 0.1),
+        V1InletInput("Ввод-2", 24, 38, 35, 32, 0.1),
+    ])
+
+    assert len(result.inlet_checks) == 2
+    assert all(x.flow_lps == result.source_flow_lps for x in result.inlet_checks)
+    assert result.all_inlets_100_percent_ok is True
+    assert result.dictating_inlet_id == "Ввод-2"
+    dictating = next(x for x in result.inlet_checks if x.inlet_id == "Ввод-2")
+    assert result.input_loss_m == dictating.loss_m
+    assert result.dictating_path == ["Ввод-2", "S-A"]
+    assert {x.role for x in result.sections[:2]} == {"input"}
+
+
+def test_explicit_inlets_reject_input_role_inside_network_tree():
+    internal = calculate_v1_network(
+        [V1NodeInput("S", 0), V1NodeInput("A", 1, direct_demand_lps=0.2)],
+        [V1NetworkSectionInput("S-A", "S", "A", 5, 25, 0.01, role="input")],
+        "S",
+    )
+    with pytest.raises(ValueError, match="должны иметь role=internal"):
+        apply_v1_inlets(
+            internal,
+            [V1InletInput("Ввод-1", 20, 30, 10, 32, 0.1)],
         )
 
 
@@ -282,3 +317,46 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
     scheme = generate_scheme_svg(bundle.project)
     assert "отдельная НС" in scheme
     assert "РД-В1-1" not in scheme
+
+
+def test_orchestrator_checks_two_inlets_and_uses_dictating_tu(tmp_path):
+    from app.intake.project_builder import build_project
+    from app.intake.request_dto import (
+        DocumentRequest, IOS2Request, SourceDataRequest, V1InletRequest,
+        V1NetworkRequest, V1NetworkSectionRequest, V1NodeRequest,
+    )
+    from app.pz.ios2_orchestrator import design_ios2
+
+    request = IOS2Request(
+        document=DocumentRequest(
+            cipher="В1-2ВВ", object_name="Проверка двух вводов", organization="Заря"),
+        building_type="residential", floors=9, building_height_m=27,
+        streams=2,
+        source_data=SourceDataRequest(guaranteed_head_m=99, maximum_head_m=100),
+        v1_network=V1NetworkRequest(
+            source_node="Коллектор",
+            nodes=[
+                V1NodeRequest("Коллектор", 0),
+                V1NodeRequest("Этаж-9", 27, direct_demand_lps=1.0),
+            ],
+            sections=[
+                V1NetworkSectionRequest(
+                    "М1", "Коллектор", "Этаж-9", 35, 35, 0.01),
+            ],
+            inlets=[
+                V1InletRequest("Ввод-1", 31, 43, 20, 40, 0.1),
+                V1InletRequest("Ввод-2", 25, 39, 35, 32, 0.1),
+            ],
+        ),
+    )
+    bundle = design_ios2(build_project(request), output_dir=str(tmp_path))
+    result = bundle.project.v1_hydraulic_result
+
+    assert result.dictating_inlet_id == "Ввод-2"
+    assert len(result.inlet_checks) == 2
+    assert all(x.flow_lps == result.source_flow_lps for x in result.inlet_checks)
+    assert bundle.project.source.inputs_count == 2
+    assert bundle.project.source.guaranteed_head_m == 25
+    assert bundle.project.source.maximum_head_m == 43
+    assert any("проверено вводов 2 при 100% расходе" in x for x in bundle.status)
+    assert any("диктующий ввод Ввод-2" in x for x in bundle.status)

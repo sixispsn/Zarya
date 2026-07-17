@@ -181,10 +181,27 @@ class V1NetworkSectionRequest:
 
 
 @dataclass
+class V1InletRequest:
+    """Отдельный ввод В1, проверяемый на 100% расхода при отказе второго."""
+    inlet_id: str
+    guaranteed_head_m: float
+    maximum_head_m: float
+    length_m: float
+    inner_diameter_mm: Optional[float]
+    roughness_mm: float
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+    candidate_inner_diameters_mm: List[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
+
+
+@dataclass
 class V1NetworkRequest:
     source_node: str
     nodes: List[V1NodeRequest] = field(default_factory=list)
     sections: List[V1NetworkSectionRequest] = field(default_factory=list)
+    inlets: List[V1InletRequest] = field(default_factory=list)
 
 
 @dataclass
@@ -285,6 +302,32 @@ class IOS2Request:
                     p.append(f"v1_network.sections[{i}].max_specific_loss_m_per_m должен быть > 0")
                 if section.role not in ("internal", "input"):
                     p.append(f"v1_network.sections[{i}].role должен быть internal или input")
+            if vn.inlets and any(section.role == "input" for section in vn.sections):
+                p.append("v1_network: при явных inlets участки дерева должны иметь role=internal")
+            inlet_ids = set()
+            for i, inlet in enumerate(vn.inlets):
+                if not inlet.inlet_id or inlet.inlet_id in inlet_ids:
+                    p.append(f"v1_network.inlets[{i}]: обозначение пустое или повторяется")
+                inlet_ids.add(inlet.inlet_id)
+                if inlet.inlet_id in section_ids:
+                    p.append(f"v1_network.inlets[{i}]: обозначение совпадает с участком сети")
+                if min(inlet.guaranteed_head_m, inlet.maximum_head_m,
+                       inlet.length_m, inlet.velocity_limit_mps) <= 0:
+                    p.append(f"v1_network.inlets[{i}]: напоры, L и предел скорости должны быть > 0")
+                if inlet.maximum_head_m < inlet.guaranteed_head_m:
+                    p.append(f"v1_network.inlets[{i}]: Hмакс не может быть меньше Hгар")
+                if inlet.inner_diameter_mm is not None and inlet.inner_diameter_mm <= 0:
+                    p.append(f"v1_network.inlets[{i}].inner_diameter_mm должен быть > 0")
+                if inlet.inner_diameter_mm is None:
+                    if (not inlet.candidate_inner_diameters_mm
+                            or any(d <= 0 for d in inlet.candidate_inner_diameters_mm)):
+                        p.append(f"v1_network.inlets[{i}]: для автоподбора нужен положительный сортамент dвн")
+                    if (inlet.max_specific_loss_m_per_m is None
+                            or inlet.max_specific_loss_m_per_m <= 0):
+                        p.append(f"v1_network.inlets[{i}]: для автоподбора нужен iдоп > 0")
+                if (inlet.roughness_mm < 0 or
+                        (inlet.local_loss_factor is not None and inlet.local_loss_factor < 0)):
+                    p.append(f"v1_network.inlets[{i}]: шероховатость и k_l не могут быть отрицательными")
         if not self.document.cipher:
             p.append("document.cipher обязателен")
         if not self.document.object_name:

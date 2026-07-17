@@ -85,6 +85,36 @@ class V1NetworkSectionInput:
 
 
 @dataclass(frozen=True)
+class V1InletInput:
+    inlet_id: str
+    guaranteed_head_m: float
+    maximum_head_m: float
+    length_m: float
+    inner_diameter_mm: Optional[float]
+    roughness_mm: float
+    local_loss_factor: Optional[float] = None
+    velocity_limit_mps: float = 1.5
+    material: str = ""
+    candidate_inner_diameters_mm: list[float] = field(default_factory=list)
+    max_specific_loss_m_per_m: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class V1InletCheck:
+    inlet_id: str
+    guaranteed_head_m: float
+    maximum_head_m: float
+    flow_lps: float
+    inner_diameter_mm: float
+    diameter_selection: str
+    velocity_mps: float
+    velocity_limit_mps: float
+    velocity_ok: bool
+    loss_m: float
+    deficit_index_m: float
+
+
+@dataclass(frozen=True)
 class V1NodeHeadCheck:
     node_id: str
     path: list[str]
@@ -153,6 +183,9 @@ class V1HydraulicResult:
     zone_regulators: list[V1ZoneRegulator] = field(default_factory=list)
     node_elevations_m: dict[str, float] = field(default_factory=dict)
     source_node_id: str = ""
+    inlet_checks: list[V1InletCheck] = field(default_factory=list)
+    dictating_inlet_id: str = ""
+    all_inlets_100_percent_ok: Optional[bool] = None
     static_source_head_m: Optional[float] = None
     all_minimum_pressures_ok: Optional[bool] = None
     all_maximum_pressures_ok: Optional[bool] = None
@@ -456,6 +489,112 @@ def calculate_v1_network(
     )
 
 
+def apply_v1_inlets(
+    result: V1HydraulicResult,
+    inlets: list[V1InletInput],
+    *,
+    water_temperature_c: float = 10.0,
+) -> V1HydraulicResult:
+    """Проверить каждый ввод на 100% расхода и выбрать диктующий сценарий."""
+    if not inlets:
+        return result
+    if any(section.role == "input" for section in result.sections):
+        raise ValueError("При явных вводах участки дерева В1 должны иметь role=internal")
+    ids = [x.inlet_id.strip() for x in inlets]
+    if any(not x for x in ids) or len(set(ids)) != len(ids):
+        raise ValueError("Обозначения вводов В1 должны быть непустыми и уникальными")
+    if set(ids) & {x.section_id for x in result.sections}:
+        raise ValueError("Обозначение ввода В1 совпадает с обозначением участка сети")
+
+    inlet_rows: list[V1SectionResult] = []
+    checks: list[V1InletCheck] = []
+    for inlet in inlets:
+        if (inlet.guaranteed_head_m <= 0 or inlet.maximum_head_m <= 0
+                or inlet.maximum_head_m < inlet.guaranteed_head_m):
+            raise ValueError(f"Ввод {inlet.inlet_id}: проверьте Hгар и Hмакс")
+
+        def calculate_at(diameter_mm: float) -> V1SectionResult:
+            return calculate_v1_hydraulics([V1SectionInput(
+                section_id=inlet.inlet_id,
+                length_m=inlet.length_m,
+                inner_diameter_mm=diameter_mm,
+                flow_lps=result.source_flow_lps,
+                roughness_mm=inlet.roughness_mm,
+                role="input",
+                local_loss_factor=inlet.local_loss_factor,
+                velocity_limit_mps=inlet.velocity_limit_mps,
+                material=inlet.material,
+            )], water_temperature_c=water_temperature_c).sections[0]
+
+        if inlet.inner_diameter_mm is not None:
+            row = calculate_at(inlet.inner_diameter_mm)
+            selection = "fixed"
+        else:
+            candidates = sorted(set(inlet.candidate_inner_diameters_mm))
+            if not candidates or any(d <= 0 for d in candidates):
+                raise ValueError(f"Ввод {inlet.inlet_id}: для автоподбора нужен сортамент dвн")
+            if (inlet.max_specific_loss_m_per_m is None
+                    or inlet.max_specific_loss_m_per_m <= 0):
+                raise ValueError(f"Ввод {inlet.inlet_id}: для автоподбора задайте iдоп > 0")
+            variants = [calculate_at(d) for d in candidates]
+            row = next((x for x in variants if x.velocity_ok
+                        and x.specific_loss_m_per_m
+                        <= inlet.max_specific_loss_m_per_m), None)
+            if row is None:
+                raise ValueError(
+                    f"Ввод {inlet.inlet_id}: сортамент до {candidates[-1]:g} мм "
+                    "не пропускает 100% расчётного расхода по vдоп и iдоп")
+            selection = "auto"
+        row = replace(
+            row,
+            from_node=f"Наружная сеть ({inlet.inlet_id})",
+            to_node=result.source_node_id,
+            diameter_selection=selection,
+            specific_loss_limit_m_per_m=inlet.max_specific_loss_m_per_m,
+        )
+        inlet_rows.append(row)
+        checks.append(V1InletCheck(
+            inlet_id=inlet.inlet_id,
+            guaranteed_head_m=round(inlet.guaranteed_head_m, 2),
+            maximum_head_m=round(inlet.maximum_head_m, 2),
+            flow_lps=result.source_flow_lps,
+            inner_diameter_mm=row.inner_diameter_mm,
+            diameter_selection=selection,
+            velocity_mps=row.velocity_mps,
+            velocity_limit_mps=row.velocity_limit_mps,
+            velocity_ok=row.velocity_ok,
+            loss_m=row.total_loss_m,
+            deficit_index_m=round(row.total_loss_m - inlet.guaranteed_head_m, 3),
+        ))
+
+    dictating_inlet = max(checks, key=lambda x: (x.deficit_index_m, x.inlet_id))
+    updated_nodes = [replace(
+        node,
+        path=[dictating_inlet.inlet_id] + node.path,
+        input_loss_m=dictating_inlet.loss_m,
+        required_before_common_m=round(
+            node.required_before_common_m + dictating_inlet.loss_m, 3),
+    ) for node in result.node_checks]
+    dictating_node = max(updated_nodes,
+                         key=lambda x: (x.required_before_common_m, x.node_id))
+    all_sections = inlet_rows + result.sections
+    return replace(
+        result,
+        sections=all_sections,
+        input_loss_m=dictating_inlet.loss_m,
+        total_loss_m=round(dictating_node.internal_loss_m
+                           + dictating_inlet.loss_m, 3),
+        max_velocity_mps=max(x.velocity_mps for x in all_sections),
+        all_velocities_ok=all(x.velocity_ok for x in all_sections),
+        dictating_node_id=dictating_node.node_id,
+        dictating_path=dictating_node.path,
+        node_checks=updated_nodes,
+        inlet_checks=checks,
+        dictating_inlet_id=dictating_inlet.inlet_id,
+        all_inlets_100_percent_ok=all(x.velocity_ok for x in checks),
+    )
+
+
 def audit_v1_pressures(
     result: V1HydraulicResult,
     *,
@@ -540,8 +679,11 @@ def audit_v1_pressures(
     for zone in zones:
         zone_nodes = set(zone.node_ids)
         zone_paths = [all_paths[node_id] for node_id in zone.node_ids]
-        common_sections = [sid for sid in zone_paths[0]
-                           if all(sid in path for path in zone_paths[1:])]
+        common_sections = [
+            sid for sid in zone_paths[0]
+            if (not result.inlet_checks or section_by_id[sid].role == "internal")
+            and all(sid in path for path in zone_paths[1:])
+        ]
         outside_paths = [path for node_id, path in all_paths.items()
                          if node_id not in zone_nodes]
         exclusive_sections = [sid for sid in common_sections

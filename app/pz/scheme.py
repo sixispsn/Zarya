@@ -75,6 +75,9 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     two_zones = (b.zones or 1) >= 2
     zone_regulators = list(getattr(
         getattr(project, "v1_hydraulic_result", None), "zone_regulators", []) or [])
+    network_inlets = list(getattr(
+        getattr(project, "v1_network", None), "inlets", []) or [])
+    inlet_count = len(network_inlets) if network_inlets else P.inlet_count
     if (b.zones or 1) > 2:
         warns.append("расчётных зон больше двух: на принципиальной схеме показаны две характерные зоны")
     plk_on = bool(project.flows and project.flows.irrigation_m3_day > 0)
@@ -478,7 +481,7 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     # ================= НИЗ: вводы (п.8.5), транзит ПК, насосные =================
     ym = 1560; y_low = 1658
     xe = XL + 40
-    inlet2 = P.inlet_count >= 2
+    inlet2 = inlet_count >= 2
     if inlet2:
         for yy in (ym - 34, ym + 34):
             ph(xe, xe + 66, yy); gate_hh(xe + 42, yy); flow_r(xe + 22, yy)
@@ -573,12 +576,12 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
             tilde(xo, yr_t + 96); pv(xo, yr_t + 96, yv); ph(min(xo, xg), max(xo, xg), yv); pv(xg, yv, y_gb - 2)
 
     # выноски низа
-    inlet_txt = (f"Ввод водопровода {P.inlet_count}x{DIA}{P.inlet_dn}"
+    inlet_txt = (f"Ввод водопровода {inlet_count}x{DIA}{P.inlet_dn}"
                  + (f", абс. отметка {P.inlet_abs} ({_fmt_mark(P.inlet_mark_m)})" if P.inlet_abs
                     else f", отм. {_fmt_mark(P.inlet_mark_m)}"))
     lbl((xe + 33, ym + (34 if inlet2 else 0)), inlet_txt, 11)
     if fire_on:
-        lbl((378, 1470), f"На пожаротушение нижней зоны {P.inlet_count}x{DIA}{P.inlet_dn}", 11, maxr=480)
+        lbl((378, 1470), f"На пожаротушение нижней зоны {inlet_count}x{DIA}{P.inlet_dn}", 11, maxr=480)
     vyn(1900, y_low, 26, -26, 44, "отм. " + _fmt_mark(-(P.basement_depth_m - 0.6)), 11)
     vyn(1250, y_0 + CHg - 46, 24, -22, 44, "отм. -0,700", 11)
     if fire_on:

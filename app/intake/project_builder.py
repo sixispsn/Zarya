@@ -20,7 +20,7 @@ from app.pz.project import (
     Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
-    V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec,
+    V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
 )
 
 
@@ -134,7 +134,10 @@ def build_project(req: IOS2Request) -> Project:
                 max_static_head_m=n.max_static_head_m,
             ) for n in req.v1_network.nodes],
             sections=[V1NetworkSectionSpec(**vars(s)) for s in req.v1_network.sections],
+            inlets=[V1InletSpec(**vars(x)) for x in req.v1_network.inlets],
         )
+        if req.v1_network.inlets:
+            p.source.inputs_count = len(req.v1_network.inlets)
         # Топология является источником состава потребителей для общего расхода:
         # это исключает расхождение расхода водомера и корневого участка сети.
         counts = {}
