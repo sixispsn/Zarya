@@ -55,6 +55,10 @@ table.equip td.bad  { color: #b01818; font-weight: 700; }
 
 .equip-verdict { font-size: 8pt; margin: 3pt 0 0; }
 .equip-note    { font-size: 8pt; font-style: italic; margin: 3pt 0 0; }
+table.pump-compliance { font-size:7.5pt; line-height:1.15; }
+table.pump-compliance th:first-child, table.pump-compliance td:first-child { width:10%; }
+table.pump-compliance th:last-child, table.pump-compliance td:last-child { width:14%; }
+.pump-compliance-title { break-after: avoid; page-break-after: avoid; }
 
 /* рисунок (график Q-H) */
 .figure { margin: 8pt 0; text-align: center; break-inside: avoid; }

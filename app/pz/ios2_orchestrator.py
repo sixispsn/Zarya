@@ -188,6 +188,7 @@ def design_ios2(
         project.fire_pumps = compute_fire_pump_from_duty(
             hydraulic_result.pump_duty,
             npsh_a_m=project.source.npsh_available_m,
+            maximum_source_head_m=project.source.maximum_head_m,
         )
         if project.fire_pumps.model:
             bundle.status.append(

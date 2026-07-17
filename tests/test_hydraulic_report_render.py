@@ -67,6 +67,12 @@ def test_html_shows_pump_duty():
     assert "12.6" in html or "12,6" in html
 
 
+def test_html_never_sizes_pump_from_ring_failure():
+    report, p = _report_and_project()
+    html = generate_hydraulic_report_html(p, report)
+    assert "рабочую точку принять по аварийному режиму" not in html
+
+
 def test_pdf_is_a4(tmp_path):
     from pypdf import PdfReader
     report, p = _report_and_project()

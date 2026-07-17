@@ -77,6 +77,15 @@ def _interp_h(curve: list[PumpCurvePoint], q: float) -> float:
     return 0.0
 
 
+def interpolate_pump_head(curve, q: float) -> float:
+    """Публичная проверка напора по каталожной Q-H кривой.
+
+    Использует ту же линейную интерполяцию, что legacy-подбор. Нужна внешним
+    нормативным проверкам, чтобы не дублировать алгоритм кривой.
+    """
+    return _interp_h(list(curve), q)
+
+
 def _build_effective_curve(curve: tuple[PumpCurvePoint, ...], mode: PumpMode) -> list[PumpCurvePoint]:
     """Кривая насоса с учётом режима (параллельно/последовательно)."""
     if mode == "2p":  # параллельно: Q удваивается при том же H

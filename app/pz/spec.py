@@ -427,7 +427,9 @@ def build_specification(project: Project) -> Specification:
                 f"H={fp.wp_h:.1f} м, N={getattr(acc, 'p2_kw', 0):.2f} кВт",
                 type_mark=f"{getattr(acc, 'brand', '')} {getattr(acc, 'model', '')}".strip(),
                 manufacturer="по проекту", unit="компл.", qty=1,
-                note=fp.count_note or "1 рабочий + 1 резервный"))
+                note=(fp.count_note or "1 рабочий + 1 резервный")
+                     + ("; предварительный подбор по архивной Q-H кривой"
+                        if getattr(acc, "archived", False) else "")))
         pk = getattr(f, "pk_total", 0) or 0
         ndn = getattr(f, "nozzle_dn", 50)
         hose = getattr(f, "hose_length_m", 20)

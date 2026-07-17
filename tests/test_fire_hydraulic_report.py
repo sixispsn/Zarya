@@ -118,6 +118,11 @@ def test_conclusion_mentions_pump():
     assert "42.6" in txt or "42,6" in txt
 
 
+def test_conclusion_never_uses_ring_failure_as_pump_duty():
+    txt = _report(available=30.0).render_text()
+    assert "рабочую точку принять по аварийному режиму" not in txt
+
+
 def test_conclusion_no_pump_variant():
     txt = _report(available=100.0).render_text()
     assert "не требуется" in txt

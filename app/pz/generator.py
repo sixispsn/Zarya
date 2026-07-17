@@ -247,6 +247,7 @@ def generate_hydraulic_report_html(project: Project, report) -> str:
     )
     return env.get_template("hydraulic_document.html").render(
         doc=doc, h=report.header, segments=report.segments,
+        fire_pumps=project.fire_pumps,
         dictating_paths=report.dictating_paths,
         conclusion_html=_conclusion_to_html(report),
     )
@@ -255,8 +256,12 @@ def generate_hydraulic_report_html(project: Project, report) -> str:
 def generate_hydraulic_report_pdf(project: Project, report, output_path: str) -> str:
     """PDF листа гидравлического расчёта В2. CSS: hydraulic.css (А4 книжная)."""
     html_str = generate_hydraulic_report_html(project, report)
-    stylesheets = [CSS(filename=str(TEMPLATES_DIR / "hydraulic.css"),
-                       base_url=str(TEMPLATES_DIR))]
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / "hydraulic.css"),
+            base_url=str(TEMPLATES_DIR)),
+        CSS(filename=str(TEMPLATES_DIR / "equipment.css"),
+            base_url=str(TEMPLATES_DIR)),
+    ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets)
     return output_path

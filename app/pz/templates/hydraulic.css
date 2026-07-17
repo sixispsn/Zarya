@@ -40,6 +40,14 @@ table.hdr { width:100%; border-collapse:collapse; font-size:10pt; margin:4pt 0 6
 table.hdr td { padding:2pt 4pt; vertical-align:top; }
 table.hdr td.k { width:55mm; font-weight:600; }
 
+table.pump-norms { width:100%; border-collapse:collapse; font-size:7.5pt; line-height:1.15; margin:2pt 0 6pt; }
+table.pump-norms th, table.pump-norms td { border:0.3mm solid #000; padding:1.5pt 2pt; vertical-align:top; }
+table.pump-norms th { background:#f2f2f2; text-align:center; }
+table.pump-norms th:first-child, table.pump-norms td:first-child { width:14mm; text-align:center; }
+table.pump-norms th:last-child, table.pump-norms td:last-child { width:21mm; text-align:center; }
+table.pump-norms tr.fail td { background:#ffe0e0; font-weight:600; }
+table.pump-norms tr.pending td { background:#fff6e0; }
+
 /* ── Блок 2: таблица участков ── */
 table.hydr { width:100%; border-collapse:collapse; font-size:8pt; line-height:1.15; margin:2pt 0 6pt; }
 table.hydr thead { display: table-header-group; }

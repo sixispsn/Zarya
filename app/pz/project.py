@@ -308,6 +308,15 @@ class PumpCandidate:
 
 
 @dataclass
+class PumpComplianceCheck:
+    """Строка нормативной проверки пожарной насосной установки."""
+    clause: str = ""
+    requirement: str = ""
+    decision: str = ""
+    status: str = "specified"    # verified / specified / pending / fail
+
+
+@dataclass
 class PumpSystem:
     required: bool = False
     purpose: str = ""
@@ -329,6 +338,12 @@ class PumpSystem:
     wp_h: float = 0.0                            # рабочая точка H, м
     q_opt: float = 0.0                           # BEP насоса, м³/ч
     selection_note: str = ""                    # статус/границы каталожного подбора
+    working_units: int = 0
+    reserve_units: int = 0
+    pump_head_at_design_m: Optional[float] = None
+    maximum_system_pressure_bar: Optional[float] = None
+    sp10_compliant: Optional[bool] = None
+    sp10_checks: list = field(default_factory=list)  # list[PumpComplianceCheck]
 
 
 @dataclass
