@@ -31,7 +31,7 @@
     </tr>
     <tr>
       <td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name or '' }}</td><td class="b"></td><td class="b"></td>
-      <td rowspan="2">{{ doc.stage_label or 'П' }}</td><td rowspan="2">{{ doc.sheet_no or '1' }}</td><td rowspan="2">{{ doc.sheet_total or '—' }}</td>
+      <td rowspan="2">{{ doc.stage_label or 'П' }}</td><td rowspan="2"><span class="page-number"></span></td><td rowspan="2"><span class="page-total"></span></td>
     </tr>
     <tr>
       <td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td>
@@ -65,7 +65,7 @@
     <tr>
       <td class="blank"></td><td class="blank"></td><td class="blank"></td>
       <td class="blank"></td><td class="blank"></td><td class="blank"></td>
-      <td rowspan="2"></td>
+      <td rowspan="2"><span class="page-number"></span></td>
     </tr>
     <tr>
       <td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td>

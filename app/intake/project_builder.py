@@ -21,6 +21,7 @@ from app.pz.project import (
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
     V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
+    InsulationDesign,
 )
 
 
@@ -62,7 +63,16 @@ def build_project(req: IOS2Request) -> Project:
 
     p.building = BuildingFlags(
         purpose=_BUILDING_MAP[req.building_type],
-        floors_above=req.floors, height_m=req.building_height_m, zones=req.zones)
+        floors_above=req.floors, height_m=req.building_height_m, zones=req.zones,
+        total_area_m2=req.total_area_m2, risers_v1=req.risers_v1,
+        risers_t3=req.risers_t3, risers_t4=req.risers_t4)
+    p.insulation = InsulationDesign(
+        location=req.insulation_location,
+        t_room_manual=req.insulation_t_room_manual,
+        humidity=req.insulation_humidity,
+        hvs_water_temp=req.insulation_hvs_water_temp,
+        gvs_water_temp=req.insulation_gvs_water_temp,
+    )
 
     from app.pz.project import WaterSource
     sd = req.source_data

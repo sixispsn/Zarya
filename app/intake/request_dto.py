@@ -216,6 +216,15 @@ class IOS2Request:
     building_type: str                            # BUILDING_TYPES
     floors: int
     building_height_m: float
+    total_area_m2: float = 0.0
+    risers_v1: int = 0
+    risers_t3: int = 0
+    risers_t4: int = 0
+    insulation_location: str = "room_hot"
+    insulation_t_room_manual: float = 5.0
+    insulation_humidity: int = 60
+    insulation_hvs_water_temp: float = 10.0
+    insulation_gvs_water_temp: float = 60.0
     # ВПВ
     streams: Optional[int] = None                 # None → авто по табл. 7.1 (future)
     q_per_stream_lps: float = 2.6
@@ -243,6 +252,14 @@ class IOS2Request:
             p.append("floors должно быть > 0")
         if self.building_height_m <= 0:
             p.append("building_height_m должно быть > 0 (нужно для Rk п. 7.15)")
+        if self.total_area_m2 < 0:
+            p.append("total_area_m2 не может быть отрицательной")
+        if min(self.risers_v1, self.risers_t3, self.risers_t4) < 0:
+            p.append("число стояков В1/Т3/Т4 не может быть отрицательным")
+        if self.insulation_location not in ("room_hot", "room_cold", "parking"):
+            p.append("insulation_location должен быть room_hot, room_cold или parking")
+        if self.insulation_humidity not in (40, 50, 60, 70, 80, 90):
+            p.append("insulation_humidity должна быть 40, 50, 60, 70, 80 или 90")
         if self.streams is not None and self.streams not in (1, 2):
             p.append(f"streams={self.streams}: поддерживается 1 или 2")
         if self.sewage_max_fixture_lps < 0:

@@ -89,10 +89,18 @@ def test_builder_raises_on_invalid():
 
 
 def test_builder_maps_building_type():
-    p = build_project(_req())
+    p = build_project(_req(
+        total_area_m2=12000, risers_v1=6, risers_t3=5, risers_t4=5,
+        insulation_location="parking", insulation_humidity=70,
+        insulation_hvs_water_temp=8, insulation_gvs_water_temp=60))
     assert p.building.purpose == BuildingPurpose.RESIDENTIAL
     assert p.building.floors_above == 16
     assert p.building.height_m == 48.0
+    assert p.building.total_area_m2 == 12000
+    assert (p.building.risers_v1, p.building.risers_t3, p.building.risers_t4) == (6, 5, 5)
+    assert p.insulation.location == "parking"
+    assert p.insulation.humidity == 70
+    assert p.insulation.hvs_water_temp == 8
 
 
 def test_builder_fills_fire_system():

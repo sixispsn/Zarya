@@ -12,10 +12,14 @@ app/pz/spec.py — спецификация оборудования, издел
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 from app.pz.project import BuildingPurpose, Project
+from app.calc.insulation import (
+    InsulationParams, PipeGvs, PipeHvs, calculate_insulation,
+)
 
 # Удельные показатели расхода труб, пог. м на 1 м² (Метод 2); общ./пром. = жилые ÷1,5.
 UNIT_PIPE_M_PER_M2 = {
@@ -50,11 +54,6 @@ def ring_volume_l(d_outer_mm: float, length_m: float) -> float:
 # Сортамент PE-X/ПНД (Ду -> Ø×стенка) для записи труб распределительной сети.
 PEX_SORTAMENT = {16: "16×2,0", 20: "20×2,0", 25: "25×2,3",
                  32: "32×3,0", 40: "40×3,7", 50: "50×4,6"}
-# Номенклатурная толщина вспененного каучука по Ду (СП 61 п.6.9 — ближайшая
-# по ряду; точный расчёт по п.6.8 от темп./влажности — отдельным препроцессором).
-INSUL_THK_MM = {16: 9, 20: 9, 25: 13, 32: 13, 40: 19, 50: 19}
-
-
 @dataclass
 class SpecRow:
     pos: Optional[int]
@@ -294,16 +293,65 @@ def build_specification(project: Project) -> Specification:
                 continue
             rows.append((dn_map[key], round(total * share, 1)))
         rows.sort(key=lambda e: e[0])
+        ins = project.insulation
+        params = InsulationParams(
+            location=ins.location,
+            t_room_manual=ins.t_room_manual,
+            humidity=ins.humidity,
+        )
+        if key == "gvs":
+            result = calculate_insulation(
+                params,
+                [PipeGvs(dn=dn, t_water=ins.gvs_water_temp) for dn, _ in rows],
+                [],
+            )
+            calculated = {x.dn: x for x in result.gvs}
+        else:
+            result = calculate_insulation(
+                params,
+                [],
+                [PipeHvs(dn=dn, t_water=ins.hvs_water_temp) for dn, _ in rows],
+            )
+            calculated = {x.dn: x for x in result.hvs if x.need_insulation}
         first = True
         for dn, length in rows:
-            thk = INSUL_THK_MM.get(dn, 13)
+            calc = calculated.get(dn)
+            if calc is None:
+                continue
+            thk = calc.delta
+            material = ("минеральной ваты группы Г1" if ins.location == "parking" and key == "gvs"
+                        else "вспененного каучука группы Г1" if ins.location == "parking"
+                        else "вспененного каучука")
             if first:
-                name = f"Трубки теплоизоляционные из вспененного каучука, толщ. {thk} мм, Ду{dn}"
+                name = f"Трубки теплоизоляционные из {material}, толщ. {thk} мм, Ду{dn}"
                 first = False
             else:
                 name = f"то же толщ. {thk} мм, Ду{dn}"
             out.append(SpecRow(next_pos(), name, type_mark=f"Ду{dn}, δ{thk}",
-                               manufacturer="Торговая сеть", unit="м", qty=length))
+                               manufacturer="Торговая сеть", unit="м", qty=length,
+                               note=(f"расчёт legacy/SP 61: tводы="
+                                     f"{ins.gvs_water_temp if key == 'gvs' else ins.hvs_water_temp:g} °C, "
+                                     f"tпом={result.t_room:g} °C, φ={ins.humidity}%")))
+        return out
+
+    def fire_pipe_rows():
+        """Трубы В2 по фактическим длинам расчётной сети, без укрупнения."""
+        net = project.fire_network
+        if net is None:
+            return []
+        lengths = defaultdict(float)
+        for segment in net.segments:
+            lengths[("кольцевая магистраль", int(segment.dn))] += segment.length_m
+        for riser in net.risers:
+            lengths[("стояки", int(riser.dn))] += riser.length_m
+        out = []
+        material = _mat(mats, "fire_pipes", "сталь по ГОСТ 3262-75")
+        for (role, dn), length in sorted(lengths.items(), key=lambda x: (x[0][1], x[0][0])):
+            out.append(SpecRow(
+                next_pos(), f"Труба {material}, Ду{dn}", type_mark=f"Ду{dn}",
+                manufacturer="Торговая сеть", unit="м", qty=round(length, 1),
+                note=f"В2, {role}; по расчётной схеме стадии П",
+            ))
         return out
 
     # ── Раздел В1 (хоз-питьевой холодный водопровод) ──
@@ -451,14 +499,18 @@ def build_specification(project: Project) -> Specification:
             sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
                                     manufacturer="Торговая сеть", unit="шт.",
                                     qty=None, note="по числу ПК"))
+        sec.rows += fire_pipe_rows()
         sections.append(sec)
 
     return Specification(
         sections=sections,
-        note=("Длины трубопроводов определены укрупнённо по удельным показателям расхода "
-              "труб на 1 м² площади (Метод 2); уточняются на стадии «Р». Санитарные приборы "
+        note=(f"Длины трубопроводов В1 и Т3-Т4 определены для общей площади {area:g} м² "
+              "укрупнённо по удельным показателям расхода труб на 1 м² площади (Метод 2) "
+              "с коэффициентом запаса 1,07; уточняются на стадии «Р». Санитарные приборы "
               "и запорная арматура — по заданию АР. Теплоизоляция (вспененный каучук) принята "
               "на магистрали и стояки В1 и Т3-Т4 (от конденсата и теплопотерь, СП 30 п.8.11); "
-              "толщина номенклатурная, уточняется расчётом по СП 61. Фасонные части и крепёж "
+              "толщина рассчитана алгоритмом legacy SP calculator по СП 61 для заданных "
+              "температуры и влажности. Трубы В2 приняты по длинам расчётной сети стадии П. "
+              "Фасонные части и крепёж "
               "в спецификацию не включены (ГОСТ 21.601-2011 п.9.4). Единицы — по ГОСТ 21.110 п.9.5."),
     )

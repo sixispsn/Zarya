@@ -14,6 +14,10 @@ building:
   type: residential
   floors: 16
   height_m: 48.0
+  total_area_m2: 14400.0
+  risers_v1: 8
+  risers_t3: 8
+  risers_t4: 8
   zones: 2
 fire:
   streams: 2
@@ -43,6 +47,12 @@ source_data:
 consumers:
   - code: residential_central_hw
     count: 480
+insulation:
+  location: room_hot
+  t_room_manual: 5.0
+  humidity: 60
+  hvs_water_temp: 10.0
+  gvs_water_temp: 60.0
 rooms:
   - name: Коридор типового этажа
     length_m: 42.0

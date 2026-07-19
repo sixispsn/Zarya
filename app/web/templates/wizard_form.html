@@ -66,9 +66,27 @@
     </select></label>
     <label>Этажей<input class="w-s" name="floors" value="{{ prefill.floors if prefill else 16 }}" required></label>
     <label>Высота, м<input class="w-s" name="height" value="{{ prefill.building_height_m if prefill else 48 }}" required></label>
+    <label>Общая площадь, м²<input class="w-s" name="total_area" value="{{ prefill.total_area_m2 if prefill else 14400 }}" required></label>
     <label>Зон водоснабжения<input class="w-s" name="zones" value="{{ prefill.zones if prefill else 2 }}"></label>
     <label>Расчётных струй (пусто = по табл. 7.1)<input class="w-s" name="streams" value="{{ prefill.streams if prefill and prefill.streams is not none else ('' if prefill else 2) }}"></label>
   </div>
+  <div class="row">
+    <label>Стояков В1<input class="w-s" name="risers_v1" value="{{ prefill.risers_v1 if prefill else 8 }}"></label>
+    <label>Стояков Т3<input class="w-s" name="risers_t3" value="{{ prefill.risers_t3 if prefill else 8 }}"></label>
+    <label>Стояков Т4<input class="w-s" name="risers_t4" value="{{ prefill.risers_t4 if prefill else 8 }}"></label>
+    <label>Место прокладки<select name="insulation_location">
+      <option value="room_hot">отапливаемое помещение</option>
+      <option value="room_cold">неотапливаемое помещение</option>
+      <option value="parking">подземная стоянка</option>
+    </select></label>
+    <label>t помещения, °C<input class="w-s" name="insulation_t_room" value="{{ prefill.insulation_t_room_manual if prefill else 5 }}"></label>
+    <label>Влажность, %<select name="insulation_humidity">
+      {% for h in [40,50,60,70,80,90] %}<option value="{{ h }}"{% if (prefill.insulation_humidity if prefill else 60) == h %} selected{% endif %}>{{ h }}</option>{% endfor %}
+    </select></label>
+    <label>t ХВС, °C<input class="w-s" name="insulation_hvs_temp" value="{{ prefill.insulation_hvs_water_temp if prefill else 10 }}"></label>
+    <label>t ГВС, °C<input class="w-s" name="insulation_gvs_temp" value="{{ prefill.insulation_gvs_water_temp if prefill else 60 }}"></label>
+  </div>
+  <p class="hint">Площадь и число стояков формируют укрупнённые объёмы труб стадии П; толщина изоляции рассчитывается алгоритмом legacy SP calculator.</p>
 </fieldset>
 
 <fieldset><legend>3 · Помещение расстановки ПК</legend>

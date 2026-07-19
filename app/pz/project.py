@@ -494,11 +494,22 @@ class V1NetworkSpec:
 
 
 @dataclass
+class InsulationDesign:
+    """Исходные данные расчёта изоляции, перенесённого из legacy SP calculator."""
+    location: str = "room_hot"
+    t_room_manual: float = 5.0
+    humidity: int = 60
+    hvs_water_temp: float = 10.0
+    gvs_water_temp: float = 60.0
+
+
+@dataclass
 class Project:
     document: DocumentInfo = field(default_factory=DocumentInfo)
     building: BuildingFlags = field(default_factory=BuildingFlags)
     source: WaterSource = field(default_factory=WaterSource)
     materials: PipeMaterials = field(default_factory=PipeMaterials)
+    insulation: InsulationDesign = field(default_factory=InsulationDesign)
     flows: FlowsData = field(default_factory=FlowsData)
     fire: FireSystem = field(default_factory=FireSystem)
     meters: MetersSystem = field(default_factory=MetersSystem)

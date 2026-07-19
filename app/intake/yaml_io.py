@@ -86,6 +86,7 @@ def load_request(text: str) -> IOS2Request:
     bld = sect("building")
     fire = sect("fire", required=False)
     source_data_s = sect("source_data", required=False)
+    insulation_s = sect("insulation", required=False)
     net_s = sect("network", required=False)
     rooms_s = data.get("rooms", [])
     if rooms_s is not None and not isinstance(rooms_s, list):
@@ -202,6 +203,15 @@ def load_request(text: str) -> IOS2Request:
         building_type=str(bld.get("type", "residential")),
         floors=int(bld.get("floors", 0)),
         building_height_m=float(bld.get("height_m", 0)),
+        total_area_m2=float(bld.get("total_area_m2", 0)),
+        risers_v1=int(bld.get("risers_v1", 0)),
+        risers_t3=int(bld.get("risers_t3", 0)),
+        risers_t4=int(bld.get("risers_t4", 0)),
+        insulation_location=str(insulation_s.get("location", "room_hot")),
+        insulation_t_room_manual=float(insulation_s.get("t_room_manual", 5.0)),
+        insulation_humidity=int(insulation_s.get("humidity", 60)),
+        insulation_hvs_water_temp=float(insulation_s.get("hvs_water_temp", 10.0)),
+        insulation_gvs_water_temp=float(insulation_s.get("gvs_water_temp", 60.0)),
         streams=(int(fire_streams) if fire_streams is not None else None),
         q_per_stream_lps=float(fire.get("q_per_stream_lps", 2.6)),
         hose_length_m=int(fire.get("hose_length_m", 20)),
@@ -237,12 +247,23 @@ def dump_request(req: IOS2Request) -> str:
         "building": {
             "type": req.building_type, "floors": req.floors,
             "height_m": req.building_height_m, "zones": req.zones,
+            "total_area_m2": req.total_area_m2,
+            "risers_v1": req.risers_v1,
+            "risers_t3": req.risers_t3,
+            "risers_t4": req.risers_t4,
         },
         "fire": {
             **({"streams": req.streams} if req.streams is not None else {}),
             "q_per_stream_lps": req.q_per_stream_lps,
             "hose_length_m": req.hose_length_m,
             "cabinet_dn": req.cabinet_dn,
+        },
+        "insulation": {
+            "location": req.insulation_location,
+            "t_room_manual": req.insulation_t_room_manual,
+            "humidity": req.insulation_humidity,
+            "hvs_water_temp": req.insulation_hvs_water_temp,
+            "gvs_water_temp": req.insulation_gvs_water_temp,
         },
     }
     if req.source_data is not None:

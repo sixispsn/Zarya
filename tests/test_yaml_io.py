@@ -114,5 +114,8 @@ def test_demo_yaml_is_valid_complete_and_roundtrips():
     assert req.source_data.tu_number == "DEMO-ТУ-01"
     assert req.source_data.maximum_head_m == 45.0
     assert req.consumers[0].count == 480
+    assert req.total_area_m2 == 14400.0
+    assert (req.risers_v1, req.risers_t3, req.risers_t4) == (8, 8, 8)
+    assert req.insulation_humidity == 60
     assert all(x.repair_section_id for x in req.network.runs)
     assert load_request(dump_request(req)) == req
