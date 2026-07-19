@@ -5,8 +5,9 @@ app/pz/spec.py — спецификация оборудования, издел
 Источники строк:
   • оборудование — из подбора (PumpSystem, MetersSystem);
   • арматура — запорные краны перед приборами (project.fixtures, от АР), по Ду;
-  • трубы — укрупнённо по площади (Метод 2), с группировкой по Ду (Метод 3).
-Фасонные части, крепёж, гибкие подводки не включают (ГОСТ 21.601 п.9.4,
+  • трубы — укрупнённо по площади (Метод 2), с группировкой по Ду (Метод 3);
+  • крепления — по длинам труб и нормативному максимальному шагу.
+Фасонные части и гибкие подводки не включают (ГОСТ 21.601 п.9.4,
 ГОСТ 21.110 п.4.6). Повтор наименования по возрастанию Ду -> «то же Ø…» (п.4.5).
 """
 from __future__ import annotations
@@ -32,6 +33,19 @@ PIPE_GROUPS = [("магистрали", 0.15, {"hvs": 50, "gvs": 40}),
                ("стояки",     0.35, {"hvs": 32, "gvs": 25}),
                ("подводки",   0.50, {"hvs": 20, "gvs": 20})]
 PIPE_SPARE = 1.07
+# СП 73.13330.2016, таблица 2: Ду -> (неизолированные, изолированные), м.
+STEEL_SUPPORT_SPACING_M = {
+    15: (2.5, 1.5), 20: (3.0, 2.0), 25: (3.5, 2.0), 32: (4.0, 2.5),
+    40: (4.5, 3.0), 50: (5.0, 3.0), 80: (6.0, 4.0), 100: (6.0, 4.5),
+    125: (7.0, 5.0), 150: (8.0, 6.0),
+}
+# СП 41-109-2005, таблица 4: наружный диаметр ->
+# (ХВС горизонталь, ГВС горизонталь, ХВС вертикаль, ГВС вертикаль), м.
+PEX_SUPPORT_SPACING_M = {
+    16: (0.35, 0.35, 0.36, 0.29), 20: (0.40, 0.35, 0.43, 0.29),
+    25: (0.45, 0.40, 0.57, 0.36), 32: (0.55, 0.50, 0.72, 0.50),
+    40: (0.60, 0.55, 0.86, 0.57), 50: (0.75, 0.70, 1.07, 0.79),
+}
 VALVE_MAIN_COEF = 0.3   # укрупнённый коэф. секционной запорки на магистралях (от числа стояков)
 # Проходки через конструкции (СП 30: гильзы Ø+5–10 мм, зазор — негорючий материал)
 SLAB_THK_M = 0.20       # толщина перекрытия
@@ -106,6 +120,15 @@ def build_specification(project: Project) -> Specification:
             if any(k in r.label.lower() for k in keys):
                 return r
         return None
+
+    def _step_for_steel(dn, insulated):
+        table_dn = next((x for x in sorted(STEEL_SUPPORT_SPACING_M) if x >= dn), 150)
+        return STEEL_SUPPORT_SPACING_M[table_dn][1 if insulated else 0]
+
+    def _step_for_pex(dn, key, vertical):
+        table_dn = next((x for x in sorted(PEX_SUPPORT_SPACING_M) if x >= dn), 50)
+        idx = (2 if vertical else 0) + (1 if key == "gvs" else 0)
+        return PEX_SUPPORT_SPACING_M[table_dn][idx]
 
     def meter_marka(type_label, dn, is_hot):
         """Марка водосчётчика: крыльчатый холодный — ВСХНд, горячий — ВСГд,
@@ -271,6 +294,43 @@ def build_specification(project: Project) -> Specification:
                                qty=round(total * share, 1)))
         return out
 
+    def fastener_rows(key, mat_mains, mat_dist):
+        """Минимальный укрупнённый крепёж по длинам и нормативному шагу."""
+        if area <= 0:
+            return []
+        total = area * rates[key] * PIPE_SPARE
+        out = []
+        for grp, share, dn_map in PIPE_GROUPS:
+            dn = dn_map[key]
+            length = total * share
+            vertical = grp == "стояки"
+            mat = mat_mains if grp == "магистрали" else mat_dist
+            mat_lower = mat.lower()
+            if "сталь" in mat_lower:
+                step = _step_for_steel(dn, insulated=(grp != "подводки"))
+                name = f"Хомут трубный стальной с эластомерной прокладкой, Ду{dn}"
+                basis = "СП 73.13330.2016, табл. 2"
+            elif "pe-x" in mat_lower or "сшит" in mat_lower:
+                step = _step_for_pex(dn, key, vertical)
+                name = f"Крепление скользящее для труб PE-X, Ду{dn}"
+                basis = "СП 41-109-2005, табл. 4"
+            else:
+                out.append(SpecRow(
+                    next_pos(), f"Комплект креплений для труб {mat}, Ду{dn}",
+                    type_mark=f"Ду{dn}", manufacturer="по системе изготовителя",
+                    unit="компл.", qty=None,
+                    note="количество по таблице изготовителя после выбора системы труб",
+                ))
+                continue
+            qty = math.ceil(length / step)
+            out.append(SpecRow(
+                next_pos(), name, type_mark=f"Ду{dn}",
+                manufacturer="Торговая сеть", unit="шт.", qty=qty,
+                note=(f"{grp}; L={length:.1f} м, шаг ≤{step:g} м; {basis}; "
+                      "доп. крепления у арматуры/поворотов уточнить на Р"),
+            ))
+        return out
+
     def fixture_rows():
         """Группа 2 «Санитарные приборы» (ГОСТ 21.110 п.9.4) — из задания АР."""
         out = []
@@ -354,6 +414,35 @@ def build_specification(project: Project) -> Specification:
             ))
         return out
 
+    def fire_fastener_rows():
+        """Крепления В2: кольцо по СП 73, стояки укрупнённо по этажам."""
+        net = project.fire_network
+        if net is None:
+            return []
+        out = []
+        by_dn = defaultdict(float)
+        for segment in net.segments:
+            by_dn[int(segment.dn)] += segment.length_m
+        for dn, length in sorted(by_dn.items()):
+            step = _step_for_steel(dn, insulated=False)
+            out.append(SpecRow(
+                next_pos(), f"Хомут трубный стальной с эластомерной прокладкой, Ду{dn}",
+                type_mark=f"Ду{dn}", manufacturer="Торговая сеть", unit="шт.",
+                qty=math.ceil(length / step),
+                note=f"кольцо В2; L={length:.1f} м, шаг ≤{step:g} м; СП 73.13330.2016, табл. 2",
+            ))
+        risers_by_dn = defaultdict(int)
+        for riser in net.risers:
+            risers_by_dn[int(riser.dn)] += 1
+        for dn, count in sorted(risers_by_dn.items()):
+            out.append(SpecRow(
+                next_pos(), f"Хомут трубный стояка В2 с эластомерной прокладкой, Ду{dn}",
+                type_mark=f"Ду{dn}", manufacturer="Торговая сеть", unit="шт.",
+                qty=count * floors,
+                note="укрупнённо: 1 крепление на этаж; окончательно по узлам стадии Р",
+            ))
+        return out
+
     # ── Раздел В1 (хоз-питьевой холодный водопровод) ──
     sec = SpecSection(title="В1 — хозяйственно-питьевой водопровод")
     # группа 1: оборудование
@@ -388,6 +477,11 @@ def build_specification(project: Project) -> Specification:
         sec.rows.append(SpecRow(
             next_pos(), f"Фильтр сетчатый муфтовый, Ду{cm.dn}", type_mark=f"Ду{cm.dn}",
             manufacturer="Торговая сеть", unit="шт.", qty=1, note="на водомерный узел"))
+        sec.rows.append(SpecRow(
+            next_pos(), f"Подставка (опорная рама) под водомерный узел, Ду{cm.dn}",
+            type_mark="индивидуального изготовления", manufacturer="по месту",
+            unit="шт.", qty=max(1, project.source.inputs_count),
+            note="по числу вводов; конструкцию и анкеровку уточнить на стадии Р"))
     nv1 = project.building.risers_v1 or 0
     if nv1:
         sec.rows.append(SpecRow(
@@ -415,6 +509,8 @@ def build_specification(project: Project) -> Specification:
     # группа 6: трубопроводы
     sec.rows += pipe_rows("hvs", _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
                           _mat(mats, "cold_distribution", "PE-X"))
+    sec.rows += fastener_rows("hvs", _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
+                              _mat(mats, "cold_distribution", "PE-X"))
     # группа 7: конструкции теплоизоляционные
     sec.rows += insulation_rows("hvs")
     # группа 8: материалы (герметик по объёму)
@@ -456,6 +552,8 @@ def build_specification(project: Project) -> Specification:
         sec.rows += heating_rows("gvs")
         sec.rows += pipe_rows("gvs", _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
                               _mat(mats, "hot_distribution", "PE-X"))
+        sec.rows += fastener_rows("gvs", _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
+                                  _mat(mats, "hot_distribution", "PE-X"))
         sec.rows += insulation_rows("gvs")
         # группа 8: материалы (герметик)
         sec.rows += sealant_rows(sealant_l(nt, PIPE_GROUPS[1][2]["gvs"], floors, 1,
@@ -500,6 +598,7 @@ def build_specification(project: Project) -> Specification:
                                     manufacturer="Торговая сеть", unit="шт.",
                                     qty=None, note="по числу ПК"))
         sec.rows += fire_pipe_rows()
+        sec.rows += fire_fastener_rows()
         sections.append(sec)
 
     return Specification(
@@ -511,6 +610,8 @@ def build_specification(project: Project) -> Specification:
               "на магистрали и стояки В1 и Т3-Т4 (от конденсата и теплопотерь, СП 30 п.8.11); "
               "толщина рассчитана алгоритмом legacy SP calculator по СП 61 для заданных "
               "температуры и влажности. Трубы В2 приняты по длинам расчётной сети стадии П. "
-              "Фасонные части и крепёж "
+              "Крепления рассчитаны минимально по длинам и предельному шагу СП 73.13330.2016 "
+              "и СП 41-109-2005; дополнительные крепления у арматуры, поворотов и ответвлений "
+              "уточняются на стадии «Р». Фасонные части "
               "в спецификацию не включены (ГОСТ 21.601-2011 п.9.4). Единицы — по ГОСТ 21.110 п.9.5."),
     )

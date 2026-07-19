@@ -1,5 +1,6 @@
 """Состав труб и изоляции спецификации стадии П."""
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,9 +9,13 @@ from app.intake.yaml_io import load_request
 from app.pz.spec import build_specification
 
 
-def _demo_spec():
+def _demo_project():
     req = load_request(Path("demo/demo_project.yaml").read_text(encoding="utf-8"))
-    return build_specification(build_project(req))
+    return build_project(req)
+
+
+def _demo_spec():
+    return build_specification(_demo_project())
 
 
 def _section(spec, marker):
@@ -25,6 +30,23 @@ def test_demo_spec_contains_stage_p_v1_pipes_and_calculated_insulation():
     assert sum(row.qty for row in insulation) == pytest.approx(1926.0)
     assert all("legacy/SP 61" in row.note for row in insulation)
     assert all("δ" in row.type_mark for row in insulation)
+
+
+def test_demo_spec_contains_normative_fasteners_and_meter_stand():
+    project = _demo_project()
+    project.meters.rows = [SimpleNamespace(
+        label="Ввод ХВС", dn=32, type_label="крыльчатый",
+        need_bypass=True, need_combo=False,
+    )]
+    rows = _section(build_specification(project), "В1").rows
+    stand = next(row for row in rows if "Подставка" in row.name)
+    assert stand.qty == 1
+    fasteners = [row for row in rows if "Хомут трубный" in row.name or "Крепление скользящее" in row.name]
+    by_dn = {row.type_mark: row for row in fasteners}
+    assert by_dn["Ду50"].qty == 193
+    assert by_dn["Ду32"].qty == 1873
+    assert by_dn["Ду20"].qty == 4815
+    assert all("уточнить на Р" in row.note for row in fasteners)
 
 
 def test_demo_spec_contains_t3_t4_pipes_and_insulation():
@@ -42,3 +64,7 @@ def test_demo_spec_contains_exact_v2_ring_and_riser_lengths():
     assert ring.qty == pytest.approx(102.0)
     assert risers.type_mark == "Ду65"
     assert risers.qty == pytest.approx(186.0)
+    ring_fix = next(row for row in rows if "Хомут трубный стальной" in row.name)
+    riser_fix = next(row for row in rows if "Хомут трубный стояка" in row.name)
+    assert ring_fix.qty == 17
+    assert riser_fix.qty == 64
