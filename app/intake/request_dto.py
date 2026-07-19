@@ -56,6 +56,9 @@ class SourceDataRequest:
     designer_org: str = ""             # проектная организация (генпроектировщик)
     basis: str = ""                    # основание (договор №, дата)
     design_stage: str = "Проектная документация (П)"
+    source_description: str = ""       # существующая централизованная сеть
+    water_protection_note: str = ""    # подтверждение по ГПЗУ/ИОС1
+    reserve_water_note: str = ""       # решение по резервированию воды
     # ТУ на подключение к водопроводу
     tu_org: str = ""                   # кто выдал ТУ (водоканал)
     tu_number: str = ""

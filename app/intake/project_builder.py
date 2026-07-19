@@ -68,7 +68,10 @@ def build_project(req: IOS2Request) -> Project:
     sd = req.source_data
     if sd is not None:
         p.source = WaterSource(
-            description=sd.customer, connection_point=sd.connection_point,
+            description=(sd.source_description or sd.tu_org),
+            water_protection_note=sd.water_protection_note,
+            reserve_water_note=sd.reserve_water_note,
+            connection_point=sd.connection_point,
             tu_number=sd.tu_number, tu_date=sd.tu_date,
             guaranteed_head_m=sd.guaranteed_head_m,
             maximum_head_m=sd.maximum_head_m,

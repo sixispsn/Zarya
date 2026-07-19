@@ -104,3 +104,15 @@ def test_streams_absent_means_none():
     y = GOOD.replace("fire: {streams: 2}", "fire: {}")
     req = load_request(y)
     assert req.streams is None
+
+
+def test_demo_yaml_is_valid_complete_and_roundtrips():
+    from pathlib import Path
+    raw = Path("demo/demo_project.yaml").read_text(encoding="utf-8")
+    req = load_request(raw)
+    assert req.validate() == []
+    assert req.source_data.tu_number == "DEMO-ТУ-01"
+    assert req.source_data.maximum_head_m == 45.0
+    assert req.consumers[0].count == 480
+    assert all(x.repair_section_id for x in req.network.runs)
+    assert load_request(dump_request(req)) == req

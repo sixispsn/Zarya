@@ -159,6 +159,18 @@ def test_builder_maps_head_and_meter_inputs():
     assert source.npsh_available_m == pytest.approx(7.5)
 
 
+def test_builder_maps_source_document_statements():
+    sd = SourceDataRequest(
+        source_description="централизованная сеть",
+        water_protection_note="Вне водоохранных зон по ГПЗУ",
+        reserve_water_note="Резервирование предусмотрено",
+    )
+    source = build_project(_req(source_data=sd)).source
+    assert source.description == "централизованная сеть"
+    assert source.water_protection_note == "Вне водоохранных зон по ГПЗУ"
+    assert source.reserve_water_note == "Резервирование предусмотрено"
+
+
 # ── сквозная цепочка: намерение → комплект ───────────────────────────────────
 
 def test_end_to_end_dto_to_pdfs(tmp_path):

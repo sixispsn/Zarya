@@ -52,6 +52,8 @@ class DocumentInfo:
 @dataclass
 class WaterSource:
     description: str = ""
+    water_protection_note: str = ""
+    reserve_water_note: str = ""
     connection_point: str = ""
     tu_number: str = ""
     tu_date: str = ""

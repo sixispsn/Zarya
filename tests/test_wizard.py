@@ -38,7 +38,7 @@ def test_form_template_has_all_sections():
     env = Environment(loader=FileSystemLoader("app/web/templates"))
     # рендерим шаблон — имена run/riser-полей генерятся циклом
     html = env.get_template("wizard_form.html").render(errors=[])
-    assert html.count("<fieldset") == 6
+    assert html.count("<fieldset") == 7
     for field in ("cipher", "object_name", "building_type", "floors", "height",
                   "room_name", "run1_from", "riser1_name", "source_node"):
         assert f'name="{field}"' in html

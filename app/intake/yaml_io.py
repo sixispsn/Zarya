@@ -44,7 +44,7 @@ import yaml
 
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
-    MainRunRequest, RiserRequest,
+    MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
 )
 
 
@@ -85,6 +85,7 @@ def load_request(text: str) -> IOS2Request:
     doc = sect("document")
     bld = sect("building")
     fire = sect("fire", required=False)
+    source_data_s = sect("source_data", required=False)
     net_s = sect("network", required=False)
     rooms_s = data.get("rooms", [])
     if rooms_s is not None and not isinstance(rooms_s, list):
@@ -163,6 +164,39 @@ def load_request(text: str) -> IOS2Request:
                              (net_s.get("node_elevations") or {}).items()})
 
     fire_streams = fire.get("streams")
+    source_data = None
+    if source_data_s:
+        sd = source_data_s
+        def optional_float(name):
+            return float(sd[name]) if sd.get(name) is not None else None
+        source_data = SourceDataRequest(
+            customer=str(sd.get("customer", "")),
+            designer_org=str(sd.get("designer_org", "")),
+            basis=str(sd.get("basis", "")),
+            design_stage=str(sd.get("design_stage", "Проектная документация (П)")),
+            source_description=str(sd.get("source_description", "")),
+            water_protection_note=str(sd.get("water_protection_note", "")),
+            reserve_water_note=str(sd.get("reserve_water_note", "")),
+            tu_org=str(sd.get("tu_org", "")), tu_number=str(sd.get("tu_number", "")),
+            tu_date=str(sd.get("tu_date", "")),
+            connection_point=str(sd.get("connection_point", "")),
+            guaranteed_head_m=optional_float("guaranteed_head_m"),
+            maximum_head_m=optional_float("maximum_head_m"),
+            tu_limit_q_day=optional_float("tu_limit_q_day"),
+            tu_fire_outdoor_l_s=optional_float("tu_fire_outdoor_l_s"),
+            water_main_dn=int(sd.get("water_main_dn", 0)),
+            elev_header_m=optional_float("elev_header_m"),
+            elev_fixture_m=optional_float("elev_fixture_m"),
+            h_geom_m=optional_float("h_geom_m"), il_dict_m=optional_float("il_dict_m"),
+            h_il_m=optional_float("h_il_m"), network_kind=str(sd.get("network_kind", "domestic")),
+            h_pr_m=float(sd.get("h_pr_m", 20.0)), h_tepl_m=float(sd.get("h_tepl_m", 0.0)),
+            il_vvod_m=optional_float("il_vvod_m"), h_vvod_m=optional_float("h_vvod_m"),
+            water_use_period_h=float(sd.get("water_use_period_h", 24.0)),
+            inputs_count=int(sd.get("inputs_count", 1)),
+            npsh_available_m=optional_float("npsh_available_m"),
+        )
+    consumers = [ConsumerGroupRequest(str(x.get("code", "")), int(x.get("count", 0)))
+                 for x in (data.get("consumers") or []) if isinstance(x, dict)]
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
@@ -173,7 +207,7 @@ def load_request(text: str) -> IOS2Request:
         hose_length_m=int(fire.get("hose_length_m", 20)),
         cabinet_dn=int(fire.get("cabinet_dn", 50)),
         zones=int(bld.get("zones", 1)),
-        rooms=rooms, network=network)
+        rooms=rooms, network=network, source_data=source_data, consumers=consumers)
 
 
 def load_request_file(path: str) -> IOS2Request:
@@ -211,6 +245,14 @@ def dump_request(req: IOS2Request) -> str:
             "cabinet_dn": req.cabinet_dn,
         },
     }
+    if req.source_data is not None:
+        sd = req.source_data
+        data["source_data"] = {
+            key: value for key, value in vars(sd).items()
+            if value not in (None, "")
+        }
+    if req.consumers:
+        data["consumers"] = [{"code": x.code, "count": x.count} for x in req.consumers]
     if req.rooms:
         data["rooms"] = [{
             "name": r.name, "length_m": r.length_m, "width_m": r.width_m,

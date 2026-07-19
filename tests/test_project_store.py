@@ -90,6 +90,9 @@ def test_form_without_prefill_uses_demo():
     h = env.get_template("wizard_form.html").render(errors=[], prefill=None,
                                                     project_id=None)
     assert "2026-089-ИОС2" in h       # демо-заполнение живо
+    assert "DEMO-ТУ-01" in h
+    assert "РС-1" in h
+    assert 'name="consumer_count"' in h
 
 
 def test_projects_page_template():

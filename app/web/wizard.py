@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
-    MainRunRequest, RiserRequest,
+    MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.pz.ios2_orchestrator import design_ios2
@@ -74,7 +74,8 @@ async def wizard_design(request: Request):
         if a and b:
             runs.append(MainRunRequest(
                 a, b, length_m=ff(f"run{i}_len"), dn=fi(f"run{i}_dn", 100),
-                equiv_length_m=ff(f"run{i}_leq")))
+                equiv_length_m=ff(f"run{i}_leq"),
+                repair_section_id=fv(f"run{i}_repair")))
     # стояки: до 4
     risers = []
     for i in range(1, 5):
@@ -83,7 +84,8 @@ async def wizard_design(request: Request):
             risers.append(RiserRequest(
                 nm, at_node=fv(f"riser{i}_node"), height_m=ff(f"riser{i}_h"),
                 cabinet_elevation_m=ff(f"riser{i}_elev"), dn=fi(f"riser{i}_dn", 65),
-                equiv_length_m=ff(f"riser{i}_leq")))
+                equiv_length_m=ff(f"riser{i}_leq"),
+                repair_section_id=fv(f"riser{i}_repair")))
 
     network = None
     if runs:
@@ -111,7 +113,29 @@ async def wizard_design(request: Request):
         building_type=fv("building_type", "residential"),
         floors=fi("floors"), building_height_m=ff("height"),
         streams=(fi("streams") if fv("streams") else None),
-        zones=fi("zones", 1), rooms=rooms, network=network)
+        zones=fi("zones", 1), rooms=rooms, network=network,
+        source_data=SourceDataRequest(
+            source_description=fv("source_description"),
+            water_protection_note=fv("water_protection_note"),
+            reserve_water_note=fv("reserve_water_note"),
+            tu_org=fv("tu_org"), tu_number=fv("tu_number"), tu_date=fv("tu_date"),
+            connection_point=fv("connection_point"),
+            guaranteed_head_m=(ff("tu_guaranteed_head") if fv("tu_guaranteed_head") else None),
+            maximum_head_m=(ff("tu_maximum_head") if fv("tu_maximum_head") else None),
+            tu_limit_q_day=(ff("tu_limit_q_day") if fv("tu_limit_q_day") else None),
+            water_main_dn=fi("water_main_dn"),
+            h_geom_m=(ff("h_geom") if fv("h_geom") else None),
+            h_il_m=(ff("h_il") if fv("h_il") else None),
+            network_kind=fv("network_kind", "combined"),
+            h_pr_m=ff("h_pr", 20.0),
+            h_vvod_m=(ff("h_vvod") if fv("h_vvod") else None),
+            inputs_count=fi("inputs_count", 1),
+            npsh_available_m=(ff("npsh_available") if fv("npsh_available") else None),
+        ),
+        consumers=([ConsumerGroupRequest(
+            fv("consumer_code", "residential_central_hw"), fi("consumer_count"))]
+            if fi("consumer_count") > 0 else []),
+    )
 
     try:
         project = build_project(req)

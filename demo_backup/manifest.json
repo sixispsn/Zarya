@@ -1,0 +1,70 @@
+{
+  "release": "Demo Release 0.1",
+  "input": "demo_project.yaml",
+  "test_command": "OSIFONT_PATH=/System/Library/Fonts/Supplemental/Arial.ttf venv/bin/pytest -q",
+  "documents": [
+    {
+      "name": "ПЗ.pdf",
+      "bytes": 146530,
+      "sha256": "2aec93be18abdae72000171490d7eeb09998cd46b760bbe0c8909d87f8f7373f"
+    },
+    {
+      "name": "Спецификация.pdf",
+      "bytes": 48126,
+      "sha256": "2aace7da4adec3050b4267aadf98da0d441dd5fcffac14ec57134d061a5d881e"
+    },
+    {
+      "name": "Схема.pdf",
+      "bytes": 42794,
+      "sha256": "6d6482b01565ada3a6d1d11a8ed84b845cab282ddfe3e5aebdac32c326bf8699"
+    },
+    {
+      "name": "Гидравлический_расчет.pdf",
+      "bytes": 45066,
+      "sha256": "e6733cadea875b2d52316509d5b8bdbf3f25f3bd9755c48cd045eae0845c04f7"
+    },
+    {
+      "name": "Проверка_живучести.pdf",
+      "bytes": 32760,
+      "sha256": "d26e60f21667a1abf608fc72e51429cccfad96475f7d386c4e2bbf67c086a9b5"
+    }
+  ],
+  "presentation": {
+    "name": "Zarya_Demo_Release_0.1.pptx",
+    "bytes": 31686,
+    "sha256": "78b83dbb48deb485a3f0fa9ef895d5988bbbae503477777358f0f03f532d54f4"
+  },
+  "calculation": {
+    "fire_flow_lps": 5.2,
+    "fire_cabinets_placed": 5,
+    "dictating_cabinets": "СТ-В2-2-PK+СТ-В2-3-PK",
+    "required_head_m": 60.48,
+    "available_head_m": 32.0,
+    "fire_pump": "Grundfos Hydro MX-A CR15-9",
+    "fire_pump_design_q_m3h": 18.72,
+    "fire_pump_design_h_m": 28.5,
+    "fire_pump_working_q_m3h": 21.01,
+    "fire_pump_working_h_m": 36.4
+  },
+  "status": [
+    "geometry: layout_inputs построены из project.fire_rooms (1 помещений)",
+    "geometry: network построена из project.fire_network",
+    "fire_layout: рассчитано помещений 1",
+    "fire_hydraulics + diameter_audit: рассчитаны",
+    "ring_resilience: проверены ремонтные секции и отказы вводов",
+    "enrich_fire: FireSystem обогащён расчётными данными",
+    "fire_pump: подобран Grundfos Hydro MX-A CR15-9 (Q=21.0 м³/ч, H=36.4 м; 1 раб. + 1 рез.)",
+    "water_demand: расходы В1/Т3 рассчитаны (q_сут=62.4 м³/сут, q_сек=2.71 л/с)",
+    "meters: подобрано узлов 2; потери диктующего узла 2.644 м",
+    "head: H_тр=74.34 м; H_гар=32.00 м",
+    "pump: подобран Grundfos CR 5-8 (рабочая точка Q=5.1 м³/ч, H=42.6 м)",
+    "ПЗ.pdf собран",
+    "Спецификация.pdf собрана",
+    "Схема.pdf собрана",
+    "Гидравлический_расчет.pdf собран",
+    "Проверка_живучести.pdf собрана"
+  ],
+  "warnings": [
+    "v1_hydraulics: участки диктующего направления не заданы; потери В1 принимаются только из явных исходных данных"
+  ]
+}

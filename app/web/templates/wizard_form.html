@@ -89,22 +89,23 @@
 </fieldset>
 
 <fieldset><legend>4 · Магистраль В2 (до 6 участков; кольцо — замкните узлы)</legend>
-  <table class="grid"><tr><th></th><th>от узла</th><th>до узла</th><th>L, м</th><th>Ду</th><th>L экв, м</th></tr>
-  {% if prefill and prefill.network %}{% set _r = prefill.network.runs %}{% set runs = [] %}{% for i in range(6) %}{% if i < _r|length %}{% set runs = runs.append((_r[i].from_node, _r[i].to_node, _r[i].length_m, _r[i].dn, _r[i].equiv_length_m)) or runs %}{% else %}{% set runs = runs.append(("","","","","")) or runs %}{% endif %}{% endfor %}{% else %}{% set runs = [("К1","К2","36","100","6"),("К2","К3","15","100","4"),("К3","К4","36","100","6"),("К4","К1","15","100","4"),("","","","",""),("","","","","")] %}{% endif %}
+  <table class="grid"><tr><th></th><th>от узла</th><th>до узла</th><th>L, м</th><th>Ду</th><th>L экв, м</th><th>рем. секция</th></tr>
+  {% if prefill and prefill.network %}{% set _r = prefill.network.runs %}{% set runs = [] %}{% for i in range(6) %}{% if i < _r|length %}{% set runs = runs.append((_r[i].from_node, _r[i].to_node, _r[i].length_m, _r[i].dn, _r[i].equiv_length_m, _r[i].repair_section_id)) or runs %}{% else %}{% set runs = runs.append(("","","","","","")) or runs %}{% endif %}{% endfor %}{% else %}{% set runs = [("К1","К2","36","100","6","РС-1"),("К2","К3","15","100","4","РС-2"),("К3","К4","36","100","6","РС-3"),("К4","К1","15","100","4","РС-4"),("","","","","",""),("","","","","","")] %}{% endif %}
   {% for r in runs %}
   <tr><td>{{ loop.index }}</td>
     <td><input name="run{{ loop.index }}_from" value="{{ r[0] }}"></td>
     <td><input name="run{{ loop.index }}_to" value="{{ r[1] }}"></td>
     <td><input name="run{{ loop.index }}_len" value="{{ r[2] }}"></td>
     <td><input name="run{{ loop.index }}_dn" value="{{ r[3] }}"></td>
-    <td><input name="run{{ loop.index }}_leq" value="{{ r[4] }}"></td></tr>
+    <td><input name="run{{ loop.index }}_leq" value="{{ r[4] }}"></td>
+    <td><input name="run{{ loop.index }}_repair" value="{{ r[5] }}"></td></tr>
   {% endfor %}
   </table>
 </fieldset>
 
 <fieldset><legend>5 · Стояки с ПК (до 4)</legend>
-  <table class="grid"><tr><th></th><th>имя</th><th>узел</th><th>длина, м</th><th>отм. ПК, м</th><th>Ду</th><th>L экв, м</th></tr>
-  {% if prefill and prefill.network %}{% set _s = prefill.network.risers %}{% set rs = [] %}{% for i in range(4) %}{% if i < _s|length %}{% set rs = rs.append((_s[i].name, _s[i].at_node, _s[i].height_m, _s[i].cabinet_elevation_m, _s[i].dn, _s[i].equiv_length_m)) or rs %}{% else %}{% set rs = rs.append(("","","","","","")) or rs %}{% endif %}{% endfor %}{% else %}{% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6"),("СТ-В2-2","К2","46.5","45.6","65","6"),("СТ-В2-3","К3","46.5","45.6","65","6"),("СТ-В2-4","К4","46.5","45.6","65","6")] %}{% endif %}
+  <table class="grid"><tr><th></th><th>имя</th><th>узел</th><th>длина, м</th><th>отм. ПК, м</th><th>Ду</th><th>L экв, м</th><th>рем. секция</th></tr>
+  {% if prefill and prefill.network %}{% set _s = prefill.network.risers %}{% set rs = [] %}{% for i in range(4) %}{% if i < _s|length %}{% set rs = rs.append((_s[i].name, _s[i].at_node, _s[i].height_m, _s[i].cabinet_elevation_m, _s[i].dn, _s[i].equiv_length_m, _s[i].repair_section_id)) or rs %}{% else %}{% set rs = rs.append(("","","","","","","")) or rs %}{% endif %}{% endfor %}{% else %}{% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6","РС-1"),("СТ-В2-2","К2","46.5","45.6","65","6","РС-2"),("СТ-В2-3","К3","46.5","45.6","65","6","РС-3"),("СТ-В2-4","К4","46.5","45.6","65","6","РС-4")] %}{% endif %}
   {% for r in rs %}
   <tr><td>{{ loop.index }}</td>
     <td><input name="riser{{ loop.index }}_name" value="{{ r[0] }}"></td>
@@ -112,12 +113,48 @@
     <td><input name="riser{{ loop.index }}_h" value="{{ r[2] }}"></td>
     <td><input name="riser{{ loop.index }}_elev" value="{{ r[3] }}"></td>
     <td><input name="riser{{ loop.index }}_dn" value="{{ r[4] }}"></td>
-    <td><input name="riser{{ loop.index }}_leq" value="{{ r[5] }}"></td></tr>
+    <td><input name="riser{{ loop.index }}_leq" value="{{ r[5] }}"></td>
+    <td><input name="riser{{ loop.index }}_repair" value="{{ r[6] }}"></td></tr>
   {% endfor %}
   </table>
 </fieldset>
 
-<fieldset><legend>6 · Источник</legend>
+{% set sd = prefill.source_data if prefill and prefill.source_data else none %}
+<fieldset><legend>6 · Исходные данные ТУ и В1/Т3</legend>
+  <div class="row">
+    <label>Источник<input class="w-l" name="source_description" value="{{ sd.source_description if sd else 'централизованная сеть хозяйственно-питьевого водоснабжения' }}"></label>
+    <label>Организация, выдавшая ТУ<input class="w-m" name="tu_org" value="{{ sd.tu_org if sd else 'Демонстрационный водоканал' }}"></label>
+    <label>№ ТУ<input name="tu_number" value="{{ sd.tu_number if sd else 'DEMO-ТУ-01' }}"></label>
+    <label>Дата ТУ<input name="tu_date" value="{{ sd.tu_date if sd else '01.07.2026' }}"></label>
+  </div>
+  <div class="row">
+    <label>Точка подключения<input class="w-l" name="connection_point" value="{{ sd.connection_point if sd else 'существующий водопровод DN200 у границы участка' }}"></label>
+    <label>H гарант., м<input class="w-s" name="tu_guaranteed_head" value="{{ sd.guaranteed_head_m if sd and sd.guaranteed_head_m is not none else 32 }}"></label>
+    <label>H максим., м<input class="w-s" name="tu_maximum_head" value="{{ sd.maximum_head_m if sd and sd.maximum_head_m is not none else 45 }}"></label>
+    <label>Лимит, м³/сут<input class="w-s" name="tu_limit_q_day" value="{{ sd.tu_limit_q_day if sd and sd.tu_limit_q_day is not none else 100 }}"></label>
+    <label>DN водовода<input class="w-s" name="water_main_dn" value="{{ sd.water_main_dn if sd else 200 }}"></label>
+  </div>
+  <div class="row">
+    <label>H геом. В1, м<input class="w-s" name="h_geom" value="{{ sd.h_geom_m if sd and sd.h_geom_m is not none else 46 }}"></label>
+    <label>Потери В1, м<input class="w-s" name="h_il" value="{{ sd.h_il_m if sd and sd.h_il_m is not none else 4.5 }}"></label>
+    <label>Потери ввода, м<input class="w-s" name="h_vvod" value="{{ sd.h_vvod_m if sd and sd.h_vvod_m is not none else 1.2 }}"></label>
+    <label>Свободный напор, м<input class="w-s" name="h_pr" value="{{ sd.h_pr_m if sd else 20 }}"></label>
+    <label>NPSHa, м<input class="w-s" name="npsh_available" value="{{ sd.npsh_available_m if sd and sd.npsh_available_m is not none else 8 }}"></label>
+    <label>Вводов<input class="w-s" name="inputs_count" value="{{ sd.inputs_count if sd else 1 }}"></label>
+    <input type="hidden" name="network_kind" value="combined">
+  </div>
+  <div class="row">
+    <label>Потребители<select name="consumer_code"><option value="residential_central_hw">Жилой дом, централизованное ГВС</option></select></label>
+    <label>Расчётное число жителей<input class="w-s" name="consumer_count" value="{{ prefill.consumers[0].count if prefill and prefill.consumers else 480 }}"></label>
+  </div>
+  <div class="row">
+    <label>Зоны охраны<input class="w-l" name="water_protection_note" value="{{ sd.water_protection_note if sd else 'Согласно демонстрационным исходным данным объект расположен вне водоохранных зон' }}"></label>
+    <label>Резервирование воды<input class="w-l" name="reserve_water_note" value="{{ sd.reserve_water_note if sd else 'Резервирование обеспечивается кольцевой сетью В2 и резервным пожарным насосом' }}"></label>
+  </div>
+  <p class="hint">Значения с пометкой DEMO предназначены только для демонстрационного объекта и не заменяют реальные ТУ.</p>
+</fieldset>
+
+<fieldset><legend>7 · Источник В2</legend>
   <div class="row">
     <label>Узел ввода<input class="w-s" name="source_node" value="{{ prefill.network.source_node if prefill and prefill.network else 'К1' }}"></label>
     <label>Тип источника<select name="source_kind">

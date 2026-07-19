@@ -1,0 +1,67 @@
+document:
+  cipher: ZARYA-DEMO-001-ИОС2
+  object_name: Демонстрационный многоквартирный жилой дом, 16 этажей
+  organization: ООО «Заря»
+  object_address: Московская область, демонстрационный объект
+  object_part: Секция 1
+  stage: П
+  developer: Демонстрационный комплект
+  inspector: Демонстрационный комплект
+  dept_head: Демонстрационный комплект
+  gip: Демонстрационный комплект
+  norm_control: Демонстрационный комплект
+building:
+  type: residential
+  floors: 16
+  height_m: 48.0
+  zones: 2
+fire:
+  streams: 2
+  q_per_stream_lps: 2.6
+  hose_length_m: 20
+  cabinet_dn: 50
+source_data:
+  source_description: централизованная сеть хозяйственно-питьевого водоснабжения
+  water_protection_note: Согласно демонстрационным исходным данным объект расположен вне водоохранных зон
+  reserve_water_note: Резервирование обеспечивается кольцевой сетью В2 и резервным пожарным насосом
+  tu_org: Демонстрационный водоканал
+  tu_number: DEMO-ТУ-01
+  tu_date: 01.07.2026
+  connection_point: существующий водопровод DN200 у границы участка
+  guaranteed_head_m: 32.0
+  maximum_head_m: 45.0
+  tu_limit_q_day: 100.0
+  water_main_dn: 200
+  h_geom_m: 46.0
+  h_il_m: 4.5
+  network_kind: combined
+  h_pr_m: 20.0
+  h_vvod_m: 1.2
+  water_use_period_h: 24.0
+  inputs_count: 1
+  npsh_available_m: 8.0
+consumers:
+  - code: residential_central_hw
+    count: 480
+rooms:
+  - name: Коридор типового этажа
+    length_m: 42.0
+    width_m: 2.4
+    height_m: 3.0
+    kind: corridor
+    placement: two_opposite_sides
+network:
+  source:
+    node: К1
+    kind: city_main
+    available_head_m: 32.0
+  runs:
+    - {from: К1, to: К2, length_m: 36.0, dn: 100, equiv_length_m: 6.0, A: 0.0023, repair_section_id: РС-1}
+    - {from: К2, to: К3, length_m: 15.0, dn: 100, equiv_length_m: 4.0, A: 0.0023, repair_section_id: РС-2}
+    - {from: К3, to: К4, length_m: 36.0, dn: 100, equiv_length_m: 6.0, A: 0.0023, repair_section_id: РС-3}
+    - {from: К4, to: К1, length_m: 15.0, dn: 100, equiv_length_m: 4.0, A: 0.0023, repair_section_id: РС-4}
+  risers:
+    - {name: СТ-В2-1, at: К1, height_m: 46.5, cabinet_elevation_m: 45.6, dn: 65, equiv_length_m: 6.0, A: 0.011, repair_section_id: РС-1}
+    - {name: СТ-В2-2, at: К2, height_m: 46.5, cabinet_elevation_m: 45.6, dn: 65, equiv_length_m: 6.0, A: 0.011, repair_section_id: РС-2}
+    - {name: СТ-В2-3, at: К3, height_m: 46.5, cabinet_elevation_m: 45.6, dn: 65, equiv_length_m: 6.0, A: 0.011, repair_section_id: РС-3}
+    - {name: СТ-В2-4, at: К4, height_m: 46.5, cabinet_elevation_m: 45.6, dn: 65, equiv_length_m: 6.0, A: 0.011, repair_section_id: РС-4}
