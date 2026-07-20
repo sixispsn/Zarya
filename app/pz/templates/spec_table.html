@@ -1,43 +1,54 @@
 {# Спецификация — форма 1 ГОСТ 21.110-2013 (9 граф). Контекст: spec #}
-<table class="spec">
-  <colgroup>
-    <col style="width:18mm"><col style="width:95mm"><col style="width:50mm">
-    <col style="width:25mm"><col style="width:35mm"><col style="width:18mm">
-    <col style="width:18mm"><col style="width:22mm"><col style="width:40mm">
-  </colgroup>
+{% macro table_header() %}
   <thead>
     <tr>
-      <th>Позиция</th>
+      <th>Поз.</th>
       <th>Наименование и техническая характеристика</th>
       <th>Тип, марка, обозначение документа, опросного листа</th>
-      <th>Код оборудования, изделия, материала</th>
-      <th>Завод-изготовитель</th>
-      <th>Единица измерения</th>
-      <th>Коли­чество</th>
-      <th>Масса единицы, кг</th>
+      <th>Код продукции</th>
+      <th>Поставщик</th>
+      <th>Ед. измерения</th>
+      <th>Кол.</th>
+      <th>Масса 1 ед., кг</th>
       <th>Приме­чание</th>
     </tr>
-    <tr class="s-num">
-      <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
-    </tr>
   </thead>
+{% endmacro %}
+{% set ns = namespace(division='') %}
+{% for sec in spec.sections %}
+{% set section_loop = loop %}
+{% for row_chunk in sec.rows|batch(22) %}
+{% if not (section_loop.first and loop.first) %}<div class="spec-page-break"></div>{% endif %}
+<div class="spec-sheet">
+<table class="spec">
+  <colgroup>
+    <col style="width:20mm"><col style="width:130mm"><col style="width:60mm">
+    <col style="width:35mm"><col style="width:45mm"><col style="width:20mm">
+    <col style="width:20mm"><col style="width:25mm"><col style="width:40mm">
+  </colgroup>
+  {{ table_header() }}
   <tbody>
-    {% for sec in spec.sections %}
-      <tr class="s-section"><td colspan="9">{{ sec.title }}</td></tr>
-      {% for r in sec.rows %}
-        <tr>
-          <td class="c">{{ r.pos if r.pos is not none else '' }}</td>
-          <td class="l">{{ r.name }}</td>
-          <td class="c">{{ r.type_mark }}</td>
-          <td class="c">{{ r.code }}</td>
-          <td class="c">{{ r.manufacturer }}</td>
-          <td class="c">{{ r.unit }}</td>
-          <td class="c">{{ (r.qty|num(1)) if r.qty else '' }}</td>
-          <td class="c">{{ r.mass }}</td>
-          <td class="l">{{ r.note }}</td>
-        </tr>
-      {% endfor %}
+    {% if sec.division %}
+      <tr class="s-division"><td colspan="9">{{ sec.division }}{% if sec.division == ns.division %} (продолжение){% endif %}</td></tr>
+      {% set ns.division = sec.division %}
+    {% endif %}
+    <tr class="s-section"><td colspan="9">{{ sec.title }}{% if not loop.first %} (продолжение){% endif %}</td></tr>
+    {% for r in row_chunk %}
+      <tr>
+        <td class="c">{{ r.pos if r.pos is not none else '' }}</td>
+        <td class="l">{{ r.name }}</td>
+        <td class="c">{{ r.type_mark }}</td>
+        <td class="c">{{ r.code }}</td>
+        <td class="c">{{ r.manufacturer }}</td>
+        <td class="c">{{ r.unit }}</td>
+        <td class="c">{{ r.qty|spec_qty(r.unit) }}</td>
+        <td class="c">{{ r.mass }}</td>
+        <td class="l">{{ r.note }}</td>
+      </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
+{% endfor %}
+{% endfor %}
 {% if spec.note %}<p class="spec-note">{{ spec.note }}</p>{% endif %}

@@ -6,7 +6,7 @@ import pytest
 
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request
-from app.pz.spec import build_specification
+from app.pz.spec import build_specification, format_spec_qty
 
 
 def _demo_project():
@@ -68,3 +68,23 @@ def test_demo_spec_contains_exact_v2_ring_and_riser_lengths():
     riser_fix = next(row for row in rows if "Хомут трубный стояка" in row.name)
     assert ring_fix.qty == 17
     assert riser_fix.qty == 64
+
+
+def test_spec_sections_follow_gost_21_601_order():
+    spec = _demo_spec()
+    assert [(section.division, section.title.split(" — ")[0]) for section in spec.sections] == [
+        ("Водоснабжение холодное", "В1"),
+        ("Водоснабжение холодное", "В2"),
+        ("Водоснабжение горячее", "Т3-Т4"),
+    ]
+    positions = [row.pos for section in spec.sections for row in section.rows if row.pos is not None]
+    assert positions == list(range(1, len(positions) + 1))
+
+
+def test_discrete_spec_quantities_have_no_decimal_comma():
+    assert format_spec_qty(1, "шт.") == "1"
+    assert format_spec_qty(8.0, "шт.") == "8"
+    assert format_spec_qty(1, "компл.") == "1"
+    assert format_spec_qty(12.25, "м") == "12,2"
+    with pytest.raises(ValueError, match="Дробное количество"):
+        format_spec_qty(1.5, "шт.")

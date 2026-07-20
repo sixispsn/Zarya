@@ -1,6 +1,7 @@
 """
 app/pz/spec.py — спецификация оборудования, изделий и материалов
-(форма 1 ГОСТ 21.110-2013), раздел ИОС2. Группировка ПО СИСТЕМАМ (В1, Т3, В2).
+(форма 1 ГОСТ 21.110-2013), раздел ИОС2. Группировка по разделам и системам
+(водоснабжение холодное: В1, В2; водоснабжение горячее: Т3-Т4).
 
 Источники строк:
   • оборудование — из подбора (PumpSystem, MetersSystem);
@@ -68,6 +69,23 @@ def ring_volume_l(d_outer_mm: float, length_m: float) -> float:
 # Сортамент PE-X/ПНД (Ду -> Ø×стенка) для записи труб распределительной сети.
 PEX_SORTAMENT = {16: "16×2,0", 20: "20×2,0", 25: "25×2,3",
                  32: "32×3,0", 40: "40×3,7", 50: "50×4,6"}
+
+DISCRETE_SPEC_UNITS = {"шт", "шт.", "компл", "компл.", "комплект"}
+
+
+def format_spec_qty(value: Optional[float], unit: str) -> str:
+    """Количество для формы 1: штучные единицы без десятичной части."""
+    if value is None:
+        return ""
+    number = float(value)
+    if (unit or "").strip().lower() in DISCRETE_SPEC_UNITS:
+        rounded = round(number)
+        if not math.isclose(number, rounded, abs_tol=1e-9):
+            raise ValueError(f"Дробное количество {number:g} недопустимо для единицы '{unit}'")
+        return str(int(rounded))
+    return f"{number:.1f}".replace(".", ",")
+
+
 @dataclass
 class SpecRow:
     pos: Optional[int]
@@ -76,7 +94,7 @@ class SpecRow:
     code: str = ""
     manufacturer: str = ""
     unit: str = ""
-    qty: float = 0
+    qty: Optional[float] = 0
     mass: str = ""
     note: str = ""
 
@@ -84,6 +102,7 @@ class SpecRow:
 @dataclass
 class SpecSection:
     title: str
+    division: str = ""
     rows: List[SpecRow] = field(default_factory=list)
 
 
@@ -229,12 +248,13 @@ def build_specification(project: Project) -> Specification:
         return v
 
     def sealant_rows(vol_l):
-        """Группа 8 «материалы»: герметик/негорючий материал заделки (по объёму)."""
+        """Группа 8 «материалы»: массу указывают после выбора состава и его плотности."""
         if vol_l <= 0:
             return []
         return [SpecRow(next_pos(), "Материал негорючий гидрофобный для заделки зазоров",
-                type_mark="заделка проходок", manufacturer="Торговая сеть", unit="дм³",
-                qty=round(vol_l, 1), note="заполнение зазоров гильз (СП 30)")]
+                type_mark="заделка проходок", manufacturer="Торговая сеть", unit="кг",
+                qty=None, note=(f"расчётный объём {vol_l:.1f} дм³; массу определить после "
+                                "выбора состава по его плотности на стадии Р"))]
 
     def seismic_rows(n_fixtures, n_risers, main_dn):
         """Сейсмические мероприятия (СП 30 р.15): гибкие подводки к приборам +
@@ -300,7 +320,8 @@ def build_specification(project: Project) -> Specification:
             return []
         total = area * rates[key] * PIPE_SPARE
         out = []
-        for grp, share, dn_map in PIPE_GROUPS:
+        entries = sorted(PIPE_GROUPS, key=lambda item: item[2][key])
+        for grp, share, dn_map in entries:
             dn = dn_map[key]
             length = total * share
             vertical = grp == "стояки"
@@ -318,7 +339,7 @@ def build_specification(project: Project) -> Specification:
                 out.append(SpecRow(
                     next_pos(), f"Комплект креплений для труб {mat}, Ду{dn}",
                     type_mark=f"Ду{dn}", manufacturer="по системе изготовителя",
-                    unit="компл.", qty=None,
+                    unit="шт.", qty=None,
                     note="количество по таблице изготовителя после выбора системы труб",
                 ))
                 continue
@@ -441,10 +462,14 @@ def build_specification(project: Project) -> Specification:
                 qty=count * floors,
                 note="укрупнённо: 1 крепление на этаж; окончательно по узлам стадии Р",
             ))
+        out.sort(key=lambda row: int(row.type_mark.removeprefix("Ду")))
         return out
 
     # ── Раздел В1 (хоз-питьевой холодный водопровод) ──
-    sec = SpecSection(title="В1 — хозяйственно-питьевой водопровод")
+    sec = SpecSection(
+        title="В1 — хозяйственно-питьевой водопровод",
+        division="Водоснабжение холодное",
+    )
     # группа 1: оборудование
     p = project.pumps
     pump_obr = None
@@ -455,7 +480,7 @@ def build_specification(project: Project) -> Specification:
             f"Установка повысительная: Q={p.wp_q:.2f} м³/ч, H={p.wp_h:.1f} м, "
             f"N={getattr(acc,'p2_kw',0):.2f} кВт",
             type_mark=f"{getattr(acc,'brand','')} {getattr(acc,'model','')}".strip(),
-            manufacturer="по проекту", unit="компл.", qty=1,
+            manufacturer="по проекту", unit="шт.", qty=1,
             note=p.count_note or "1 раб. + 1 рез."))
         pump_obr = True
         # вибровставки у насоса (СП 30): кроме произв. зданий без шумозащиты
@@ -478,10 +503,10 @@ def build_specification(project: Project) -> Specification:
             next_pos(), f"Фильтр сетчатый муфтовый, Ду{cm.dn}", type_mark=f"Ду{cm.dn}",
             manufacturer="Торговая сеть", unit="шт.", qty=1, note="на водомерный узел"))
         sec.rows.append(SpecRow(
-            next_pos(), f"Подставка (опорная рама) под водомерный узел, Ду{cm.dn}",
-            type_mark="индивидуального изготовления", manufacturer="по месту",
+            next_pos(), f"Подставка монтажная регулируемая под водомерный узел, Ду{cm.dn}",
+            type_mark=f"для водомерного узла Ду{cm.dn}", manufacturer="Торговая сеть",
             unit="шт.", qty=max(1, project.source.inputs_count),
-            note="по числу вводов; конструкцию и анкеровку уточнить на стадии Р"))
+            note="по числу вводов; тип и анкеровку уточнить на стадии Р"))
     nv1 = project.building.risers_v1 or 0
     if nv1:
         sec.rows.append(SpecRow(
@@ -506,11 +531,12 @@ def build_specification(project: Project) -> Specification:
     sec.rows += seismic_rows(sum(fg.count for fg in (project.fixtures or [])),
                              nv1, PIPE_GROUPS[0][2]["hvs"])
     sec.rows += heating_rows("hvs")
+    # группа 4: опоры и крепления трубопроводов
+    sec.rows += fastener_rows("hvs", _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
+                              _mat(mats, "cold_distribution", "PE-X"))
     # группа 6: трубопроводы
     sec.rows += pipe_rows("hvs", _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
                           _mat(mats, "cold_distribution", "PE-X"))
-    sec.rows += fastener_rows("hvs", _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
-                              _mat(mats, "cold_distribution", "PE-X"))
     # группа 7: конструкции теплоизоляционные
     sec.rows += insulation_rows("hvs")
     # группа 8: материалы (герметик по объёму)
@@ -520,7 +546,10 @@ def build_specification(project: Project) -> Specification:
 
     # ── Раздел Т3-Т4 (ГВС подача + циркуляция) ──
     if project.building.hws_type.value != "none":
-        sec = SpecSection(title="Т3-Т4 — горячее водоснабжение")
+        sec = SpecSection(
+            title="Т3-Т4 — горячее водоснабжение",
+            division="Водоснабжение горячее",
+        )
         hm = find_meter(["гвс", "горяч"])
         if hm:
             sec.rows.append(SpecRow(
@@ -550,10 +579,12 @@ def build_specification(project: Project) -> Specification:
                                      PIPE_GROUPS[0][2]["gvs"], plastic=True)
         sec.rows += seismic_rows(0, nt, PIPE_GROUPS[0][2]["gvs"])
         sec.rows += heating_rows("gvs")
-        sec.rows += pipe_rows("gvs", _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
-                              _mat(mats, "hot_distribution", "PE-X"))
+        # группа 4: опоры и крепления трубопроводов
         sec.rows += fastener_rows("gvs", _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
                                   _mat(mats, "hot_distribution", "PE-X"))
+        # группа 6: трубопроводы
+        sec.rows += pipe_rows("gvs", _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
+                              _mat(mats, "hot_distribution", "PE-X"))
         sec.rows += insulation_rows("gvs")
         # группа 8: материалы (герметик)
         sec.rows += sealant_rows(sealant_l(nt, PIPE_GROUPS[1][2]["gvs"], floors, 1,
@@ -563,7 +594,10 @@ def build_specification(project: Project) -> Specification:
     # ── Раздел В2 (внутренний противопожарный водопровод) ──
     f = project.fire
     if f.required:
-        sec = SpecSection(title="В2 — внутренний противопожарный водопровод")
+        sec = SpecSection(
+            title="В2 — внутренний противопожарный водопровод",
+            division="Водоснабжение холодное",
+        )
         fp = project.fire_pumps
         if fp.required and fp.top3:
             acc = fp.top3[0]
@@ -572,7 +606,7 @@ def build_specification(project: Project) -> Specification:
                 f"Установка пожарная насосная: Q={fp.wp_q:.2f} м³/ч, "
                 f"H={fp.wp_h:.1f} м, N={getattr(acc, 'p2_kw', 0):.2f} кВт",
                 type_mark=f"{getattr(acc, 'brand', '')} {getattr(acc, 'model', '')}".strip(),
-                manufacturer="по проекту", unit="компл.", qty=1,
+                manufacturer="по проекту", unit="шт.", qty=1,
                 note=(fp.count_note or "1 рабочий + 1 резервный")
                      + ("; предварительный подбор по архивной Q-H кривой"
                         if getattr(acc, "archived", False) else "")))
@@ -582,7 +616,7 @@ def build_specification(project: Project) -> Specification:
         if pk:
             sec.rows.append(SpecRow(
                 next_pos(), f"Кран пожарный Ду{ndn} с рукавом {hose} м и стволом РС-50",
-                type_mark=f"Ду{ndn}", manufacturer="Торговая сеть", unit="компл.",
+                type_mark=f"Ду{ndn}", manufacturer="Торговая сеть", unit="шт.",
                 qty=pk, note="в шкафу пожарном"))
             sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
                                     manufacturer="Торговая сеть", unit="шт.", qty=pk))
@@ -592,14 +626,30 @@ def build_specification(project: Project) -> Specification:
             # позиция вносится, количество уточняется по планам, а не молча теряется.
             sec.rows.append(SpecRow(
                 next_pos(), f"Кран пожарный Ду{ndn} с рукавом {hose} м и стволом РС-50",
-                type_mark=f"Ду{ndn}", manufacturer="Торговая сеть", unit="компл.",
+                type_mark=f"Ду{ndn}", manufacturer="Торговая сеть", unit="шт.",
                 qty=None, note="кол-во по расстановке ПК на планах"))
             sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
                                     manufacturer="Торговая сеть", unit="шт.",
                                     qty=None, note="по числу ПК"))
-        sec.rows += fire_pipe_rows()
         sec.rows += fire_fastener_rows()
+        sec.rows += fire_pipe_rows()
         sections.append(sec)
+
+    # ГОСТ 21.601-2011, пп. 9.3–9.4: сначала раздел холодного
+    # водоснабжения (В1, В2), затем горячего; позиции выводим последовательно
+    # после нормативной сортировки разделов.
+    system_order = {"В1": 0, "В2": 1, "Т3-Т4": 2}
+    division_order = {"Водоснабжение холодное": 0, "Водоснабжение горячее": 1}
+    sections.sort(key=lambda s: (
+        division_order.get(s.division, 99),
+        next((rank for marker, rank in system_order.items() if s.title.startswith(marker)), 99),
+    ))
+    row_number = 0
+    for section in sections:
+        for row in section.rows:
+            if row.pos is not None:
+                row_number += 1
+                row.pos = row_number
 
     return Specification(
         sections=sections,
@@ -612,6 +662,8 @@ def build_specification(project: Project) -> Specification:
               "температуры и влажности. Трубы В2 приняты по длинам расчётной сети стадии П. "
               "Крепления рассчитаны минимально по длинам и предельному шагу СП 73.13330.2016 "
               "и СП 41-109-2005; дополнительные крепления у арматуры, поворотов и ответвлений "
-              "уточняются на стадии «Р». Фасонные части "
-              "в спецификацию не включены (ГОСТ 21.601-2011 п.9.4). Единицы — по ГОСТ 21.110 п.9.5."),
+              "уточняются на стадии «Р». Фасонные части и отдельные метизы "
+              "в спецификацию не включены (ГОСТ 21.601-2011 п.9.4). "
+              "Состав разделов, порядок групп и единицы измерения — по ГОСТ 21.601-2011 "
+              "пп.9.3–9.5; форма таблицы — по ГОСТ 21.110-2013."),
     )

@@ -16,7 +16,7 @@ from dataclasses import replace
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
-from app.pz.spec import build_specification
+from app.pz.spec import build_specification, format_spec_qty
 from app.pz.scheme import build_scheme, SchemeParams, SchemeResult, W as SCHEME_W, H as SCHEME_H
 
 
@@ -36,6 +36,7 @@ def _build_env() -> Environment:
     )
     # Число в русской записи: num(2) -> "5,76"; None -> "—"
     env.filters["num"] = lambda v, p=2: ("—" if v is None else f"{v:.{p}f}".replace(".", ","))
+    env.filters["spec_qty"] = format_spec_qty
     return env
 
 
