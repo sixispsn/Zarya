@@ -45,6 +45,15 @@ class TestGvs:
         r = calc_gvs_pipe(PipeGvs(dn=15, t_water=55), t_room=20)
         assert r.delta >= 10
 
+    def test_actual_outer_diameter_can_override_legacy_dn_geometry(self):
+        """Табличные qL/RнL остаются по DN, геометрия — по выбранной трубе."""
+        r = calc_gvs_pipe(
+            PipeGvs(dn=25, t_water=60, outer_diameter_mm=25.0),
+            t_room=20,
+        )
+        assert r.d_mm == 25.0
+        assert r.ql == 10.0
+
 
 class TestHvs:
     """ХВС — защита от конденсата."""

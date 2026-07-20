@@ -41,6 +41,7 @@ class PipeGvs:
     dn: int             # условный диаметр, мм
     t_water: float      # температура воды, °С (обычно 60)
     label: str = ""     # описание (стояк, магистраль)
+    outer_diameter_mm: Optional[float] = None  # фактический Dн; None сохраняет legacy
 
 
 @dataclass
@@ -49,6 +50,7 @@ class PipeHvs:
     dn: int
     t_water: float      # температура воды, °С (обычно 5-15)
     label: str = ""
+    outer_diameter_mm: Optional[float] = None
 
 
 @dataclass
@@ -111,7 +113,7 @@ def _resolve_t_room(params: InsulationParams) -> tuple[float, bool]:
 
 def calc_gvs_pipe(pipe: PipeGvs, t_room: float) -> GvsResult:
     """Расчёт толщины изоляции для трубы ГВС."""
-    d_m = get_pipe_od(pipe.dn) / 1000.0
+    d_m = (pipe.outer_diameter_mm or get_pipe_od(pipe.dn)) / 1000.0
     ql = interp_ql(pipe.dn, pipe.t_water)
     rnl = get_rnl(pipe.dn, pipe.t_water)
 
@@ -134,7 +136,7 @@ def calc_gvs_pipe(pipe: PipeGvs, t_room: float) -> GvsResult:
 
 def calc_hvs_pipe(pipe: PipeHvs, t_room: float, humidity: int) -> HvsResult:
     """Расчёт толщины изоляции для трубы ХВС (защита от конденсата)."""
-    d_m = get_pipe_od(pipe.dn) / 1000.0
+    d_m = (pipe.outer_diameter_mm or get_pipe_od(pipe.dn)) / 1000.0
     dt = interp_tv4(t_room, humidity)
     t_surf = t_room - dt
 

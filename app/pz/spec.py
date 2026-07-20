@@ -22,6 +22,7 @@ from app.pz.project import BuildingPurpose, Project
 from app.calc.insulation import (
     InsulationParams, PipeGvs, PipeHvs, calculate_insulation,
 )
+from app.data.pipe_catalog import PipeSize, pipe_size, sleeve_for, steel_vgp_ordinary
 
 # Удельные показатели расхода труб, пог. м на 1 м² (Метод 2); общ./пром. = жилые ÷1,5.
 UNIT_PIPE_M_PER_M2 = {
@@ -51,24 +52,28 @@ VALVE_MAIN_COEF = 0.3   # укрупнённый коэф. секционной 
 # Проходки через конструкции (СП 30: гильзы Ø+5–10 мм, зазор — негорючий материал)
 SLAB_THK_M = 0.20       # толщина перекрытия
 WALL_THK_M = 0.30       # толщина наружной стены (для вводов)
-SLEEVE_GAP_MM = 8       # зазор труба↔гильза (5–10 мм)
-SLEEVE_DN_ROW = [25, 32, 40, 50, 65, 80, 100, 125, 150]  # ряд Ду гильз
+SLEEVE_DIAMETRAL_CLEARANCE_MM = 8  # СП 30, п. 11.5: допустимо 5–10 мм
 
-def sleeve_dn(d_outer_mm: float) -> int:
-    need = d_outer_mm + SLEEVE_GAP_MM
-    for s in SLEEVE_DN_ROW:
-        if s >= need:
-            return s
-    return SLEEVE_DN_ROW[-1]
 
-def ring_volume_l(d_outer_mm: float, length_m: float) -> float:
+def ring_volume_l(pipe_outer_mm: float, sleeve_inner_mm: float, length_m: float) -> float:
     """Объём кольцевого зазора труба↔гильза, дм³ (л)."""
-    dg = d_outer_mm + SLEEVE_GAP_MM
-    area_mm2 = math.pi / 4.0 * (dg ** 2 - d_outer_mm ** 2)
+    if sleeve_inner_mm <= pipe_outer_mm:
+        raise ValueError("Внутренний диаметр гильзы должен быть больше наружного диаметра трубы")
+    area_mm2 = math.pi / 4.0 * (sleeve_inner_mm ** 2 - pipe_outer_mm ** 2)
     return area_mm2 * (length_m * 1000.0) / 1e6
-# Сортамент PE-X/ПНД (Ду -> Ø×стенка) для записи труб распределительной сети.
-PEX_SORTAMENT = {16: "16×2,0", 20: "20×2,0", 25: "25×2,3",
-                 32: "32×3,0", 40: "40×3,7", 50: "50×4,6"}
+
+
+def _size_mark(size: PipeSize) -> str:
+    return (f"DN{size.dn}; {size.size_label}; dвн={size.inner_mm:g} мм"
+            .replace(".", ","))
+
+
+def _size_label_ru(size: PipeSize) -> str:
+    return size.size_label.replace(".", ",")
+
+
+def _mass_mark(size: PipeSize) -> str:
+    return "" if size.mass_kg_m is None else f"{size.mass_kg_m:.2f}".replace(".", ",")
 
 DISCRETE_SPEC_UNITS = {"шт", "шт.", "компл", "компл.", "комплект"}
 
@@ -222,38 +227,64 @@ def build_specification(project: Project) -> Specification:
                        note="подача и обратка ГВС"))
         return out
 
-    def crossing_g4_rows(n_risers, riser_dn, floors, n_inlets, inlet_dn, plastic):
+    def crossing_g4_rows(n_risers, riser_dn, riser_material, floors,
+                         n_inlets, inlet_dn, inlet_material, plastic):
         """Группа 4 «другие элементы»: гильзы при пересечении конструкций (СП 30) +
         противопожарные муфты на пластиковых стояках (при fire_barriers)."""
         out = []
         n_slab = (n_risers or 0) * (floors or 0)
+        riser = pipe_size(riser_material, riser_dn)
+        inlet = pipe_size(inlet_material, inlet_dn)
+        riser_sleeve = sleeve_for(riser, SLEEVE_DIAMETRAL_CLEARANCE_MM)
+        inlet_sleeve = sleeve_for(inlet, SLEEVE_DIAMETRAL_CLEARANCE_MM)
         if n_slab:
-            out.append(SpecRow(next_pos(), f"Гильза стальная, Ду{sleeve_dn(riser_dn)}",
-                       type_mark=f"Ду{sleeve_dn(riser_dn)}", manufacturer="Торговая сеть",
-                       unit="шт.", qty=n_slab, note="проходки стояков через перекрытия (стояки×этажи)"))
+            out.append(SpecRow(
+                next_pos(), f"Гильза стальная ВГП обыкновенная, DN{riser_sleeve.dn}",
+                type_mark=_size_mark(riser_sleeve), manufacturer="Торговая сеть",
+                unit="шт.", qty=n_slab,
+                note=(f"для трубы {_size_label_ru(riser)}; dвн гильзы больше Dн трубы "
+                      f"на 5–10 мм (принято {SLEEVE_DIAMETRAL_CLEARANCE_MM:g} мм); "
+                      "стояки×этажи"),
+            ))
         if n_inlets:
-            out.append(SpecRow(next_pos(), f"Гильза стальная, Ду{sleeve_dn(inlet_dn)}",
-                       type_mark=f"Ду{sleeve_dn(inlet_dn)}", manufacturer="Торговая сеть",
-                       unit="шт.", qty=n_inlets, note="проходки вводов через стену"))
+            out.append(SpecRow(
+                next_pos(), f"Гильза стальная ВГП обыкновенная, DN{inlet_sleeve.dn}",
+                type_mark=_size_mark(inlet_sleeve), manufacturer="Торговая сеть",
+                unit="шт.", qty=n_inlets,
+                note=(f"для трубы {_size_label_ru(inlet)}; dвн гильзы больше Dн трубы "
+                      f"на 5–10 мм (принято {SLEEVE_DIAMETRAL_CLEARANCE_MM:g} мм); "
+                      "ввод через стену"),
+            ))
         if plastic and fb and n_slab:
             out.append(SpecRow(next_pos(), f"Муфта противопожарная, Ду{riser_dn}",
-                       type_mark=f"Ду{riser_dn}", manufacturer="Торговая сеть", unit="шт.",
+                       type_mark=f"для трубы {_size_label_ru(riser)}", manufacturer="Торговая сеть", unit="шт.",
                        qty=n_slab, note="на пластиковых стояках при пересечении преград"))
         return out
 
-    def sealant_l(n_risers, riser_dn, floors, n_inlets, inlet_dn):
+    def sealant_l(n_risers, riser_dn, riser_material, floors,
+                  n_inlets, inlet_dn, inlet_material):
         """Объём негорючего материала для заделки зазоров проходок, дм³."""
-        v = (n_risers or 0) * (floors or 0) * ring_volume_l(riser_dn, SLAB_THK_M)
-        v += (n_inlets or 0) * ring_volume_l(inlet_dn, WALL_THK_M)
+        riser = pipe_size(riser_material, riser_dn)
+        inlet = pipe_size(inlet_material, inlet_dn)
+        riser_sleeve = sleeve_for(riser, SLEEVE_DIAMETRAL_CLEARANCE_MM)
+        inlet_sleeve = sleeve_for(inlet, SLEEVE_DIAMETRAL_CLEARANCE_MM)
+        v = ((n_risers or 0) * (floors or 0)
+             * ring_volume_l(riser.outer_mm, riser_sleeve.inner_mm, SLAB_THK_M))
+        v += ((n_inlets or 0)
+              * ring_volume_l(inlet.outer_mm, inlet_sleeve.inner_mm, WALL_THK_M))
         return v
 
-    def sealant_rows(vol_l):
+    def sealant_rows(vol_l, *, firestop=False):
         """Группа 8 «материалы»: массу указывают после выбора состава и его плотности."""
         if vol_l <= 0:
             return []
-        return [SpecRow(next_pos(), "Материал негорючий гидрофобный для заделки зазоров",
-                type_mark="заделка проходок", manufacturer="Торговая сеть", unit="кг",
-                qty=None, note=(f"расчётный объём {vol_l:.1f} дм³; массу определить после "
+        name = ("Состав огнезащитный сертифицированный для проходок инженерных коммуникаций"
+                if firestop else "Материал негорючий гидрофобный для заделки зазоров")
+        mark = "огнезаделка проходок" if firestop else "заделка проходок"
+        volume_text = f"{vol_l:.1f}".replace(".", ",")
+        return [SpecRow(next_pos(), name,
+                type_mark=mark, manufacturer="Торговая сеть", unit="кг",
+                qty=None, note=(f"расчётный объём {volume_text} дм³; массу определить после "
                                 "выбора состава по его плотности на стадии Р"))]
 
     def seismic_rows(n_fixtures, n_risers, main_dn):
@@ -293,25 +324,25 @@ def build_specification(project: Project) -> Specification:
         if area <= 0:
             return out
         total = area * rates[key] * PIPE_SPARE
-        entries = []  # (Ду, материал, доля, сортамент)
+        entries = []  # (DN/наружный размер, материал, доля)
         for grp, share, dn_map in PIPE_GROUPS:
             dn = dn_map[key]
             is_main = (grp == "магистрали")
             mat = mat_mains if is_main else mat_dist
-            sort = "" if is_main else PEX_SORTAMENT.get(dn, "")
-            entries.append((dn, mat, share, sort))
+            entries.append((dn, mat, share))
         entries.sort(key=lambda e: e[0])  # по возрастанию Ду
         prev_mat = None
-        for dn, mat, share, sort in entries:
-            suffix = f" ({sort})" if sort else ""
+        for dn, mat, share in entries:
+            size = pipe_size(mat, dn)
+            suffix = f" ({size.size_label}; dвн={size.inner_mm:g} мм)".replace(".", ",")
             if mat != prev_mat:
                 name = f"Труба {mat}, Ду{dn}{suffix}"
                 prev_mat = mat
             else:
                 name = f"то же Ду{dn}{suffix}"
-            out.append(SpecRow(next_pos(), name, type_mark=f"Ду{dn}",
+            out.append(SpecRow(next_pos(), name, type_mark=_size_mark(size),
                                manufacturer="Торговая сеть", unit="м",
-                               qty=round(total * share, 1)))
+                               qty=round(total * share, 1), mass=_mass_mark(size)))
         return out
 
     def fastener_rows(key, mat_mains, mat_dist):
@@ -368,11 +399,15 @@ def build_specification(project: Project) -> Specification:
         if area <= 0:
             return out
         total = area * rates[key] * PIPE_SPARE
-        rows = []  # (Ду, длина)
+        rows = []  # (Ду, длина, материал, фактическая геометрия)
         for grp, share, dn_map in PIPE_GROUPS:
             if grp == "подводки":
                 continue
-            rows.append((dn_map[key], round(total * share, 1)))
+            dn = dn_map[key]
+            mat = (_mat(mats, "hot_mains" if key == "gvs" else "cold_mains", "сталь ГОСТ 3262-75")
+                   if grp == "магистрали" else
+                   _mat(mats, "hot_distribution" if key == "gvs" else "cold_distribution", "PE-X"))
+            rows.append((dn, round(total * share, 1), pipe_size(mat, dn)))
         rows.sort(key=lambda e: e[0])
         ins = project.insulation
         params = InsulationParams(
@@ -383,7 +418,8 @@ def build_specification(project: Project) -> Specification:
         if key == "gvs":
             result = calculate_insulation(
                 params,
-                [PipeGvs(dn=dn, t_water=ins.gvs_water_temp) for dn, _ in rows],
+                [PipeGvs(dn=dn, t_water=ins.gvs_water_temp,
+                         outer_diameter_mm=size.outer_mm) for dn, _, size in rows],
                 [],
             )
             calculated = {x.dn: x for x in result.gvs}
@@ -391,11 +427,12 @@ def build_specification(project: Project) -> Specification:
             result = calculate_insulation(
                 params,
                 [],
-                [PipeHvs(dn=dn, t_water=ins.hvs_water_temp) for dn, _ in rows],
+                [PipeHvs(dn=dn, t_water=ins.hvs_water_temp,
+                         outer_diameter_mm=size.outer_mm) for dn, _, size in rows],
             )
             calculated = {x.dn: x for x in result.hvs if x.need_insulation}
         first = True
-        for dn, length in rows:
+        for dn, length, size in rows:
             calc = calculated.get(dn)
             if calc is None:
                 continue
@@ -404,11 +441,12 @@ def build_specification(project: Project) -> Specification:
                         else "вспененного каучука группы Г1" if ins.location == "parking"
                         else "вспененного каучука")
             if first:
-                name = f"Трубки теплоизоляционные из {material}, толщ. {thk} мм, Ду{dn}"
+                name = (f"Трубки теплоизоляционные из {material}, толщ. {thk} мм, "
+                        f"для трубы {_size_label_ru(size)}")
                 first = False
             else:
-                name = f"то же толщ. {thk} мм, Ду{dn}"
-            out.append(SpecRow(next_pos(), name, type_mark=f"Ду{dn}, δ{thk}",
+                name = f"то же толщ. {thk} мм, для трубы {_size_label_ru(size)}"
+            out.append(SpecRow(next_pos(), name, type_mark=f"для {_size_label_ru(size)}, δ{thk}",
                                manufacturer="Торговая сеть", unit="м", qty=length,
                                note=(f"расчёт legacy/SP 61: tводы="
                                      f"{ins.gvs_water_temp if key == 'gvs' else ins.hvs_water_temp:g} °C, "
@@ -428,9 +466,13 @@ def build_specification(project: Project) -> Specification:
         out = []
         material = _mat(mats, "fire_pipes", "сталь по ГОСТ 3262-75")
         for (role, dn), length in sorted(lengths.items(), key=lambda x: (x[0][1], x[0][0])):
+            size = pipe_size(material, dn)
             out.append(SpecRow(
-                next_pos(), f"Труба {material}, Ду{dn}", type_mark=f"Ду{dn}",
+                next_pos(), (f"Труба {material}, Ду{dn} "
+                             f"({size.size_label}; dвн={size.inner_mm:g} мм)".replace(".", ",")),
+                type_mark=_size_mark(size),
                 manufacturer="Торговая сеть", unit="м", qty=round(length, 1),
+                mass=_mass_mark(size),
                 note=f"В2, {role}; по расчётной схеме стадии П",
             ))
         return out
@@ -464,6 +506,36 @@ def build_specification(project: Project) -> Specification:
             ))
         out.sort(key=lambda row: int(row.type_mark.removeprefix("Ду")))
         return out
+
+    def fire_crossing_rows():
+        """Стальные гильзы проходок стояков В2 по фактическому сортаменту."""
+        net = project.fire_network
+        if net is None:
+            return []
+        material = _mat(mats, "fire_pipes", "сталь по ГОСТ 3262-75")
+        by_dn = defaultdict(int)
+        for riser in net.risers:
+            by_dn[int(riser.dn)] += 1
+        out = []
+        for dn, count in sorted(by_dn.items()):
+            out += crossing_g4_rows(
+                count, dn, material, floors,
+                0, dn, material, plastic=False,
+            )
+        return out
+
+    def fire_sealant_l():
+        net = project.fire_network
+        if net is None:
+            return 0.0
+        material = _mat(mats, "fire_pipes", "сталь по ГОСТ 3262-75")
+        total = 0.0
+        for riser in net.risers:
+            pipe = pipe_size(material, int(riser.dn))
+            sleeve = sleeve_for(pipe, SLEEVE_DIAMETRAL_CLEARANCE_MM)
+            total += ((floors or 0)
+                      * ring_volume_l(pipe.outer_mm, sleeve.inner_mm, SLAB_THK_M))
+        return total
 
     # ── Раздел В1 (хоз-питьевой холодный водопровод) ──
     sec = SpecSection(
@@ -525,8 +597,11 @@ def build_specification(project: Project) -> Specification:
     # КИП: манометры узла учёта и насоса
     sec.rows += kip_rows(1 + (2 if pump_obr else 0), 0, mano_note="узел учёта и насос")
     # группа 4: гильзы + противопожарные муфты (проходки)
-    sec.rows += crossing_g4_rows(nv1, PIPE_GROUPS[1][2]["hvs"], floors, 1,
-                                 PIPE_GROUPS[0][2]["hvs"], plastic=True)
+    sec.rows += crossing_g4_rows(
+        nv1, PIPE_GROUPS[1][2]["hvs"], _mat(mats, "cold_distribution", "PE-X"), floors,
+        project.source.inputs_count, PIPE_GROUPS[0][2]["hvs"],
+        _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"), plastic=True,
+    )
     # реакции на условия: сейсмика + обогрев (срабатывают по флагам ТЗ)
     sec.rows += seismic_rows(sum(fg.count for fg in (project.fixtures or [])),
                              nv1, PIPE_GROUPS[0][2]["hvs"])
@@ -540,8 +615,11 @@ def build_specification(project: Project) -> Specification:
     # группа 7: конструкции теплоизоляционные
     sec.rows += insulation_rows("hvs")
     # группа 8: материалы (герметик по объёму)
-    sec.rows += sealant_rows(sealant_l(nv1, PIPE_GROUPS[1][2]["hvs"], floors, 1,
-                                       PIPE_GROUPS[0][2]["hvs"]))
+    sec.rows += sealant_rows(sealant_l(
+        nv1, PIPE_GROUPS[1][2]["hvs"], _mat(mats, "cold_distribution", "PE-X"), floors,
+        project.source.inputs_count, PIPE_GROUPS[0][2]["hvs"],
+        _mat(mats, "cold_mains", "сталь ГОСТ 3262-75"),
+    ))
     sections.append(sec)
 
     # ── Раздел Т3-Т4 (ГВС подача + циркуляция) ──
@@ -575,8 +653,11 @@ def build_specification(project: Project) -> Specification:
         # КИП: манометр узла учёта + термометры подачи/обратки ГВС
         sec.rows += kip_rows(1, 2, mano_note="узел учёта ГВС")
         # группа 4: гильзы + противопожарные муфты (стояки Т3+Т4)
-        sec.rows += crossing_g4_rows(nt, PIPE_GROUPS[1][2]["gvs"], floors, 1,
-                                     PIPE_GROUPS[0][2]["gvs"], plastic=True)
+        sec.rows += crossing_g4_rows(
+            nt, PIPE_GROUPS[1][2]["gvs"], _mat(mats, "hot_distribution", "PE-X"), floors,
+            project.source.inputs_count, PIPE_GROUPS[0][2]["gvs"],
+            _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"), plastic=True,
+        )
         sec.rows += seismic_rows(0, nt, PIPE_GROUPS[0][2]["gvs"])
         sec.rows += heating_rows("gvs")
         # группа 4: опоры и крепления трубопроводов
@@ -587,8 +668,11 @@ def build_specification(project: Project) -> Specification:
                               _mat(mats, "hot_distribution", "PE-X"))
         sec.rows += insulation_rows("gvs")
         # группа 8: материалы (герметик)
-        sec.rows += sealant_rows(sealant_l(nt, PIPE_GROUPS[1][2]["gvs"], floors, 1,
-                                           PIPE_GROUPS[0][2]["gvs"]))
+        sec.rows += sealant_rows(sealant_l(
+            nt, PIPE_GROUPS[1][2]["gvs"], _mat(mats, "hot_distribution", "PE-X"), floors,
+            project.source.inputs_count, PIPE_GROUPS[0][2]["gvs"],
+            _mat(mats, "hot_mains", "сталь ГОСТ 3262-75"),
+        ))
         sections.append(sec)
 
     # ── Раздел В2 (внутренний противопожарный водопровод) ──
@@ -631,8 +715,10 @@ def build_specification(project: Project) -> Specification:
             sec.rows.append(SpecRow(next_pos(), "Шкаф пожарный навесной (ШПК)",
                                     manufacturer="Торговая сеть", unit="шт.",
                                     qty=None, note="по числу ПК"))
+        sec.rows += fire_crossing_rows()
         sec.rows += fire_fastener_rows()
         sec.rows += fire_pipe_rows()
+        sec.rows += sealant_rows(fire_sealant_l(), firestop=True)
         sections.append(sec)
 
     # ГОСТ 21.601-2011, пп. 9.3–9.4: сначала раздел холодного
@@ -660,6 +746,9 @@ def build_specification(project: Project) -> Specification:
               "на магистрали и стояки В1 и Т3-Т4 (от конденсата и теплопотерь, СП 30 п.8.11); "
               "толщина рассчитана алгоритмом legacy SP calculator по СП 61 для заданных "
               "температуры и влажности. Трубы В2 приняты по длинам расчётной сети стадии П. "
+              "Для стальных труб зафиксировано исполнение ВГП «обыкновенная» по ГОСТ 3262-75; "
+              "в спецификации приведены Dн×s и расчётный Dвн=Dн−2s. Для PE-X приведены "
+              "фактические Dн×s и Dвн принятого сортамента. "
               "Крепления рассчитаны минимально по длинам и предельному шагу СП 73.13330.2016 "
               "и СП 41-109-2005; дополнительные крепления у арматуры, поворотов и ответвлений "
               "уточняются на стадии «Р». Фасонные части и отдельные метизы "

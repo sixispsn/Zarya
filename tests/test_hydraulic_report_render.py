@@ -52,6 +52,7 @@ def test_html_has_segment_rows():
     html = generate_hydraulic_report_html(p, report)
     assert "mag" in html and "rA" in html and "rB" in html
     assert "PK-A" in html
+    assert "67.5" in html
 
 
 def test_html_cipher_suffix_gr():

@@ -571,11 +571,11 @@ def test_private_segment_not_shared():
 # ── скорость по внутреннему диаметру ─────────────────────────────────────────
 
 def test_velocity_uses_inner_diameter():
-    # Ду65 → внутренний 68мм из таблицы, не 65
+    # DN65 ВГП обыкновенная: Ø75,5×4,0 → внутренний 67,5 мм.
     r = solve_fire_hydraulics_scenario(_tree_net(), 2)
     mag = next(s for s in r.dictating_scenario.sections if s.segment_id == "mag")
-    assert mag.inner_diameter_mm == 68.0
-    assert mag.velocity_mps == pytest.approx(velocity_mps(5.2, 68.0))
+    assert mag.inner_diameter_mm == 67.5
+    assert mag.velocity_mps == pytest.approx(velocity_mps(5.2, 67.5))
 
 
 def test_velocity_formula():
@@ -697,5 +697,5 @@ def test_second_source_node_must_exist():
 
 def test_inner_diameter_table():
     assert STEEL_INNER_DIAMETER_MM[50] == 53.0
-    assert STEEL_INNER_DIAMETER_MM[65] == 68.0
-    assert STEEL_INNER_DIAMETER_MM[100] == 106.0
+    assert STEEL_INNER_DIAMETER_MM[65] == 67.5
+    assert STEEL_INNER_DIAMETER_MM[100] == 105.0

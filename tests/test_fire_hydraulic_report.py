@@ -77,7 +77,8 @@ def test_segments_table_has_all():
     mag = next(s for s in rep.segments if s.segment_id == "mag")
     assert mag.is_shared is True
     assert mag.flow_lps == pytest.approx(5.2)
-    assert mag.inner_diameter_mm == 68.0
+    assert mag.inner_diameter_mm == 67.5
+    assert "67.5" in rep.render_text()
 
 
 # ── блок 3: вердикты по диаметрам ────────────────────────────────────────────

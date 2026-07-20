@@ -1,6 +1,12 @@
 {# Спецификация — форма 1 ГОСТ 21.110-2013 (9 граф). Контекст: spec #}
 {% macro table_header() %}
-  <thead>
+  <table class="spec spec-header">
+  <colgroup>
+    <col style="width:20mm"><col style="width:130mm"><col style="width:60mm">
+    <col style="width:35mm"><col style="width:45mm"><col style="width:20mm">
+    <col style="width:20mm"><col style="width:25mm"><col style="width:40mm">
+  </colgroup>
+  <tbody>
     <tr>
       <th>Поз.</th>
       <th>Наименование и техническая характеристика</th>
@@ -12,21 +18,23 @@
       <th>Масса 1 ед., кг</th>
       <th>Приме­чание</th>
     </tr>
-  </thead>
+  </tbody>
+  </table>
 {% endmacro %}
 {% set ns = namespace(division='') %}
 {% for sec in spec.sections %}
 {% set section_loop = loop %}
-{% for row_chunk in sec.rows|batch(22) %}
+{# Запас по высоте нужен для многострочных примечаний о креплениях и проходках. #}
+{% for row_chunk in sec.rows|batch(8) %}
 {% if not (section_loop.first and loop.first) %}<div class="spec-page-break"></div>{% endif %}
 <div class="spec-sheet">
+{{ table_header() }}
 <table class="spec">
   <colgroup>
     <col style="width:20mm"><col style="width:130mm"><col style="width:60mm">
     <col style="width:35mm"><col style="width:45mm"><col style="width:20mm">
     <col style="width:20mm"><col style="width:25mm"><col style="width:40mm">
   </colgroup>
-  {{ table_header() }}
   <tbody>
     {% if sec.division %}
       <tr class="s-division"><td colspan="9">{{ sec.division }}{% if sec.division == ns.division %} (продолжение){% endif %}</td></tr>

@@ -83,6 +83,8 @@ def test_network_built():
     assert len(net.segments) == 6
     assert len(net.cabinets) == 2
     assert net.validate() == []
+    assert next(s for s in net.segments if s.diameter_mm == 100).inner_diameter_mm == 105.0
+    assert next(s for s in net.segments if s.diameter_mm == 50).inner_diameter_mm == 53.0
 
 
 def test_network_is_ring():

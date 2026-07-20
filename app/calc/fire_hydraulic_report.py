@@ -135,7 +135,10 @@ class FireHydraulicReport:
             arrow = f"{s.from_node}→{s.to_node}"
             v = f"{s.velocity_mps:.2f}" if s.velocity_mps is not None else "—"
             dn = str(s.current_dn) if s.current_dn else "—"
-            din = f"{s.inner_diameter_mm:.0f}" if s.inner_diameter_mm else "—"
+            din = (
+                f"{s.inner_diameter_mm:.1f}".rstrip("0").rstrip(".")
+                if s.inner_diameter_mm else "—"
+            )
             L.append(f"{s.segment_id:10}{arrow:16}{s.effective_length_m:7.1f}"
                      f"{s.flow_lps:7.1f}{dn:>5}{din:>7}{v:>7}{s.head_loss_m:8.2f}"
                      f"{'да' if s.is_shared else 'нет':>7}")

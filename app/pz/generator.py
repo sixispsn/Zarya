@@ -36,6 +36,10 @@ def _build_env() -> Environment:
     )
     # Число в русской записи: num(2) -> "5,76"; None -> "—"
     env.filters["num"] = lambda v, p=2: ("—" if v is None else f"{v:.{p}f}".replace(".", ","))
+    # Точная геометрия без ложного округления и без незначащего нуля: 67.5; 105.
+    env.filters["compact"] = lambda v, p=1: (
+        "—" if v is None else f"{v:.{p}f}".rstrip("0").rstrip(".")
+    )
     env.filters["spec_qty"] = format_spec_qty
     return env
 

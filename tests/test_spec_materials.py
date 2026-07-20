@@ -54,20 +54,49 @@ def test_demo_spec_contains_t3_t4_pipes_and_insulation():
     assert any("Труба " in row.name for row in rows)
     assert any("теплоизоляционные" in row.name for row in rows)
     assert any("балансировочный" in row.name.lower() and row.qty == 8 for row in rows)
+    sleeves = [row for row in rows if "Гильза" in row.name]
+    assert [row.type_mark for row in sleeves] == [
+        "DN32; Ø42,3×3,2; dвн=35,9 мм",
+        "DN65; Ø75,5×4; dвн=67,5 мм",
+    ]
+    sealant = next(row for row in rows if "заделки зазоров" in row.name)
+    assert "27,2 дм³" in sealant.note
 
 
 def test_demo_spec_contains_exact_v2_ring_and_riser_lengths():
     rows = _section(_demo_spec(), "В2").rows
     ring = next(row for row in rows if "кольцевая магистраль" in row.note)
-    risers = next(row for row in rows if "стояки" in row.note)
-    assert ring.type_mark == "Ду100"
+    risers = next(
+        row for row in rows
+        if "стояки" in row.note and row.name.startswith("Труба ")
+    )
+    assert ring.type_mark == "DN100; Ø114×4,5; dвн=105 мм"
     assert ring.qty == pytest.approx(102.0)
-    assert risers.type_mark == "Ду65"
+    assert risers.type_mark == "DN65; Ø75,5×4; dвн=67,5 мм"
     assert risers.qty == pytest.approx(186.0)
     ring_fix = next(row for row in rows if "Хомут трубный стальной" in row.name)
     riser_fix = next(row for row in rows if "Хомут трубный стояка" in row.name)
     assert ring_fix.qty == 17
     assert riser_fix.qty == 64
+    sleeve = next(row for row in rows if "Гильза" in row.name)
+    assert sleeve.type_mark == "DN90; Ø101,3×4; dвн=93,3 мм"
+    assert sleeve.qty == 64
+    firestop = next(row for row in rows if "огнезащитный" in row.name.lower())
+    assert firestop.unit == "кг"
+    assert "30,2 дм³" in firestop.note
+
+
+def test_stage_p_sleeves_use_actual_pipe_od_and_sleeve_id():
+    spec = _demo_spec()
+    v1 = _section(spec, "В1").rows
+    sleeves = [row for row in v1 if "Гильза" in row.name]
+    assert [row.type_mark for row in sleeves] == [
+        "DN40; Ø48×3,5; dвн=41 мм",
+        "DN80; Ø88,5×4; dвн=80,5 мм",
+    ]
+    assert all("на 5–10 мм (принято 8 мм)" in row.note for row in sleeves)
+    sealant = next(row for row in v1 if "заделки зазоров" in row.name)
+    assert "13,9 дм³" in sealant.note
 
 
 def test_spec_sections_follow_gost_21_601_order():

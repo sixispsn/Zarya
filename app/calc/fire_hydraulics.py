@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 from app.data.fire_tables import get_nozzle_data
+from app.data.pipe_catalog import STEEL_VGP_ORDINARY
 
 
 # перевод давления у клапана ПК (МПа, табл. 7.3) в напор (м вод. ст.)
@@ -35,7 +36,7 @@ MPA_TO_M = 1.0e6 / (1000.0 * 9.81)   # ≈ 101.94 м / МПа
 # внутренний диаметр стальных труб В2 по Ду (мм). Скорость считается по нему,
 # а не по номинальному Ду (у стали внутренний заметно отличается).
 STEEL_INNER_DIAMETER_MM = {
-    50: 53.0, 65: 68.0, 80: 82.5, 100: 106.0, 125: 131.0, 150: 156.0,
+    dn: size.inner_mm for dn, size in STEEL_VGP_ORDINARY.items()
 }
 
 

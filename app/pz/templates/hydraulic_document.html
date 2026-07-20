@@ -105,7 +105,7 @@
       <td>{{ '%.1f'|format(s.effective_length_m) }}</td>
       <td>{{ '%.1f'|format(s.flow_lps) }}</td>
       <td>{{ s.current_dn or '—' }}</td>
-      <td>{{ '%.0f'|format(s.inner_diameter_mm) if s.inner_diameter_mm else '—' }}</td>
+      <td>{{ s.inner_diameter_mm|compact(1) if s.inner_diameter_mm else '—' }}</td>
       <td>{{ '%.2f'|format(s.velocity_mps) if s.velocity_mps is not none else '—' }}</td>
       <td>{{ '%.0f'|format(s.normative_limit_mps) }}</td>
       <td>{{ '%.0f'|format(s.design_limit_mps) }}</td>

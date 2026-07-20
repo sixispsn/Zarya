@@ -80,6 +80,7 @@ def build_network(project: Project) -> object:
     from app.calc.fire_hydraulics import (
         FireNetwork, HydraulicNode, PipeSegment, FireCabinetNode,
         HydraulicSource, SourceKind)
+    from app.data.pipe_catalog import steel_vgp_ordinary
 
     spec = project.fire_network
     if spec is None:
@@ -97,6 +98,7 @@ def build_network(project: Project) -> object:
         PipeSegment(s.segment_id, s.from_node, s.to_node,
                     length_m=s.length_m, A=s.A,
                     equiv_length_m=s.equiv_length_m, diameter_mm=s.dn,
+                    inner_diameter_mm=steel_vgp_ordinary(s.dn).inner_mm,
                     repair_section_id=(s.repair_section_id or None))
         for s in spec.segments]
 
@@ -111,7 +113,8 @@ def build_network(project: Project) -> object:
         segments.append(PipeSegment(
             f"{r.riser_id}_seg", r.attach_node, pk_node,
             length_m=r.length_m, A=r.A,
-            equiv_length_m=r.equiv_length_m, diameter_mm=r.dn))
+            equiv_length_m=r.equiv_length_m, diameter_mm=r.dn,
+            inner_diameter_mm=steel_vgp_ordinary(r.dn).inner_mm))
         cabinets.append(FireCabinetNode(
             cabinet_id=cab_id, node_id=pk_node,
             dn=fire.nozzle_dn, hose_m=fire.hose_length_m,
