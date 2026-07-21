@@ -196,7 +196,9 @@ def load_request(text: str) -> IOS2Request:
             inputs_count=int(sd.get("inputs_count", 1)),
             npsh_available_m=optional_float("npsh_available_m"),
         )
-    consumers = [ConsumerGroupRequest(str(x.get("code", "")), int(x.get("count", 0)))
+    consumers = [ConsumerGroupRequest(
+                    str(x.get("code", "")), int(x.get("count", 0)),
+                    str(x.get("name", "")))
                  for x in (data.get("consumers") or []) if isinstance(x, dict)]
     return IOS2Request(
         document=document,
@@ -273,7 +275,11 @@ def dump_request(req: IOS2Request) -> str:
             if value not in (None, "")
         }
     if req.consumers:
-        data["consumers"] = [{"code": x.code, "count": x.count} for x in req.consumers]
+        data["consumers"] = [{
+            **({"name": x.name} if x.name else {}),
+            "code": x.code,
+            "count": x.count,
+        } for x in req.consumers]
     if req.rooms:
         data["rooms"] = [{
             "name": r.name, "length_m": r.length_m, "width_m": r.width_m,

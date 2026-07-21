@@ -11,7 +11,8 @@ app/web/wizard.py — Wizard: веб-форма ввода объекта ИОС
             → GET /wizard/file/{run_id}/{name}    отдача PDF
 
 MVP-упрощения (осознанные):
-  • одно помещение и до 6 участков магистрали / 4 стояков в форме
+  • до 12 групп потребителей, одно характерное помещение и до 6 участков
+    магистрали / 4 стояков в форме
     (для демо достаточно; полный ввод — следующая итерация);
   • результаты хранятся в памяти процесса (run_id → bundle); без БД.
 """
@@ -34,6 +35,7 @@ from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.pz.generator import cold_meter_loss
 from app.pz.rules import calc_required_head
+from app.data.sp30_tables import list_consumer_norms
 
 router = APIRouter(prefix="/wizard", tags=["wizard"])
 _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -45,11 +47,17 @@ _TPL.env.filters["ru_num"] = lambda value, precision=1: (
 _RUNS: Dict[str, dict] = {}
 _OUT_ROOT = "/tmp/zarya_wizard_runs"
 _STORE = ProjectStore()
+_CONSUMER_NORMS = list_consumer_norms()
+
+
+def _form_context(**values):
+    return {"consumer_norms": _CONSUMER_NORMS, **values}
 
 
 @router.get("", response_class=HTMLResponse)
 def wizard_form(request: Request):
-    return _TPL.TemplateResponse(request, "wizard_form.html", {"errors": []})
+    return _TPL.TemplateResponse(
+        request, "wizard_form.html", _form_context(errors=[]))
 
 
 @router.post("/design")
@@ -108,6 +116,23 @@ async def wizard_design(request: Request):
             height_m=ff("room_h"), space_kind=fv("room_kind", "corridor"),
             placement=fv("room_place", "two_opposite_sides")))
 
+    consumers = []
+    for i in range(1, 13):
+        code = fv(f"consumer{i}_code")
+        count = fi(f"consumer{i}_count")
+        if code and count > 0:
+            consumers.append(ConsumerGroupRequest(
+                code=code,
+                count=count,
+                name=fv(f"consumer{i}_name"),
+            ))
+    # Совместимость со старой формой и внешними клиентами Wizard.
+    if not consumers and fi("consumer_count") > 0:
+        consumers.append(ConsumerGroupRequest(
+            fv("consumer_code", "residential_central_hw"),
+            fi("consumer_count"),
+        ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -145,18 +170,16 @@ async def wizard_design(request: Request):
             inputs_count=fi("inputs_count", 1),
             npsh_available_m=(ff("npsh_available") if fv("npsh_available") else None),
         ),
-        consumers=([ConsumerGroupRequest(
-            fv("consumer_code", "residential_central_hw"), fi("consumer_count"))]
-            if fi("consumer_count") > 0 else []),
+        consumers=consumers,
     )
 
     pid = fv("project_id") or None
     try:
         project = build_project(req)
     except RequestValidationError as e:
-        return _TPL.TemplateResponse(request, "wizard_form.html", {
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
             "errors": e.problems, "prefill": req, "project_id": pid,
-        })
+        }))
 
     # персистентность: намерение сохраняется (source of truth — вход)
     project_id = _STORE.save(req, project_id=(pid if pid and _STORE.exists(pid) else None))
@@ -166,11 +189,11 @@ async def wizard_design(request: Request):
     try:
         bundle = design_ios2(project, output_dir=outdir)
     except Exception as exc:
-        return _TPL.TemplateResponse(request, "wizard_form.html", {
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
             "errors": [f"Комплект не собран: {exc}"],
             "prefill": req,
             "project_id": project_id,
-        }, status_code=422)
+        }), status_code=422)
     _RUNS[run_id] = {"bundle": bundle, "outdir": outdir, "project_id": project_id}
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -256,7 +279,7 @@ def wizard_open(request: Request, project_id: str):
     except (FileNotFoundError, ValueError):
         return HTMLResponse("<h2>Проект не найден</h2>", status_code=404)
     return _TPL.TemplateResponse(request, "wizard_form.html", {
-        "errors": [], "prefill": req_dto, "project_id": project_id})
+        **_form_context(errors=[]), "prefill": req_dto, "project_id": project_id})
 
 
 @router.post("/projects/{project_id}/delete")

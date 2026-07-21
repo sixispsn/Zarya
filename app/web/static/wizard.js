@@ -10,16 +10,62 @@ document.addEventListener("DOMContentLoaded", () => {
     if (details) details.open = true;
   }));
 
-  document.querySelectorAll(".input-section").forEach((details) => {
-    details.querySelectorAll("input, select").forEach((control) => {
-      control.addEventListener("input", () => {
-        const state = details.querySelector(".accepted");
-        if (!state) return;
-        state.textContent = "изменено";
-        state.classList.add("changed");
-      });
+  const markChanged = (control) => {
+    const details = control.closest(".input-section");
+    const state = details?.querySelector(".accepted");
+    if (!state) return;
+    state.textContent = "изменено";
+    state.classList.add("changed");
+  };
+
+  const bindControl = (control) => {
+    if (control.dataset.changeBound) return;
+    control.dataset.changeBound = "true";
+    control.addEventListener("input", () => markChanged(control));
+  };
+  document.querySelectorAll(".input-section input, .input-section select")
+    .forEach(bindControl);
+
+  const consumerRows = document.querySelector("#consumer-rows");
+  const consumerTemplate = document.querySelector("#consumer-row-template");
+  const addConsumer = document.querySelector("#add-consumer");
+
+  const updateConsumerUnit = (row) => {
+    const select = row.querySelector("[data-consumer-select]");
+    const unit = row.querySelector("[data-consumer-unit]");
+    if (!select || !unit) return;
+    unit.textContent = select.selectedOptions[0]?.dataset.unit || "—";
+  };
+  const bindConsumerRow = (row) => {
+    row.querySelectorAll("input, select").forEach(bindControl);
+    const select = row.querySelector("[data-consumer-select]");
+    if (select) select.addEventListener("input", () => updateConsumerUnit(row));
+    const remove = row.querySelector(".consumer-remove");
+    if (remove) remove.addEventListener("click", () => {
+      if (consumerRows.querySelectorAll("[data-consumer-row]").length <= 1) return;
+      row.remove();
+      markChanged(consumerRows);
     });
-  });
+    updateConsumerUnit(row);
+  };
+  consumerRows?.querySelectorAll("[data-consumer-row]").forEach(bindConsumerRow);
+
+  if (addConsumer && consumerRows && consumerTemplate) {
+    addConsumer.addEventListener("click", () => {
+      const used = [...consumerRows.querySelectorAll("[data-consumer-row]")]
+        .map((row) => Number(row.querySelector("[name*='_code']")?.name.match(/consumer(\d+)_/)?.[1] || 0));
+      const index = Array.from({ length: 12 }, (_, i) => i + 1)
+        .find((candidate) => !used.includes(candidate));
+      if (!index) return;
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = consumerTemplate.innerHTML.replaceAll("__INDEX__", String(index)).trim();
+      const row = wrapper.firstElementChild;
+      consumerRows.appendChild(row);
+      bindConsumerRow(row);
+      row.querySelector("input")?.focus();
+      markChanged(row);
+    });
+  }
 
   if (links.length && sections.length && "IntersectionObserver" in window) {
     const activate = (id) => links.forEach((link) => {

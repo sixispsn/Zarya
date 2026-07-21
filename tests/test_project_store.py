@@ -113,7 +113,9 @@ def test_form_without_prefill_uses_demo():
     assert "2026-089-ИОС2" in h       # демо-заполнение живо
     assert "DEMO-ТУ-01" in h
     assert "РС-1" in h
-    assert 'name="consumer_count"' in h
+    assert 'name="consumer1_name"' in h
+    assert 'name="consumer1_code"' in h
+    assert 'name="consumer1_count"' in h
 
 
 def test_projects_page_template():

@@ -45,17 +45,30 @@ def test_templates_exist_and_valid_jinja():
 
 
 def test_form_template_has_all_sections():
-    from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader("app/web/templates"))
+    from app.web.wizard import _TPL, _form_context
     # рендерим шаблон — имена run/riser-полей генерятся циклом
-    html = env.get_template("wizard_form.html").render(errors=[])
-    assert html.count("<fieldset") == 7
-    assert html.count('<details class="input-section"') == 7
-    assert html.count('<details class="input-section" open') == 0
-    assert html.count('<span class="accepted">принято</span>') == 7
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]))
+    assert html.count("<fieldset") == 5
+    assert html.count('<details class="input-section"') == 5
+    assert html.count('<details class="input-section" open') == 1
+    assert html.count('<span class="accepted">принято</span>') == 5
     for field in ("cipher", "object_name", "building_type", "floors", "height",
+                  "consumer1_name", "consumer1_code", "consumer1_count",
                   "room_name", "run1_from", "riser1_name", "source_node"):
         assert f'name="{field}"' in html
+    assert "Магистраль В2" not in html
+    assert "Расстановка пожарных кранов" not in html
+    assert "Стояки В2" not in html
+
+
+def test_form_exposes_all_sp30_consumer_norms():
+    from app.data.sp30_tables import list_consumer_norms
+    from app.web.wizard import _TPL, _form_context
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]))
+    for norm in list_consumer_norms():
+        assert f'value="{norm.code}"' in html
 
 
 def test_result_template_shows_key_numbers():
@@ -85,6 +98,12 @@ def test_invalid_form_keeps_entered_values():
                 "building_type": "residential",
                 "floors": "0",
                 "height": "48",
+                "consumer1_name": "Жилая часть",
+                "consumer1_code": "residential_central_hw",
+                "consumer1_count": "480",
+                "consumer2_name": "Спортивный комплекс",
+                "consumer2_code": "sport_pool",
+                "consumer2_count": "120",
             }
 
     response = asyncio.run(wizard_design(RequestStub()))
@@ -92,3 +111,7 @@ def test_invalid_form_keeps_entered_values():
     body = response.body.decode("utf-8")
     assert "Дом с ошибкой" in body
     assert "floors должно быть &gt; 0" in body
+    assert "Жилая часть" in body
+    assert "Спортивный комплекс" in body
+    assert 'value="sport_pool" data-unit=' in body
+    assert 'data-unit="чел" selected' in body

@@ -53,6 +53,16 @@ def test_roundtrip_preserves_optional_fields():
     assert req2.network.node_elevations == {"К2": -1.5}
 
 
+def test_roundtrip_preserves_consumer_functional_names():
+    from app.intake.request_dto import ConsumerGroupRequest
+    req = load_request(GOOD)
+    req.consumers = [
+        ConsumerGroupRequest("residential_central_hw", 480, "Жилая часть"),
+        ConsumerGroupRequest("sport_pool", 120, "Спортивный комплекс"),
+    ]
+    assert load_request(dump_request(req)).consumers == req.consumers
+
+
 def test_roundtrip_preserves_repair_sections():
     req = load_request(GOOD)
     req.network.runs[0].repair_section_id = "РС-1"
