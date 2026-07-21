@@ -33,3 +33,4 @@ htmlcov/
 # Временные файлы
 tmp/
 temp/
+dist/
