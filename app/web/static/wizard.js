@@ -4,6 +4,23 @@ document.addEventListener("DOMContentLoaded", () => {
     .map((link) => document.querySelector(link.getAttribute("href")))
     .filter(Boolean);
 
+  links.forEach((link) => link.addEventListener("click", () => {
+    const section = document.querySelector(link.getAttribute("href"));
+    const details = section?.querySelector("details");
+    if (details) details.open = true;
+  }));
+
+  document.querySelectorAll(".input-section").forEach((details) => {
+    details.querySelectorAll("input, select").forEach((control) => {
+      control.addEventListener("input", () => {
+        const state = details.querySelector(".accepted");
+        if (!state) return;
+        state.textContent = "изменено";
+        state.classList.add("changed");
+      });
+    });
+  });
+
   if (links.length && sections.length && "IntersectionObserver" in window) {
     const activate = (id) => links.forEach((link) => {
       link.classList.toggle("active", link.getAttribute("href") === `#${id}`);

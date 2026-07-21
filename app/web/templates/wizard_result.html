@@ -47,10 +47,10 @@
       </div>
     </section>
 
-    <section class="card full">
-      <div class="card-kicker"><h2>Протокол сборки</h2><span class="system-tag">{{ status|length }} операций</span></div>
-      <ul class="log">{% for s in status %}<li>{{ s }}</li>{% endfor %}</ul>
-      {% if warnings %}<ul class="log warn">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+    <section class="card full protocol-card">
+      <details class="protocol"><summary><span>Протокол сборки</span><span class="system-tag">{{ status|length }} операций{% if warnings %} · {{ warnings|length }} замечание{% endif %}</span></summary>
+      <div class="protocol-body"><ul class="log">{% for s in status %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% if warnings %}<ul class="log warn">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}</div></details>
     </section>
   </div>
 

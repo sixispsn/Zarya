@@ -50,6 +50,9 @@ def test_form_template_has_all_sections():
     # рендерим шаблон — имена run/riser-полей генерятся циклом
     html = env.get_template("wizard_form.html").render(errors=[])
     assert html.count("<fieldset") == 7
+    assert html.count('<details class="input-section"') == 7
+    assert html.count('<details class="input-section" open') == 0
+    assert html.count('<span class="accepted">принято</span>') == 7
     for field in ("cipher", "object_name", "building_type", "floors", "height",
                   "room_name", "run1_from", "riser1_name", "source_node"):
         assert f'name="{field}"' in html
@@ -59,6 +62,14 @@ def test_result_template_shows_key_numbers():
     html = open("app/web/templates/wizard_result.html", encoding="utf-8").read()
     for token in ("fire.pk_total", "fire.required_head", "pdfs", "status"):
         assert token in html
+    assert '<details class="protocol">' in html
+
+
+def test_blueprint_ui_marks_edited_sections():
+    js = open("app/web/static/wizard.js", encoding="utf-8").read()
+    css = open("app/web/static/wizard.css", encoding="utf-8").read()
+    assert 'state.textContent = "изменено"' in js
+    assert ".accepted.changed" in css
 
 
 def test_invalid_form_keeps_entered_values():
