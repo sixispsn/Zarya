@@ -43,10 +43,8 @@ class DocumentInfo:
 
     @property
     def stage_label(self) -> str:
-        try:
-            return self.stage.value
-        except Exception:
-            return "П"
+        value = getattr(self.stage, "value", self.stage)
+        return str(value or "П")
 
 
 @dataclass

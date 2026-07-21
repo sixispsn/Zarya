@@ -84,6 +84,27 @@ def test_form_prefill_renders_saved_values():
     assert "2026-089" not in h        # демо не просачивается
 
 
+def test_form_prefill_preserves_selects():
+    from jinja2 import Environment, FileSystemLoader
+    req = _req()
+    req.document.stage = "Р"
+    req.building_type = "public"
+    req.insulation_location = "parking"
+    req.rooms[0].space_kind = "hall"
+    req.rooms[0].placement = "one_side"
+    env = Environment(loader=FileSystemLoader("app/web/templates"))
+    h = env.get_template("wizard_form.html").render(
+        errors=[], prefill=req, project_id="ab12cd34ef")
+    for token in (
+        "<option selected>Р</option>",
+        '<option value="public" selected>',
+        '<option value="parking" selected>',
+        '<option value="hall" selected>',
+        '<option value="one_side" selected>',
+    ):
+        assert token in h
+
+
 def test_form_without_prefill_uses_demo():
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader("app/web/templates"))

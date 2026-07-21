@@ -1,9 +1,10 @@
-"""
-Заря — инженерный калькулятор ВК.
-Точка входа FastAPI приложения.
-"""
+"""Заря — инженерный калькулятор ВК. Точка входа FastAPI приложения."""
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import fire, insulation, irrigation, pumps, storm, water_demand, water_meters
 from app.web import wizard
@@ -32,15 +33,16 @@ app.include_router(fire.router)
 app.include_router(wizard.router)
 app.include_router(insulation.router)
 app.include_router(pumps.router)
+app.mount(
+    "/static",
+    StaticFiles(directory=str(Path(__file__).parent / "web" / "static")),
+    name="static",
+)
 
 @app.get("/")
 def root():
-    """Проверка что сервер работает."""
-    return {
-        "service": "Заря",
-        "version": "0.1.0",
-        "status": "ok",
-    }
+    """Основная точка входа — рабочее место проектировщика."""
+    return RedirectResponse(url="/wizard", status_code=307)
 
 
 @app.get("/health")

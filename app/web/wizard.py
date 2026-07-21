@@ -32,9 +32,14 @@ from app.intake.request_dto import (
 from app.intake.project_builder import build_project, RequestValidationError
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
+from app.pz.generator import cold_meter_loss
+from app.pz.rules import calc_required_head
 
 router = APIRouter(prefix="/wizard", tags=["wizard"])
 _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+_TPL.env.filters["ru_num"] = lambda value, precision=1: (
+    "—" if value is None else f"{value:.{precision}f}".replace(".", ",")
+)
 
 # run_id → {"bundle": IOS2DesignBundle, "outdir": str}
 _RUNS: Dict[str, dict] = {}
@@ -145,19 +150,27 @@ async def wizard_design(request: Request):
             if fi("consumer_count") > 0 else []),
     )
 
+    pid = fv("project_id") or None
     try:
         project = build_project(req)
     except RequestValidationError as e:
-        return _TPL.TemplateResponse(request, "wizard_form.html",
-                                     {"errors": e.problems})
+        return _TPL.TemplateResponse(request, "wizard_form.html", {
+            "errors": e.problems, "prefill": req, "project_id": pid,
+        })
 
     # персистентность: намерение сохраняется (source of truth — вход)
-    pid = fv("project_id") or None
     project_id = _STORE.save(req, project_id=(pid if pid and _STORE.exists(pid) else None))
 
     run_id = uuid.uuid4().hex[:10]
     outdir = os.path.join(_OUT_ROOT, run_id)
-    bundle = design_ios2(project, output_dir=outdir)
+    try:
+        bundle = design_ios2(project, output_dir=outdir)
+    except Exception as exc:
+        return _TPL.TemplateResponse(request, "wizard_form.html", {
+            "errors": [f"Комплект не собран: {exc}"],
+            "prefill": req,
+            "project_id": project_id,
+        }, status_code=422)
     _RUNS[run_id] = {"bundle": bundle, "outdir": outdir, "project_id": project_id}
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -177,15 +190,38 @@ def wizard_result(request: Request, run_id: str):
         if path:
             pdfs.append({"label": label, "name": os.path.basename(path)})
     f = b.project.fire
+    p = b.project
+    head = calc_required_head(p.source, h_vod_m=cold_meter_loss(p.meters))
     return _TPL.TemplateResponse(request, "wizard_result.html", {
         "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
         "status": b.status, "warnings": b.warnings,
+        "project": {
+            "title": p.document.object_name,
+            "cipher": p.document.cipher,
+            "stage": p.document.stage_label,
+        },
+        "v1": {
+            "q_day": p.flows.q_day_tot,
+            "q_sec": p.flows.q_sec_c,
+            "required_head": head.h_required_m,
+            "guaranteed_head": head.h_guaranteed_m,
+            "pump_required": p.pumps.required,
+            "pump_model": p.pumps.model,
+            "pump_q": p.pumps.wp_q or p.pumps.q_m3h,
+            "pump_h": p.pumps.wp_h or p.pumps.head_m,
+        },
         "fire": {
+            "flow": f.q_total,
             "pk_total": f.pk_total,
             "required_head": f.required_head_m,
             "available_head": f.available_head_m,
             "needs_pump": f.needs_pump,
             "dictating": f.dictating_cabinet_id,
+        },
+        "fire_pump": {
+            "model": p.fire_pumps.model,
+            "q": p.fire_pumps.wp_q or p.fire_pumps.q_m3h,
+            "h": p.fire_pumps.wp_h or p.fire_pumps.head_m,
         },
         "pump_duty": (b.fire_hydraulic_result.pump_duty
                       if b.fire_hydraulic_result else None),

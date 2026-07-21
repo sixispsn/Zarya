@@ -1,65 +1,62 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Заря — комплект ИОС2 готов</title>
-<style>
-  :root { --acc:#b45309; --ok:#15803d; --bg:#faf8f5; --line:#e5dfd5; }
-  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#1c1917; }
-  header { background:#292524; color:#fafaf9; padding:14px 28px; }
-  header h1 { margin:0; font-size:20px; }
-  main { max-width:820px; margin:26px auto; padding:0 16px; }
-  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px 22px; margin-bottom:18px; }
-  h2 { margin:0 0 10px; font-size:17px; color:var(--acc); }
-  .kv { display:grid; grid-template-columns:230px 1fr; gap:5px 14px; font-size:15px; }
-  .kv b { color:#57534e; font-weight:500; }
-  ul.pdfs { list-style:none; margin:0; padding:0; }
-  ul.pdfs li { margin:8px 0; }
-  ul.pdfs a { display:inline-block; background:var(--acc); color:#fff; text-decoration:none;
-              padding:10px 20px; border-radius:7px; font-weight:600; }
-  ul.pdfs a:hover { background:#92400e; }
-  ul.log { font-size:13px; color:#57534e; margin:4px 0; padding-left:20px; }
-  .warn li { color:#b45309; }
-  .back { display:inline-block; margin-top:8px; color:var(--acc); }
-</style></head><body>
-<header><h1>Заря · комплект ИОС2 собран</h1></header>
-<main>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css">
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav>
+</header>
+<main class="result-shell">
+  <section class="result-hero">
+    <p class="eyebrow">Комплект успешно собран</p>
+    <h1>{{ project.title }}</h1>
+    <p>{{ project.cipher }} · стадия {{ project.stage }} · сформировано документов: {{ pdfs|length }}</p>
+  </section>
 
-<div class="card">
-  <h2>Результат расчёта В2</h2>
-  <div class="kv">
-    <b>Пожарных кранов (ПК)</b><span>{{ fire.pk_total }}</span>
-    <b>Требуемый напор на вводе</b><span>{{ "%.1f"|format(fire.required_head) }} м</span>
-    {% if fire.available_head is not none %}
-    <b>Доступный напор источника</b><span>{{ "%.1f"|format(fire.available_head) }} м</span>
-    {% endif %}
-    <b>Повысительная насосная</b>
-    <span>{% if fire.needs_pump %}требуется{% if pump_duty %} — рабочая точка
-      Q = {{ "%.1f"|format(pump_duty.flow_lps) }} л/с,
-      H = {{ "%.1f"|format(pump_duty.required_head_m) }} м{% endif %}
-      {% else %}не требуется{% endif %}</span>
-    <b>Диктующий сценарий</b><span>{{ fire.dictating }}</span>
+  <div class="result-grid">
+    <section class="card">
+      <div class="card-kicker"><h2>Хозяйственно-питьевой водопровод</h2><span class="system-tag">В1</span></div>
+      <div class="metric-grid">
+        <div class="metric"><b>Суточный расход</b><strong>{{ v1.q_day|ru_num(1) }}</strong><small>м³/сут</small></div>
+        <div class="metric"><b>Секундный расход</b><strong>{{ v1.q_sec|ru_num(3) }}</strong><small>л/с</small></div>
+        <div class="metric"><b>Требуемый напор</b><strong>{{ v1.required_head|ru_num(2) }}</strong><small>м вод. ст.</small></div>
+        <div class="metric"><b>Гарантированный напор</b><strong>{{ v1.guaranteed_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
+      </div>
+      {% if v1.pump_required %}<div class="equipment"><strong>{{ v1.pump_model or 'Модель требует уточнения' }}</strong>Насосная В1 · Q = {{ v1.pump_q|ru_num(2) }} м³/ч · H = {{ v1.pump_h|ru_num(1) }} м</div>{% else %}<div class="equipment"><strong>Повышение давления не требуется</strong>Гарантированный напор покрывает расчётную потребность В1.</div>{% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-kicker"><h2>Противопожарный водопровод</h2><span class="system-tag">В2</span></div>
+      <div class="metric-grid">
+        <div class="metric"><b>Пожарный расход</b><strong>{{ fire.flow|ru_num(1) }}</strong><small>л/с</small></div>
+        <div class="metric"><b>Размещено ПК</b><strong>{{ fire.pk_total }}</strong><small>шт.</small></div>
+        <div class="metric"><b>Требуемый напор</b><strong>{{ fire.required_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
+        <div class="metric"><b>Доступный напор</b><strong>{{ fire.available_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
+      </div>
+      {% if fire.needs_pump %}<div class="equipment"><strong>{{ fire_pump.model or 'Модель требует уточнения' }}</strong>Пожарная насосная · Q = {{ fire_pump.q|ru_num(1) }} м³/ч · H = {{ fire_pump.h|ru_num(1) }} м{% if pump_duty %} · расчётный режим {{ pump_duty.flow_lps|ru_num(1) }} л/с{% endif %}</div>{% else %}<div class="equipment"><strong>Пожарная насосная не требуется</strong>Напор источника покрывает расчетный режим В2.</div>{% endif %}
+      <p class="hint" style="margin-top:13px">Диктующий сценарий: {{ fire.dictating or 'не определён' }}</p>
+    </section>
+
+    <section class="card full">
+      <div class="card-kicker"><h2>Комплект документов</h2><span class="system-tag">{{ pdfs|length }} PDF</span></div>
+      <div class="doc-grid">
+        {% for p in pdfs %}<a class="doc-link" href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }}</a>{% endfor %}
+      </div>
+    </section>
+
+    <section class="card full">
+      <div class="card-kicker"><h2>Протокол сборки</h2><span class="system-tag">{{ status|length }} операций</span></div>
+      <ul class="log">{% for s in status %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% if warnings %}<ul class="log warn">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+    </section>
   </div>
-</div>
 
-<div class="card">
-  <h2>Документы</h2>
-  <ul class="pdfs">
-    {% for p in pdfs %}
-    <li><a href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }} (PDF)</a></li>
-    {% endfor %}
-  </ul>
-</div>
-
-<div class="card">
-  <h2>Как это было собрано</h2>
-  <ul class="log">
-    {% for s in status %}<li>✓ {{ s }}</li>{% endfor %}
-  </ul>
-  {% if warnings %}
-  <ul class="log warn">
-    {% for w in warnings %}<li>! {{ w }}</li>{% endfor %}
-  </ul>
-  {% endif %}
-</div>
-
-<a class="back" href="/wizard">← новый расчёт</a>
+  <div class="result-actions">
+    {% if project_id %}<a class="button-primary" href="/wizard/open/{{ project_id }}">Редактировать проект</a>{% endif %}
+    <a class="button-secondary" href="/wizard">Новый расчёт</a>
+    <a class="button-secondary" href="/wizard/projects">Все проекты</a>
+  </div>
 </main></body></html>

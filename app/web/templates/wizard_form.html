@@ -1,48 +1,43 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Заря — проектирование ИОС2</title>
-<style>
-  :root { --acc:#b45309; --bg:#faf8f5; --line:#e5dfd5; }
-  * { box-sizing:border-box; }
-  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#1c1917; }
-  header { background:#292524; color:#fafaf9; padding:14px 28px; display:flex; align-items:baseline; gap:14px; }
-  header h1 { margin:0; font-size:20px; } header span { color:#d6d3d1; font-size:13px; }
-  main { max-width:980px; margin:24px auto; padding:0 16px; }
-  fieldset { border:1px solid var(--line); border-radius:8px; background:#fff; margin:0 0 18px; padding:16px 18px; }
-  legend { font-weight:600; padding:0 6px; color:var(--acc); }
-  .row { display:flex; flex-wrap:wrap; gap:10px 14px; margin-bottom:8px; }
-  label { display:flex; flex-direction:column; font-size:12px; color:#57534e; gap:3px; }
-  input, select { padding:6px 8px; border:1px solid #d6d3d1; border-radius:5px; font-size:14px; min-width:90px; }
-  input.w-l { min-width:240px; } input.w-m { min-width:150px; } input.w-s { width:80px; }
-  table.grid { border-collapse:collapse; font-size:13px; }
-  table.grid th, table.grid td { padding:3px 5px; }
-  table.grid input { min-width:64px; width:88px; }
-  .hint { font-size:12px; color:#78716c; margin:4px 0 10px; }
-  .errors { background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:12px 16px; margin-bottom:18px; }
-  .errors li { color:#b91c1c; font-size:14px; }
-  button.go { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:12px 34px;
-              font-size:17px; font-weight:600; cursor:pointer; }
-  button.go:hover { background:#92400e; }
-  .actions { text-align:center; padding:6px 0 40px; }
-</style></head><body>
-<header><h1>Заря</h1><span>внутренний противопожарный водопровод · комплект ИОС2 одним расчётом</span><a href="/wizard/projects" style="margin-left:auto;color:#fbbf24;text-decoration:none;font-size:14px;">мои проекты →</a></header>
-<main>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css">
+<script defer src="/static/wizard.js"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard" aria-current="page">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav>
+</header>
 {% set d = prefill.document if prefill else none %}
+<main class="shell">
+<section class="hero">
+  <div><p class="eyebrow">Рабочее место проектировщика</p><h1>{% if d %}{{ d.object_name }}{% else %}Новый комплект водоснабжения и водоотведения{% endif %}</h1><p>Исходные данные, расчёты В1/В2/Т3/Т4 и пять документов стадии П в одном согласованном сценарии.</p></div>
+  <div class="hero-meta"><span class="chip">СП 30.13330.2020</span><span class="chip">СП 10.13130.2020</span><span class="chip">ПП РФ № 87</span></div>
+</section>
+<div class="workspace">
+<nav class="stepnav" aria-label="Разделы исходных данных">
+  <div class="stepnav-title">Исходные данные</div>
+  <a class="active" href="#object" data-step="1">Объект</a><a href="#building" data-step="2">Здание</a><a href="#fire-room" data-step="3">Расстановка ПК</a><a href="#fire-main" data-step="4">Магистраль В2</a><a href="#fire-risers" data-step="5">Стояки В2</a><a href="#source-v1" data-step="6">ТУ и В1/Т3</a><a href="#source-v2" data-step="7">Источник В2</a>
+  <p class="stepnav-note">Поля DEMO нужно заменить фактическими данными объекта перед выпуском.</p>
+</nav>
+<div class="form-stack">
 {% if errors %}
-<div class="errors"><b>Вход не принят:</b><ul>
+<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>
   {% for e in errors %}<li>{{ e }}</li>{% endfor %}
 </ul></div>
 {% endif %}
 
-<form method="post" action="/wizard/design">
+<form method="post" action="/wizard/design" data-design-form>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
 
-<fieldset><legend>1 · Объект и реквизиты</legend>
+<fieldset id="object"><legend><span class="section-head"><span class="step-badge">1</span><span><span class="section-title">Объект и реквизиты</span><span class="section-desc">Основная надпись, титульный лист и идентификация комплекта</span></span></span></legend><div class="section-body">
   <div class="row">
     <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '2026-089-ИОС2' }}" required></label>
     <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else 'Многоквартирный жилой дом, 16 этажей' }}" required></label>
     <label>Часть<input class="w-m" name="object_part" value="{{ d.object_part if d else 'Секция 2' }}"></label>
-    <label>Стадия<select name="stage"><option>П</option><option>Р</option></select></label>
+    <label>Стадия<select name="stage"><option{% if not d or d.stage == 'П' %} selected{% endif %}>П</option><option{% if d and d.stage == 'Р' %} selected{% endif %}>Р</option></select></label>
   </div>
   <div class="row">
     <label>Организация<input class="w-l" name="organization" value="{{ d.organization if d else 'ООО «ПроектСервис»' }}" required></label>
@@ -55,14 +50,15 @@
     <label>ГИП<input name="gip" value="{{ d.gip if d else 'Громов Д.А.' }}"></label>
     <label>Н. контроль<input name="norm_control" value="{{ d.norm_control if d else 'Дьякова О.М.' }}"></label>
   </div>
+</div>
 </fieldset>
 
-<fieldset><legend>2 · Здание</legend>
+<fieldset id="building"><legend><span class="section-head"><span class="step-badge">2</span><span><span class="section-title">Здание и системы</span><span class="section-desc">Назначение, этажность, зоны, стояки и условия теплоизоляции</span></span></span></legend><div class="section-body">
   <div class="row">
     <label>Тип<select name="building_type">
-      <option value="residential">Жилое (Ф1.3)</option>
-      <option value="public">Общественное</option>
-      <option value="industrial">Производственное</option>
+      <option value="residential"{% if not prefill or prefill.building_type == 'residential' %} selected{% endif %}>Жилое (Ф1.3)</option>
+      <option value="public"{% if prefill and prefill.building_type == 'public' %} selected{% endif %}>Общественное</option>
+      <option value="industrial"{% if prefill and prefill.building_type == 'industrial' %} selected{% endif %}>Производственное</option>
     </select></label>
     <label>Этажей<input class="w-s" name="floors" value="{{ prefill.floors if prefill else 16 }}" required></label>
     <label>Высота, м<input class="w-s" name="height" value="{{ prefill.building_height_m if prefill else 48 }}" required></label>
@@ -75,9 +71,9 @@
     <label>Стояков Т3<input class="w-s" name="risers_t3" value="{{ prefill.risers_t3 if prefill else 8 }}"></label>
     <label>Стояков Т4<input class="w-s" name="risers_t4" value="{{ prefill.risers_t4 if prefill else 8 }}"></label>
     <label>Место прокладки<select name="insulation_location">
-      <option value="room_hot">отапливаемое помещение</option>
-      <option value="room_cold">неотапливаемое помещение</option>
-      <option value="parking">подземная стоянка</option>
+      <option value="room_hot"{% if not prefill or prefill.insulation_location == 'room_hot' %} selected{% endif %}>отапливаемое помещение</option>
+      <option value="room_cold"{% if prefill and prefill.insulation_location == 'room_cold' %} selected{% endif %}>неотапливаемое помещение</option>
+      <option value="parking"{% if prefill and prefill.insulation_location == 'parking' %} selected{% endif %}>подземная стоянка</option>
     </select></label>
     <label>t помещения, °C<input class="w-s" name="insulation_t_room" value="{{ prefill.insulation_t_room_manual if prefill else 5 }}"></label>
     <label>Влажность, %<select name="insulation_humidity">
@@ -86,27 +82,29 @@
     <label>t ХВС, °C<input class="w-s" name="insulation_hvs_temp" value="{{ prefill.insulation_hvs_water_temp if prefill else 10 }}"></label>
     <label>t ГВС, °C<input class="w-s" name="insulation_gvs_temp" value="{{ prefill.insulation_gvs_water_temp if prefill else 60 }}"></label>
   </div>
-  <p class="hint">Площадь и число стояков формируют укрупнённые объёмы труб стадии П; толщина изоляции рассчитывается алгоритмом legacy SP calculator.</p>
+  <p class="hint"><strong>Граница стадии П.</strong> Площадь и число стояков формируют укрупнённые объёмы труб; толщина изоляции рассчитывается алгоритмом legacy SP calculator.</p>
+</div>
 </fieldset>
 
-<fieldset><legend>3 · Помещение расстановки ПК</legend>
+<fieldset id="fire-room"><legend><span class="section-head"><span class="step-badge">3</span><span><span class="section-title">Помещение расстановки пожарных кранов</span><span class="section-desc">Геометрия характерного этажа для проверки орошения каждой точки</span></span></span></legend><div class="section-body">
   <div class="row">
     <label>Наименование<input class="w-m" name="room_name" value="{{ prefill.rooms[0].name if prefill and prefill.rooms else 'Коридор тип. этажа' }}"></label>
     <label>Длина, м<input class="w-s" name="room_len" value="{{ prefill.rooms[0].length_m if prefill and prefill.rooms else 42 }}"></label>
     <label>Ширина, м<input class="w-s" name="room_wid" value="{{ prefill.rooms[0].width_m if prefill and prefill.rooms else 2.4 }}"></label>
     <label>Высота, м<input class="w-s" name="room_h" value="{{ prefill.rooms[0].height_m if prefill and prefill.rooms else 3.0 }}"></label>
     <label>Тип<select name="room_kind">
-      <option value="corridor">коридор</option><option value="room">помещение</option>
-      <option value="hall">зал</option><option value="storage">склад</option>
+      <option value="corridor"{% if not prefill or not prefill.rooms or prefill.rooms[0].space_kind == 'corridor' %} selected{% endif %}>коридор</option><option value="room"{% if prefill and prefill.rooms and prefill.rooms[0].space_kind == 'room' %} selected{% endif %}>помещение</option>
+      <option value="hall"{% if prefill and prefill.rooms and prefill.rooms[0].space_kind == 'hall' %} selected{% endif %}>зал</option><option value="storage"{% if prefill and prefill.rooms and prefill.rooms[0].space_kind == 'storage' %} selected{% endif %}>склад</option>
     </select></label>
     <label>Расстановка<select name="room_place">
-      <option value="two_opposite_sides">с двух сторон</option>
-      <option value="one_side">с одной стороны</option>
+      <option value="two_opposite_sides"{% if not prefill or not prefill.rooms or prefill.rooms[0].placement == 'two_opposite_sides' %} selected{% endif %}>с двух сторон</option>
+      <option value="one_side"{% if prefill and prefill.rooms and prefill.rooms[0].placement == 'one_side' %} selected{% endif %}>с одной стороны</option>
     </select></label>
   </div>
+</div>
 </fieldset>
 
-<fieldset><legend>4 · Магистраль В2 (до 6 участков; кольцо — замкните узлы)</legend>
+<fieldset id="fire-main"><legend><span class="section-head"><span class="step-badge">4</span><span><span class="section-title">Магистраль В2</span><span class="section-desc">До шести участков; для кольца последний участок возвращается в исходный узел</span></span></span></legend><div class="section-body"><div class="table-wrap">
   <table class="grid"><tr><th></th><th>от узла</th><th>до узла</th><th>L, м</th><th>Ду</th><th>L экв, м</th><th>рем. секция</th></tr>
   {% if prefill and prefill.network %}{% set _r = prefill.network.runs %}{% set runs = [] %}{% for i in range(6) %}{% if i < _r|length %}{% set runs = runs.append((_r[i].from_node, _r[i].to_node, _r[i].length_m, _r[i].dn, _r[i].equiv_length_m, _r[i].repair_section_id)) or runs %}{% else %}{% set runs = runs.append(("","","","","","")) or runs %}{% endif %}{% endfor %}{% else %}{% set runs = [("К1","К2","36","100","6","РС-1"),("К2","К3","15","100","4","РС-2"),("К3","К4","36","100","6","РС-3"),("К4","К1","15","100","4","РС-4"),("","","","","",""),("","","","","","")] %}{% endif %}
   {% for r in runs %}
@@ -118,10 +116,10 @@
     <td><input name="run{{ loop.index }}_leq" value="{{ r[4] }}"></td>
     <td><input name="run{{ loop.index }}_repair" value="{{ r[5] }}"></td></tr>
   {% endfor %}
-  </table>
+  </table></div><p class="hint"><strong>В2 рассчитывается строго по СП 10.</strong> Ремонтные секции используются для проверки аварийного режима кольца.</p></div>
 </fieldset>
 
-<fieldset><legend>5 · Стояки с ПК (до 4)</legend>
+<fieldset id="fire-risers"><legend><span class="section-head"><span class="step-badge">5</span><span><span class="section-title">Стояки с пожарными кранами</span><span class="section-desc">Привязка к узлам магистрали, отметки диктующих ПК и эквивалентные длины</span></span></span></legend><div class="section-body"><div class="table-wrap">
   <table class="grid"><tr><th></th><th>имя</th><th>узел</th><th>длина, м</th><th>отм. ПК, м</th><th>Ду</th><th>L экв, м</th><th>рем. секция</th></tr>
   {% if prefill and prefill.network %}{% set _s = prefill.network.risers %}{% set rs = [] %}{% for i in range(4) %}{% if i < _s|length %}{% set rs = rs.append((_s[i].name, _s[i].at_node, _s[i].height_m, _s[i].cabinet_elevation_m, _s[i].dn, _s[i].equiv_length_m, _s[i].repair_section_id)) or rs %}{% else %}{% set rs = rs.append(("","","","","","","")) or rs %}{% endif %}{% endfor %}{% else %}{% set rs = [("СТ-В2-1","К1","46.5","45.6","65","6","РС-1"),("СТ-В2-2","К2","46.5","45.6","65","6","РС-2"),("СТ-В2-3","К3","46.5","45.6","65","6","РС-3"),("СТ-В2-4","К4","46.5","45.6","65","6","РС-4")] %}{% endif %}
   {% for r in rs %}
@@ -134,11 +132,11 @@
     <td><input name="riser{{ loop.index }}_leq" value="{{ r[5] }}"></td>
     <td><input name="riser{{ loop.index }}_repair" value="{{ r[6] }}"></td></tr>
   {% endfor %}
-  </table>
+  </table></div></div>
 </fieldset>
 
 {% set sd = prefill.source_data if prefill and prefill.source_data else none %}
-<fieldset><legend>6 · Исходные данные ТУ и В1/Т3</legend>
+<fieldset id="source-v1"><legend><span class="section-head"><span class="step-badge">6</span><span><span class="section-title">Технические условия и В1/Т3</span><span class="section-desc">Подключение, напоры, лимиты, расчетный потребитель и составляющие Hтр</span></span></span></legend><div class="section-body">
   <div class="row">
     <label>Источник<input class="w-l" name="source_description" value="{{ sd.source_description if sd else 'централизованная сеть хозяйственно-питьевого водоснабжения' }}"></label>
     <label>Организация, выдавшая ТУ<input class="w-m" name="tu_org" value="{{ sd.tu_org if sd else 'Демонстрационный водоканал' }}"></label>
@@ -169,25 +167,28 @@
     <label>Зоны охраны<input class="w-l" name="water_protection_note" value="{{ sd.water_protection_note if sd else 'Согласно демонстрационным исходным данным объект расположен вне водоохранных зон' }}"></label>
     <label>Резервирование воды<input class="w-l" name="reserve_water_note" value="{{ sd.reserve_water_note if sd else 'Резервирование обеспечивается кольцевой сетью В2 и резервным пожарным насосом' }}"></label>
   </div>
-  <p class="hint">Значения с пометкой DEMO предназначены только для демонстрационного объекта и не заменяют реальные ТУ.</p>
+  <p class="hint"><strong>Важно.</strong> Значения с пометкой DEMO предназначены только для демонстрационного объекта и не заменяют реальные ТУ.</p>
+</div>
 </fieldset>
 
-<fieldset><legend>7 · Источник В2</legend>
+<fieldset id="source-v2"><legend><span class="section-head"><span class="step-badge">7</span><span><span class="section-title">Источник противопожарного водоснабжения</span><span class="section-desc">Тип источника и располагаемый напор для подбора пожарной насосной установки</span></span></span></legend><div class="section-body">
   <div class="row">
     <label>Узел ввода<input class="w-s" name="source_node" value="{{ prefill.network.source_node if prefill and prefill.network else 'К1' }}"></label>
     <label>Тип источника<select name="source_kind">
-      <option value="city_main">городская сеть</option>
-      <option value="reservoir">резервуар</option>
-      <option value="pond">водоём</option>
-      <option value="well">скважина</option>
+      <option value="city_main"{% if not prefill or not prefill.network or prefill.network.source_kind == 'city_main' %} selected{% endif %}>городская сеть</option>
+      <option value="reservoir"{% if prefill and prefill.network and prefill.network.source_kind == 'reservoir' %} selected{% endif %}>резервуар</option>
+      <option value="pond"{% if prefill and prefill.network and prefill.network.source_kind == 'pond' %} selected{% endif %}>водоём</option>
+      <option value="well"{% if prefill and prefill.network and prefill.network.source_kind == 'well' %} selected{% endif %}>скважина</option>
     </select></label>
     <label>Гарант. напор города, м<input class="w-s" name="available_head" value="{{ prefill.network.available_head_m if prefill and prefill.network and prefill.network.available_head_m is not none else ('' if prefill else 32) }}"></label>
-    <label>Уровень воды, м (резервуар)<input class="w-s" name="water_level" value=""></label>
+    <label>Уровень воды, м (резервуар)<input class="w-s" name="water_level" value="{{ prefill.network.water_level_m if prefill and prefill.network and prefill.network.water_level_m is not none else '' }}"></label>
     <label>Потери всаса, м<input class="w-s" name="suction_loss" value="{{ prefill.network.suction_head_loss_m if prefill and prefill.network else 0 }}"></label>
   </div>
-  <p class="hint">Напор пуст → принят 0 (уточнить у водоканала), насос на весь требуемый напор.</p>
+  <p class="hint">Если располагаемый напор не задан, он принимается равным нулю и насос проверяется на полный требуемый напор.</p>
+</div>
 </fieldset>
 
-<div class="actions"><button class="go" type="submit">Рассчитать и собрать комплект ИОС2</button></div>
+<div class="actions"><div class="actions-copy"><strong>Исходные данные готовы к расчёту</strong><span>Будут сформированы ПЗ, спецификация, схема, гидравлика и проверка живучести</span></div><button class="button-primary" type="submit">Рассчитать и собрать комплект</button></div>
 </form>
+</div></div>
 </main></body></html>
