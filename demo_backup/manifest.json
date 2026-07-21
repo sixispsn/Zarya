@@ -5,8 +5,8 @@
   "documents": [
     {
       "name": "ПЗ.pdf",
-      "bytes": 146565,
-      "sha256": "657b0272c7b1f16589b4e079ce0abe6cebaed197351f3d3ee5850d552fc3ceda"
+      "bytes": 150148,
+      "sha256": "292a5deb4349b60f2db41af1428202711569c8c27bad326095c9c9528b697141"
     },
     {
       "name": "Спецификация.pdf",
@@ -16,17 +16,17 @@
     {
       "name": "Схема.pdf",
       "bytes": 42794,
-      "sha256": "cf2af9d82cfb3577dc29bf5bdbd1b63e687d2931d1a524fa14a7622cea0663b1"
+      "sha256": "04c40c98b5875e1a6bb9131623201456cb8f962705fe61ef10cd2c02c11f8b76"
     },
     {
       "name": "Гидравлический_расчет.pdf",
-      "bytes": 45066,
-      "sha256": "854cf73ee044031008fe8284b86a27cb053af4faee89b4ae7e027351844ab8f7"
+      "bytes": 45068,
+      "sha256": "4f66db3ff35b820d03988c4230a478107b04f78e1b67e806abadc602c1b06098"
     },
     {
       "name": "Проверка_живучести.pdf",
       "bytes": 32760,
-      "sha256": "d26e60f21667a1abf608fc72e51429cccfad96475f7d386c4e2bbf67c086a9b5"
+      "sha256": "8c8e05a600de8f6e8813850cccde06cc9b253fd71b160f7cf515f03c2d57a7f8"
     }
   ],
   "presentation": {
@@ -55,6 +55,7 @@
     "enrich_fire: FireSystem обогащён расчётными данными",
     "fire_pump: подобран Grundfos Hydro MX-A CR15-9 (Q=21.0 м³/ч, H=36.4 м; 1 раб. + 1 рез.)",
     "water_demand: расходы В1/Т3 рассчитаны (q_сут=62.4 м³/сут, q_сек=2.71 л/с)",
+    "v1_stage_p: ввод DN50 60×3.5; dвн=53 мм; Q=1.426 л/с; v=0.646 м/с; скорость соответствует",
     "meters: подобрано узлов 2; потери диктующего узла 2.644 м",
     "head: H_тр=74.34 м; H_гар=32.00 м",
     "pump: подобран Grundfos CR 5-8 (рабочая точка Q=5.1 м³/ч, H=42.6 м)",

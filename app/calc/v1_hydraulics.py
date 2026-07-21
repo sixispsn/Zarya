@@ -228,6 +228,16 @@ def _friction_factor(reynolds: float, roughness_m: float, diameter_m: float) -> 
     return 0.25 / (math.log10(term) ** 2)
 
 
+def velocity_mps(flow_lps: float, inner_diameter_mm: float) -> float:
+    """Скорость по расходу и фактическому внутреннему диаметру трубы."""
+    if flow_lps < 0:
+        raise ValueError("Расход не может быть отрицательным")
+    if inner_diameter_mm <= 0:
+        raise ValueError("Внутренний диаметр должен быть > 0")
+    diameter_m = inner_diameter_mm / 1000.0
+    return (flow_lps / 1000.0) / (math.pi * diameter_m * diameter_m / 4.0)
+
+
 def calculate_v1_hydraulics(
     sections: list[V1SectionInput],
     *,
@@ -257,9 +267,7 @@ def calculate_v1_hydraulics(
             raise ValueError(f"Участок {s.section_id}: неизвестная роль {s.role}")
 
         d = s.inner_diameter_mm / 1000.0
-        q = s.flow_lps / 1000.0
-        area = math.pi * d * d / 4.0
-        velocity = q / area
+        velocity = velocity_mps(s.flow_lps, s.inner_diameter_mm)
         reynolds = velocity * d / nu
         friction = _friction_factor(reynolds, s.roughness_mm / 1000.0, d)
         specific = friction * velocity * velocity / (2.0 * 9.80665 * d)

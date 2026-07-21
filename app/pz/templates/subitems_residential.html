@@ -86,6 +86,9 @@
 {% if source.pressure_note %}{{ source.pressure_note }}{% endif %}</p>
 {% if head.h_required_m is not none %}
 <p class="subitem">Требуемый напор Hтр определён по формуле (14) п.8.27 СП 30.13330.2020:</p>
+{% if v1_stage_p %}
+{% include "v1_stage_p_table.html" %}
+{% endif %}
 {% if v1_hydraulics %}
 <p class="subitem">Гидравлический расчёт диктующего направления В1:</p>
 {% include "v1_hydraulic_table.html" %}

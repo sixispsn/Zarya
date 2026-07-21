@@ -5,8 +5,9 @@ import pytest
 from app.calc.v1_hydraulics import (
     V1InletInput, V1NetworkSectionInput, V1NodeInput, V1SectionInput,
     apply_v1_inlets, audit_v1_pressures, calculate_v1_hydraulics,
-    calculate_v1_network,
+    calculate_v1_network, velocity_mps,
 )
+from app.calc.v1_stage_p import calculate_v1_stage_p
 
 
 def test_darcy_weisbach_section_and_formula_15():
@@ -23,6 +24,19 @@ def test_darcy_weisbach_section_and_formula_15():
     assert row.total_loss_m == pytest.approx(row.linear_loss_m * 1.3, abs=0.002)
     assert result.internal_loss_m == row.total_loss_m
     assert result.input_loss_m == 0
+
+
+def test_stage_p_checks_only_inlet_and_uses_exact_pipe_geometry():
+    result = calculate_v1_stage_p(1.426, 2)
+    inlet, riser, branch = result.rows
+    assert inlet.flow_lps == 1.426  # каждый ввод несёт 100%, расход не делится на два
+    assert (inlet.outer_mm, inlet.wall_mm, inlet.inner_mm) == (60.0, 3.5, 53.0)
+    assert inlet.velocity_mps == pytest.approx(velocity_mps(1.426, 53.0), abs=0.001)
+    assert inlet.velocity_ok is True
+    assert (riser.outer_mm, riser.wall_mm, riser.inner_mm) == (32.0, 3.0, 26.0)
+    assert (branch.outer_mm, branch.wall_mm, branch.inner_mm) == (20.0, 2.0, 16.0)
+    assert riser.flow_lps is None and riser.velocity_mps is None
+    assert branch.flow_lps is None and branch.velocity_mps is None
 
 
 def test_internal_and_input_losses_are_separated():

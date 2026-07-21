@@ -1,0 +1,28 @@
+<p class="subitem"><b>Укрупнённая проверка принятых сечений В1 на стадии П.</b>
+Расчётный расход В1 {{ v1_stage_p.design_flow_lps|num(3) }} л/с получен действующим
+расчётом водопотребления. {% if v1_stage_p.inputs_count == 1 %}Единственный ввод проверен{% else %}Каждый из {{ v1_stage_p.inputs_count }} вводов проверен{% endif %}
+на пропуск 100% максимального секундного расхода по п. 8.23 СП 30.13330.2020. Скорость определена по
+фактическому внутреннему диаметру трубы.</p>
+<table class="data">
+  <tr>
+    <th>Характерный участок</th><th>Материал</th><th>DN / размер Dн×s, мм</th>
+    <th>dвн, мм</th><th>q, л/с</th><th>v, м/с</th><th>Проверка / основание</th>
+  </tr>
+  {% for r in v1_stage_p.rows %}
+  <tr>
+    <td>{{ r.section }}</td>
+    <td>{{ r.material }}</td>
+    <td>DN{{ r.dn }} / {{ r.outer_mm|num(1) }}×{{ r.wall_mm|num(1) }}</td>
+    <td>{{ r.inner_mm|num(1) }}</td>
+    <td>{{ r.flow_lps|num(3) if r.flow_lps is not none else '—' }}</td>
+    <td>{{ r.velocity_mps|num(3) if r.velocity_mps is not none else '—' }}</td>
+    <td>{% if r.velocity_ok is not none %}<span class="{{ 'ok' if r.velocity_ok else 'bad' }}">{{ 'соответствует' if r.velocity_ok else 'не соответствует' }}{% if r.velocity_limit_mps is not none %} (v ≤ {{ r.velocity_limit_mps|num(1) }} м/с){% endif %}</span>; {% endif %}{{ r.basis }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="subitem">Для стояков и поквартирных ветвей на стадии П зафиксирована
+геометрия труб, но расход и скорость не назначаются: их достоверное определение
+требует аксонометрической схемы и распределения санитарно-технических приборов.
+Полный гидравлический расчёт диктующего направления выполняется на стадии Р.
+Марка, серия, класс эксплуатации и номинальное давление труб PE-X уточняются
+после выбора системы изготовителя без изменения указанных расчётных размеров.</p>

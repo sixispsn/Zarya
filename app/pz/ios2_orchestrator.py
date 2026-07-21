@@ -220,6 +220,24 @@ def design_ios2(
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
 
+        # ── Стадия П: точные сечения и проверка скорости на вводе В1 ──
+        # Без аксонометрии расход по отдельному стояку/ветви не назначается.
+        if not getattr(project, "v1_network", None) and not getattr(project, "v1_sections", None):
+            from app.calc.v1_stage_p import calculate_v1_stage_p
+            try:
+                hws = getattr(project.building.hws_type, "value", project.building.hws_type)
+                v1_flow = project.flows.q_sec_tot if hws == "local" else project.flows.q_sec_c
+                project.v1_stage_p_result = calculate_v1_stage_p(
+                    v1_flow, project.source.inputs_count)
+                inlet = project.v1_stage_p_result.rows[0]
+                bundle.status.append(
+                    f"v1_stage_p: ввод DN{inlet.dn} {inlet.outer_mm:g}×{inlet.wall_mm:g}; "
+                    f"dвн={inlet.inner_mm:g} мм; Q={inlet.flow_lps:.3f} л/с; "
+                    f"v={inlet.velocity_mps:.3f} м/с; "
+                    f"скорость {'соответствует' if inlet.velocity_ok else 'не соответствует'}")
+            except Exception as e:
+                bundle.warnings.append(f"v1_stage_p: проверка сечений не выполнена ({e})")
+
         # ── Гидравлика В1: топология приоритетна, ручной путь — резерв ──
         if getattr(project, "v1_network", None):
             from app.calc.v1_hydraulics import (

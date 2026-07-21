@@ -523,6 +523,7 @@ class Project:
     v1_sections: List[V1SectionSpec] = field(default_factory=list)
     v1_network: Optional[V1NetworkSpec] = None
     v1_hydraulic_result: Optional[object] = None
+    v1_stage_p_result: Optional[object] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None
