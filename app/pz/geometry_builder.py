@@ -44,8 +44,12 @@ def build_layout_inputs(project: Project) -> List[Tuple[object, object]]:
     if not project.fire_rooms:
         raise ValueError("project.fire_rooms пуст — нечего строить")
     b = project.building
-    if b.height_m <= 0:
-        raise ValueError("building.height_m не задан — нужен для Rk по п. 7.15")
+    fire_height_m = b.fire_height_m
+    if fire_height_m is None or fire_height_m <= 0:
+        raise ValueError(
+            "building.fire_height_m не задан — нужна пожарно-техническая "
+            "высота для СП 10"
+        )
     streams = project.fire.streams
     if streams not in (1, 2):
         raise ValueError(f"fire.streams={streams}: нужен 1 или 2 "
@@ -59,7 +63,7 @@ def build_layout_inputs(project: Project) -> List[Tuple[object, object]]:
             space_kind=FireSpaceKind(spec.space_kind),
             room_height_m=spec.height_m,
             room_width_m=spec.width_m,
-            building_height_m=b.height_m,
+            building_height_m=fire_height_m,
             hose_length_m=float(project.fire.hose_length_m),
             placement_mode=PlacementMode(spec.placement_mode),
             required_jets_override=streams,

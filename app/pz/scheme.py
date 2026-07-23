@@ -622,8 +622,11 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     T(mmx(142.5), mmy(37), doc.stage_label or "П", 11)
     T(mmx(157.5), mmy(37), doc.sheet_no or "1", 11)
     T(mmx(175), mmy(37), doc.sheet_total or "1", 11)
+    title_line2 = P.title_line2
+    if params is None:
+        title_line2 = "систем В1, В2" if fire_on else "системы В1"
     T(mmx(100), mmy(46.5), P.title_line1, 12)
-    T(mmx(100), mmy(52.5), P.title_line2, 12)
+    T(mmx(100), mmy(52.5), title_line2, 12)
     T(mmx(160), mmy(49), doc.organization or "⟦ОРГАНИЗАЦИЯ⟧", 10)
     # боковая графа (25|35|25, снизу вверх)
     bg = fx0 - 12 * PXMM

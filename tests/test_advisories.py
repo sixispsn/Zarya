@@ -12,6 +12,7 @@ def _req(building_type="residential", height=48.0, consumers=None):
         building_type=building_type,
         floors=16,
         building_height_m=height,
+        fire_height_m=height,
         consumers=consumers or [
             ConsumerGroupRequest("residential_central_hw", 480, "Жилая часть")
         ],

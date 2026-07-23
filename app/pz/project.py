@@ -120,26 +120,30 @@ class FlowsData:
 
 @dataclass
 class ConsumerRow:
-    """Одна строка баланса. Объёмы — в м³; q_*_year = q_*_day · days_year,
-    но держим явными, чтобы мост мог положить точные значения из ядра."""
-    name: str = ""              # наименование потребителя
-    count: float = 0.0          # расчётное число потребителей
-    count_unit: str = ""        # ед. изм.: «мест», «чел.», «м²», «кг сух. белья»
-    norm_display: str = ""      # норма расхода, напр. «8,1 л/место·сут»
-    nd_ref: str = ""            # норм. документ: «СП 30.13330.2020, табл. А.2»
-    regime_h: float = 0.0       # режим работы, ч/сут
-    days_year: int = 0          # число суток работы в году
-    q_cold_day: float = 0.0     # ХВС, м³/сут
-    q_cold_year: float = 0.0    # ХВС, м³/год
-    q_hot_day: float = 0.0      # ГВС, м³/сут
-    q_hot_year: float = 0.0     # ГВС, м³/год
-    q_sew_day: float = 0.0      # водоотведение, м³/сут
-    q_sew_year: float = 0.0     # водоотведение, м³/год
+    """Строка формы 2 приложения А ГОСТ Р 21.619-2023."""
+    name: str = ""
+    process: str = "Хозяйственно-питьевые нужды"
+    regime_h: Optional[float] = None
+    quantity_display: str = ""
+    norm_basis: str = "СП 30.13330.2020, таблица А.2"
+    norm_m3_per_unit_day: float = 0.0
+    water_quality: str = "питьевая"
+    total_m3_day: float = 0.0
+    source_city_m3_day: float = 0.0
+    source_artesian_m3_day: float = 0.0
+    source_technical_m3_day: float = 0.0
+    source_reused_m3_day: float = 0.0
+    losses_m3_day: float = 0.0
+    sewage_domestic_m3_day: float = 0.0
+    sewage_clean_m3_day: float = 0.0
+    sewage_mechanical_m3_day: float = 0.0
+    sewage_chemical_m3_day: float = 0.0
+    storm_m3_day: float = 0.0
 
 
 @dataclass
 class BalanceData:
-    """Баланс целиком. Итоги считаются в шаблоне (sum по строкам)."""
+    """Баланс формы 2 для объекта непроизводственного назначения."""
     rows: list = field(default_factory=list)   # list[ConsumerRow]
     note: str = ""                              # сноска под таблицей
 
@@ -147,6 +151,8 @@ class BalanceData:
 @dataclass
 class FireSystem:
     required: bool = False
+    determination_mode: str = "auto"
+    normative_note: str = ""
     streams: int = 0                          # число струй
     q_per_stream: float = 0.0                 # расход струи, л/с
     q_total: float = 0.0                      # Q_пож, л/с
@@ -363,6 +369,7 @@ class BuildingFlags:
     floors_above: int = 1
     floors_below: int = 0
     height_m: float = 0.0
+    fire_height_m: Optional[float] = None
     total_area_m2: float = 0.0   # общая площадь здания, м² (для удельного расчёта труб, Метод 2)
     has_parking: bool = False
     has_built_in: bool = False
@@ -520,6 +527,7 @@ class Project:
     # --- спецификации геометрии ВПВ (для автопостроения layout/network) ---
     fire_rooms: List["FireRoomSpec"] = field(default_factory=list)
     consumer_groups: List[tuple] = field(default_factory=list)  # [(код, кол-во)] расходы В1
+    consumer_details: list = field(default_factory=list)  # [(название части, код, количество)]
     v1_sections: List[V1SectionSpec] = field(default_factory=list)
     v1_network: Optional[V1NetworkSpec] = None
     v1_hydraulic_result: Optional[object] = None

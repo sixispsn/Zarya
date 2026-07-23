@@ -146,6 +146,28 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
     return output_path
 
 
+def generate_balance_html(project: Project) -> str:
+    """Отдельный лист формы 2 приложения А ГОСТ Р 21.619-2023."""
+    env = _build_env()
+    return env.get_template("balance_document.html").render(
+        doc=project.document,
+        balance=project.balance,
+    )
+
+
+def generate_balance_pdf(project: Project, output_path: str) -> str:
+    """Сформировать нормативный баланс на листе А3 альбомной ориентации."""
+    html_str = generate_balance_html(project)
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=[CSS(
+            filename=str(TEMPLATES_DIR / "balance_document.css"),
+            base_url=str(TEMPLATES_DIR),
+        )],
+    )
+    return output_path
+
+
 # ── РАСЧЁТ И ПОДБОР НАСОСНЫХ УСТАНОВОК (отдельное приложение) ────────────
 
 def generate_pump_selection_html(project: Project) -> str:

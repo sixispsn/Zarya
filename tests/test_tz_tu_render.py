@@ -15,7 +15,8 @@ def _project_with_sd():
     req = IOS2Request(
         document=DocumentRequest(cipher="047-ИОС2", object_name="Жилой дом",
                                  organization="Орг", gip="Соколов В.П."),
-        building_type="residential", floors=17, building_height_m=51.3, streams=2,
+        building_type="residential", floors=17, building_height_m=51.3,
+        fire_height_m=51.3, streams=2,
         zones=2, rooms=[RoomRequest("Коридор", 38, 2.2, 2.85)],
         network=NetworkRequest(
             runs=[MainRunRequest("A", "B", 28), MainRunRequest("B", "C", 15),

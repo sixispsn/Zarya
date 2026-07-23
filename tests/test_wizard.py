@@ -54,12 +54,15 @@ def test_form_template_has_all_sections():
     assert html.count('<details class="input-section" open') == 1
     assert html.count('<span class="accepted">принято</span>') == 5
     for field in ("cipher", "object_name", "building_type", "floors", "height",
+                  "fire_mode", "fire_height",
                   "consumer1_name", "consumer1_code", "consumer1_count",
                   "room_name", "run1_from", "riser1_name", "source_node"):
         assert f'name="{field}"' in html
     assert "Магистраль В2" not in html
     assert "Расстановка пожарных кранов" not in html
     assert "Стояки В2" not in html
+    assert 'value="residential_full_bath"' in html
+    assert "Пожарно-техническая высота" in html
 
 
 def test_form_exposes_all_sp30_consumer_norms():
@@ -106,6 +109,7 @@ def test_live_normative_advisories_are_wired():
     assert 'data-purpose="public"' in html
     assert "height > 75" in js
     assert "height > 50" in js
+    assert "fireHeight > 30" in js
     assert "пп. 1.1, 7.5–7.6" in js
 
 

@@ -97,6 +97,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!validationPanel || !validationList || !validationCount) return;
     const heightRaw = document.querySelector('[name="height"]')?.value || "0";
     const height = Number.parseFloat(heightRaw.replace(",", ".")) || 0;
+    const floors = Number.parseInt(
+      document.querySelector('[name="floors"]')?.value || "0", 10
+    ) || 0;
+    const fireHeightRaw = document.querySelector('[name="fire_height"]')?.value || "0";
+    const fireHeight = Number.parseFloat(fireHeightRaw.replace(",", ".")) || 0;
+    const fireMode = document.querySelector('[name="fire_mode"]')?.value || "auto";
     const buildingType = document.querySelector('[name="building_type"]')?.value;
     const purposes = new Set(
       [...document.querySelectorAll("[data-consumer-select]")]
@@ -104,6 +110,14 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(Boolean)
     );
     const advisories = [];
+    if (fireMode === "auto" && buildingType === "residential"
+        && floors < 12 && fireHeight > 30) {
+      advisories.push({
+        level: "warning",
+        message: `При ${floors} этажах ВПВ включается по пожарно-технической высоте ${fireHeight} м. Подтвердите показатель по АР.`,
+        reference: "СП 10.13130.2020, таблица 7.1, строка 1"
+      });
+    }
     if (buildingType === "residential" && height > 75) {
       advisories.push({
         level: "warning",

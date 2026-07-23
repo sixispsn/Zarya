@@ -110,6 +110,14 @@ def test_spec_sections_follow_gost_21_601_order():
     assert positions == list(range(1, len(positions) + 1))
 
 
+def test_spec_without_vpv_has_no_v2_section_or_v2_note():
+    project = _demo_project()
+    project.fire.required = False
+    spec = build_specification(project)
+    assert not any(section.title.startswith("В2") for section in spec.sections)
+    assert "Трубы В2 приняты" not in spec.note
+
+
 def test_discrete_spec_quantities_have_no_decimal_comma():
     assert format_spec_qty(1, "шт.") == "1"
     assert format_spec_qty(8.0, "шт.") == "8"

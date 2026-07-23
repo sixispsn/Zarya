@@ -56,6 +56,8 @@
 «1 рабочий + 1 резервный» в соответствии с п. 12.3 СП 10.13130.2020.</p>
 {% with pumps=fire_pumps, pump_chart_svg=fire_pump_chart_svg %}{% include "pump_table.html" %}{% endwith %}
 {% endif %}
+{% else %}
+<p class="subitem">{{ fire.normative_note or "Внутренний противопожарный водопровод по таблице 7.1 СП 10.13130.2020 не требуется." }}</p>
 {% endif %}
 
 <p class="subhead">г) сведения о расчетном расходе воды на хозяйственно-питьевые нужды, в том числе на автоматическое пожаротушение и техническое водоснабжение, включая оборотное.</p>
@@ -135,7 +137,12 @@ H = {{ pumps.head_m|num(1) }} м, N = {{ pumps.power_kw|num(2) }} кВт{% endif
 тока воды; фильтры механической очистки на вводе.</p>
 
 <p class="subhead">к) перечень мероприятий по резервированию воды.</p>
-<p class="subitem">{{ source.reserve_water_note if source.reserve_water_note else 'Резервирование воды не предусматривается' }}{% if not source.reserve_water_note %} <span class="fill">⟦УТОЧНИТЬ ПО ТУ/ТЗ⟧</span>{% endif %}.</p>
+{% if fire.required %}
+<p class="subitem">{{ source.reserve_water_note if source.reserve_water_note else 'Решения по резервированию ВПВ принимаются согласно ТУ и расчётной схеме' }}{% if not source.reserve_water_note %} <span class="fill">⟦УТОЧНИТЬ ПО ТУ/ТЗ⟧</span>{% endif %}.</p>
+{% else %}
+<p class="subitem">Специальный запас и резервирование воды для ВПВ не требуются.
+Решения по резервированию хозяйственно-питьевого водоснабжения принимаются согласно ТУ.</p>
+{% endif %}
 
 <p class="subhead">л) перечень мероприятий по учету водопотребления, в том числе по учету потребления горячей воды для нужд горячего водоснабжения.</p>
 <p class="subitem">Учёт водопотребления осуществляется общим водомерным узлом
@@ -181,11 +188,11 @@ H = {{ pumps.head_m|num(1) }} м, N = {{ pumps.power_kw|num(2) }} кВт{% endif
 <p class="subitem">Объект относится к непроизводственным. В составе раздела не разрабатывается.</p>
 
 <p class="subhead">т) баланс водопотребления и водоотведения по объекту капитального строительства — для объектов непроизводственного назначения.</p>
-<table class="data">
-  <tr><th>Наименование</th><th>м³/сут</th><th>м³/ч</th><th>л/с</th></tr>
-  <tr><td>Водопотребление, всего</td><td>{{ flows.q_day_tot|num(2) }}</td><td>{{ flows.q_hr_tot|num(2) }}</td><td>{{ flows.q_sec_tot|num(2) }}</td></tr>
-  <tr><td>Водоотведение, всего</td><td>{{ flows.q_day_tot|num(2) }}</td><td>{{ flows.q_hr_tot|num(2) }}</td><td>{{ flows.sewage_l_per_s|num(2) }}</td></tr>
-</table>
+{% if balance.rows %}
+{% include "balance_table.html" %}
+{% else %}
+<p class="subitem"><span class="fill">⟦СОСТАВ ПОТРЕБИТЕЛЕЙ ДЛЯ ФОРМЫ 2 НЕ ЗАДАН⟧</span></p>
+{% endif %}
 <p class="subitem">Водоотведение по суточному и часовому расходам принято равным водопотреблению;
 секундный расход стоков определён по формуле q<sub>s</sub> = q<sup>tot</sup> + q<sub>0s</sub>
 при q<sub>0s</sub> = {{ flows.sewage_q0s_l_per_s|num(2) }} л/с для прибора с максимальным водоотведением

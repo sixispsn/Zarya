@@ -130,7 +130,7 @@ async def wizard_design(request: Request):
     # Совместимость со старой формой и внешними клиентами Wizard.
     if not consumers and fi("consumer_count") > 0:
         consumers.append(ConsumerGroupRequest(
-            fv("consumer_code", "residential_central_hw"),
+            fv("consumer_code", "residential_full_bath"),
             fi("consumer_count"),
         ))
 
@@ -151,7 +151,11 @@ async def wizard_design(request: Request):
         insulation_humidity=fi("insulation_humidity", 60),
         insulation_hvs_water_temp=ff("insulation_hvs_temp", 10.0),
         insulation_gvs_water_temp=ff("insulation_gvs_temp", 60.0),
+        fire_mode=fv("fire_mode", "auto"),
+        fire_height_m=(ff("fire_height") if fv("fire_height") else None),
         streams=(fi("streams") if fv("streams") else None),
+        nozzle_mm=fi("nozzle_mm", 13),
+        compact_jet_m=fi("compact_jet_m", 12),
         zones=fi("zones", 1), rooms=rooms, network=network,
         source_data=SourceDataRequest(
             source_description=fv("source_description"),
@@ -165,7 +169,7 @@ async def wizard_design(request: Request):
             water_main_dn=fi("water_main_dn"),
             h_geom_m=(ff("h_geom") if fv("h_geom") else None),
             h_il_m=(ff("h_il") if fv("h_il") else None),
-            network_kind=fv("network_kind", "combined"),
+            network_kind=fv("network_kind", "domestic"),
             h_pr_m=ff("h_pr", 20.0),
             h_vvod_m=(ff("h_vvod") if fv("h_vvod") else None),
             inputs_count=fi("inputs_count", 1),
@@ -213,6 +217,8 @@ def wizard_result(request: Request, run_id: str):
     b = run["bundle"]
     pdfs = []
     for label, path in (("Пояснительная записка", b.pz_pdf),
+                        ("Баланс водопотребления и водоотведения",
+                         getattr(b, "balance_pdf", None)),
                         ("Расчёт и подбор насосов", getattr(b, "pump_selection_pdf", None)),
                         ("Спецификация", b.spec_pdf),
                         ("Схема", b.scheme_pdf),
@@ -246,6 +252,8 @@ def wizard_result(request: Request, run_id: str):
             "pump_h": p.pumps.wp_h or p.pumps.head_m,
         },
         "fire": {
+            "required": f.required,
+            "note": f.normative_note,
             "flow": f.q_total,
             "pk_total": f.pk_total,
             "required_head": f.required_head_m,

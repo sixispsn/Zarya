@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"></head>
+<body>
+<header class="balance-title">
+  <div><b>Форма 2</b></div>
+  <h1>Баланс водопотребления и водоотведения</h1>
+  <p><b>Наименование объекта:</b> {{ doc.object_name }}</p>
+  <p><b>Адрес объекта:</b> {{ doc.object_address or "—" }}</p>
+</header>
+
+<table class="form2">
+  <colgroup>
+    <col class="n"><col class="name"><col class="process"><col class="hours">
+    <col class="basis"><col class="basis"><col class="norm"><col class="quality">
+    <col class="q"><col class="q"><col class="q"><col class="q"><col class="q">
+    <col class="q"><col class="q"><col class="q"><col class="q"><col class="q"><col class="q">
+  </colgroup>
+  <thead>
+    <tr>
+      <th rowspan="3">№</th>
+      <th rowspan="3">Наименование потребителя</th>
+      <th rowspan="3">Технологический процесс</th>
+      <th rowspan="3">Время работы, ч/сут</th>
+      <th colspan="4">Норма водопотребления</th>
+      <th rowspan="3">Общее водопотребление, м³/сут</th>
+      <th colspan="4">Источники водоснабжения, м³/сут</th>
+      <th rowspan="3">Безвозвратные потери, м³/сут</th>
+      <th colspan="5">Водоотведение, м³/сут</th>
+    </tr>
+    <tr>
+      <th rowspan="2">Количество единиц оборудования или потребителей</th>
+      <th rowspan="2">Обоснование (нормативный документ)</th>
+      <th rowspan="2">Расход на единицу, м³/сут</th>
+      <th rowspan="2">Требуемое качество воды</th>
+      <th rowspan="2">Городской водопровод</th>
+      <th rowspan="2">Артезианские скважины</th>
+      <th rowspan="2">Технический водопровод</th>
+      <th rowspan="2">Оборотные системы</th>
+      <th colspan="4">Городская канализация</th>
+      <th rowspan="2">Водосток</th>
+    </tr>
+    <tr>
+      <th>Хозяйственно-бытовые стоки</th>
+      <th>Нормативно-чистые</th>
+      <th>Загрязнённые механическими и минеральными примесями</th>
+      <th>Загрязнённые химическими и прочими примесями</th>
+    </tr>
+    <tr class="numbers">
+      {% for n in range(1, 20) %}<th>{{ n }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% set t = namespace(total=0, city=0, art=0, tech=0, reused=0, losses=0, domestic=0, clean=0, mechanical=0, chemical=0, storm=0) %}
+    {% for r in balance.rows %}
+      {% set t.total = t.total + r.total_m3_day %}
+      {% set t.city = t.city + r.source_city_m3_day %}
+      {% set t.art = t.art + r.source_artesian_m3_day %}
+      {% set t.tech = t.tech + r.source_technical_m3_day %}
+      {% set t.reused = t.reused + r.source_reused_m3_day %}
+      {% set t.losses = t.losses + r.losses_m3_day %}
+      {% set t.domestic = t.domestic + r.sewage_domestic_m3_day %}
+      {% set t.clean = t.clean + r.sewage_clean_m3_day %}
+      {% set t.mechanical = t.mechanical + r.sewage_mechanical_m3_day %}
+      {% set t.chemical = t.chemical + r.sewage_chemical_m3_day %}
+      {% set t.storm = t.storm + r.storm_m3_day %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="left">{{ r.name }}</td>
+        <td class="left">{{ r.process }}</td>
+        <td>{{ r.regime_h|num(0) if r.regime_h is not none else "—" }}</td>
+        <td>{{ r.quantity_display }}</td>
+        <td>{{ r.norm_basis }}</td>
+        <td>{{ r.norm_m3_per_unit_day|num(3) if r.norm_m3_per_unit_day else "—" }}</td>
+        <td>{{ r.water_quality }}</td>
+        <td>{{ r.total_m3_day|num(3) }}</td>
+        <td>{{ r.source_city_m3_day|num(3) }}</td>
+        <td>{{ r.source_artesian_m3_day|num(3) }}</td>
+        <td>{{ r.source_technical_m3_day|num(3) }}</td>
+        <td>{{ r.source_reused_m3_day|num(3) }}</td>
+        <td>{{ r.losses_m3_day|num(3) }}</td>
+        <td>{{ r.sewage_domestic_m3_day|num(3) }}</td>
+        <td>{{ r.sewage_clean_m3_day|num(3) }}</td>
+        <td>{{ r.sewage_mechanical_m3_day|num(3) }}</td>
+        <td>{{ r.sewage_chemical_m3_day|num(3) }}</td>
+        <td>{{ r.storm_m3_day|num(3) }}</td>
+      </tr>
+    {% endfor %}
+    <tr class="total">
+      <td></td><td colspan="7" class="left"><b>Всего по объекту</b></td>
+      <td>{{ t.total|num(3) }}</td><td>{{ t.city|num(3) }}</td>
+      <td>{{ t.art|num(3) }}</td><td>{{ t.tech|num(3) }}</td>
+      <td>{{ t.reused|num(3) }}</td><td>{{ t.losses|num(3) }}</td>
+      <td>{{ t.domestic|num(3) }}</td><td>{{ t.clean|num(3) }}</td>
+      <td>{{ t.mechanical|num(3) }}</td><td>{{ t.chemical|num(3) }}</td>
+      <td>{{ t.storm|num(3) }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="note">{{ balance.note }}</p>
+<footer><span>{{ doc.cipher }}.БВ</span><span>ГОСТ Р 21.619-2023, приложение А, форма 2 · Лист 1</span></footer>
+</body>
+</html>

@@ -14,8 +14,12 @@ from app.pz.geometry_builder import (
 
 def _project():
     p = Project()
-    p.building = BuildingFlags(purpose=BuildingPurpose.PUBLIC, floors_above=9,
-                               height_m=30.0)
+    p.building = BuildingFlags(
+        purpose=BuildingPurpose.PUBLIC,
+        floors_above=9,
+        height_m=30.0,
+        fire_height_m=30.0,
+    )
     p.fire = FireSystem(required=True, streams=2, nozzle_dn=50, hose_length_m=20)
     p.fire_rooms = [FireRoomSpec("corr", 48, 12, 3.0, space_kind="corridor",
                                  placement_mode="two_opposite_sides")]
@@ -54,7 +58,7 @@ def test_layout_maps_purpose():
 
 def test_layout_requires_height():
     p = _project()
-    p.building.height_m = 0.0
+    p.building.fire_height_m = None
     with pytest.raises(ValueError, match="height_m"):
         build_layout_inputs(p)
 

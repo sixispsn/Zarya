@@ -42,7 +42,8 @@ def _request():
         SourceDataRequest)
     return IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
-        building_type="residential", floors=12, building_height_m=36.0, streams=2,
+        building_type="residential", floors=12, building_height_m=36.0,
+        fire_height_m=36.0, streams=2,
         rooms=[RoomRequest("Коридор", 24, 2.4, 3.0)],
         consumers=[ConsumerGroupRequest("residential_central_hw", 260)],
         source_data=SourceDataRequest(

@@ -190,39 +190,100 @@ def meters_from_calc(res) -> MetersSystem:
 
 
 # ── БАЛАНС ────────────────────────────────────────────────────────────────────
-# ВНИМАНИЕ: расчёт водопотребления возвращает группы потребителей в своей
-# структуре (app/calc/water_demand.py). Поля g.* ниже — предположительные,
-# подгони под фактический результат, когда дойдём до подключения баланса.
+
+_REGIME_H = {
+    "residential_": 24.0,
+    "dorm_": 24.0,
+    "hotel_": 24.0,
+    "hospital_": 24.0,
+    "sanatorium_": 24.0,
+    "polyclinic": 10.0,
+    "office": 8.0,
+    "higher_education": 8.0,
+    "school": 8.0,
+    "kindergarten_": 10.0,
+}
+
+
+def _regime_h(code: str):
+    for prefix, value in _REGIME_H.items():
+        if code == prefix or code.startswith(prefix):
+            return value
+    return None
+
+
+def _process_name(code: str) -> str:
+    if code.startswith("cafe_"):
+        return "Приготовление и отпуск пищи"
+    if code.startswith("laundry_"):
+        return "Стирка белья"
+    return "Хозяйственно-питьевые нужды"
+
 
 def balance_from_calc(groups, flows, *, irrigation_days: int = 50) -> BalanceData:
-    """Группы потребителей + полив -> BalanceData (форма 2)."""
+    """Состав потребителей -> форма 2 приложения А ГОСТ Р 21.619-2023.
+
+    Допустимые элементы groups:
+      (code, count) или (functional_name, code, count).
+    Суточные объёмы берутся из тех же строк таблицы А.2 СП 30, что и
+    calculate_water_demand; формулы расходного ядра здесь не дублируются.
+    """
+    from app.data.sp30_tables import get_consumer_norm
+
     rows: list[ConsumerRow] = []
-    for g in groups:
-        days = int(_g(g, "days_year", "days", default=0) or 0)
-        qc = float(_g(g, "q_day_c", "q_cold_day", default=0) or 0)
-        qh = float(_g(g, "q_day_h", "q_hot_day", default=0) or 0)
+    for item in groups:
+        if len(item) == 3:
+            functional_name, code, count = item
+        else:
+            code, count = item
+            functional_name = ""
+        norm = get_consumer_norm(code)
+        if norm is None or count <= 0:
+            continue
+        total = round(norm.qu_tot * count / 1000.0, 3)
         rows.append(ConsumerRow(
-            name=str(_g(g, "label", "name", default="")),
-            count=float(_g(g, "U", "count", "n", default=0) or 0),
-            count_unit=str(_g(g, "unit", "count_unit", default="")),
-            norm_display=str(_g(g, "norm_str", "norm_display", default="")),
-            nd_ref=str(_g(g, "nd", "nd_ref", default="")),
-            regime_h=float(_g(g, "hours", "regime_h", default=0) or 0),
-            days_year=days,
-            q_cold_day=qc, q_cold_year=round(qc * days, 1),
-            q_hot_day=qh,  q_hot_year=round(qh * days, 1),
-            q_sew_day=round(qc + qh, 2), q_sew_year=round((qc + qh) * days, 1),
+            name=(functional_name or norm.label),
+            process=_process_name(code),
+            regime_h=_regime_h(code),
+            quantity_display=f"{count:g} {norm.unit}",
+            norm_basis="СП 30.13330.2020, таблица А.2",
+            norm_m3_per_unit_day=norm.qu_tot / 1000.0,
+            water_quality="питьевая",
+            total_m3_day=total,
+            source_city_m3_day=total,
+            sewage_domestic_m3_day=total,
         ))
     if getattr(flows, "irrigation_m3_day", 0):
-        q = flows.irrigation_m3_day
+        q = round(float(flows.irrigation_m3_day), 3)
         rows.append(ConsumerRow(
-            name="Полив территории", count=0, count_unit="",
-            norm_display="—", nd_ref="СП 30.13330.2020, п. 5.3",
-            regime_h=0, days_year=irrigation_days,
-            q_cold_day=q, q_cold_year=round(q * irrigation_days, 1),
-            q_hot_day=0, q_hot_year=0, q_sew_day=0, q_sew_year=0,
+            name="Полив территории",
+            process="Полив покрытий и зелёных насаждений",
+            regime_h=None,
+            quantity_display="по генплану",
+            norm_basis="СП 30.13330.2020, таблица А.2",
+            norm_m3_per_unit_day=0.0,
+            water_quality="питьевая",
+            total_m3_day=q,
+            source_city_m3_day=q,
+            sewage_domestic_m3_day=0.0,
         ))
-    return BalanceData(rows=rows)
+    rows_total = round(sum(row.total_m3_day for row in rows), 3)
+    calculated_total = round(
+        float(getattr(flows, "q_day_tot", 0.0) or 0.0)
+        + float(getattr(flows, "irrigation_m3_day", 0.0) or 0.0),
+        3,
+    )
+    note = (
+        "Суточный баланс сформирован по форме 2 приложения А "
+        "ГОСТ Р 21.619-2023. Хозяйственно-бытовое водоотведение принято "
+        "равным водопотреблению; расход на полив в канализацию не поступает."
+    )
+    if abs(rows_total - calculated_total) > 0.001:
+        note += (
+            f" Требуется проверка состава: сумма строк {rows_total:g} м³/сут "
+            f"не совпадает с расчётным итогом {calculated_total:g} м³/сут."
+        )
+    return BalanceData(rows=rows, note=note)
 
 
 def fire_from_calc(res, *, pk_total: int = 0, nozzle_dn: int = 50,

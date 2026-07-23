@@ -23,10 +23,14 @@ from dataclasses import dataclass, field, replace
 from typing import List, Optional, Tuple
 
 from app.pz.project import Project
-from app.pz.flows_bridge import enrich_fire_from_layout_and_hydraulics
+from app.pz.flows_bridge import (
+    balance_from_calc,
+    enrich_fire_from_layout_and_hydraulics,
+)
 from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
-    generate_hydraulic_report_pdf, generate_pump_selection_pdf, append_pdf,
+    generate_hydraulic_report_pdf, generate_pump_selection_pdf,
+    generate_balance_pdf, append_pdf,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -46,6 +50,7 @@ class IOS2DesignBundle:
     scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
+    balance_pdf: Optional[str] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
@@ -58,7 +63,7 @@ def design_ios2(
     output_dir: str = "output",
     layout_inputs: Optional[List[Tuple[object, object]]] = None,
     network: Optional[object] = None,
-    required_jets: int = 2,
+    required_jets: Optional[int] = None,
     network_mode: Optional[object] = None,
     dn_by_segment: Optional[dict] = None,
     hydraulic_report: Optional[object] = None,
@@ -82,12 +87,22 @@ def design_ios2(
     os.makedirs(output_dir, exist_ok=True)
     bundle = IOS2DesignBundle(project=project)
     fire = project.fire
+    if fire.required:
+        required_jets = required_jets or fire.streams
+    else:
+        layout_inputs = None
+        network = None
+        required_jets = 0
+        bundle.status.append(
+            "fire: ВПВ не требуется; геометрия, гидравлика, насосы "
+            "и спецификация В2 исключены"
+        )
 
     # ── Автопостроение геометрии из спецификаций проекта (truly one-click) ──
     # Явно переданные аргументы имеют приоритет; спеки используются, только
     # если аргумента нет. Построение — чистая развёртка, без расчётов.
     from app.pz import geometry_builder as _gb
-    if layout_inputs is None and _gb.project_has_layout_geometry(project):
+    if fire.required and layout_inputs is None and _gb.project_has_layout_geometry(project):
         try:
             layout_inputs = _gb.build_layout_inputs(project)
             bundle.status.append(
@@ -95,7 +110,7 @@ def design_ios2(
                 f"({len(layout_inputs)} помещений)")
         except ValueError as e:
             bundle.warnings.append(f"geometry: fire_rooms не развёрнуты: {e}")
-    if network is None and _gb.project_has_network_geometry(project):
+    if fire.required and network is None and _gb.project_has_network_geometry(project):
         try:
             network = _gb.build_network(project)
             bundle.status.append("geometry: network построена из project.fire_network")
@@ -116,14 +131,19 @@ def design_ios2(
                     f"расстановка невозможна (см. результат).")
         bundle.fire_layout_results = layout_results
         bundle.status.append(f"fire_layout: рассчитано помещений {len(layout_results)}")
-    else:
+    elif fire.required:
         bundle.warnings.append("fire_layout skipped: layout_inputs not provided")
 
     # ── Режим 1б: гидравлика + аудит (если есть network) ──
     hydraulic_result = None
     audit = None
     report = hydraulic_report   # может прийти готовым (режим 2)
-    if network is not None:
+    if fire.required and network is not None:
+        if required_jets not in (1, 2):
+            raise ValueError(
+                "Для гидравлического расчёта В2 требуется 1 или 2 "
+                f"одновременные струи; получено {required_jets!r}"
+            )
         from app.calc.fire_hydraulics import (
             solve_fire_hydraulics_scenario, NetworkMode,
         )
@@ -146,13 +166,13 @@ def design_ios2(
             bundle.diameter_audit = audit
             report = build_hydraulic_report(hydraulic_result, audit)
             bundle.status.append("fire_hydraulics + diameter_audit: рассчитаны")
-    else:
+    elif fire.required:
         bundle.warnings.append("fire_hydraulics skipped: network not provided")
 
     bundle.hydraulic_report = report
 
     # ── Живучесть кольца: только если сеть кольцевая и гидравлика решена ──
-    if network is not None and hydraulic_result is not None \
+    if fire.required and network is not None and hydraulic_result is not None \
             and hydraulic_result.dictating_scenario is not None:
         from app.calc.ring_hydraulics import analyze_ring_resilience
         try:
@@ -172,19 +192,20 @@ def design_ios2(
                     "ring_resilience: предварительно, требуется секционирование СП 10")
 
     # ── Мост: обогащаем FireSystem результатами (только если что-то посчитано) ──
-    if layout_results or hydraulic_result:
+    if fire.required and (layout_results or hydraulic_result):
         enriched = enrich_fire_from_layout_and_hydraulics(
             fire, layout_results=layout_results, hydraulic_result=hydraulic_result)
         project = replace(project, fire=enriched)
         bundle.project = project
         bundle.status.append("enrich_fire: FireSystem обогащён расчётными данными")
-    else:
+    elif fire.required:
         bundle.warnings.append("documents built from pre-filled project.fire "
                                "(расчётные слои пропущены)")
 
     # Пожарная насосная В2 — отдельный подбор по рабочей точке основного
     # расчётного сценария. Ремонтный/аварийный режим кольца сюда не подмешивается.
-    if hydraulic_result is not None and hydraulic_result.pump_duty is not None:
+    if (fire.required and hydraulic_result is not None
+            and hydraulic_result.pump_duty is not None):
         from app.pz.pump_bridge import compute_fire_pump_from_duty
         project.fire_pumps = compute_fire_pump_from_duty(
             hydraulic_result.pump_duty,
@@ -214,10 +235,18 @@ def design_ios2(
                 project.consumer_groups,
                 sewage_max_fixture_lps=project.sewage_max_fixture_lps,
             )
+            balance_groups = (
+                project.consumer_details
+                if getattr(project, "consumer_details", None)
+                else project.consumer_groups
+            )
+            project.balance = balance_from_calc(balance_groups, project.flows)
             bundle.status.append(
                 f"water_demand: расходы В1/Т3 рассчитаны "
                 f"(q_сут={project.flows.q_day_tot:.1f} м³/сут, "
                 f"q_сек={project.flows.q_sec_tot:.2f} л/с)")
+            bundle.status.append(
+                f"balance: форма 2 собрана, строк {len(project.balance.rows)}")
         except Exception as e:
             bundle.warnings.append(f"water_demand: расчёт расходов не выполнен ({e})")
 
@@ -477,6 +506,13 @@ def design_ios2(
 
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")
+
+    bundle.balance_pdf = generate_balance_pdf(
+        project, os.path.join(output_dir, "Баланс_ВиВ.pdf"))
+    append_pdf(bundle.pz_pdf, bundle.balance_pdf)
+    bundle.status.append(
+        "Баланс_ВиВ.pdf собран по форме 2 ГОСТ Р 21.619-2023 "
+        "и добавлен в конец ПЗ.pdf")
 
     bundle.pump_selection_pdf = generate_pump_selection_pdf(
         project, os.path.join(output_dir, "Подбор_насосов.pdf"))

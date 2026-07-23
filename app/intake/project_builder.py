@@ -41,12 +41,7 @@ _BUILDING_MAP = {
 
 
 def build_project(req: IOS2Request) -> Project:
-    """IOS2Request → Project. Валидация намерения → маппинг → сборка.
-
-    streams: если None — оставляем 0 в FireSystem (задел: авто по табл. 7.1
-    через категорию; сейчас honest-поведение — билдер геометрии потребует
-    streams явно, см. geometry_builder.build_layout_inputs).
-    """
+    """IOS2Request → Project. Валидация намерения → маппинг → сборка."""
     problems = req.validate()
     if problems:
         raise RequestValidationError(problems)
@@ -63,7 +58,8 @@ def build_project(req: IOS2Request) -> Project:
 
     p.building = BuildingFlags(
         purpose=_BUILDING_MAP[req.building_type],
-        floors_above=req.floors, height_m=req.building_height_m, zones=req.zones,
+        floors_above=req.floors, height_m=req.building_height_m,
+        fire_height_m=req.fire_height_m, zones=req.zones,
         total_area_m2=req.total_area_m2, risers_v1=req.risers_v1,
         risers_t3=req.risers_t3, risers_t4=req.risers_t4)
     p.insulation = InsulationDesign(
@@ -94,24 +90,76 @@ def build_project(req: IOS2Request) -> Project:
             h_vvod_m=sd.h_vvod_m, water_use_period_h=sd.water_use_period_h,
             inputs_count=sd.inputs_count, npsh_available_m=sd.npsh_available_m)
 
-    streams = req.streams if req.streams is not None else 0
-    q_total = round(streams * req.q_per_stream_lps, 3) if streams else 0.0
-    p.fire = FireSystem(
-        required=True, streams=streams, q_per_stream=req.q_per_stream_lps,
-        q_total=q_total, nozzle_dn=req.cabinet_dn, hose_length_m=req.hose_length_m)
+    if req.fire_mode == "not_required":
+        p.fire = FireSystem(
+            required=False,
+            determination_mode="not_required",
+            normative_note="ВПВ не требуется — решение подтверждено проектировщиком.",
+            nozzle_dn=req.cabinet_dn,
+            hose_length_m=req.hose_length_m,
+        )
+    elif req.fire_mode == "manual":
+        streams = int(req.streams or 0)
+        p.fire = FireSystem(
+            required=True,
+            determination_mode="manual",
+            normative_note="Параметры ВПВ заданы проектировщиком вручную.",
+            streams=streams,
+            q_per_stream=req.q_per_stream_lps,
+            q_total=round(streams * req.q_per_stream_lps, 3),
+            nozzle_dn=req.cabinet_dn,
+            hose_length_m=req.hose_length_m,
+        )
+    else:
+        from app.calc.fire import FireInput, calculate_fire
+        from app.pz.flows_bridge import fire_from_calc
+
+        fire_type = {
+            "residential": "f13",
+            "public": "f_office",
+        }[req.building_type]
+        corridor_length = next(
+            (room.length_m for room in req.rooms
+             if room.space_kind == "corridor"),
+            None,
+        )
+        fire_result = calculate_fire(FireInput(
+            building_type=fire_type,
+            floors=req.floors,
+            height_m=req.fire_height_m,
+            corridor_length_m=corridor_length,
+            area_m2=(req.total_area_m2 or None),
+            dn=req.cabinet_dn,
+            nozzle_mm=req.nozzle_mm,
+            hose_m=req.hose_length_m,
+            jet_m=req.compact_jet_m,
+        ))
+        p.fire = fire_from_calc(
+            fire_result,
+            nozzle_dn=req.cabinet_dn,
+            hose_length_m=req.hose_length_m,
+        )
+        p.fire.determination_mode = "auto"
+        p.fire.normative_note = fire_result.message
+
+    # Без ВПВ система В1 не может оставаться «объединённой В1+В2».
+    # Нормализуем старые анкеты, в которых combined был скрытым UI-дефолтом.
+    if not p.fire.required and p.source.network_kind == "combined":
+        p.source.network_kind = "domestic"
 
     p.pumps = PumpSystem(required=req.needs_booster_pumps)
     p.flows = FlowsData()
 
-    # помещения ПК
+    # Помещения/сеть В2 разворачиваются только если ВПВ действительно требуется.
     p.fire_rooms = [
         FireRoomSpec(r.name, length_m=r.length_m, width_m=r.width_m,
                      height_m=r.height_m, space_kind=r.space_kind,
                      placement_mode=r.placement)
-        for r in req.rooms]
+        for r in req.rooms
+    ] if p.fire.required else []
 
     # сеть В2: узлы собираются из участков (namespace runs), отметки из карты
-    if req.network is not None:
+    if req.network is not None and p.fire.required:
         n = req.network
         node_ids = sorted({x for r in n.runs for x in (r.from_node, r.to_node)})
         nodes = [MainNodeSpec(nid, float(n.node_elevations.get(nid, 0.0)))
@@ -136,6 +184,7 @@ def build_project(req: IOS2Request) -> Project:
             second_available_head_m=n.second_available_head_m)
 
     p.consumer_groups = [(g.code, g.count) for g in req.consumers]
+    p.consumer_details = [(g.name, g.code, g.count) for g in req.consumers]
     p.v1_sections = [V1SectionSpec(**vars(s)) for s in req.v1_sections]
     if req.v1_network is not None:
         p.v1_network = V1NetworkSpec(

@@ -27,6 +27,7 @@ from typing import List, Optional
 # ── справочники значений (строки — то, что придёт из формы/YAML/API) ────────
 
 BUILDING_TYPES = ("residential", "public", "industrial")
+FIRE_MODES = ("auto", "not_required", "manual")
 SOURCE_KINDS = ("city_main", "reservoir", "pond", "well")
 SPACE_KINDS = ("corridor", "room", "hall", "storage")
 PLACEMENT_MODES = ("one_side", "two_opposite_sides")
@@ -227,10 +228,14 @@ class IOS2Request:
     insulation_hvs_water_temp: float = 10.0
     insulation_gvs_water_temp: float = 60.0
     # ВПВ
-    streams: Optional[int] = None                 # None → авто по табл. 7.1 (future)
+    fire_mode: str = "auto"                       # auto / not_required / manual
+    fire_height_m: Optional[float] = None          # пожарно-техническая высота
+    streams: Optional[int] = None                  # только ручной override
     q_per_stream_lps: float = 2.6
     hose_length_m: int = 20
     cabinet_dn: int = 50
+    nozzle_mm: int = 13
+    compact_jet_m: int = 12
     rooms: List[RoomRequest] = field(default_factory=list)
     network: Optional[NetworkRequest] = None
     # прочее
@@ -261,8 +266,27 @@ class IOS2Request:
             p.append("insulation_location должен быть room_hot, room_cold или parking")
         if self.insulation_humidity not in (40, 50, 60, 70, 80, 90):
             p.append("insulation_humidity должна быть 40, 50, 60, 70, 80 или 90")
+        if self.fire_mode not in FIRE_MODES:
+            p.append(f"fire_mode '{self.fire_mode}' не из {FIRE_MODES}")
+        if self.fire_mode == "auto":
+            if self.fire_height_m is None or self.fire_height_m <= 0:
+                p.append(
+                    "fire_height_m должна быть > 0 для автоматической проверки "
+                    "ВПВ по СП 10 (укажите пожарно-техническую высоту)"
+                )
+            if self.building_type == "industrial":
+                p.append(
+                    "автомат В2 для производственного здания требует категории, "
+                    "степени огнестойкости, класса и объёма; используйте ручной режим"
+                )
+        if self.fire_mode == "manual" and self.streams not in (1, 2):
+            p.append("для ручного режима В2 задайте streams=1 или 2")
         if self.streams is not None and self.streams not in (1, 2):
             p.append(f"streams={self.streams}: поддерживается 1 или 2")
+        if self.nozzle_mm not in (13, 16, 19):
+            p.append("nozzle_mm должен быть 13, 16 или 19")
+        if self.compact_jet_m not in (6, 8, 10, 12, 14, 16, 18, 20):
+            p.append("compact_jet_m должен быть 6, 8, 10, 12, 14, 16, 18 или 20")
         if self.sewage_max_fixture_lps < 0:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
         seen_v1 = set()

@@ -20,10 +20,13 @@ building:
   risers_t4: 8
   zones: 2
 fire:
-  streams: 2
+  mode: auto
+  height_m: 48.0
   q_per_stream_lps: 2.6
   hose_length_m: 20
   cabinet_dn: 50
+  nozzle_mm: 13
+  compact_jet_m: 12
 source_data:
   source_description: централизованная сеть хозяйственно-питьевого водоснабжения
   water_protection_note: Согласно демонстрационным исходным данным объект расположен вне водоохранных зон
@@ -45,7 +48,8 @@ source_data:
   inputs_count: 1
   npsh_available_m: 8.0
 consumers:
-  - code: residential_central_hw
+  - name: Жилая часть
+    code: residential_full_bath
     count: 480
 insulation:
   location: room_hot

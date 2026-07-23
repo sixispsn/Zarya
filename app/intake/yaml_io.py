@@ -214,10 +214,16 @@ def load_request(text: str) -> IOS2Request:
         insulation_humidity=int(insulation_s.get("humidity", 60)),
         insulation_hvs_water_temp=float(insulation_s.get("hvs_water_temp", 10.0)),
         insulation_gvs_water_temp=float(insulation_s.get("gvs_water_temp", 60.0)),
+        fire_mode=str(fire.get("mode", "auto")),
+        fire_height_m=float(
+            fire.get("height_m", bld.get("fire_height_m", bld.get("height_m", 0)))
+        ),
         streams=(int(fire_streams) if fire_streams is not None else None),
         q_per_stream_lps=float(fire.get("q_per_stream_lps", 2.6)),
         hose_length_m=int(fire.get("hose_length_m", 20)),
         cabinet_dn=int(fire.get("cabinet_dn", 50)),
+        nozzle_mm=int(fire.get("nozzle_mm", 13)),
+        compact_jet_m=int(fire.get("compact_jet_m", 12)),
         zones=int(bld.get("zones", 1)),
         rooms=rooms, network=network, source_data=source_data, consumers=consumers)
 
@@ -255,10 +261,14 @@ def dump_request(req: IOS2Request) -> str:
             "risers_t4": req.risers_t4,
         },
         "fire": {
+            "mode": req.fire_mode,
+            **({"height_m": req.fire_height_m} if req.fire_height_m is not None else {}),
             **({"streams": req.streams} if req.streams is not None else {}),
             "q_per_stream_lps": req.q_per_stream_lps,
             "hose_length_m": req.hose_length_m,
             "cabinet_dn": req.cabinet_dn,
+            "nozzle_mm": req.nozzle_mm,
+            "compact_jet_m": req.compact_jet_m,
         },
         "insulation": {
             "location": req.insulation_location,

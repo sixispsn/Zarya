@@ -77,7 +77,8 @@ def test_orchestrator_includes_resilience(tmp_path):
     from app.pz.ios2_orchestrator import design_ios2
     req = IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
-        building_type="residential", floors=16, building_height_m=48.0, streams=2,
+        building_type="residential", floors=16, building_height_m=48.0,
+        fire_height_m=48.0, streams=2,
         rooms=[RoomRequest("Коридор", 42, 2.4, 3.0)],
         network=NetworkRequest(
             runs=[MainRunRequest("К1", "К2", 36), MainRunRequest("К2", "К3", 15),
@@ -99,7 +100,8 @@ def test_orchestrator_no_resilience_for_tree(tmp_path):
     from app.pz.ios2_orchestrator import design_ios2
     req = IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
-        building_type="residential", floors=16, building_height_m=48.0, streams=2,
+        building_type="residential", floors=16, building_height_m=48.0,
+        fire_height_m=48.0, streams=2,
         rooms=[RoomRequest("Коридор", 42, 2.4, 3.0)],
         network=NetworkRequest(
             runs=[MainRunRequest("К1", "К2", 36), MainRunRequest("К2", "К3", 15)],

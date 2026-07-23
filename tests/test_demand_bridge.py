@@ -43,7 +43,8 @@ def test_orchestrator_fills_flows(tmp_path):
     from app.pz.ios2_orchestrator import design_ios2
     req = IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
-        building_type="residential", floors=12, building_height_m=36.0, streams=2,
+        building_type="residential", floors=12, building_height_m=36.0,
+        fire_height_m=36.0, streams=2,
         rooms=[RoomRequest("Коридор", 24, 2.4, 3.0)],
         consumers=[ConsumerGroupRequest("residential_central_hw", 260)],
         network=NetworkRequest(
@@ -63,7 +64,8 @@ def test_orchestrator_warns_without_consumers(tmp_path):
     from app.pz.ios2_orchestrator import design_ios2
     req = IOS2Request(
         document=DocumentRequest(cipher="Т", object_name="О", organization="Орг"),
-        building_type="residential", floors=12, building_height_m=36.0, streams=2,
+        building_type="residential", floors=12, building_height_m=36.0,
+        fire_height_m=36.0, streams=2,
         rooms=[RoomRequest("Коридор", 24, 2.4, 3.0)],
         network=NetworkRequest(
             runs=[MainRunRequest("У1","У2",22), MainRunRequest("У2","У3",12),

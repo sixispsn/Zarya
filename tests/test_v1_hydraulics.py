@@ -303,6 +303,7 @@ def test_orchestrator_puts_v1_losses_into_required_head(tmp_path):
     request = IOS2Request(
         document=DocumentRequest(cipher="В1", object_name="Проверка", organization="Заря"),
         building_type="residential", floors=9, building_height_m=27,
+        fire_height_m=27,
         streams=2,
         consumers=[ConsumerGroupRequest("residential_central_hw", 100)],
         source_data=SourceDataRequest(guaranteed_head_m=30, h_geom_m=25),
@@ -331,6 +332,7 @@ def test_orchestrator_uses_network_dictating_node_for_required_head(tmp_path):
     request = IOS2Request(
         document=DocumentRequest(cipher="В1-АВТО", object_name="Проверка", organization="Заря"),
         building_type="residential", floors=9, building_height_m=27,
+        fire_height_m=27,
         streams=2,
         source_data=SourceDataRequest(guaranteed_head_m=30, maximum_head_m=35),
         v1_network=V1NetworkRequest(
@@ -390,6 +392,7 @@ def test_orchestrator_checks_two_inlets_and_uses_dictating_tu(tmp_path):
         document=DocumentRequest(
             cipher="В1-2ВВ", object_name="Проверка двух вводов", organization="Заря"),
         building_type="residential", floors=9, building_height_m=27,
+        fire_height_m=27,
         streams=2,
         source_data=SourceDataRequest(guaranteed_head_m=99, maximum_head_m=100),
         v1_network=V1NetworkRequest(

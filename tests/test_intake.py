@@ -15,6 +15,7 @@ def _req(**overrides):
         document=DocumentRequest(cipher="Т-ИОС2", object_name="Объект",
                                  organization="Орг"),
         building_type="residential", floors=16, building_height_m=48.0,
+        fire_height_m=48.0,
         streams=2,
         rooms=[RoomRequest("Коридор", 42.0, 2.4, 3.0)],
         network=NetworkRequest(
@@ -110,10 +111,32 @@ def test_builder_fills_fire_system():
     assert p.fire.nozzle_dn == 50
 
 
-def test_builder_streams_none_stays_zero():
-    # streams не задан → 0 (honest: билдер геометрии потребует явно)
+def test_builder_streams_none_uses_sp10_auto():
     p = build_project(_req(streams=None))
+    assert p.fire.required is True
+    assert p.fire.streams == 2
+
+
+def test_nine_floors_below_30m_has_no_vpv():
+    p = build_project(_req(
+        floors=9, building_height_m=29.0, fire_height_m=29.0,
+        streams=None, rooms=[], network=None,
+        source_data=SourceDataRequest(network_kind="combined"),
+    ))
+    assert p.fire.required is False
     assert p.fire.streams == 0
+    assert p.fire_network is None
+    assert p.fire_rooms == []
+    assert p.source.network_kind == "domestic"
+
+
+def test_nine_floors_above_30m_uses_height_and_requires_vpv():
+    p = build_project(_req(
+        floors=9, building_height_m=33.0, fire_height_m=33.0,
+        streams=None,
+    ))
+    assert p.fire.required is True
+    assert p.fire.streams == 2
 
 
 def test_builder_builds_rooms():
