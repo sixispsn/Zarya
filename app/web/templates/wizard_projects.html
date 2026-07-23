@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>Заря — мои проекты</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/wizard.css">
+<script defer src="/static/wizard.js"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects" aria-current="page">Мои проекты</a><a href="/docs" target="_blank">API</a></nav>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects" aria-current="page">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
 </header>
 <main class="projects-shell">
   <div class="projects-head"><div><p class="eyebrow">Локальное хранилище</p><h1>Мои проекты</h1><p>Исходные данные сохраняются в YAML и остаются доступными для повторного расчёта.</p></div><a class="button-primary" href="/wizard">+ Новый проект</a></div>

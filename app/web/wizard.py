@@ -31,6 +31,7 @@ from app.intake.request_dto import (
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
+from app.intake.advisories import review_request
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.pz.generator import cold_meter_loss
@@ -51,7 +52,7 @@ _CONSUMER_NORMS = list_consumer_norms()
 
 
 def _form_context(**values):
-    return {"consumer_norms": _CONSUMER_NORMS, **values}
+    return {"consumer_norms": _CONSUMER_NORMS, "advisories": [], **values}
 
 
 @router.get("", response_class=HTMLResponse)
@@ -172,13 +173,15 @@ async def wizard_design(request: Request):
         ),
         consumers=consumers,
     )
+    advisories = review_request(req)
 
     pid = fv("project_id") or None
     try:
         project = build_project(req)
     except RequestValidationError as e:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
-            "errors": e.problems, "prefill": req, "project_id": pid,
+            "errors": e.problems, "advisories": advisories,
+            "prefill": req, "project_id": pid,
         }))
 
     # персистентность: намерение сохраняется (source of truth — вход)
@@ -191,10 +194,14 @@ async def wizard_design(request: Request):
     except Exception as exc:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
             "errors": [f"Комплект не собран: {exc}"],
+            "advisories": advisories,
             "prefill": req,
             "project_id": project_id,
         }), status_code=422)
-    _RUNS[run_id] = {"bundle": bundle, "outdir": outdir, "project_id": project_id}
+    _RUNS[run_id] = {
+        "bundle": bundle, "outdir": outdir, "project_id": project_id,
+        "advisories": advisories,
+    }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
 
@@ -217,7 +224,11 @@ def wizard_result(request: Request, run_id: str):
     head = calc_required_head(p.source, h_vod_m=cold_meter_loss(p.meters))
     return _TPL.TemplateResponse(request, "wizard_result.html", {
         "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
-        "status": b.status, "warnings": b.warnings,
+        "status": b.status,
+        "warnings": b.warnings + [
+            f"{item.message} ({item.reference})"
+            for item in run.get("advisories", [])
+        ],
         "project": {
             "title": p.document.object_name,
             "cipher": p.document.cipher,
@@ -279,7 +290,8 @@ def wizard_open(request: Request, project_id: str):
     except (FileNotFoundError, ValueError):
         return HTMLResponse("<h2>Проект не найден</h2>", status_code=404)
     return _TPL.TemplateResponse(request, "wizard_form.html", {
-        **_form_context(errors=[]), "prefill": req_dto, "project_id": project_id})
+        **_form_context(errors=[], advisories=review_request(req_dto)),
+        "prefill": req_dto, "project_id": project_id})
 
 
 @router.post("/projects/{project_id}/delete")

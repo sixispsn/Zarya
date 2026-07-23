@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>Заря — проектирование ИОС2</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/wizard.css">
 <script defer src="/static/wizard.js"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard" aria-current="page">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard" aria-current="page">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
 </header>
 {% set d = prefill.document if prefill else none %}
 {% set sd = prefill.source_data if prefill and prefill.source_data else none %}
@@ -27,6 +29,10 @@
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" action="/wizard/design" data-design-form>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+<section class="validation-panel" data-validation-panel{% if not advisories %} hidden{% endif %} aria-live="polite">
+  <div class="validation-heading"><span>Нормативный контроль исходных данных</span><b data-validation-count>{{ advisories|length }}</b></div>
+  <ul data-validation-list>{% for item in advisories %}<li data-level="{{ item.level }}"><span>{{ item.message }}</span><small>{{ item.reference }}</small></li>{% endfor %}</ul>
+</section>
 
 <fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d else '2026-089-ИОС2' }} · {{ d.object_part if d else 'Секция 2' }} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
   <div class="row">
@@ -48,7 +54,7 @@
       <input name="consumer{{ idx }}_name" aria-label="Функциональная часть {{ idx }}" value="{{ group.name if group and group.name else ('Жилая часть' if idx == 1 else '') }}" placeholder="Например: аптека">
       <select name="consumer{{ idx }}_code" aria-label="Нормативная группа {{ idx }}" data-consumer-select>
         <option value="">Выберите строку таблицы А.2</option>
-        {% for norm in consumer_norms|default([]) %}<option value="{{ norm.code }}" data-unit="{{ norm.unit }}"{% if (group and group.code == norm.code) or (not group and norm.code == 'residential_central_hw') %} selected{% endif %}>{{ norm.label }}</option>{% endfor %}
+        {% for norm in consumer_norms|default([]) %}<option value="{{ norm.code }}" data-unit="{{ norm.unit }}" data-purpose="{{ 'residential' if norm.code.startswith('residential_') else 'public' }}"{% if (group and group.code == norm.code) or (not group and norm.code == 'residential_central_hw') %} selected{% endif %}>{{ norm.label }}</option>{% endfor %}
       </select>
       <input name="consumer{{ idx }}_count" aria-label="Количество потребителей {{ idx }}" value="{{ group.count if group else 480 }}" placeholder="Количество" inputmode="numeric">
       <span class="consumer-unit" data-consumer-unit>{% if group %}{% for norm in consumer_norms|default([]) %}{% if norm.code == group.code %}{{ norm.unit }}{% endif %}{% endfor %}{% else %}житель{% endif %}</span>
@@ -62,7 +68,7 @@
 
 <template id="consumer-row-template"><div class="consumer-row" data-consumer-row>
   <input name="consumer__INDEX___name" aria-label="Функциональная часть __INDEX__" placeholder="Например: коммерческое помещение">
-  <select name="consumer__INDEX___code" aria-label="Нормативная группа __INDEX__" data-consumer-select><option value="">Выберите строку таблицы А.2</option>{% for norm in consumer_norms|default([]) %}<option value="{{ norm.code }}" data-unit="{{ norm.unit }}">{{ norm.label }}</option>{% endfor %}</select>
+  <select name="consumer__INDEX___code" aria-label="Нормативная группа __INDEX__" data-consumer-select><option value="">Выберите строку таблицы А.2</option>{% for norm in consumer_norms|default([]) %}<option value="{{ norm.code }}" data-unit="{{ norm.unit }}" data-purpose="{{ 'residential' if norm.code.startswith('residential_') else 'public' }}">{{ norm.label }}</option>{% endfor %}</select>
   <input name="consumer__INDEX___count" aria-label="Количество потребителей __INDEX__" placeholder="Количество" inputmode="numeric">
   <span class="consumer-unit" data-consumer-unit></span><button class="consumer-remove" type="button" aria-label="Удалить группу">×</button>
 </div></template>

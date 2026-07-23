@@ -85,6 +85,30 @@ def test_blueprint_ui_marks_edited_sections():
     assert ".accepted.changed" in css
 
 
+def test_dark_theme_is_default_and_responsive():
+    css = open("app/web/static/wizard.css", encoding="utf-8").read()
+    js = open("app/web/static/wizard.js", encoding="utf-8").read()
+    assert "--canvas: #0b0b0e" in css
+    assert 'html[data-theme="light"]' in css
+    assert "background-image" not in css
+    assert "@media (max-width: 1080px)" in css
+    assert "@media (max-width: 680px)" in css
+    assert 'localStorage.setItem("zarya-theme"' in js
+
+
+def test_live_normative_advisories_are_wired():
+    from app.web.wizard import _TPL, _form_context
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]))
+    js = open("app/web/static/wizard.js", encoding="utf-8").read()
+    assert "data-validation-panel" in html
+    assert 'data-purpose="residential"' in html
+    assert 'data-purpose="public"' in html
+    assert "height > 75" in js
+    assert "height > 50" in js
+    assert "пп. 1.1, 7.5–7.6" in js
+
+
 def test_invalid_form_keeps_entered_values():
     import asyncio
     from app.web.wizard import wizard_design
@@ -114,4 +138,4 @@ def test_invalid_form_keeps_entered_values():
     assert "Жилая часть" in body
     assert "Спортивный комплекс" in body
     assert 'value="sport_pool" data-unit=' in body
-    assert 'data-unit="чел" selected' in body
+    assert 'data-unit="чел" data-purpose="public" selected' in body

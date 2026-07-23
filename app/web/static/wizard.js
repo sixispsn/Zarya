@@ -1,4 +1,21 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const root = document.documentElement;
+  const themeButtons = document.querySelectorAll("[data-theme-toggle]");
+  const renderTheme = () => {
+    const dark = root.dataset.theme !== "light";
+    themeButtons.forEach((button) => {
+      const label = button.querySelector("[data-theme-label]");
+      if (label) label.textContent = dark ? "Светлая" : "Тёмная";
+      button.setAttribute("aria-pressed", String(!dark));
+    });
+  };
+  themeButtons.forEach((button) => button.addEventListener("click", () => {
+    root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
+    try { localStorage.setItem("zarya-theme", root.dataset.theme); } catch (_) { /* local only */ }
+    renderTheme();
+  }));
+  renderTheme();
+
   const links = [...document.querySelectorAll(".stepnav a[href^='#']")];
   const sections = links
     .map((link) => document.querySelector(link.getAttribute("href")))
@@ -18,10 +35,14 @@ document.addEventListener("DOMContentLoaded", () => {
     state.classList.add("changed");
   };
 
+  let runAdvisories = () => {};
   const bindControl = (control) => {
     if (control.dataset.changeBound) return;
     control.dataset.changeBound = "true";
-    control.addEventListener("input", () => markChanged(control));
+    control.addEventListener("input", () => {
+      markChanged(control);
+      runAdvisories();
+    });
   };
   document.querySelectorAll(".input-section input, .input-section select")
     .forEach(bindControl);
@@ -45,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (consumerRows.querySelectorAll("[data-consumer-row]").length <= 1) return;
       row.remove();
       markChanged(consumerRows);
+      runAdvisories();
     });
     updateConsumerUnit(row);
   };
@@ -64,8 +86,62 @@ document.addEventListener("DOMContentLoaded", () => {
       bindConsumerRow(row);
       row.querySelector("input")?.focus();
       markChanged(row);
+      runAdvisories();
     });
   }
+
+  const validationPanel = document.querySelector("[data-validation-panel]");
+  const validationList = document.querySelector("[data-validation-list]");
+  const validationCount = document.querySelector("[data-validation-count]");
+  runAdvisories = () => {
+    if (!validationPanel || !validationList || !validationCount) return;
+    const heightRaw = document.querySelector('[name="height"]')?.value || "0";
+    const height = Number.parseFloat(heightRaw.replace(",", ".")) || 0;
+    const buildingType = document.querySelector('[name="building_type"]')?.value;
+    const purposes = new Set(
+      [...document.querySelectorAll("[data-consumer-select]")]
+        .map((select) => select.selectedOptions[0]?.dataset.purpose)
+        .filter(Boolean)
+    );
+    const advisories = [];
+    if (buildingType === "residential" && height > 75) {
+      advisories.push({
+        level: "warning",
+        message: `Жилое здание высотой ${height} м выше 75 м: СП 30 применяется совместно с СП 253.1325800.`,
+        reference: "СП 30.13330.2020, п. 4.1"
+      });
+    } else if (buildingType === "public" && height > 50) {
+      advisories.push({
+        level: "warning",
+        message: `Общественное здание высотой ${height} м выше 50 м: СП 30 применяется совместно с СП 253.1325800.`,
+        reference: "СП 30.13330.2020, п. 4.1"
+      });
+    }
+    const mixed = purposes.size > 1;
+    const mismatch = purposes.size > 0
+      && ["residential", "public"].includes(buildingType)
+      && !purposes.has(buildingType);
+    if (mixed || mismatch) {
+      advisories.push({
+        level: "info",
+        message: "Обнаружен смешанный функциональный состав. Подтвердите назначение частей и пожарные отсеки по АР/ТЗ; расход В2 проверяется отдельно для соответствующих частей.",
+        reference: "СП 30.13330.2020, пп. 1.1, 7.5–7.6"
+      });
+    }
+    validationList.replaceChildren(...advisories.map((item) => {
+      const li = document.createElement("li");
+      li.dataset.level = item.level;
+      const message = document.createElement("span");
+      message.textContent = item.message;
+      const reference = document.createElement("small");
+      reference.textContent = item.reference;
+      li.append(message, reference);
+      return li;
+    }));
+    validationCount.textContent = String(advisories.length);
+    validationPanel.hidden = advisories.length === 0;
+  };
+  runAdvisories();
 
   if (links.length && sections.length && "IntersectionObserver" in window) {
     const activate = (id) => links.forEach((link) => {
