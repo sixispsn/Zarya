@@ -10,6 +10,7 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         fonts-dejavu-core \
         fonts-liberation \
+        libcairo2 \
         libharfbuzz-subset0 \
         libopenjp2-7 \
         libpango-1.0-0 \
@@ -21,6 +22,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --requirement requirements.txt
+RUN python -c "import cairosvg; assert cairosvg.svg2pdf(bytestring=b'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>').startswith(b'%PDF')"
 
 COPY app ./app
 
