@@ -305,6 +305,8 @@ class PumpCandidate:
     score: float = 0.0
     reasons: list = field(default_factory=list)  # list[str] — обоснование
     archived: bool = False        # архивная каталожная кривая, требует подтверждения
+    source_url: str = ""
+    source_note: str = ""
 
 
 @dataclass

@@ -1,9 +1,9 @@
 """
 База насосов с кривыми Q-H.
 
-ВАЖНО: на старте используется архивная база Grundfos (из каталога, реальные кривые).
-В продукте заменяется на российских производителей (Спрут, ЦНС, Беламос и др.)
-через админку/БД. Механика подбора от бренда не зависит.
+Архивная база Grundfos из legacy хранится отдельно от актуального расширения
+каталога. Это позволяет запускать неизменные golden/parity-тесты legacy и
+одновременно выполнять проектный подбор по проверенным кривым изготовителей.
 
 Перенесено из legacy/sp30_calculator.html (массив PUMP_CURVES).
 """
@@ -35,6 +35,8 @@ class Pump:
     note: str
     curve: tuple[PumpCurvePoint, ...]
     archived: bool = False   # архивная база (Grundfos)
+    source_url: str = ""     # официальная карточка/кривая изготовителя
+    source_note: str = ""    # идентификатор изделия и дата проверки
 
 
 # Архивная база Grundfos (реальные кривые из каталога)
@@ -81,9 +83,63 @@ PUMPS: list[Pump] = [
     ),
 ]
 
+# Актуальное расширение каталога. Эти позиции не входят в PUMPS намеренно:
+# PUMPS остаётся дословным зеркалом legacy для source-parity теста.
+#
+# Wilo Helix FIRST V 1606:
+# - артикул 4200993, P2=4 кВт, PN16, Tmax=120 °C — карточка Wilo;
+# - точки Q-H перенесены из официального SVG интерактивной характеристики;
+# - NPSHr=1,8 м принят по официальной NPSH-кривой в зоне BEP Q≈17,5 м³/ч.
+CURRENT_PUMPS: list[Pump] = [
+    Pump(
+        model="Helix FIRST V 1606-5/16/E/S/400-50",
+        brand="Wilo",
+        type="boost",
+        p_kw=4.0,
+        p_max_bar=16.0,
+        t_max=120.0,
+        npshr=1.8,
+        q_opt=17.5,
+        note="Вертикальный многоступенчатый, G 2, 3~400 В; артикул 4200993",
+        curve=(
+            PumpCurvePoint(0, 75.9),
+            PumpCurvePoint(2, 75.2),
+            PumpCurvePoint(4, 74.6),
+            PumpCurvePoint(6, 73.7),
+            PumpCurvePoint(8, 72.0),
+            PumpCurvePoint(10, 70.1),
+            PumpCurvePoint(12, 67.0),
+            PumpCurvePoint(14, 63.7),
+            PumpCurvePoint(16, 59.7),
+            PumpCurvePoint(18, 54.7),
+            PumpCurvePoint(20, 48.6),
+            PumpCurvePoint(22, 41.0),
+            PumpCurvePoint(24, 32.8),
+            PumpCurvePoint(26, 24.6),
+            PumpCurvePoint(28, 15.0),
+            PumpCurvePoint(30, 6.6),
+        ),
+        source_url=(
+            "https://wilo.com/oem/en/Products/en/application/heating/heating/"
+            "renewables-heating/wilo-helix-first-v/"
+            "helix-first-v-1606-5-16-e-s-400-50?t=1"
+        ),
+        source_note="Wilo, артикул 4200993; Q-H/NPSH проверены 23.07.2026",
+    ),
+]
 
-def list_pumps(pump_type: str | None = None) -> list[Pump]:
-    """Список насосов, опционально отфильтрованный по типу."""
+
+def list_pumps(
+    pump_type: str | None = None,
+    *,
+    include_current: bool = False,
+) -> list[Pump]:
+    """Список насосов, опционально отфильтрованный по типу.
+
+    ``include_current=False`` сохраняет дословный legacy-каталог и его golden
+    результаты. Проектные мосты явно включают актуальное расширение.
+    """
+    catalog = PUMPS + (CURRENT_PUMPS if include_current else [])
     if pump_type is None:
-        return list(PUMPS)
-    return [p for p in PUMPS if p.type == pump_type]
+        return list(catalog)
+    return [p for p in catalog if p.type == pump_type]

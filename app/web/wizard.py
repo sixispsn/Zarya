@@ -213,6 +213,7 @@ def wizard_result(request: Request, run_id: str):
     b = run["bundle"]
     pdfs = []
     for label, path in (("Пояснительная записка", b.pz_pdf),
+                        ("Расчёт и подбор насосов", getattr(b, "pump_selection_pdf", None)),
                         ("Спецификация", b.spec_pdf),
                         ("Схема", b.scheme_pdf),
                         ("Гидравлический расчёт", b.hydraulic_pdf),

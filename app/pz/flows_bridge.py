@@ -123,6 +123,8 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
             score=c.score,
             reasons=[_clean_reason(r) for r in (c.reasons or [])],
             archived=bool(_g(c.pump, "archived", default=False)),
+            source_url=str(_g(c.pump, "source_url", default="") or ""),
+            source_note=str(_g(c.pump, "source_note", default="") or ""),
         ))
 
     acc = res.candidates[0]

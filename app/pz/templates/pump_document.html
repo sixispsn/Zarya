@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"></head>
+<body>
+<div class="stamp">
+  <table>
+    <tr><td class="cipher" colspan="4">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+    <tr><td class="object" colspan="4">{{ doc.object_name or '' }}</td></tr>
+    <tr>
+      <td>{{ doc.stage_label or 'П' }}</td>
+      <td class="title">Расчёт и подбор насосных установок</td>
+      <td>{{ doc.developer_name or 'Разраб.' }}</td>
+      <td>{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+    </tr>
+  </table>
+</div>
+
+<section class="calculation-sheet">
+  <h1>Расчёт и подбор повысительной насосной установки В1</h1>
+  <p class="lead">Расчёт выполнен по принятому расходу В1 и составляющим требуемого
+  напора. Свободный напор у диктующего санитарно-технического прибора входит в
+  H<sub>тр</sub> отдельным слагаемым.</p>
+
+  <h2>1. Расчёт требуемого напора</h2>
+  <table class="components">
+    <thead><tr><th>Составляющая</th><th>Значение, м</th></tr></thead>
+    <tbody>
+    {% for name, value in head.components %}
+      <tr><td>{{ name }}</td><td>{{ value | num(2) }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td>Требуемый напор H<sub>тр</sub></td><td>{{ head.h_required_m | num(2) }}</td></tr>
+      <tr><td>Гарантированный напор по ТУ H<sub>гар</sub></td><td>{{ head.h_guaranteed_m | num(2) }}</td></tr>
+      <tr><td>Требуемый напор насоса H<sub>нас</sub> = H<sub>тр</sub> - H<sub>гар</sub></td><td>{{ head.h_pump_m | num(2) }}</td></tr>
+    </tfoot>
+  </table>
+
+  <p class="formula">H<sub>тр</sub> = H<sub>geom</sub> + ΣH<sub>il</sub> +
+  H<sub>пр</sub> + ΣH<sub>вод</sub> + H<sub>тепл</sub> + H<sub>ввод</sub>.</p>
+  <p class="formula">Кривая системы для подбора:
+  H<sub>сист</sub> = {{ v1.h_stat | num(2) }} +
+  {{ v1.k_sys | num(4) }}·Q².</p>
+
+  <h2>2. Подбор по рабочей точке</h2>
+  {% set pumps = v1 %}
+  {% set pump_chart_svg = v1_chart %}
+  {% include "pump_table.html" %}
+</section>
+
+{% if v2.required %}
+<section class="calculation-sheet new-page">
+  <h1>Подбор пожарной насосной установки В2</h1>
+  <p class="lead">Подбор выполнен по расчётной точке основного пожарного режима.
+  Резервный агрегат не суммируется с рабочим; один рабочий насос должен
+  обеспечить полный расчётный расход и напор. Нормативные проверки приведены
+  согласно СП 10.13130.2020.</p>
+
+  {% set pumps = v2 %}
+  {% set pump_chart_svg = v2_chart %}
+  {% include "pump_table.html" %}
+</section>
+{% endif %}
+</body>
+</html>

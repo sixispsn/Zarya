@@ -146,6 +146,66 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
     return output_path
 
 
+# ── РАСЧЁТ И ПОДБОР НАСОСНЫХ УСТАНОВОК (отдельное приложение) ────────────
+
+def generate_pump_selection_html(project: Project) -> str:
+    """HTML самостоятельного расчётного листа подбора насосов В1/В2.
+
+    Лист ничего не пересчитывает: использует уже сформированные HeadCalc и
+    PumpSystem, то есть те же результаты, что показаны в основной ПЗ.
+    """
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".РН") else cipher + ".РН"),
+        sheet_title="Расчёт и подбор насосных установок",
+    )
+    head = calc_required_head(
+        project.source,
+        h_vod_m=cold_meter_loss(project.meters),
+    )
+    return env.get_template("pump_document.html").render(
+        doc=doc,
+        head=head,
+        v1=project.pumps,
+        v2=project.fire_pumps,
+        v1_chart=_pump_chart_for(project.pumps),
+        v2_chart=_pump_chart_for(project.fire_pumps),
+    )
+
+
+def generate_pump_selection_pdf(project: Project, output_path: str) -> str:
+    """PDF расчётного листа насосов (А4) для отдельной выдачи и приложения к ПЗ."""
+    html_str = generate_pump_selection_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / "pump_document.css"),
+            base_url=str(TEMPLATES_DIR)),
+        CSS(filename=str(TEMPLATES_DIR / "equipment.css"),
+            base_url=str(TEMPLATES_DIR)),
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets,
+    )
+    return output_path
+
+
+def append_pdf(base_path: str, appendix_path: str) -> str:
+    """Добавить приложение в конец PDF атомарной заменой исходного файла."""
+    from pypdf import PdfReader, PdfWriter
+
+    base = Path(base_path)
+    tmp = base.with_name(base.stem + ".with-appendix.pdf")
+    writer = PdfWriter()
+    for source in (base_path, appendix_path):
+        for page in PdfReader(source).pages:
+            writer.add_page(page)
+    with tmp.open("wb") as fh:
+        writer.write(fh)
+    tmp.replace(base)
+    return str(base)
+
+
 # ── СПЕЦИФИКАЦИЯ (отдельный документ, шифр .С, форма 3) ────────────────────
 
 def generate_spec_html(project: Project) -> str:

@@ -33,6 +33,7 @@ class PumpInput:
     h_pr: float = 20.0           # свободный напор у прибора, м
     h_gar: Optional[float] = None  # гарантированный напор сети из ТУ, м
     npsh_a: Optional[float] = None  # располагаемый кавитационный запас системы, м
+    include_current_catalog: bool = False  # False = строгий legacy/parity
 
 
 @dataclass
@@ -134,7 +135,10 @@ def calculate_pump(data: PumpInput) -> PumpResult:
     k_sys = ((hp - h_stat) / (data.q_design_m3h ** 2)
              if hp > h_stat else 0.1)
 
-    candidates_raw = list_pumps(data.pump_type)
+    candidates_raw = list_pumps(
+        data.pump_type,
+        include_current=data.include_current_catalog,
+    )
     results: list[PumpCandidate] = []
 
     for pump in candidates_raw:

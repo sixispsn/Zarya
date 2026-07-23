@@ -26,7 +26,7 @@ from app.pz.project import Project
 from app.pz.flows_bridge import enrich_fire_from_layout_and_hydraulics
 from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
-    generate_hydraulic_report_pdf,
+    generate_hydraulic_report_pdf, generate_pump_selection_pdf, append_pdf,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -45,6 +45,7 @@ class IOS2DesignBundle:
     spec_pdf: Optional[str] = None
     scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
+    pump_selection_pdf: Optional[str] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
@@ -476,6 +477,12 @@ def design_ios2(
 
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")
+
+    bundle.pump_selection_pdf = generate_pump_selection_pdf(
+        project, os.path.join(output_dir, "Подбор_насосов.pdf"))
+    append_pdf(bundle.pz_pdf, bundle.pump_selection_pdf)
+    bundle.status.append(
+        "Подбор_насосов.pdf собран отдельным приложением и добавлен в конец ПЗ.pdf")
 
     bundle.spec_pdf = generate_spec_pdf(project, os.path.join(output_dir, "Спецификация.pdf"))
     bundle.status.append("Спецификация.pdf собрана")

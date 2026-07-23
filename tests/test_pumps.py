@@ -95,6 +95,24 @@ class TestSelection:
             q_design_m3h=5, pump_type="boost", h_geom_manual=25, h_gar=20))
         assert len(r.candidates[0].eff_curve) > 0
 
+    def test_current_catalog_covers_project_working_point(self):
+        """Расширение каталога перекрывает точку В1 14,46 м³/ч / 54,0 м."""
+        r = calculate_pump(PumpInput(
+            q_design_m3h=14.4612,
+            pump_type="boost",
+            h_geom_manual=46.0,
+            h_losses=8.007,
+            h_pr=20.0,
+            h_gar=20.0,
+            npsh_a=8.0,
+            include_current_catalog=True,
+        ))
+        assert r.candidates
+        accepted = r.candidates[0]
+        assert accepted.pump.model == "Helix FIRST V 1606-5/16/E/S/400-50"
+        assert (accepted.working_point.q, accepted.working_point.h) == (15.75, 60.2)
+        assert accepted.pump.source_url.startswith("https://wilo.com/")
+
     @pytest.mark.parametrize("mode,q_design,h_geom,h_losses,h_gar,expected", [
         ("1", 5.0, 25.0, 5.0, 20.0,
          [("CR 10-4", 5.94, 34.1, 160), ("CR 5-8", 5.99, 34.1, 110)]),

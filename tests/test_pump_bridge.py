@@ -80,6 +80,8 @@ def test_orchestrator_fills_pump_and_head(tmp_path):
     assert bundle.project.pumps.model
     assert bundle.project.pumps.wp_q > 0
     assert any("pump:" in status for status in bundle.status)
+    assert bundle.pump_selection_pdf
+    assert bundle.pump_selection_pdf.endswith("Подбор_насосов.pdf")
 
 
 def test_pz_shows_pump_not_placeholder(tmp_path):
@@ -94,3 +96,22 @@ def test_pz_shows_pump_not_placeholder(tmp_path):
     assert "МОДЕЛЬ НАСОСА" not in pz
     assert "CR" in pz
     assert "<svg" in _pump_chart_svg(bundle.project)
+
+
+def test_pump_calculation_is_separate_pdf_and_appended_to_pz(tmp_path):
+    from pathlib import Path
+    from pypdf import PdfReader
+    from app.intake.project_builder import build_project
+    from app.pz.ios2_orchestrator import design_ios2
+
+    bundle = design_ios2(build_project(_request()), output_dir=str(tmp_path))
+    appendix = Path(bundle.pump_selection_pdf)
+    assert appendix.exists()
+    appendix_text = " ".join(
+        page.extract_text() or "" for page in PdfReader(appendix).pages)
+    assert "Расчёт и подбор повысительной насосной установки В1" in appendix_text
+    assert "Требуемый напор насоса" in appendix_text
+
+    pz_text = " ".join(
+        page.extract_text() or "" for page in PdfReader(bundle.pz_pdf).pages)
+    assert "Расчёт и подбор повысительной насосной установки В1" in pz_text

@@ -34,6 +34,7 @@ def calculate(request: PumpRequest):
             h_pr=request.h_pr,
             h_gar=request.h_gar,
             npsh_a=request.npsh_a,
+            include_current_catalog=True,
         ))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

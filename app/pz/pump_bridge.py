@@ -41,7 +41,8 @@ def compute_pump(
     res = calculate_pump(PumpInput(
         q_design_m3h=q_design_m3h, pump_type="boost", floors=floors,
         floor_height=floor_height_m, h_losses=h_losses_m,
-        h_pr=h_pr_m, h_gar=h_gar_m, npsh_a=npsh_a_m))
+        h_pr=h_pr_m, h_gar=h_gar_m, npsh_a=npsh_a_m,
+        include_current_catalog=True))
 
     ps = PumpSystem(
         required=True, purpose=purpose,
@@ -97,6 +98,7 @@ def compute_pump_from_head(
         h_pr=head.h_pr_m,
         h_gar=head.h_guaranteed_m,
         npsh_a=npsh_a_m,
+        include_current_catalog=True,
     ))
 
     # Единый мост сохраняет подробные характеристики кандидатов для таблицы

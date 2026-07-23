@@ -49,6 +49,10 @@ H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
 Pмакс = {{ accepted.p_max_bar | num(1) }} бар; NPSHr = {{ accepted.npshr | num(1) }} м;
 расчётная мощность = {{ accepted.p2_kw | num(2) }} кВт.
 {% if accepted.archived %}Каталожная кривая архивная — марку, исполнение и актуальную характеристику подтвердить у изготовителя.{% endif %}</p>
+{% if accepted.source_note %}
+<p class="equip-verdict">Источник каталожных данных: {{ accepted.source_note }}{% if accepted.source_url %};
+<a href="{{ accepted.source_url }}">официальная карточка изготовителя</a>{% endif %}.</p>
+{% endif %}
 {% endif %}
 
 {% if accepted and accepted.reasons %}

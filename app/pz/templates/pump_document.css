@@ -1,0 +1,84 @@
+@page {
+  size: A4 portrait;
+  margin: 12mm 12mm 26mm 20mm;
+  background-image: url("frame-bg-a4.svg");
+  background-repeat: no-repeat;
+  background-size: 210mm 297mm;
+  background-position: -20mm -12mm;
+  @bottom-right {
+    content: element(pump-stamp);
+    vertical-align: bottom;
+    padding-bottom: 5mm;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: #111;
+  font-family: "Liberation Serif", "Times New Roman", serif;
+  font-size: 9.5pt;
+  line-height: 1.28;
+}
+
+.stamp {
+  position: running(pump-stamp);
+  width: 178mm;
+}
+.stamp table {
+  width: 178mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.stamp td {
+  border: 0.3mm solid #000;
+  height: 7mm;
+  padding: 1mm 1.5mm;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 7pt;
+}
+.stamp .cipher { font-size: 10pt; font-weight: 700; }
+.stamp .object { font-size: 7.5pt; }
+.stamp .title { width: 76mm; font-size: 8pt; font-weight: 700; }
+
+.calculation-sheet { break-after: auto; }
+.new-page { break-before: page; }
+h1 {
+  margin: 0 0 5mm;
+  text-align: center;
+  font-size: 13pt;
+  line-height: 1.15;
+}
+h2 { margin: 4mm 0 2mm; font-size: 10.5pt; }
+.lead, .formula, .equip-verdict {
+  margin: 1.5mm 0;
+  text-align: justify;
+  overflow-wrap: anywhere;
+}
+.formula { font-weight: 600; }
+
+table.components {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2mm 0;
+  font-size: 8.5pt;
+}
+table.components th, table.components td {
+  border: 0.3mm solid #000;
+  padding: 1.2mm 1.5mm;
+  vertical-align: top;
+}
+table.components th { background: #f2f2f2; }
+table.components th:last-child,
+table.components td:last-child { width: 28mm; text-align: center; }
+table.components tfoot td { font-weight: 700; }
+
+table.equip { font-size: 7.2pt; margin: 1.5mm 0 2mm; }
+.figure { margin: 2mm auto 0; text-align: center; break-inside: avoid; }
+.figure svg { width: 154mm; height: auto; }
+.figure-cap { margin-top: 1mm; text-align: justify; font-size: 7.8pt; }
+.pump-compliance { font-size: 6.7pt !important; }
+.pump-compliance-title { margin-top: 2mm; }
+
+a { color: #111; text-decoration: none; }
