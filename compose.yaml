@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      ZARYA_PROJECTS_DIR: /data/projects
+      OSIFONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+      TZ: Europe/Moscow
+    volumes:
+      - zarya_projects:/data/projects
+    tmpfs:
+      - /tmp:size=1g,uid=10001,gid=10001,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  zarya_projects:
+  caddy_data:
+  caddy_config:

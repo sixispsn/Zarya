@@ -1,0 +1,17 @@
+{$ZARYA_DOMAIN} {
+	encode zstd gzip
+
+	basic_auth {
+		{$ZARYA_USERNAME} {$ZARYA_PASSWORD_HASH}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy app:8000
+}

@@ -1,0 +1,24 @@
+.git
+.gitignore
+.DS_Store
+.env
+.env.*
+!.env.example
+.pytest_cache
+__pycache__
+*.py[cod]
+venv
+.venv
+dist
+tmp
+temp
+demo
+demo_backup
+docs
+legacy
+tests
+make_test_pz.py
+start_zarya.py
+scripts
+Запустить Зарю.bat
+Запустить Зарю.command
