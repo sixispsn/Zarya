@@ -63,6 +63,7 @@ def test_form_template_has_all_sections():
     assert "Стояки В2" not in html
     assert 'value="residential_full_bath"' in html
     assert "Пожарно-техническая высота" in html
+    assert "ГОСТ Р 21.619-2023" in html
 
 
 def test_form_exposes_all_sp30_consumer_norms():

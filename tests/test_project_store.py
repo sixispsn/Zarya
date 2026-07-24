@@ -105,13 +105,17 @@ def test_form_prefill_preserves_selects():
         assert token in h
 
 
-def test_form_without_prefill_uses_demo():
+def test_form_without_prefill_has_no_demo_document_data():
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader("app/web/templates"))
     h = env.get_template("wizard_form.html").render(errors=[], prefill=None,
                                                     project_id=None)
-    assert "2026-089-ИОС2" in h       # демо-заполнение живо
-    assert "DEMO-ТУ-01" in h
+    assert 'name="cipher" value=""' in h
+    assert 'name="object_name" value=""' in h
+    assert 'name="organization" value=""' in h
+    assert "DEMO-ТУ-01" not in h
+    assert "Демонстрационный водоканал" not in h
+    assert "Аникин А.В." not in h
     assert "РС-1" in h
     assert 'name="consumer1_name"' in h
     assert 'name="consumer1_code"' in h

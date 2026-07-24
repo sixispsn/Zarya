@@ -2,13 +2,63 @@
 <html lang="ru">
 <head><meta charset="utf-8"></head>
 <body>
+<div class="stamp3">
+  <table>
+    <colgroup>
+      <col style="width:7mm"><col style="width:10mm"><col style="width:8mm">
+      <col style="width:12mm"><col style="width:16mm"><col style="width:12mm">
+      <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
+    </colgroup>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher }}</td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+      <td colspan="4" rowspan="3" class="obj">{{ doc.object_name }}</td>
+    </tr>
+    <tr>
+      <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td>Изм.</td><td>Кол.уч.</td><td>Лист</td><td>№&nbsp;док.</td><td>Подп.</td><td>Дата</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Разраб.</td><td colspan="2">{{ doc.developer_name }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="part">{{ doc.object_part }}</td>
+      <td class="lblsm">Стадия</td><td class="lblsm">Лист</td><td class="lblsm">Листов</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Проверил</td><td colspan="2">{{ doc.inspector_name }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="2">{{ doc.stage_label }}</td><td rowspan="2">1</td><td rowspan="2">1</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name }}</td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name }}</td><td class="b"></td><td class="b"></td>
+      <td rowspan="3" class="ttl">{{ doc.sheet_title }}</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization }}</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td>
+    </tr>
+    <tr>
+      <td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name }}</td><td class="b"></td><td class="b"></td>
+    </tr>
+  </table>
+</div>
+
+<main>
 <header class="balance-title">
   <div><b>Форма 2</b></div>
   <h1>Баланс водопотребления и водоотведения</h1>
   <p><b>Наименование объекта:</b> {{ doc.object_name }}</p>
   <p><b>Адрес объекта:</b> {{ doc.object_address or "—" }}</p>
 </header>
-
 <table class="form2">
   <colgroup>
     <col class="n"><col class="name"><col class="process"><col class="hours">
@@ -99,6 +149,6 @@
 </table>
 
 <p class="note">{{ balance.note }}</p>
-<footer><span>{{ doc.cipher }}.БВ</span><span>ГОСТ Р 21.619-2023, приложение А, форма 2 · Лист 1</span></footer>
+</main>
 </body>
 </html>

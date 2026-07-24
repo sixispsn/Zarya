@@ -146,6 +146,8 @@ def test_mode1_status_records_each_step(tmp_path):
     b = design_ios2(_project(), output_dir=str(tmp_path),
                     layout_inputs=layout_inputs, network=net, required_jets=2)
     joined = " ".join(b.status)
+    assert "ГОСТ Р 21.619-2023" in joined
+    assert "п. 5.1.21" in joined
     assert "fire_layout" in joined
     assert "fire_hydraulics" in joined
     assert "enrich_fire" in joined

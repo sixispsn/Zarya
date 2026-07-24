@@ -86,6 +86,17 @@ def design_ios2(
     """
     os.makedirs(output_dir, exist_ok=True)
     bundle = IOS2DesignBundle(project=project)
+    purpose = getattr(project.building.purpose, "value", project.building.purpose)
+    if purpose in ("residential", "public"):
+        bundle.status.append(
+            "gost_r_21_619: состав ПЗ проверяется по ГОСТ Р 21.619-2023; "
+            "баланс непроизводственного объекта — п. 5.1.21, форма 2 приложения А"
+        )
+    else:
+        bundle.status.append(
+            "gost_r_21_619: для производственного объекта требуется баланс "
+            "по п. 5.1.20, форма 1 приложения А"
+        )
     fire = project.fire
     if fire.required:
         required_jets = required_jets or fire.streams

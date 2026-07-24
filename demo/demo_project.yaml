@@ -5,11 +5,11 @@ document:
   object_address: Московская область, демонстрационный объект
   object_part: Секция 1
   stage: П
-  developer: Демонстрационный комплект
-  inspector: Демонстрационный комплект
-  dept_head: Демонстрационный комплект
-  gip: Демонстрационный комплект
-  norm_control: Демонстрационный комплект
+  developer: ''
+  inspector: ''
+  dept_head: ''
+  gip: ''
+  norm_control: ''
 building:
   type: residential
   floors: 16

@@ -59,3 +59,27 @@ def test_form2_html_contains_normative_19_columns():
         assert label in html
     assert all(f"<th>{n}</th>" in html for n in range(1, 20))
     assert "90,000" in html
+    assert "ТЕСТ-ИОС2.БВ" in html
+    assert 'class="stamp3"' in html
+    assert "Баланс водопотребления и водоотведения" in html
+
+
+def test_form2_page_uses_a3_frame_and_main_stamp():
+    css = open(
+        "app/pz/templates/balance_document.css",
+        encoding="utf-8",
+    ).read()
+    assert "size: A3 landscape" in css
+    assert 'url("frame-bg-a3.svg")' in css
+    assert "content: element(stamp3)" in css
+
+
+def test_demo_document_has_no_demonstration_signers():
+    from pathlib import Path
+
+    from app.intake.project_builder import build_project
+    from app.intake.yaml_io import load_request
+
+    req = load_request(Path("demo/demo_project.yaml").read_text(encoding="utf-8"))
+    html = generate_balance_html(build_project(req))
+    assert "Демонстрационный комплект" not in html

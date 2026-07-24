@@ -1,6 +1,15 @@
 @page {
   size: A3 landscape;
-  margin: 12mm 12mm 15mm;
+  margin: 5mm 5mm 65mm 20mm;
+  background-image: url("frame-bg-a3.svg");
+  background-repeat: no-repeat;
+  background-size: 420mm 297mm;
+  background-position: -20mm -5mm;
+  @bottom-right {
+    content: element(stamp3);
+    vertical-align: bottom;
+    padding-bottom: 5mm;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -10,6 +19,7 @@ body {
   font-family: "Liberation Serif", "Times New Roman", serif;
   font-size: 7pt;
 }
+main { padding: 4mm 4mm 0; }
 .balance-title { margin-bottom: 4mm; }
 .balance-title div { float: right; font-size: 8pt; }
 .balance-title h1 {
@@ -45,14 +55,23 @@ table.form2 {
 .form2 col.quality { width: 20mm; }
 .form2 col.q { width: 14mm; }
 .note { margin: 3mm 0 0; font-size: 7pt; }
-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: -10mm;
-  display: flex;
-  justify-content: space-between;
-  border-top: 0.25mm solid #000;
-  padding-top: 1.5mm;
+
+.stamp3 { position: running(stamp3); width: 185mm; }
+.stamp3 table { width: 185mm; border-collapse: collapse; table-layout: fixed; }
+.stamp3 td {
+  border: 0.3mm solid #000;
+  text-align: center;
+  vertical-align: middle;
   font-size: 7pt;
+  line-height: 1;
+  height: 5mm;
+  padding: 0 0.5mm;
+  overflow: hidden;
 }
+.stamp3 .cph { font-size: 13pt; font-weight: 700; }
+.stamp3 .obj { font-size: 7.5pt; line-height: 1.15; padding: 0 1.5mm; }
+.stamp3 .part { font-size: 9pt; }
+.stamp3 .ttl { font-size: 9pt; font-weight: 700; }
+.stamp3 .onm { font-size: 9pt; }
+.stamp3 .lbll { text-align: left; padding-left: 1mm; }
+.stamp3 .lblsm { font-size: 6.5pt; }

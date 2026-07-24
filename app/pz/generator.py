@@ -149,8 +149,16 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
 def generate_balance_html(project: Project) -> str:
     """Отдельный лист формы 2 приложения А ГОСТ Р 21.619-2023."""
     env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".БВ") else cipher + ".БВ"),
+        sheet_title="Баланс водопотребления и водоотведения",
+        sheet_no="1",
+        sheet_total="1",
+    )
     return env.get_template("balance_document.html").render(
-        doc=project.document,
+        doc=doc,
         balance=project.balance,
     )
 
