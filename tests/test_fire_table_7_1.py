@@ -29,6 +29,18 @@ def test_residential_below_threshold_not_required():
     assert r.vpv_required is False and r.jets == 0
 
 
+def test_residential_exactly_30m_is_inclusive():
+    r = resolve_table_7_1(
+        C.RESIDENTIAL_F13, floors=8, height_m=30.0, corridor_length_m=8.0)
+    assert r.vpv_required is True and r.jets == 1
+
+
+def test_residential_eight_floors_below_30m_not_required():
+    r = resolve_table_7_1(
+        C.RESIDENTIAL_F13, floors=8, height_m=29.9, corridor_length_m=42.0)
+    assert r.vpv_required is False and r.jets == 0
+
+
 def test_residential_above_75m_manual():
     r = resolve_table_7_1(C.RESIDENTIAL_F13, floors=30)
     assert r.manual_review is True
@@ -43,7 +55,7 @@ def test_footnote_height_is_determining():
     # 14 эт. (диапазон 1), но h=55 м (диапазон 2) → определяет ВЫСОТА → 2 ПК
     r = resolve_table_7_1(C.RESIDENTIAL_F13, floors=14, height_m=55.0,
                           corridor_length_m=8.0)
-    assert r.jets == 2 and "50–75" in r.notes[0]
+    assert r.jets == 2 and "свыше 50 до 75" in r.notes[0]
 
 
 # ── строка 2: общественные/офисы ─────────────────────────────────────────────

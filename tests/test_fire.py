@@ -45,6 +45,21 @@ class TestNozzleTable:
 # ============================================================
 
 class TestResidentialF13:
+    def test_eight_floors_below_30m_not_required(self):
+        """8 этажей и hпт < 30 м — ВПВ по строке 1 табл. 7.1 не требуется."""
+        r = calculate_fire(FireInput(building_type="f13", floors=8, height_m=24))
+        assert r.required is False
+        assert "ниже 12 эт. и ниже 30 м" in r.message
+
+    def test_eight_floors_at_48m_explains_height_trigger(self):
+        r = calculate_fire(FireInput(
+            building_type="f13", floors=8, height_m=48,
+            corridor_length_m=42, dn=50, nozzle_mm=13, hose_m=20, jet_m=12,
+        ))
+        assert r.required is True
+        assert "hпт=48 м" in r.message
+        assert "коридор свыше 10 м" in r.message
+
     def test_below_12_floors_not_required(self):
         """Менее 12 этажей — ВПВ не требуется."""
         r = calculate_fire(FireInput(building_type="f13", floors=9, height_m=27))

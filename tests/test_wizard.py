@@ -73,8 +73,10 @@ def test_form_template_has_all_sections():
         **_form_context(errors=[]))
     assert html.count("<fieldset") == 5
     assert html.count('<details class="input-section"') == 5
-    assert html.count('<details class="input-section" open') == 2
+    assert html.count('<details class="input-section" open') == 3
     assert 'data-design-form novalidate' in html
+    assert 'name="fire_height" value=""' in html
+    assert html.count('name="fire_height"') == 1
     assert html.count('<span class="accepted">принято</span>') == 5
     for field in ("cipher", "object_name", "building_type", "floors", "height",
                   "fire_mode", "fire_height",
@@ -100,7 +102,7 @@ def test_form_exposes_all_sp30_consumer_norms():
 
 def test_result_template_shows_key_numbers():
     html = open("app/web/templates/wizard_result.html", encoding="utf-8").read()
-    for token in ("fire.pk_total", "fire.required_head", "pdfs", "status"):
+    for token in ("fire.pk_total", "fire.required_head", "fire.note", "pdfs", "status"):
         assert token in html
     assert '<details class="protocol">' in html
 
@@ -133,7 +135,7 @@ def test_live_normative_advisories_are_wired():
     assert 'data-purpose="public"' in html
     assert "height > 75" in js
     assert "height > 50" in js
-    assert "fireHeight > 30" in js
+    assert "fireHeight >= 30" in js
     assert "пп. 1.1, 7.5–7.6" in js
 
 

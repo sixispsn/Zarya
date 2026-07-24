@@ -40,6 +40,7 @@
         <div class="metric"><b>Требуемый напор</b><strong>{{ fire.required_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
         <div class="metric"><b>Доступный напор</b><strong>{{ fire.available_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
       </div>
+      <p class="hint" style="margin-top:13px">{{ fire.note }}</p>
       {% if fire.needs_pump %}<div class="equipment"><strong>{{ fire_pump.model or 'Модель требует уточнения' }}</strong>Пожарная насосная · Q = {{ fire_pump.q|ru_num(1) }} м³/ч · H = {{ fire_pump.h|ru_num(1) }} м{% if pump_duty %} · расчётный режим {{ pump_duty.flow_lps|ru_num(1) }} л/с{% endif %}</div>{% else %}<div class="equipment"><strong>Пожарная насосная не требуется</strong>Напор источника покрывает расчетный режим В2.</div>{% endif %}
       <p class="hint" style="margin-top:13px">Диктующий сценарий: {{ fire.dictating or 'не определён' }}</p>
       {% else %}

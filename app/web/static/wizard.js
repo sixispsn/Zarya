@@ -110,8 +110,14 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(Boolean)
     );
     const advisories = [];
-    if (fireMode === "auto" && buildingType === "residential"
-        && floors < 12 && fireHeight > 30) {
+    if (fireMode === "auto" && !fireHeight) {
+      advisories.push({
+        level: "warning",
+        message: "Укажите пожарно-техническую высоту по АР: без неё автоматическая проверка ВПВ невозможна.",
+        reference: "СП 10.13130.2020, таблица 7.1"
+      });
+    } else if (fireMode === "auto" && buildingType === "residential"
+        && floors < 12 && fireHeight >= 30) {
       advisories.push({
         level: "warning",
         message: `При ${floors} этажах ВПВ включается по пожарно-технической высоте ${fireHeight} м. Подтвердите показатель по АР.`,

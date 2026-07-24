@@ -61,7 +61,9 @@ def _band_by_height_or_floors(
     None — вне всех диапазонов (ниже нижней или выше верхней границы решает вызывающий)."""
     if height_m is not None and height_m > 0:
         for i, (lo, hi) in enumerate(height_bands):
-            if lo < height_m <= hi:
+            # Таблица использует «от ... включительно». На общей границе
+            # смежных диапазонов первый диапазон имеет приоритет.
+            if lo <= height_m <= hi:
                 return i
         return None
     if floors is not None and floors > 0:
@@ -97,17 +99,34 @@ def resolve_table_7_1(
             hf = height_m if (height_m or 0) > 0 else floors
             if hf is not None and ((height_m or 0) > 75.0 or (floors or 0) > 25):
                 return _manual("жилое выше 75 м / 25 эт. — вне табл. 7.1 (СТУ)")
-            return _not_required("жилое ниже 12 эт. / 30 м — ВПВ по табл. 7.1 не требуется")
+            return _not_required(
+                "жилое ниже 12 эт. и ниже 30 м — ВПВ по табл. 7.1 не требуется")
+        if height_m is not None and height_m > 0:
+            basis = (
+                f"hпт={height_m:g} м, диапазон "
+                f"{'свыше 50 до 75 м' if band == 1 else 'от 30 до 50 м включительно'}"
+            )
+        else:
+            basis = (
+                f"{floors} эт., диапазон "
+                f"{'свыше 16 до 25 эт.' if band == 1 else 'от 12 до 16 эт. включительно'}"
+            )
         if band == 1:
-            return _jets(2, "табл. 7.1 стр. 1: жилое свыше 16 до 25 эт. (50–75 м) — "
-                            "2 ПК независимо от длины коридора")
+            return _jets(
+                2, f"табл. 7.1 стр. 1: {basis} — "
+                "2 ПК независимо от длины коридора")
         # band 0: 12–16 эт. (30–50 м) — решает ДЛИНА коридора
         if corridor_length_m is None:
-            return _manual("табл. 7.1 стр. 1: 12–16 эт., но общая длина коридора не "
-                           "задана — принято консервативно 2 ПК, уточните")
+            return _manual(
+                f"табл. 7.1 стр. 1: {basis}, но общая длина коридора не "
+                "задана — принято консервативно 2 ПК, уточните")
         if corridor_length_m > 10.0:
-            return _jets(2, "табл. 7.1 стр. 1: 12–16 эт., коридор свыше 10 м — 2 ПК")
-        return _jets(1, "табл. 7.1 стр. 1: 12–16 эт., коридор до 10 м включ. — 1 ПК")
+            return _jets(
+                2, f"табл. 7.1 стр. 1: {basis}, "
+                "коридор свыше 10 м — 2 ПК")
+        return _jets(
+            1, f"табл. 7.1 стр. 1: {basis}, "
+            "коридор до 10 м включ. — 1 ПК")
 
     # ── строка 2: адм-бытовые/общественные/офисы/гостиницы/поликлиники/ФОК/вузы ──
     if c == Table71Category.OFFICE_PUBLIC:

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 from app.calc.fire_table_7_1 import (
-    Table71Category,
+    Table71Category, Table71Result,
     resolve_table_7_1,
     resolve_table_7_2,
 )
@@ -82,10 +82,10 @@ def _get_t71(
     seats: Optional[int],
     area: Optional[float],
     height_m: Optional[float] = None,
-) -> Optional[tuple[int, float]]:
+) -> Table71Result:
     """
     Таблица 7.1 — жилые и общественные здания.
-    Возвращает (число_струй, базовый_расход) или None если ВПВ не требуется.
+    Возвращает нормативный результат вместе с трассировкой строки таблицы.
     """
     categories = {
         "f13": Table71Category.RESIDENTIAL_F13,
@@ -99,7 +99,7 @@ def _get_t71(
     }
     category = categories.get(building_type)
     if category is None:
-        return None
+        raise ValueError(f"тип здания {building_type!r} отсутствует в таблице 7.1")
     result = resolve_table_7_1(
         category,
         floors=floors,
@@ -110,9 +110,7 @@ def _get_t71(
     )
     if result.manual_review:
         raise ValueError("Требуется ручная проверка по СП 10: " + "; ".join(result.notes))
-    if not result.vpv_required:
-        return None
-    return result.jets, result.q_per_jet_lps
+    return result
 
 
 def _get_t72(
@@ -170,18 +168,25 @@ def calculate_fire(data: FireInput) -> FireResult:
             "п. 7.13" if (data.height_m or 0) > 50 and data.volume_thousand_m3 > 150
             else "7.2"
         )
+        normative_note = ""
     else:
-        res = _get_t71(
+        table_result = _get_t71(
             data.building_type, data.floors,
             data.corridor_length_m, data.seats, data.area_m2, data.height_m,
         )
+        res = (
+            (table_result.jets, table_result.q_per_jet_lps)
+            if table_result.vpv_required else None
+        )
+        normative_note = "; ".join(table_result.notes)
         table_used = "7.1"
 
     if res is None:
         return FireResult(
             required=False,
             table_used=table_used,
-            message="Внутренний противопожарный водопровод не требуется "
+            message=((normative_note + ". ") if normative_note else "") +
+                    "Внутренний противопожарный водопровод не требуется "
                     "(по таблице {} СП 10.13130.2020)".format(table_used),
         )
 
@@ -243,7 +248,8 @@ def calculate_fire(data: FireInput) -> FireResult:
         table_used=table_used,
         nozzle_found=True,
         pressure_control_required=pressure_control_required,
-        message="ВПВ: {} струи × {} л/с = {} л/с{}".format(
-            n_streams, q_dikt, round(q_total, 2), pressure_note,
-        ),
+        message=((normative_note + ". ") if normative_note else "") +
+                "ВПВ: {} струи × {} л/с = {} л/с{}".format(
+                    n_streams, q_dikt, round(q_total, 2), pressure_note,
+                ),
     )
