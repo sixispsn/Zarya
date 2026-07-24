@@ -27,14 +27,14 @@
 </nav>
 <div class="form-stack">
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
-<form method="post" action="/wizard/design" data-design-form>
+<form method="post" action="/wizard/design" data-design-form novalidate>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
 <section class="validation-panel" data-validation-panel{% if not advisories %} hidden{% endif %} aria-live="polite">
   <div class="validation-heading"><span>Нормативный контроль исходных данных</span><b data-validation-count>{{ advisories|length }}</b></div>
   <ul data-validation-list>{% for item in advisories %}<li data-level="{{ item.level }}"><span>{{ item.message }}</span><small>{{ item.reference }}</small></li>{% endfor %}</ul>
 </section>
 
-<fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d else 'Новый проект' }}{% if d and d.object_part %} · {{ d.object_part }}{% endif %} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
+<fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors or not d %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d else 'Новый проект' }}{% if d and d.object_part %} · {{ d.object_part }}{% endif %} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
   <div class="row">
     <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '' }}" placeholder="ШИФР-ИОС2" required></label>
     <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else '' }}" placeholder="Полное наименование по ТЗ" required></label>

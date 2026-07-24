@@ -31,6 +31,28 @@ def test_root_redirects_to_workspace():
     assert response.headers["location"] == "/wizard"
 
 
+def test_empty_submit_returns_visible_validation_errors():
+    import asyncio
+    from starlette.datastructures import FormData
+    from starlette.requests import Request
+    from app.web.wizard import wizard_design
+
+    request = Request({
+        "type": "http", "http_version": "1.1", "method": "POST",
+        "scheme": "http", "path": "/wizard/design", "root_path": "",
+        "query_string": b"", "headers": [],
+        "client": ("testclient", 50000), "server": ("testserver", 80),
+    })
+    request._form = FormData()
+    response = asyncio.run(wizard_design(request))
+
+    assert response.status_code == 200
+    body = response.body.decode("utf-8")
+    assert "Проверьте исходные данные" in body
+    assert 'data-design-form novalidate' in body
+    assert '<details class="input-section" open' in body
+
+
 def test_document_stage_label_preserves_string_stage():
     from app.pz.project import DocumentInfo
     assert DocumentInfo(stage="Р").stage_label == "Р"
@@ -51,7 +73,8 @@ def test_form_template_has_all_sections():
         **_form_context(errors=[]))
     assert html.count("<fieldset") == 5
     assert html.count('<details class="input-section"') == 5
-    assert html.count('<details class="input-section" open') == 1
+    assert html.count('<details class="input-section" open') == 2
+    assert 'data-design-form novalidate' in html
     assert html.count('<span class="accepted">принято</span>') == 5
     for field in ("cipher", "object_name", "building_type", "floors", "height",
                   "fire_mode", "fire_height",

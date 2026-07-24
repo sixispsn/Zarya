@@ -3,11 +3,14 @@
 расчётом водопотребления. {% if v1_stage_p.inputs_count == 1 %}Единственный ввод проверен{% else %}Каждый из {{ v1_stage_p.inputs_count }} вводов проверен{% endif %}
 на пропуск 100% максимального секундного расхода по п. 8.23 СП 30.13330.2020. Скорость определена по
 фактическому внутреннему диаметру трубы.</p>
-<table class="data">
+<table class="data stage-p-table">
+  <thead>
   <tr>
     <th>Характерный участок</th><th>Материал</th><th>DN / размер Dн×s, мм</th>
     <th>dвн, мм</th><th>q, л/с</th><th>v, м/с</th><th>Проверка / основание</th>
   </tr>
+  </thead>
+  <tbody>
   {% for r in v1_stage_p.rows %}
   <tr>
     <td>{{ r.section }}</td>
@@ -19,6 +22,7 @@
     <td>{% if r.velocity_ok is not none %}<span class="{{ 'ok' if r.velocity_ok else 'bad' }}">{{ 'соответствует' if r.velocity_ok else 'не соответствует' }}{% if r.velocity_limit_mps is not none %} (v ≤ {{ r.velocity_limit_mps|num(1) }} м/с){% endif %}</span>; {% endif %}{{ r.basis }}</td>
   </tr>
   {% endfor %}
+  </tbody>
 </table>
 <p class="subitem">Для стояков и поквартирных ветвей на стадии П зафиксирована
 геометрия труб, но расход и скорость не назначаются: их достоверное определение

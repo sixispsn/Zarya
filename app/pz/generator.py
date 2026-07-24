@@ -176,6 +176,57 @@ def generate_balance_pdf(project: Project, output_path: str) -> str:
     return output_path
 
 
+# ── РАСЧЁТНЫЙ ЛИСТ В1 / Т3 / К1 (отдельное приложение) ──────────────────
+
+def generate_v1_calculation_html(project: Project) -> str:
+    """Собрать отдельный расчётный лист без дублирования расчётной логики.
+
+    В шаблон передаются только результаты, уже полученные расчётным ядром.
+    Единственное представление Hтр строится той же функцией, что используется
+    в ПЗ и листе подбора насосов.
+    """
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=(cipher if cipher.endswith(".РВ1") else cipher + ".РВ1"),
+        sheet_title="Расчёты систем В1, Т3 и К1",
+        sheet_no="1",
+        sheet_total="—",
+    )
+    head = calc_required_head(
+        project.source,
+        h_vod_m=cold_meter_loss(project.meters),
+    )
+    body_html = env.get_template("v1_calculation_body.html").render(
+        balance=project.balance,
+        flows=project.flows,
+        meters=project.meters,
+        pumps=project.pumps,
+        head=head,
+        v1_stage_p=project.v1_stage_p_result,
+        v1_hydraulics=project.v1_hydraulic_result,
+    )
+    return env.get_template("document.html").render(
+        doc=doc,
+        document_title="Расчётные обоснования систем В1, Т3 и К1",
+        body_html=body_html,
+    )
+
+
+def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
+    """Сформировать самостоятельный PDF расчётов В1 / Т3 / К1 на листах А4."""
+    html_str = generate_v1_calculation_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*_CSS_FILES, "v1_calculation.css")
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets,
+    )
+    return output_path
+
+
 # ── РАСЧЁТ И ПОДБОР НАСОСНЫХ УСТАНОВОК (отдельное приложение) ────────────
 
 def generate_pump_selection_html(project: Project) -> str:

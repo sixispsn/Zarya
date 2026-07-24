@@ -1,0 +1,147 @@
+<p class="subitem no-indent">
+  Настоящий расчётный лист содержит исходные и итоговые значения расчётов
+  водопотребления, водоотведения, водомерных узлов, требуемого напора и
+  принятых сечений В1. Значения перенесены из расчётного ядра без повторного
+  пересчёта в шаблоне документа.
+</p>
+
+<p class="subhead">1. Исходные нормы и суточные расходы</p>
+{% if balance.rows %}
+<table class="data calc-table consumer-calc">
+  <thead>
+    <tr>
+      <th>Потребитель</th>
+      <th>Количество</th>
+      <th>Нормативное основание</th>
+      <th>Норма, м³/(ед.·сут)</th>
+      <th>Расход, м³/сут</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in balance.rows %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td>{{ r.quantity_display or '—' }}</td>
+      <td>{{ r.norm_basis }}</td>
+      <td>{{ r.norm_m3_per_unit_day|num(3) }}</td>
+      <td>{{ r.total_m3_day|num(3) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="subitem">Группы потребителей не заданы; расчёт расходов не выполнен.</p>
+{% endif %}
+
+<p class="subhead">2. Расчётные расходы систем В1, Т3 и К1</p>
+<table class="data calc-table flow-calc">
+  <thead>
+    <tr>
+      <th>Показатель</th>
+      <th>В1 + Т3</th>
+      <th>В1</th>
+      <th>Т3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Суточный расход, м³/сут</td>
+      <td>{{ flows.q_day_tot|num(3) }}</td>
+      <td>{{ flows.q_day_c|num(3) }}</td>
+      <td>{{ flows.q_day_h|num(3) }}</td>
+    </tr>
+    <tr>
+      <td>Максимальный часовой расход, м³/ч</td>
+      <td>{{ flows.q_hr_tot|num(3) }}</td>
+      <td>{{ flows.q_hr_c|num(3) }}</td>
+      <td>{{ flows.q_hr_h|num(3) }}</td>
+    </tr>
+    <tr>
+      <td>Максимальный секундный расход, л/с</td>
+      <td>{{ flows.q_sec_tot|num(3) }}</td>
+      <td>{{ flows.q_sec_c|num(3) }}</td>
+      <td>{{ flows.q_sec_h|num(3) }}</td>
+    </tr>
+  </tbody>
+</table>
+<table class="data calc-table compact-calc">
+  <tr><th>Расчётный расход стоков К1, л/с</th><td>{{ flows.sewage_l_per_s|num(3) }}</td></tr>
+  <tr><th>Расход диктующего прибора q₀s, л/с</th><td>{{ flows.sewage_q0s_l_per_s|num(3) }}</td></tr>
+  <tr><th>Максимальная тепловая нагрузка Т3, кВт</th><td>{{ flows.heat_max_kw|num(2) }}</td></tr>
+</table>
+
+<p class="subhead">3. Проверка принятых сечений В1 на стадии П</p>
+{% if v1_stage_p %}
+{% include "v1_stage_p_table.html" %}
+{% elif v1_hydraulics %}
+<p class="subitem">
+  По заданной топологии выполнен расчёт сети В1. Его итоговые потери учтены
+  в расчёте требуемого напора; подробная поучастковая ведомость формируется
+  после утверждения аксонометрической схемы.
+</p>
+{% else %}
+<p class="subitem">
+  Проверка сечений не выполнена: отсутствуют расчётный расход или исходные
+  данные сети. Условные значения не подставляются.
+</p>
+{% endif %}
+
+<p class="subhead">4. Подбор и проверка водомерных узлов</p>
+{% if meters.rows %}
+{% include "meter_table.html" %}
+{% else %}
+<p class="subitem">Расчёт водомерных узлов не выполнен: исходных данных недостаточно.</p>
+{% endif %}
+
+<p class="subhead">5. Расчёт требуемого напора В1</p>
+<p class="subitem no-indent">
+  H<sub>тр</sub> = H<sub>geom</sub> + ΣH<sub>il</sub> + H<sub>пр</sub> +
+  ΣH<sub>вод</sub> + H<sub>тепл</sub> + H<sub>ввод</sub>.
+  Свободный напор перед диктующим прибором H<sub>пр</sub> = 20 м является
+  отдельной составляющей требуемого напора.
+</p>
+<table class="data calc-table head-calc">
+  <thead><tr><th>Составляющая</th><th>Значение, м</th></tr></thead>
+  <tbody>
+  {% for name, value in head.components %}
+    <tr><td>{{ name }}</td><td>{{ value|num(2) }}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><th>Требуемый напор Hтр</th><th>{{ head.h_required_m|num(2) }}</th></tr>
+    <tr><th>Гарантированный напор Hгар</th><th>{{ head.h_guaranteed_m|num(2) }}</th></tr>
+    <tr><th>Требуемый напор насоса Hнас</th><th>{{ head.h_pump_m|num(2) }}</th></tr>
+  </tfoot>
+</table>
+
+<div class="final-block">
+<p class="subhead">6. Итог по повысительной установке В1</p>
+{% if pumps.required %}
+<table class="data calc-table pump-summary">
+  <tr><th>Расчётный расход</th><td>{{ (pumps.wp_q or pumps.q_design_m3h or pumps.q_m3h)|num(2) }} м³/ч</td></tr>
+  <tr><th>Расчётный напор</th><td>{{ (pumps.wp_h or pumps.h_design_m or pumps.head_m)|num(2) }} м</td></tr>
+  <tr><th>Принятая модель</th><td>{{ pumps.model or 'подбор требует подтверждения каталожными данными' }}</td></tr>
+  <tr><th>Количество</th><td>{{ pumps.count_note or '—' }}</td></tr>
+</table>
+<p class="subitem">
+  Подробный подбор по рабочей точке, характеристики кандидатов и график Q–H
+  приведены в отдельном приложении «Расчёт и подбор насосных установок».
+</p>
+{% elif head.pump_needed is sameas false %}
+<p class="subitem">
+  Гарантированный напор обеспечивает требуемый напор системы; повысительная
+  насосная установка В1 не требуется.
+</p>
+{% else %}
+<p class="subitem">
+  Окончательное решение по повысительной установке не принято: для расчёта
+  отсутствуют обязательные исходные данные. Условные значения не подставляются.
+</p>
+{% endif %}
+
+<p class="subitem stage-note">
+  Детальный поучастковый гидравлический расчёт стояков и ответвлений выполняется
+  на стадии Р после разработки точной аксонометрической схемы и распределения
+  санитарно-технических приборов.
+</p>
+</div>

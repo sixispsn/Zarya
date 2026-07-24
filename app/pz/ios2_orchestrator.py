@@ -30,7 +30,7 @@ from app.pz.flows_bridge import (
 from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
-    generate_balance_pdf, append_pdf,
+    generate_balance_pdf, generate_v1_calculation_pdf, append_pdf,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -50,6 +50,7 @@ class IOS2DesignBundle:
     scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
+    v1_calculation_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
@@ -517,6 +518,13 @@ def design_ios2(
 
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")
+
+    bundle.v1_calculation_pdf = generate_v1_calculation_pdf(
+        project, os.path.join(output_dir, "Расчеты_В1.pdf"))
+    append_pdf(bundle.pz_pdf, bundle.v1_calculation_pdf)
+    bundle.status.append(
+        "Расчеты_В1.pdf собран отдельным расчётным приложением "
+        "и добавлен в конец ПЗ.pdf")
 
     bundle.balance_pdf = generate_balance_pdf(
         project, os.path.join(output_dir, "Баланс_ВиВ.pdf"))

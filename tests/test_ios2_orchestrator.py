@@ -54,6 +54,7 @@ def test_mode2_builds_documents_only(tmp_path):
     b = design_ios2(_project(), output_dir=str(tmp_path))
     assert isinstance(b, IOS2DesignBundle)
     assert b.pz_pdf and os.path.exists(b.pz_pdf)
+    assert b.v1_calculation_pdf and os.path.exists(b.v1_calculation_pdf)
     assert b.spec_pdf and os.path.exists(b.spec_pdf)
     # гидролист НЕ собран (нет отчёта)
     assert b.hydraulic_pdf is None
