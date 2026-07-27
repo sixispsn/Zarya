@@ -5,7 +5,7 @@
 <title>Заря — проектирование ИОС2</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css">
+<link rel="stylesheet" href="/static/wizard.css?v=20260727-2">
 <script defer src="/static/wizard.js"></script>
 </head><body>
 <header class="topbar">
@@ -75,9 +75,13 @@
 </div></template>
 
 <fieldset id="building"><legend class="visually-hidden">Назначение и параметры здания</legend><details class="input-section"{% if errors or not prefill %} open{% endif %}><summary class="section-head"><span class="step-badge">03</span><span class="section-copy"><span class="section-title">Назначение и параметры здания</span><span class="section-value">{{ prefill.floors if prefill else 16 }} этажей · {{ prefill.building_height_m if prefill else 48 }} м · h<sub>пт</sub> {% if prefill and prefill.fire_height_m is not none %}{{ prefill.fire_height_m }} м{% else %}не задана{% endif %} · {{ prefill.total_area_m2 if prefill else 14400 }} м²</span></span><span class="section-meta"><span class="source-tag">ТЗ / АР</span><span class="accepted">принято</span></span></summary><div class="section-body">
-  <div class="row">
-    <label>Основное назначение для структуры ПЗ<select name="building_type"><option value="residential"{% if not prefill or prefill.building_type == 'residential' %} selected{% endif %}>Жилое</option><option value="public"{% if prefill and prefill.building_type == 'public' %} selected{% endif %}>Общественное</option><option value="industrial"{% if prefill and prefill.building_type == 'industrial' %} selected{% endif %}>Производственное</option></select></label>
-    <label>Этажей<input name="floors" value="{{ prefill.floors if prefill else 16 }}" required></label><label>Общая геометрическая высота, м<input name="height" value="{{ prefill.building_height_m if prefill else 48 }}" required></label><label>Пожарно-техническая высота h<sub>пт</sub>, м<input name="fire_height" value="{{ prefill.fire_height_m if prefill and prefill.fire_height_m is not none else '' }}" placeholder="Точное значение по АР" required></label><label>Общая площадь, м²<input name="total_area" value="{{ prefill.total_area_m2 if prefill else 14400 }}" required></label><label>Зон водоснабжения<input name="zones" value="{{ prefill.zones if prefill else 2 }}"></label>
+  <div class="row building-row">
+    <label><span class="field-caption">Основное назначение для структуры ПЗ</span><select name="building_type"><option value="residential"{% if not prefill or prefill.building_type == 'residential' %} selected{% endif %}>Жилое</option><option value="public"{% if prefill and prefill.building_type == 'public' %} selected{% endif %}>Общественное</option><option value="industrial"{% if prefill and prefill.building_type == 'industrial' %} selected{% endif %}>Производственное</option></select></label>
+    <label><span class="field-caption">Этажей</span><input name="floors" value="{{ prefill.floors if prefill else 16 }}" required></label>
+    <label><span class="field-caption">Общая геометрическая высота, м</span><input name="height" value="{{ prefill.building_height_m if prefill else 48 }}" required></label>
+    <label><span class="field-caption">Пожарно-техническая высота h<sub>пт</sub>, м</span><input name="fire_height" value="{{ prefill.fire_height_m if prefill and prefill.fire_height_m is not none else '' }}" placeholder="Точное значение по АР" required></label>
+    <label><span class="field-caption">Общая площадь, м²</span><input name="total_area" value="{{ prefill.total_area_m2 if prefill else 14400 }}" required></label>
+    <label><span class="field-caption">Зон водоснабжения</span><input name="zones" value="{{ prefill.zones if prefill else 2 }}"></label>
   </div>
   <p class="hint"><strong>Пожарно-техническая высота не подставляется автоматически.</strong> Она принимается по АР и отличается от общей геометрической. Для многоквартирного дома Ф1.3 ниже 12 этажей и ниже 30 м ВПВ по строке 1 таблицы 7.1 СП 10 не требуется. При 12 этажах либо h<sub>пт</sub> от 30 м включительно ВПВ требуется.</p>
 </div></details></fieldset>

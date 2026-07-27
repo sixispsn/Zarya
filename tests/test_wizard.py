@@ -88,6 +88,11 @@ def test_form_template_has_all_sections():
     assert "Стояки В2" not in html
     assert 'value="residential_full_bath"' in html
     assert "Пожарно-техническая высота" in html
+    assert '<div class="row building-row">' in html
+    assert (
+        '<span class="field-caption">Пожарно-техническая высота '
+        'h<sub>пт</sub>, м</span>'
+    ) in html
     assert "ГОСТ Р 21.619-2023" in html
 
 
@@ -122,6 +127,7 @@ def test_dark_theme_is_default_and_responsive():
     assert "background-image" not in css
     assert "@media (max-width: 1080px)" in css
     assert "@media (max-width: 680px)" in css
+    assert ".building-row { grid-template-columns: repeat(3,minmax(0,1fr)); }" in css
     assert 'localStorage.setItem("zarya-theme"' in js
 
 

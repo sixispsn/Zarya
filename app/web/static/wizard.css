@@ -151,6 +151,9 @@ fieldset { scroll-margin-top: 84px; min-width: 0; margin: 0; padding: 0; border:
 .row { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 20px; margin-bottom: 22px; }
 .row:last-child { margin-bottom: 0; }
 label { display: flex; min-width: 0; flex-direction: column; gap: 7px; color: var(--ink-soft); font: 700 10px var(--mono); letter-spacing: .035em; text-transform: uppercase; }
+.building-row { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.building-row .field-caption { display: block; min-height: 2.5em; line-height: 1.25; }
+.building-row .field-caption sub { font-size: .75em; line-height: 0; }
 label:has(.w-l) { grid-column: span 2; }
 input, select { width: 100%; min-width: 0; height: 43px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; outline: none; color: var(--ink); background: var(--input); font-family: Inter, ui-sans-serif, sans-serif; font-size: 14px; font-weight: 500; text-transform: none; transition: border-color .15s, background .15s, box-shadow .15s; }
 input:hover, select:hover { border-color: var(--line-strong); background: var(--surface-hover); }
@@ -282,6 +285,7 @@ table.grid input { height: 38px; padding: 7px 8px; font-size: 13px; }
   .section-value { font-size: 10px; }
   .section-body { padding: 20px 13px 22px; }
   .row { grid-template-columns: 1fr; gap: 17px; }
+  .building-row .field-caption { min-height: 0; }
   label:has(.w-l) { grid-column: auto; }
   input, select { height: 45px; }
   .validation-panel li { grid-template-columns: 8px 1fr; }
