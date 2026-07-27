@@ -37,6 +37,7 @@ from app.intake.project_store import ProjectStore
 from app.pz.generator import cold_meter_loss
 from app.pz.rules import calc_required_head
 from app.data.sp30_tables import list_consumer_norms
+from app.data.storm_cities import list_cities
 
 router = APIRouter(prefix="/wizard", tags=["wizard"])
 _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -49,10 +50,16 @@ _RUNS: Dict[str, dict] = {}
 _OUT_ROOT = "/tmp/zarya_wizard_runs"
 _STORE = ProjectStore()
 _CONSUMER_NORMS = list_consumer_norms()
+_STORM_CITIES = list_cities()
 
 
 def _form_context(**values):
-    return {"consumer_norms": _CONSUMER_NORMS, "advisories": [], **values}
+    return {
+        "consumer_norms": _CONSUMER_NORMS,
+        "storm_cities": _STORM_CITIES,
+        "advisories": [],
+        **values,
+    }
 
 
 @router.get("", response_class=HTMLResponse)
@@ -157,6 +164,17 @@ async def wizard_design(request: Request):
         nozzle_mm=fi("nozzle_mm", 13),
         compact_jet_m=fi("compact_jet_m", 12),
         zones=fi("zones", 1), rooms=rooms, network=network,
+        apartments=fi("apartments"),
+        owner_groups_count=fi("owner_groups_count", 1),
+        roof_type=fv("roof_type", "not_set"),
+        storm_city=fv("storm_city"),
+        storm_roof_area_m2=ff("storm_roof_area"),
+        storm_walls_area_m2=ff("storm_walls_area"),
+        storm_period_years=fi("storm_period_years", 1),
+        catering_type=fv("catering_type", "none"),
+        catering_seats=fi("catering_seats"),
+        catering_conditional_dishes=fi("catering_conditional_dishes"),
+        school_grease_by_assignment=bool(form.get("school_grease_by_assignment")),
         source_data=SourceDataRequest(
             source_description=fv("source_description"),
             water_protection_note=fv("water_protection_note"),

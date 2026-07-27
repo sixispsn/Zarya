@@ -130,11 +130,42 @@ document.addEventListener("DOMContentLoaded", () => {
         message: `Жилое здание высотой ${height} м выше 75 м: СП 30 применяется совместно с СП 253.1325800.`,
         reference: "СП 30.13330.2020, п. 4.1"
       });
+      advisories.push({
+        level: "info",
+        message: "Для высотного здания будут приняты раздельные В1/В2, изоляция 10/25 мм, 100%-ный резерв, частотный привод и диспетчеризация насосов.",
+        reference: "СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27"
+      });
     } else if (buildingType === "public" && height > 50) {
       advisories.push({
         level: "warning",
         message: `Общественное здание высотой ${height} м выше 50 м: СП 30 применяется совместно с СП 253.1325800.`,
         reference: "СП 30.13330.2020, п. 4.1"
+      });
+      advisories.push({
+        level: "info",
+        message: "Для высотного здания будут приняты раздельные В1/В2, изоляция 10/25 мм, 100%-ный резерв, частотный привод и диспетчеризация насосов.",
+        reference: "СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27"
+      });
+    }
+    const apartments = Number.parseInt(
+      document.querySelector('[name="apartments"]')?.value || "0", 10
+    ) || 0;
+    if (buildingType === "residential" && apartments <= 0) {
+      advisories.push({
+        level: "info",
+        message: "Задайте число квартир для квартирных кранов Ду15 со шлангом.",
+        reference: "СП 54.13330.2022, п. 6.2.4.3"
+      });
+    }
+    const roofType = document.querySelector('[name="roof_type"]')?.value || "not_set";
+    const stormCity = document.querySelector('[name="storm_city"]')?.value || "";
+    const roofAreaRaw = document.querySelector('[name="storm_roof_area"]')?.value || "0";
+    const roofArea = Number.parseFloat(roofAreaRaw.replace(",", ".")) || 0;
+    if (roofType !== "not_set" && (!stormCity || roofArea <= 0)) {
+      advisories.push({
+        level: "warning",
+        message: "Для расчёта К2 задайте город и площадь кровли.",
+        reference: "СП 30.13330.2020, раздел 21"
       });
     }
     const mixed = purposes.size > 1;

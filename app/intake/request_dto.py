@@ -28,6 +28,8 @@ from typing import List, Optional
 
 BUILDING_TYPES = ("residential", "public", "industrial")
 FIRE_MODES = ("auto", "not_required", "manual")
+ROOF_TYPES = ("not_set", "flat", "sloped")
+CATERING_TYPES = ("none", "semi_finished", "raw", "school")
 SOURCE_KINDS = ("city_main", "reservoir", "pond", "well")
 SPACE_KINDS = ("corridor", "room", "hall", "storage")
 PLACEMENT_MODES = ("one_side", "two_opposite_sides")
@@ -247,6 +249,16 @@ class IOS2Request:
     v1_network: Optional[V1NetworkRequest] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
+    apartments: int = 0
+    owner_groups_count: int = 1
+    roof_type: str = "not_set"
+    storm_roof_area_m2: float = 0.0
+    storm_walls_area_m2: float = 0.0
+    storm_period_years: int = 1
+    catering_type: str = "none"
+    catering_seats: int = 0
+    catering_conditional_dishes: int = 0
+    school_grease_by_assignment: bool = False
 
     def validate(self) -> List[str]:
         """Первичная валидация намерения (типы/диапазоны/обязательность).
@@ -289,6 +301,20 @@ class IOS2Request:
             p.append("compact_jet_m должен быть 6, 8, 10, 12, 14, 16, 18 или 20")
         if self.sewage_max_fixture_lps < 0:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
+        if self.apartments < 0:
+            p.append("apartments не может быть отрицательным")
+        if self.owner_groups_count < 1:
+            p.append("owner_groups_count должно быть не менее 1")
+        if self.roof_type not in ROOF_TYPES:
+            p.append(f"roof_type '{self.roof_type}' не из {ROOF_TYPES}")
+        if min(self.storm_roof_area_m2, self.storm_walls_area_m2) < 0:
+            p.append("площади кровли и примыкающих стен не могут быть отрицательными")
+        if self.storm_period_years not in (1, 2, 3, 5, 10):
+            p.append("storm_period_years должен быть 1, 2, 3, 5 или 10")
+        if self.catering_type not in CATERING_TYPES:
+            p.append(f"catering_type '{self.catering_type}' не из {CATERING_TYPES}")
+        if min(self.catering_seats, self.catering_conditional_dishes) < 0:
+            p.append("число мест и условных блюд не может быть отрицательным")
         seen_v1 = set()
         for i, s in enumerate(self.v1_sections):
             if not s.section_id or s.section_id in seen_v1:

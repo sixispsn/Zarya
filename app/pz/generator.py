@@ -104,7 +104,9 @@ def generate_pz_html(project: Project) -> str:
     env = _build_env()
 
     subitems_tpl = env.get_template(_subitems_template_name(project.building.purpose))
-    fire_net = decide_fire_network(project.fire, project.materials)
+    fire_net = decide_fire_network(
+        project.fire, project.materials, project.normative,
+    )
     head = calc_required_head(project.source, h_vod_m=cold_meter_loss(project.meters))
     tu_check = check_tu_limits(project.flows, project.source)
     body_html = subitems_tpl.render(
@@ -125,6 +127,9 @@ def generate_pz_html(project: Project) -> str:
         tu_check=tu_check,
         v1_hydraulics=project.v1_hydraulic_result,
         v1_stage_p=project.v1_stage_p_result,
+        normative=project.normative,
+        storm=project.storm,
+        grease_trap=project.grease_trap,
     )
 
     doc_tpl = env.get_template("document.html")

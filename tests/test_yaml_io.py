@@ -53,6 +53,22 @@ def test_roundtrip_preserves_optional_fields():
     assert req2.network.node_elevations == {"К2": -1.5}
 
 
+def test_roundtrip_preserves_sp54_118_253_inputs():
+    req = load_request(GOOD)
+    req.apartments = 240
+    req.owner_groups_count = 3
+    req.roof_type = "flat"
+    req.storm_city = "moscow"
+    req.storm_roof_area_m2 = 1200
+    req.storm_walls_area_m2 = 80
+    req.storm_period_years = 5
+    req.catering_type = "raw"
+    req.catering_seats = 200
+    req.catering_conditional_dishes = 1500
+    req.school_grease_by_assignment = True
+    assert load_request(dump_request(req)) == req
+
+
 def test_roundtrip_preserves_consumer_functional_names():
     from app.intake.request_dto import ConsumerGroupRequest
     req = load_request(GOOD)

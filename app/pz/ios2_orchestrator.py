@@ -413,7 +413,13 @@ def design_ios2(
                 q_hr_c=project.flows.q_hr_c,
                 q_hr_h=project.flows.q_hr_h,
             ))
+            owner_groups_count = project.meters.owner_groups_count
+            has_apartment_meters = project.meters.has_apartment_meters
+            has_askue = project.meters.has_askue
             project.meters = meters_from_calc(meter_res)
+            project.meters.owner_groups_count = owner_groups_count
+            project.meters.has_apartment_meters = has_apartment_meters
+            project.meters.has_askue = has_askue
             # Для local это общий ввод, для central — узел ХВС.
             head_meter = next((m for m in meter_res.meters
                                if ("ввод" in m.label.lower() if hws_type == "local"
@@ -515,6 +521,32 @@ def design_ios2(
         bundle.warnings.append(
             "water_demand: группы потребителей не заданы — расходы В1 нулевые, "
             "ПЗ покажет прочерки (задайте consumers в запросе)")
+
+    # К2 считается только при полном наборе исходных данных. Формулы и
+    # округление перенесены из legacy/sp30_calculator.html в app.calc.storm.
+    if project.storm.city_code and project.storm.roof_area_m2 > 0:
+        from app.calc.storm import StormInput, calculate_storm
+        try:
+            project.storm.result = calculate_storm(StormInput(
+                city_code=project.storm.city_code,
+                roof_area_m2=project.storm.roof_area_m2,
+                walls_area_m2=project.storm.walls_area_m2,
+                period_years=project.storm.period_years,
+            ))
+            bundle.status.append(
+                f"storm_k2: Q={project.storm.result.q_total_l_per_s:.3f} л/с")
+        except Exception as e:
+            bundle.warnings.append(f"storm_k2: расчёт не выполнен ({e})")
+    elif project.storm.system_kind == "internal":
+        bundle.warnings.append(
+            "storm_k2: внутренний водосток требуется, но для расчёта не заданы "
+            "город и площадь кровли")
+
+    # СП 253 задаёт исполнение насосных установок независимо от результата
+    # каталожного подбора. Рабочая точка при этом остаётся расчётной.
+    for pump_system in (project.pumps, project.fire_pumps):
+        pump_system.frequency_drive_required = project.normative.frequency_drive_required
+        pump_system.dispatch_required = project.normative.pump_dispatch_required
 
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")

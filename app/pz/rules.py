@@ -14,7 +14,9 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from app.pz.project import FireSystem, FlowsData, PipeMaterials, WaterSource
+from app.pz.project import (
+    FireSystem, FlowsData, NormativeRequirements, PipeMaterials, WaterSource,
+)
 
 # Порог рабочего давления, выше которого хоз-питьевую и пожарную сети разделяют
 # (СП 10.13130.2020, пп. 6.1.1–6.1.2; СП 30.13330.2020, 5.4.1)
@@ -55,12 +57,20 @@ class FireNetworkDecision:
 def decide_fire_network(
     fire: FireSystem,
     materials: PipeMaterials,
+    normative: Optional[NormativeRequirements] = None,
 ) -> Optional[FireNetworkDecision]:
     """Объединённая или раздельная сеть В2. None — если ВПВ не требуется."""
     if not fire.required:
         return None
 
     reasons: List[str] = []
+
+    if normative and normative.separate_v1_v2_required:
+        reasons.append(
+            "для высотного здания системы водоснабжения и водяного "
+            "пожаротушения должны быть раздельными "
+            "(СП 253.1325800.2016, п. 10.3)"
+        )
 
     if (
         fire.pressure_at_lowest_pk_mpa is not None

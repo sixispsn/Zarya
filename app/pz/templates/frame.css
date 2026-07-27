@@ -50,6 +50,7 @@ table.data td, table.data th { border: 0.3mm solid #000; padding: 2pt 6pt; text-
 table.data th { font-weight: bold; background: #f0f0f0; }
 table.data.head-summary { break-inside: avoid; page-break-inside: avoid; }
 table.data.head-summary tr { break-inside: avoid; page-break-inside: avoid; }
+.normative-k2 { break-inside: avoid; page-break-inside: avoid; }
 
 /* ── Штамп форма 3 — первый лист (40 мм) ── */
 .stamp3 { position: running(stamp3); width: 185mm; }

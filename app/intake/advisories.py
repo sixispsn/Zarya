@@ -75,4 +75,29 @@ def review_request(req: IOS2Request) -> list[InputAdvisory]:
             reference="СП 30.13330.2020, пп. 1.1, 7.5–7.6",
         ))
 
+    high_rise = (
+        req.building_type == "residential" and height > 75
+        or req.building_type == "public" and height > 50
+    )
+    if high_rise:
+        result.append(InputAdvisory(
+            level="info",
+            code="sp253_mandatory_systems",
+            message=(
+                "Будут приняты раздельные В1/В2, изоляция не менее 10/25 мм, "
+                "100%-ный резерв, частотный привод и диспетчеризация насосов."
+            ),
+            reference="СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27",
+        ))
+
+    if req.roof_type != "not_set" and (
+        not req.storm_city or req.storm_roof_area_m2 <= 0
+    ):
+        result.append(InputAdvisory(
+            level="warning",
+            code="storm_missing_inputs",
+            message="Для расчёта К2 задайте город и площадь кровли.",
+            reference="СП 30.13330.2020, раздел 21",
+        ))
+
     return result

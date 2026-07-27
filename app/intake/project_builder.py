@@ -23,6 +23,7 @@ from app.pz.project import (
     V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
     InsulationDesign,
 )
+from app.pz.normative import derive_requirements, decide_grease_trap, decide_storm_system
 
 
 class RequestValidationError(ValueError):
@@ -60,6 +61,7 @@ def build_project(req: IOS2Request) -> Project:
         purpose=_BUILDING_MAP[req.building_type],
         floors_above=req.floors, height_m=req.building_height_m,
         fire_height_m=req.fire_height_m, zones=req.zones,
+        apartments=req.apartments,
         total_area_m2=req.total_area_m2, risers_v1=req.risers_v1,
         risers_t3=req.risers_t3, risers_t4=req.risers_t4)
     p.insulation = InsulationDesign(
@@ -212,5 +214,29 @@ def build_project(req: IOS2Request) -> Project:
             p.consumer_groups = list(counts.items())
     p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
     p.storm_city = req.storm_city
+    p.storm = decide_storm_system(req.roof_type, req.floors)
+    p.storm.city_code = req.storm_city
+    p.storm.roof_area_m2 = req.storm_roof_area_m2
+    p.storm.walls_area_m2 = req.storm_walls_area_m2
+    p.storm.period_years = req.storm_period_years
+    p.grease_trap = decide_grease_trap(
+        req.catering_type,
+        req.catering_seats,
+        req.catering_conditional_dishes,
+        req.school_grease_by_assignment,
+    )
+    p.normative = derive_requirements(
+        p.building,
+        [code for code, _ in p.consumer_groups],
+        req.owner_groups_count,
+    )
+    p.building.separate_k1 = p.normative.separate_k1_required
+    p.meters.owner_groups_count = req.owner_groups_count
+    p.meters.has_apartment_meters = (
+        p.building.purpose == BuildingPurpose.RESIDENTIAL
+        and req.apartments > 0
+    )
+    p.pumps.frequency_drive_required = p.normative.frequency_drive_required
+    p.pumps.dispatch_required = p.normative.pump_dispatch_required
 
     return p

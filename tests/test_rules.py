@@ -1,5 +1,7 @@
 """Тесты движка нормативных решений (ВК)."""
-from app.pz.project import FireSystem, PipeMaterials, WaterSource
+from app.pz.project import (
+    FireSystem, NormativeRequirements, PipeMaterials, WaterSource,
+)
 from app.pz.rules import (
     PRESSURE_LIMIT_MPA, calc_required_head, decide_fire_network,
 )
@@ -37,6 +39,16 @@ def test_fire_separate_all_three_reasons():
         FireSystem(required=True, pressure_at_lowest_pk_mpa=0.6, has_aupt=True),
         PipeMaterials(cold_is_plastic_uncertified=True))
     assert not d.combined and len(d.reasons) == 3
+
+
+def test_fire_separate_in_high_rise_even_without_other_reasons():
+    d = decide_fire_network(
+        FireSystem(required=True),
+        PipeMaterials(),
+        NormativeRequirements(separate_v1_v2_required=True),
+    )
+    assert not d.combined
+    assert "СП 253" in d.reasons[0]
 
 
 def test_pressure_boundary_exactly_limit_is_combined():

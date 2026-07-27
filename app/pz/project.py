@@ -288,6 +288,7 @@ class MetersSystem:
     # --- жилые дома ---
     has_apartment_meters: bool = False   # поквартирные счётчики
     has_askue: bool = False              # импульсный выход / АСКУЭ
+    owner_groups_count: int = 1          # группы помещений разных собственников
     # --- детальный подбор (таблица 5.1.13) ---
     rows: list = field(default_factory=list)   # list[MeterRow]
     single_input_bypass_note: bool = False     # примечание про обводную при 1 вводе
@@ -352,6 +353,8 @@ class PumpSystem:
     maximum_system_pressure_bar: Optional[float] = None
     sp10_compliant: Optional[bool] = None
     sp10_checks: list = field(default_factory=list)  # list[PumpComplianceCheck]
+    frequency_drive_required: bool = False
+    dispatch_required: bool = False
 
 
 @dataclass
@@ -511,12 +514,58 @@ class InsulationDesign:
 
 
 @dataclass
+class NormativeRequirements:
+    """Нормативный профиль объекта, не подменяющий расчётное ядро."""
+    sp54_applicable: bool = False
+    sp118_applicable: bool = False
+    sp253_applicable: bool = False
+    mixed_use: bool = False
+    separate_v1_v2_required: bool = False
+    apartment_hose_tap_required: bool = False
+    hvs_min_insulation_mm: int = 0
+    gvs_min_insulation_mm: int = 0
+    frequency_drive_required: bool = False
+    pump_full_reserve_required: bool = False
+    pump_dispatch_required: bool = False
+    separate_k1_required: bool = False
+    separate_owner_metering_required: bool = False
+    references: List[str] = field(default_factory=list)
+
+
+@dataclass
+class StormDesign:
+    """Проектное решение и расчёт К2 на стадии П."""
+    roof_type: str = "not_set"  # not_set / flat / sloped
+    system_kind: str = "not_determined"
+    system_note: str = ""
+    city_code: str = ""
+    roof_area_m2: float = 0.0
+    walls_area_m2: float = 0.0
+    period_years: int = 1
+    result: Optional[object] = None
+
+
+@dataclass
+class GreaseTrapDesign:
+    """Проверка необходимости жироуловителей по СП 118, п. 8.7."""
+    preparation_type: str = "none"
+    seats: int = 0
+    conditional_dishes: int = 0
+    school_by_assignment: bool = False
+    required: bool = False
+    decision_note: str = ""
+
+
+@dataclass
 class Project:
     document: DocumentInfo = field(default_factory=DocumentInfo)
     building: BuildingFlags = field(default_factory=BuildingFlags)
     source: WaterSource = field(default_factory=WaterSource)
     materials: PipeMaterials = field(default_factory=PipeMaterials)
     insulation: InsulationDesign = field(default_factory=InsulationDesign)
+    normative: NormativeRequirements = field(default_factory=NormativeRequirements)
+    storm: StormDesign = field(default_factory=StormDesign)
+    grease_trap: GreaseTrapDesign = field(default_factory=GreaseTrapDesign)
     flows: FlowsData = field(default_factory=FlowsData)
     fire: FireSystem = field(default_factory=FireSystem)
     meters: MetersSystem = field(default_factory=MetersSystem)

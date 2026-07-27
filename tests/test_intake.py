@@ -52,6 +52,34 @@ def test_blank_document_requisites_are_allowed():
     assert p.document.organization == ""
 
 
+def test_builder_maps_sp54_118_253_inputs_without_changing_calculations():
+    from app.intake.request_dto import ConsumerGroupRequest
+
+    request = _req(
+        building_height_m=76.0,
+        apartments=240,
+        owner_groups_count=3,
+        roof_type="flat",
+        storm_city="moscow",
+        storm_roof_area_m2=1200,
+        catering_type="raw",
+        catering_seats=200,
+        consumers=[
+            ConsumerGroupRequest("residential_full_bath", 500, "Жильё"),
+            ConsumerGroupRequest("office", 100, "Офисы"),
+        ],
+    )
+    project = build_project(request)
+    assert project.normative.sp253_applicable
+    assert project.normative.separate_v1_v2_required
+    assert project.normative.separate_k1_required
+    assert project.building.apartments == 240
+    assert project.meters.owner_groups_count == 3
+    assert project.storm.system_kind == "internal"
+    assert project.storm.roof_area_m2 == 1200
+    assert project.grease_trap.required
+
+
 def test_riser_at_unknown_node():
     r = _req()
     r.network.risers[0].at_node = "НЕТ"

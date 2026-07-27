@@ -87,6 +87,8 @@ def load_request(text: str) -> IOS2Request:
     fire = sect("fire", required=False)
     source_data_s = sect("source_data", required=False)
     insulation_s = sect("insulation", required=False)
+    storm_s = sect("storm", required=False)
+    catering_s = sect("catering", required=False)
     net_s = sect("network", required=False)
     rooms_s = data.get("rooms", [])
     if rooms_s is not None and not isinstance(rooms_s, list):
@@ -209,6 +211,8 @@ def load_request(text: str) -> IOS2Request:
         risers_v1=int(bld.get("risers_v1", 0)),
         risers_t3=int(bld.get("risers_t3", 0)),
         risers_t4=int(bld.get("risers_t4", 0)),
+        apartments=int(bld.get("apartments", 0)),
+        owner_groups_count=int(bld.get("owner_groups_count", 1)),
         insulation_location=str(insulation_s.get("location", "room_hot")),
         insulation_t_room_manual=float(insulation_s.get("t_room_manual", 5.0)),
         insulation_humidity=int(insulation_s.get("humidity", 60)),
@@ -224,6 +228,17 @@ def load_request(text: str) -> IOS2Request:
         cabinet_dn=int(fire.get("cabinet_dn", 50)),
         nozzle_mm=int(fire.get("nozzle_mm", 13)),
         compact_jet_m=int(fire.get("compact_jet_m", 12)),
+        roof_type=str(storm_s.get("roof_type", "not_set")),
+        storm_city=str(storm_s.get("city", "")),
+        storm_roof_area_m2=float(storm_s.get("roof_area_m2", 0)),
+        storm_walls_area_m2=float(storm_s.get("walls_area_m2", 0)),
+        storm_period_years=int(storm_s.get("period_years", 1)),
+        catering_type=str(catering_s.get("type", "none")),
+        catering_seats=int(catering_s.get("seats", 0)),
+        catering_conditional_dishes=int(catering_s.get("conditional_dishes", 0)),
+        school_grease_by_assignment=bool(
+            catering_s.get("school_grease_by_assignment", False)
+        ),
         zones=int(bld.get("zones", 1)),
         rooms=rooms, network=network, source_data=source_data, consumers=consumers)
 
@@ -259,6 +274,8 @@ def dump_request(req: IOS2Request) -> str:
             "risers_v1": req.risers_v1,
             "risers_t3": req.risers_t3,
             "risers_t4": req.risers_t4,
+            "apartments": req.apartments,
+            "owner_groups_count": req.owner_groups_count,
         },
         "fire": {
             "mode": req.fire_mode,
@@ -276,6 +293,19 @@ def dump_request(req: IOS2Request) -> str:
             "humidity": req.insulation_humidity,
             "hvs_water_temp": req.insulation_hvs_water_temp,
             "gvs_water_temp": req.insulation_gvs_water_temp,
+        },
+        "storm": {
+            "roof_type": req.roof_type,
+            "city": req.storm_city,
+            "roof_area_m2": req.storm_roof_area_m2,
+            "walls_area_m2": req.storm_walls_area_m2,
+            "period_years": req.storm_period_years,
+        },
+        "catering": {
+            "type": req.catering_type,
+            "seats": req.catering_seats,
+            "conditional_dishes": req.catering_conditional_dishes,
+            "school_grease_by_assignment": req.school_grease_by_assignment,
         },
     }
     if req.source_data is not None:

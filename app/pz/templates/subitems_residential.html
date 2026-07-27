@@ -30,6 +30,7 @@
 Здание {{ building.floors_above }}-этажное{% if building.floors_below %} с подземным этажом{% endif %},
 высотой {{ building.height_m|num(1) }} м{% if building.fire_class %}, класс Ф{{ building.fire_class }}{% endif %}{% if building.apartments %};
 {{ building.apartments }} квартир, расчётное число жителей — {{ building.residents }} чел.{% else %}.{% endif %}</p>
+{% include "normative_systems.html" %}
 {% if building.zones > 1 %}
 <p class="subitem">Для стабилизации давления система хозяйственно-питьевого водопровода принята
 {{ building.zones }}-зонной{% if building.zone_split_note %} ({{ building.zone_split_note }}){% endif %}.

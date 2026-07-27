@@ -431,12 +431,17 @@ def build_specification(project: Project) -> Specification:
                          outer_diameter_mm=size.outer_mm) for dn, _, size in rows],
             )
             calculated = {x.dn: x for x in result.hvs if x.need_insulation}
+        normative_min = (
+            project.normative.gvs_min_insulation_mm
+            if key == "gvs" else project.normative.hvs_min_insulation_mm
+        )
         first = True
         for dn, length, size in rows:
             calc = calculated.get(dn)
-            if calc is None:
+            if calc is None and not normative_min:
                 continue
-            thk = calc.delta
+            calculated_thk = calc.delta if calc is not None else 0
+            thk = max(calculated_thk, normative_min)
             material = ("минеральной ваты группы Г1" if ins.location == "parking" and key == "gvs"
                         else "вспененного каучука группы Г1" if ins.location == "parking"
                         else "вспененного каучука")
@@ -448,9 +453,14 @@ def build_specification(project: Project) -> Specification:
                 name = f"то же толщ. {thk} мм, для трубы {_size_label_ru(size)}"
             out.append(SpecRow(next_pos(), name, type_mark=f"для {_size_label_ru(size)}, δ{thk}",
                                manufacturer="Торговая сеть", unit="м", qty=length,
-                               note=(f"расчёт legacy/SP 61: tводы="
-                                     f"{ins.gvs_water_temp if key == 'gvs' else ins.hvs_water_temp:g} °C, "
-                                     f"tпом={result.t_room:g} °C, φ={ins.humidity}%")))
+                               note=(
+                                   f"расчёт legacy/SP 61: δ={calculated_thk} мм, tводы="
+                                   f"{ins.gvs_water_temp if key == 'gvs' else ins.hvs_water_temp:g} °C, "
+                                   f"tпом={result.t_room:g} °C, φ={ins.humidity}%"
+                                   + (f"; принято не менее {normative_min} мм по "
+                                      "СП 253.1325800.2016, п. 10.15"
+                                      if normative_min else "")
+                               )))
         return out
 
     def fire_pipe_rows():
@@ -555,6 +565,15 @@ def build_specification(project: Project) -> Specification:
             manufacturer="по проекту", unit="шт.", qty=1,
             note=p.count_note or "1 раб. + 1 рез."))
         pump_obr = True
+        if project.normative.frequency_drive_required:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Шкаф управления повысительной насосной установкой с частотным приводом",
+                manufacturer="Комплект поставки насосной установки",
+                unit="компл.", qty=1,
+                note="ручное, дистанционное и автоматическое управление; "
+                     "СП 253.1325800.2016, пп. 10.25, 10.27",
+            ))
         # вибровставки у насоса (СП 30): кроме произв. зданий без шумозащиты
         if project.building.noise_protection:
             sec.rows.append(SpecRow(next_pos(),
@@ -563,6 +582,21 @@ def build_specification(project: Project) -> Specification:
                 unit="шт.", qty=2, note="на всас/напор насоса (СП 30)"))
     # группа 2: санитарные приборы
     sec.rows += fixture_rows()
+    if project.normative.apartment_hose_tap_required:
+        apartment_qty = project.building.apartments or None
+        sec.rows.append(SpecRow(
+            next_pos(),
+            "Кран внутриквартирного пожаротушения Ду15 со шлангом и распылителем",
+            type_mark="Ду15", manufacturer="Торговая сеть", unit="компл.",
+            qty=apartment_qty,
+            note=(
+                "по одному на квартиру; длина шланга до любой точки квартиры; "
+                "СП 54.13330.2022, п. 6.2.4.3"
+                if apartment_qty else
+                "по одному на квартиру; количество квартир требуется по АР; "
+                "СП 54.13330.2022, п. 6.2.4.3"
+            ),
+        ))
     # группа 3: трубопроводная арматура
     cm = find_meter(["ввод", "хвс", "холодн"])
     if cm:
@@ -579,6 +613,15 @@ def build_specification(project: Project) -> Specification:
             type_mark=f"для водомерного узла Ду{cm.dn}", manufacturer="Торговая сеть",
             unit="шт.", qty=max(1, project.source.inputs_count),
             note="по числу вводов; тип и анкеровку уточнить на стадии Р"))
+    if project.normative.separate_owner_metering_required:
+        sec.rows.append(SpecRow(
+            next_pos(),
+            "Узел автономного учёта холодной воды для группы помещений отдельного собственника",
+            manufacturer="по проекту", unit="компл.",
+            qty=project.meters.owner_groups_count,
+            note="по числу групп собственников; Ду и состав подобрать по расходу "
+                 "каждой группы на стадии Р; СП 118.13330.2022, п. 8.24",
+        ))
     nv1 = project.building.risers_v1 or 0
     if nv1:
         sec.rows.append(SpecRow(
@@ -637,6 +680,15 @@ def build_specification(project: Project) -> Specification:
             sec.rows.append(SpecRow(
                 next_pos(), f"Фильтр сетчатый муфтовый, Ду{hm.dn}", type_mark=f"Ду{hm.dn}",
                 manufacturer="Торговая сеть", unit="шт.", qty=1, note="на водомерный узел"))
+        if project.normative.separate_owner_metering_required:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Узел автономного учёта горячей воды для группы помещений отдельного собственника",
+                manufacturer="по проекту", unit="компл.",
+                qty=project.meters.owner_groups_count,
+                note="по числу групп собственников; Ду и состав подобрать по расходу "
+                     "каждой группы на стадии Р; СП 118.13330.2022, п. 8.24",
+            ))
         nt = (project.building.risers_t3 or 0) + (project.building.risers_t4 or 0)
         if nt:
             sec.rows.append(SpecRow(
@@ -694,6 +746,15 @@ def build_specification(project: Project) -> Specification:
                 note=(fp.count_note or "1 рабочий + 1 резервный")
                      + ("; предварительный подбор по архивной Q-H кривой"
                         if getattr(acc, "archived", False) else "")))
+            if project.normative.frequency_drive_required:
+                sec.rows.append(SpecRow(
+                    next_pos(),
+                    "Шкаф управления пожарной насосной установкой с регулируемым приводом",
+                    manufacturer="Комплект поставки насосной установки",
+                    unit="компл.", qty=1,
+                    note="диспетчеризация; ручное, дистанционное и автоматическое "
+                         "управление; СП 253.1325800.2016, пп. 10.25–10.27",
+                ))
         pk = getattr(f, "pk_total", 0) or 0
         ndn = getattr(f, "nozzle_dn", 50)
         hose = getattr(f, "hose_length_m", 20)
@@ -721,11 +782,43 @@ def build_specification(project: Project) -> Specification:
         sec.rows += sealant_rows(fire_sealant_l(), firestop=True)
         sections.append(sec)
 
+    # ── Раздел К1/К2: только подтверждённые позиции стадии П ──
+    if project.grease_trap.required:
+        sec = SpecSection(
+            title="К1 — бытовая и производственная канализация",
+            division="Водоотведение",
+        )
+        sec.rows.append(SpecRow(
+            next_pos(),
+            "Жироуловитель для производственных стоков предприятия общественного питания",
+            manufacturer="по проекту", unit="компл.", qty=None,
+            note="на выпусках производственных стоков; число и производительность "
+                 "по заданию ТХ и схеме выпусков стадии Р; СП 118.13330.2022, п. 8.7",
+        ))
+        sections.append(sec)
+
+    if project.storm.system_kind == "internal":
+        sec = SpecSection(
+            title="К2 — внутренний водосток",
+            division="Водоотведение",
+        )
+        sec.rows.append(SpecRow(
+            next_pos(), "Воронка водосточная для внутреннего водостока",
+            manufacturer="по проекту", unit="шт.", qty=None,
+            note="количество и тип по плану кровли и расчётной пропускной способности; "
+                 "СП 118.13330.2022, пп. 8.3–8.4",
+        ))
+        sections.append(sec)
+
     # ГОСТ 21.601-2011, пп. 9.3–9.4: сначала раздел холодного
     # водоснабжения (В1, В2), затем горячего; позиции выводим последовательно
     # после нормативной сортировки разделов.
-    system_order = {"В1": 0, "В2": 1, "Т3-Т4": 2}
-    division_order = {"Водоснабжение холодное": 0, "Водоснабжение горячее": 1}
+    system_order = {"В1": 0, "В2": 1, "Т3-Т4": 2, "К1": 3, "К2": 4}
+    division_order = {
+        "Водоснабжение холодное": 0,
+        "Водоснабжение горячее": 1,
+        "Водоотведение": 2,
+    }
     sections.sort(key=lambda s: (
         division_order.get(s.division, 99),
         next((rank for marker, rank in system_order.items() if s.title.startswith(marker)), 99),
@@ -741,6 +834,11 @@ def build_specification(project: Project) -> Specification:
         "Трубы В2 приняты по длинам расчётной сети стадии П. "
         if f.required else ""
     )
+    highrise_note = (
+        "Для высотного здания применены минимумы 10 мм (ХВС) и 25 мм "
+        "(ГВС/циркуляция) по СП 253.1325800.2016, п. 10.15. "
+        if project.normative.sp253_applicable else ""
+    )
     return Specification(
         sections=sections,
         note=(f"Длины трубопроводов В1 и Т3-Т4 определены для общей площади {area:g} м² "
@@ -749,7 +847,7 @@ def build_specification(project: Project) -> Specification:
               "и запорная арматура — по заданию АР. Теплоизоляция (вспененный каучук) принята "
               "на магистрали и стояки В1 и Т3-Т4 (от конденсата и теплопотерь, СП 30 п.8.11); "
               "толщина рассчитана алгоритмом legacy SP calculator по СП 61 для заданных "
-              f"температуры и влажности. {fire_note}"
+              f"температуры и влажности. {highrise_note}{fire_note}"
               "Для стальных труб зафиксировано исполнение ВГП «обыкновенная» по ГОСТ 3262-75; "
               "в спецификации приведены Dн×s и расчётный Dвн=Dн−2s. Для PE-X приведены "
               "фактические Dн×s и Dвн принятого сортамента. "

@@ -32,6 +32,7 @@
 <p class="subitem">Здание — {{ building.floors_above }}-этажное{% if building.floors_below %} с подземной частью ({{ building.floors_below }} эт.){% endif %},
 высотой {{ building.height_m|num(1) }} м{% if building.fire_class %}, класс функциональной пожарной опасности {{ building.fire_class }}{% endif %}{% if building.seats %}, вместимость {{ building.seats }} мест{% endif %}.
 Сеть хозяйственно-питьевого водопровода принята тупиковой, с нижней разводкой магистралей.</p>
+{% include "normative_systems.html" %}
 {% if fire_net %}
 <p class="subitem">{{ fire_net.summary }}
 {% if fire.pk_total %}Предусмотрено {{ fire.pk_total }} пожарных кранов Ду{{ fire.nozzle_dn }}

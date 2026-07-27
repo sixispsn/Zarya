@@ -125,3 +125,42 @@ def test_discrete_spec_quantities_have_no_decimal_comma():
     assert format_spec_qty(12.25, "м") == "12,2"
     with pytest.raises(ValueError, match="Дробное количество"):
         format_spec_qty(1.5, "шт.")
+
+
+def test_normative_items_and_minimum_insulation_are_in_specification():
+    project = _demo_project()
+    project.building.apartments = 160
+    project.normative.apartment_hose_tap_required = True
+    project.normative.sp253_applicable = True
+    project.normative.hvs_min_insulation_mm = 10
+    project.normative.gvs_min_insulation_mm = 25
+    project.normative.frequency_drive_required = True
+    project.normative.separate_owner_metering_required = True
+    project.meters.owner_groups_count = 3
+    spec = build_specification(project)
+    v1 = _section(spec, "В1").rows
+    t3 = _section(spec, "Т3-Т4").rows
+    tap = next(row for row in v1 if "внутриквартирного" in row.name)
+    assert tap.qty == 160 and tap.type_mark == "Ду15"
+    assert any("автономного учёта" in row.name and row.qty == 3 for row in v1)
+    assert any("автономного учёта горячей" in row.name and row.qty == 3 for row in t3)
+    assert all(
+        int(row.type_mark.rsplit("δ", 1)[1]) >= 10
+        for row in v1 if "δ" in row.type_mark
+    )
+    assert all(
+        int(row.type_mark.rsplit("δ", 1)[1]) >= 25
+        for row in t3 if "δ" in row.type_mark
+    )
+
+
+def test_k1_grease_trap_and_k2_sections_do_not_invent_quantity():
+    project = _demo_project()
+    project.grease_trap.required = True
+    project.storm.system_kind = "internal"
+    spec = build_specification(project)
+    k1 = _section(spec, "К1")
+    k2 = _section(spec, "К2")
+    assert k1.rows[0].qty is None
+    assert "стадии Р" in k1.rows[0].note
+    assert k2.rows[0].qty is None
