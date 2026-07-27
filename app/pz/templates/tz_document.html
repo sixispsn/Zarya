@@ -8,7 +8,7 @@
       <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
     </colgroup>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
-      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '' }}</td></tr>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
       <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td></tr>
@@ -22,7 +22,7 @@
     <tr><td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
     <tr><td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
       <td rowspan="3" class="ttl">Задание на проектирование В2</td>
-      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '' }}</td></tr>
     <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
   </table>
@@ -32,10 +32,10 @@
 <span class="subtitle">системы внутреннего противопожарного водопровода (В2)</span></h1>
 
 <table class="tz">
-  <tr><td class="n">1</td><td class="k">Наименование объекта</td><td>{{ doc.object_name or '—' }}</td></tr>
+  <tr><td class="n">1</td><td class="k">Наименование объекта</td><td>{{ doc.object_name or '' }}</td></tr>
   <tr><td class="n">2</td><td class="k">Адрес объекта</td><td>{{ doc.object_address or '—' }}</td></tr>
   <tr><td class="n">3</td><td class="k">Заказчик</td><td>{{ sd.customer or '—' }}</td></tr>
-  <tr><td class="n">4</td><td class="k">Проектная организация</td><td>{{ sd.designer_org or doc.organization or '—' }}</td></tr>
+  <tr><td class="n">4</td><td class="k">Проектная организация</td><td>{{ sd.designer_org or doc.organization or '' }}</td></tr>
   <tr><td class="n">5</td><td class="k">Основание для проектирования</td><td>{{ sd.basis or '—' }}</td></tr>
   <tr><td class="n">6</td><td class="k">Стадия проектирования</td><td>{{ sd.design_stage or 'Проектная документация' }}</td></tr>
   <tr><td class="n">7</td><td class="k">Характеристика здания</td>

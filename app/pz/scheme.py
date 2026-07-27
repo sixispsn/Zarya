@@ -615,9 +615,9 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     for t, nm, row in signers:
         T(mmx(1) + 2, mmy(row) - 4.5, t, 8.5, "start")
         if nm: T(mmx(27), mmy(row) - 4.5, nm, 8.5)
-    T(mmx(125), mmy(8), doc.cipher or "⟦ШИФР⟧", 15.5)
-    T(mmx(125), mmy(19), doc.object_name or "⟦ОБЪЕКТ⟧", 9.5)
-    T(mmx(100), mmy(34.5), doc.object_part or "⟦ЧАСТЬ⟧", 12)
+    T(mmx(125), mmy(8), doc.cipher or "", 15.5)
+    T(mmx(125), mmy(19), doc.object_name or "", 9.5)
+    T(mmx(100), mmy(34.5), doc.object_part or "", 12)
     T(mmx(142.5), mmy(30) - 4, "Стадия", 7.5); T(mmx(157.5), mmy(30) - 4, "Лист", 7.5); T(mmx(175), mmy(30) - 4, "Листов", 7.5)
     T(mmx(142.5), mmy(37), doc.stage_label or "П", 11)
     T(mmx(157.5), mmy(37), doc.sheet_no or "1", 11)
@@ -627,7 +627,7 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         title_line2 = "систем В1, В2" if fire_on else "системы В1"
     T(mmx(100), mmy(46.5), P.title_line1, 12)
     T(mmx(100), mmy(52.5), title_line2, 12)
-    T(mmx(160), mmy(49), doc.organization or "⟦ОРГАНИЗАЦИЯ⟧", 10)
+    T(mmx(160), mmy(49), doc.organization or "", 10)
     # боковая графа (25|35|25, снизу вверх)
     bg = fx0 - 12 * PXMM
     for h0, h1, t in ((0, 25, "Инв. № подл."), (25, 60, "Подп. и дата"), (60, 85, "Взам. инв. №")):

@@ -43,9 +43,13 @@ def test_bad_streams():
     assert any("streams" in p for p in _req(streams=3).validate())
 
 
-def test_missing_cipher():
-    r = _req(document=DocumentRequest(cipher="", object_name="X", organization="Y"))
-    assert any("cipher" in p for p in r.validate())
+def test_blank_document_requisites_are_allowed():
+    r = _req(document=DocumentRequest(cipher="", object_name="", organization=""))
+    assert r.validate() == []
+    p = build_project(r)
+    assert p.document.cipher == ""
+    assert p.document.object_name == ""
+    assert p.document.organization == ""
 
 
 def test_riser_at_unknown_node():

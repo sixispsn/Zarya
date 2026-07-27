@@ -26,6 +26,13 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 _CSS_FILES = ["frame.css", "balance.css", "equipment.css"]
 
 
+def _document_cipher(cipher: str, suffix: str) -> str:
+    """Добавить суффикс документа только к реально заданному шифру."""
+    if not cipher:
+        return ""
+    return cipher if cipher.endswith(suffix) else cipher + suffix
+
+
 def _build_env() -> Environment:
     """Создать Jinja2-окружение, читающее шаблоны из папки templates."""
     env = Environment(
@@ -152,7 +159,7 @@ def generate_balance_html(project: Project) -> str:
     cipher = project.document.cipher or ""
     doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".БВ") else cipher + ".БВ"),
+        cipher=_document_cipher(cipher, ".БВ"),
         sheet_title="Баланс водопотребления и водоотведения",
         sheet_no="1",
         sheet_total="1",
@@ -189,7 +196,7 @@ def generate_v1_calculation_html(project: Project) -> str:
     cipher = project.document.cipher or ""
     doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".РВ1") else cipher + ".РВ1"),
+        cipher=_document_cipher(cipher, ".РВ1"),
         sheet_title="Расчёты систем В1, Т3 и К1",
         sheet_no="1",
         sheet_total="—",
@@ -239,7 +246,7 @@ def generate_pump_selection_html(project: Project) -> str:
     cipher = project.document.cipher or ""
     doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".РН") else cipher + ".РН"),
+        cipher=_document_cipher(cipher, ".РН"),
         sheet_title="Расчёт и подбор насосных установок",
     )
     head = calc_required_head(
@@ -297,7 +304,7 @@ def generate_spec_html(project: Project) -> str:
     cipher = project.document.cipher
     spec_doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".СО") else cipher + ".СО"),
+        cipher=_document_cipher(cipher, ".СО"),
         sheet_title="Спецификация оборудования, изделий и материалов",
     )
     return env.get_template("spec_document.html").render(doc=spec_doc, body_html=body_html)
@@ -389,7 +396,7 @@ def generate_hydraulic_report_html(project: Project, report) -> str:
     cipher = project.document.cipher or ""
     doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".ГР") else cipher + ".ГР"),
+        cipher=_document_cipher(cipher, ".ГР"),
         sheet_title="Гидравлический расчёт В2",
     )
     return env.get_template("hydraulic_document.html").render(
@@ -422,7 +429,7 @@ def generate_resilience_html(project: Project, resilience_report) -> str:
     cipher = project.document.cipher or ""
     doc = replace(
         project.document,
-        cipher=(cipher if cipher.endswith(".ЖВ") else cipher + ".ЖВ"),
+        cipher=_document_cipher(cipher, ".ЖВ"),
         sheet_title="Проверка живучести сети В2")
     return env.get_template("resilience_document.html").render(
         doc=doc, rep=resilience_report)
@@ -454,8 +461,7 @@ def generate_tz_pdf(project, output_path, source_data=None):
     """PDF задания на проектирование В2 (А4, рамка+штамп)."""
     env = _build_env()
     cipher = project.document.cipher or ""
-    doc = replace(project.document,
-                  cipher=(cipher if cipher.endswith(".ТЗ") else cipher + ".ТЗ"))
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".ТЗ"))
     ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
     html_str = env.get_template("tz_document.html").render(**ctx)
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
@@ -468,8 +474,7 @@ def generate_tu_pdf(project, output_path, source_data=None):
     """PDF листа исходных данных (ТУ на подключение) (А4, рамка+штамп)."""
     env = _build_env()
     cipher = project.document.cipher or ""
-    doc = replace(project.document,
-                  cipher=(cipher if cipher.endswith(".ИД") else cipher + ".ИД"))
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".ИД"))
     ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
     html_str = env.get_template("tu_document.html").render(**ctx)
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(

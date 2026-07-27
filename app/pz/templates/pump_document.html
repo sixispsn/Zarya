@@ -4,13 +4,13 @@
 <body>
 <div class="stamp">
   <table>
-    <tr><td class="cipher" colspan="4">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+    <tr><td class="cipher" colspan="4">{{ doc.cipher or '' }}</td></tr>
     <tr><td class="object" colspan="4">{{ doc.object_name or '' }}</td></tr>
     <tr>
       <td>{{ doc.stage_label or 'П' }}</td>
       <td class="title">Расчёт и подбор насосных установок</td>
-      <td>{{ doc.developer_name or 'Разраб.' }}</td>
-      <td>{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+      <td>{{ doc.developer_name or '' }}</td>
+      <td>{{ doc.organization or '' }}</td>
     </tr>
   </table>
 </div>

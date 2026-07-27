@@ -113,6 +113,9 @@ def test_form_without_prefill_has_no_demo_document_data():
     assert 'name="cipher" value=""' in h
     assert 'name="object_name" value=""' in h
     assert 'name="organization" value=""' in h
+    assert 'name="cipher" value="" placeholder="Можно заполнить позже" required' not in h
+    assert 'name="object_name" value="" placeholder="Можно заполнить позже" required' not in h
+    assert 'name="organization" value="" placeholder="Можно заполнить позже" required' not in h
     assert "DEMO-ТУ-01" not in h
     assert "Демонстрационный водоканал" not in h
     assert "Аникин А.В." not in h

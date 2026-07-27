@@ -9,7 +9,7 @@
 {%- endmacro %}
 
 <p class="subhead">а) сведения о существующих и проектируемых источниках водоснабжения.</p>
-<p class="subitem">Источником водоснабжения проектируемого объекта «{{ doc.object_name }}»
+<p class="subitem">Источником водоснабжения проектируемого объекта{% if doc.object_name %} «{{ doc.object_name }}»{% endif %}
 {% if doc.object_address %} по адресу: {{ doc.object_address }}{% endif %} принят существующий водопровод — подключение {{ fill(source.description, 'ИСТОЧНИК ПОДКЛЮЧЕНИЯ') }}
 согласно техническим условиям № {{ fill(source.tu_number, '№ ТУ') }} от {{ fill(source.tu_date, 'ДАТА ТУ') }}.</p>
 {% if source.connection_point %}

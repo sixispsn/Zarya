@@ -16,7 +16,7 @@
 {% set sd = prefill.source_data if prefill and prefill.source_data else none %}
 <main class="shell">
 <section class="hero">
-  <div><p class="eyebrow">ZARYA / IOS2 DESIGN SYSTEM</p><h1>{% if d %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Расчёт начинается с функциональных частей объекта и групп потребителей по таблице А.2 СП 30. Техническая геометрия В2 вынесена из основного сценария.</p></div>
+  <div><p class="eyebrow">ZARYA / IOS2 DESIGN SYSTEM</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Расчёт начинается с функциональных частей объекта и групп потребителей по таблице А.2 СП 30. Техническая геометрия В2 вынесена из основного сценария.</p></div>
   <div class="hero-meta"><span class="chip">СП 30</span><span class="chip">СП 10</span><span class="chip">ПП 87</span><span class="chip">ГОСТ Р 21.619-2023</span></div>
 </section>
 <div class="workspace">
@@ -34,14 +34,15 @@
   <ul data-validation-list>{% for item in advisories %}<li data-level="{{ item.level }}"><span>{{ item.message }}</span><small>{{ item.reference }}</small></li>{% endfor %}</ul>
 </section>
 
-<fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors or not d %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d else 'Новый проект' }}{% if d and d.object_part %} · {{ d.object_part }}{% endif %} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
+<fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors or not d %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d and d.cipher else 'Реквизиты не заданы' }}{% if d and d.object_part %} · {{ d.object_part }}{% endif %} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
   <div class="row">
-    <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '' }}" placeholder="ШИФР-ИОС2" required></label>
-    <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else '' }}" placeholder="Полное наименование по ТЗ" required></label>
+    <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '' }}" placeholder="Можно заполнить позже"></label>
+    <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else '' }}" placeholder="Можно заполнить позже"></label>
     <label>Часть<input class="w-m" name="object_part" value="{{ d.object_part if d else '' }}" placeholder="Корпус, секция или этап"></label>
     <label>Стадия<select name="stage"><option{% if not d or d.stage == 'П' %} selected{% endif %}>П</option><option{% if d and d.stage == 'Р' %} selected{% endif %}>Р</option></select></label>
   </div>
-  <div class="row"><label>Организация<input class="w-l" name="organization" value="{{ d.organization if d else '' }}" placeholder="Проектная организация" required></label><label>Адрес<input class="w-l" name="address" value="{{ d.object_address if d else '' }}" placeholder="Адрес объекта"></label></div>
+  <div class="row"><label>Организация<input class="w-l" name="organization" value="{{ d.organization if d else '' }}" placeholder="Можно заполнить позже"></label><label>Адрес<input class="w-l" name="address" value="{{ d.object_address if d else '' }}" placeholder="Адрес объекта"></label></div>
+  <p class="hint">Реквизиты не блокируют расчёт. Если оставить поля пустыми, комплект сформируется с пустыми графами штампа.</p>
   <div class="row"><label>Разработал<input name="developer" value="{{ d.developer if d else '' }}" placeholder="Фамилия И.О."></label><label>Проверил<input name="inspector" value="{{ d.inspector if d else '' }}" placeholder="Фамилия И.О."></label><label>Нач. отдела<input name="dept_head" value="{{ d.dept_head if d else '' }}" placeholder="Фамилия И.О."></label><label>ГИП<input name="gip" value="{{ d.gip if d else '' }}" placeholder="Фамилия И.О."></label><label>Н. контроль<input name="norm_control" value="{{ d.norm_control if d else '' }}" placeholder="Фамилия И.О."></label></div>
 </div></details></fieldset>
 

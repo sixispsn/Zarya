@@ -375,10 +375,6 @@ class IOS2Request:
                 if (inlet.roughness_mm < 0 or
                         (inlet.local_loss_factor is not None and inlet.local_loss_factor < 0)):
                     p.append(f"v1_network.inlets[{i}]: шероховатость и k_l не могут быть отрицательными")
-        if not self.document.cipher:
-            p.append("document.cipher обязателен")
-        if not self.document.object_name:
-            p.append("document.object_name обязателен")
         sd = self.source_data
         if sd is not None:
             if (sd.elev_header_m is None) != (sd.elev_fixture_m is None):

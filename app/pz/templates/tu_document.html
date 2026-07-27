@@ -8,7 +8,7 @@
       <col style="width:70mm"><col style="width:15mm"><col style="width:15mm"><col style="width:20mm">
     </colgroup>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
-      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td></tr>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '' }}</td></tr>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
       <td colspan="4" rowspan="3" class="obj">{{ doc.object_name or '' }}</td></tr>
@@ -22,7 +22,7 @@
     <tr><td colspan="2" class="lbll">Нач.&nbsp;отдела</td><td colspan="2">{{ doc.dept_head_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
     <tr><td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
       <td rowspan="3" class="ttl">Исходные данные (ТУ)</td>
-      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td></tr>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '' }}</td></tr>
     <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
   </table>
@@ -41,7 +41,7 @@
       <td>{% if sd.tu_number %}№ {{ sd.tu_number }}{% if sd.tu_date %} от {{ sd.tu_date }}{% endif %}{% else %}⟦№ и дата ТУ⟧{% endif %}</td></tr>
   <tr><td class="n">2</td><td class="k">Выдавшая организация</td>
       <td>{{ sd.tu_org or '⟦ресурсоснабжающая организация⟧' }}</td></tr>
-  <tr><td class="n">3</td><td class="k">Объект подключения</td><td>{{ doc.object_name or '—' }}</td></tr>
+  <tr><td class="n">3</td><td class="k">Объект подключения</td><td>{{ doc.object_name or '' }}</td></tr>
   <tr><td class="n">4</td><td class="k">Точка подключения</td>
       <td>{{ src.connection_point or '⟦точка врезки в городскую сеть⟧' }}</td></tr>
   <tr><td class="n">5</td><td class="k">Гарантированный напор в точке подключения</td>

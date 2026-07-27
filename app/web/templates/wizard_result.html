@@ -15,8 +15,8 @@
 <main class="result-shell">
   <section class="result-hero">
     <p class="eyebrow">Комплект успешно собран</p>
-    <h1>{{ project.title }}</h1>
-    <p>{{ project.cipher }} · стадия {{ project.stage }} · сформировано документов: {{ pdfs|length }}</p>
+    <h1>{{ project.title or 'Комплект без реквизитов' }}</h1>
+    <p>{% if project.cipher %}{{ project.cipher }} · {% endif %}стадия {{ project.stage }} · сформировано документов: {{ pdfs|length }}</p>
   </section>
 
   <div class="result-grid">

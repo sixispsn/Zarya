@@ -9,7 +9,7 @@
     </colgroup>
     <tr>
       <td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td>
-      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '⟦ШИФР⟧' }}</td>
+      <td colspan="4" rowspan="2" class="cph">{{ doc.cipher or '' }}</td>
     </tr>
     <tr><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr>
@@ -31,7 +31,7 @@
     <tr>
       <td colspan="2" class="lbll">ГИП</td><td colspan="2">{{ doc.gip_name or '' }}</td><td class="b"></td><td class="b"></td>
       <td rowspan="3" class="ttl">Проверка живучести сети В2</td>
-      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '⟦ОРГАНИЗАЦИЯ⟧' }}</td>
+      <td colspan="3" rowspan="3" class="onm">{{ doc.organization or '' }}</td>
     </tr>
     <tr><td colspan="2" class="b"></td><td colspan="2" class="b"></td><td class="b"></td><td class="b"></td></tr>
     <tr><td colspan="2" class="lbll">Н.&nbsp;контр.</td><td colspan="2">{{ doc.norm_control_name or '' }}</td><td class="b"></td><td class="b"></td></tr>
