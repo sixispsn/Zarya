@@ -27,10 +27,12 @@ from app.pz.flows_bridge import (
     balance_from_calc,
     enrich_fire_from_layout_and_hydraulics,
 )
+from app.pz.commission import build_commission_report
 from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
-    generate_balance_pdf, generate_v1_calculation_pdf, append_pdf,
+    generate_balance_pdf, generate_v1_calculation_pdf,
+    generate_commission_control_pdf, append_pdf,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -52,6 +54,8 @@ class IOS2DesignBundle:
     pump_selection_pdf: Optional[str] = None
     v1_calculation_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
+    commission_control_pdf: Optional[str] = None
+    commission_report: Optional[object] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
@@ -594,5 +598,24 @@ def design_ios2(
             project, bundle.resilience_report,
             os.path.join(output_dir, "Проверка_живучести.pdf"))
         bundle.status.append("Проверка_живучести.pdf собрана")
+
+    bundle.commission_report = build_commission_report(project, artifacts={
+        "Пояснительная записка": bool(bundle.pz_pdf),
+        "Расчёты В1": bool(bundle.v1_calculation_pdf),
+        "Баланс ВиВ": bool(bundle.balance_pdf),
+        "Подбор насосов": bool(bundle.pump_selection_pdf),
+        "Спецификация": bool(bundle.spec_pdf),
+        "Принципиальная схема": bool(bundle.scheme_pdf),
+        "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),
+    })
+    bundle.commission_control_pdf = generate_commission_control_pdf(
+        project,
+        os.path.join(output_dir, "Паспорт_и_нормативный_контроль.pdf"),
+        report=bundle.commission_report,
+    )
+    append_pdf(bundle.pz_pdf, bundle.commission_control_pdf)
+    bundle.status.append(
+        "Паспорт_и_нормативный_контроль.pdf собран: версия, fingerprint, "
+        "матрица требований и протокол проверок документов; добавлен в конец ПЗ.pdf")
 
     return bundle

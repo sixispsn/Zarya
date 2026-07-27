@@ -26,6 +26,7 @@ def test_v1_calculation_html_uses_existing_results(tmp_path):
 def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     bundle = design_ios2(build_project(_request()), output_dir=str(tmp_path))
     appendix = Path(bundle.v1_calculation_pdf)
+    commission = Path(bundle.commission_control_pdf)
 
     assert appendix.name == "Расчеты_В1.pdf"
     assert appendix.exists()
@@ -36,3 +37,11 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert "Расчётный расход стоков К1" in appendix_text
     assert "Расчёт требуемого напора В1" in appendix_text
     assert "Расчётные обоснования систем В1, Т3 и К1" in pz_text
+    assert commission.name == "Паспорт_и_нормативный_контроль.pdf"
+    assert commission.exists()
+    commission_text = _text(str(commission))
+    assert "Паспорт проекта и нормативный контроль" in commission_text
+    assert "Матрица нормативной трассировки" in commission_text
+    assert "Протокол автоматических проверок" in commission_text
+    assert bundle.commission_report.project_fingerprint in commission_text
+    assert "Матрица нормативной трассировки" in pz_text

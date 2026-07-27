@@ -235,6 +235,8 @@ def wizard_result(request: Request, run_id: str):
     b = run["bundle"]
     pdfs = []
     for label, path in (("Пояснительная записка", b.pz_pdf),
+                        ("Паспорт проекта и нормативный контроль",
+                         getattr(b, "commission_control_pdf", None)),
                         ("Расчётные обоснования В1, Т3 и К1",
                          getattr(b, "v1_calculation_pdf", None)),
                         ("Баланс водопотребления и водоотведения",
@@ -252,6 +254,7 @@ def wizard_result(request: Request, run_id: str):
     return _TPL.TemplateResponse(request, "wizard_result.html", {
         "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
         "status": b.status,
+        "commission": getattr(b, "commission_report", None),
         "warnings": b.warnings + [
             f"{item.message} ({item.reference})"
             for item in run.get("advisories", [])

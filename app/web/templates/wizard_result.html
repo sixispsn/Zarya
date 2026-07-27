@@ -48,6 +48,19 @@
       {% endif %}
     </section>
 
+    {% if commission %}
+    <section class="card full">
+      <div class="card-kicker"><h2>Готовность к комиссии</h2><span class="system-tag">{{ 'готово' if commission.blocking_count == 0 else 'есть замечания' }}</span></div>
+      <div class="metric-grid">
+        <div class="metric"><b>Блокирующие замечания</b><strong>{{ commission.blocking_count }}</strong><small>требуют закрытия до выпуска</small></div>
+        <div class="metric"><b>Вопросы стадии Р</b><strong>{{ commission.pending_r_count }}</strong><small>не блокируют стадию П</small></div>
+        <div class="metric"><b>Матрица требований</b><strong>{{ commission.trace_rows|length }}</strong><small>нормативных связей</small></div>
+        <div class="metric"><b>Fingerprint</b><strong style="font-size:15px">{{ commission.project_fingerprint }}</strong><small>версия исходных данных</small></div>
+      </div>
+      <p class="hint" style="margin-top:13px">{{ commission.release_status }}. Подробности — в документе «Паспорт проекта и нормативный контроль».</p>
+    </section>
+    {% endif %}
+
     <section class="card full">
       <div class="card-kicker"><h2>Комплект документов</h2><span class="system-tag">{{ pdfs|length }} PDF</span></div>
       <div class="doc-grid">

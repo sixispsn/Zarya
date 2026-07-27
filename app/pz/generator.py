@@ -17,6 +17,7 @@ from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
 from app.pz.spec import build_specification, format_spec_qty
+from app.pz.commission import build_commission_report
 from app.pz.scheme import build_scheme, SchemeParams, SchemeResult, W as SCHEME_W, H as SCHEME_H
 
 
@@ -276,6 +277,53 @@ def generate_pump_selection_pdf(project: Project, output_path: str) -> str:
             base_url=str(TEMPLATES_DIR)),
         CSS(filename=str(TEMPLATES_DIR / "equipment.css"),
             base_url=str(TEMPLATES_DIR)),
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path, stylesheets=stylesheets,
+    )
+    return output_path
+
+
+# ── КОМИССИОННЫЙ ПАСПОРТ И НОРМАТИВНЫЙ КОНТРОЛЬ ────────────────────────
+
+_COMMISSION_STATUS_LABELS = {
+    "verified": "подтверждено",
+    "specified": "принято",
+    "stage_r": "стадия Р",
+    "missing": "не хватает данных",
+    "not_applicable": "не требуется",
+}
+
+
+def generate_commission_control_html(project: Project, report=None) -> str:
+    """Паспорт версии, матрица трассировки и протокол проверки стадии П."""
+    env = _build_env()
+    report = report or build_commission_report(project)
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".НК"),
+        sheet_title="Паспорт и нормативный контроль",
+        sheet_no="1",
+        sheet_total="—",
+    )
+    body_html = env.get_template("commission_control_body.html").render(
+        report=report,
+        status_labels=_COMMISSION_STATUS_LABELS,
+    )
+    return env.get_template("document.html").render(
+        doc=doc,
+        document_title="Паспорт проекта и нормативный контроль",
+        body_html=body_html,
+    )
+
+
+def generate_commission_control_pdf(project: Project, output_path: str, report=None) -> str:
+    """Сформировать самостоятельный комиссионный паспорт на листах А4."""
+    html_str = generate_commission_control_html(project, report=report)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*_CSS_FILES, "commission_control.css")
     ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets,
