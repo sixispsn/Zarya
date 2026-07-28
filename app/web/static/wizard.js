@@ -243,6 +243,181 @@ document.addEventListener("DOMContentLoaded", () => {
     proofPanels.forEach((panel) => { panel.hidden = true; });
   });
 
+  const impactDialog = document.querySelector("[data-impact-dialog]");
+  const impactOpen = document.querySelector("[data-impact-open]");
+  const impactClose = impactDialog?.querySelector("[data-impact-close]");
+  const impactForm = impactDialog?.querySelector("[data-impact-form]");
+  const impactLoading = impactDialog?.querySelector("[data-impact-loading]");
+  const impactError = impactDialog?.querySelector("[data-impact-error]");
+  const impactResult = impactDialog?.querySelector("[data-impact-result]");
+  let impactReturnFocus = null;
+  const closeImpact = () => {
+    if (!impactDialog) return;
+    if (typeof impactDialog.close === "function") impactDialog.close();
+    else impactDialog.removeAttribute("open");
+    impactReturnFocus?.focus();
+  };
+  impactOpen?.addEventListener("click", () => {
+    if (!impactDialog) return;
+    impactReturnFocus = impactOpen;
+    if (typeof impactDialog.showModal === "function") impactDialog.showModal();
+    else impactDialog.setAttribute("open", "");
+    impactDialog.querySelector("input:not(:disabled)")?.focus();
+  });
+  impactClose?.addEventListener("click", closeImpact);
+  impactDialog?.addEventListener("click", (event) => {
+    if (event.target === impactDialog) closeImpact();
+  });
+
+  const impactElement = (tag, className, text) => {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  };
+  const renderImpact = (payload) => {
+    if (!impactResult) return;
+    const summary = impactResult.querySelector("[data-impact-summary]");
+    const inputChanges = impactResult.querySelector("[data-impact-input-changes]");
+    const deltas = impactResult.querySelector("[data-impact-deltas]");
+    const documents = impactResult.querySelector("[data-impact-documents]");
+    const warnings = impactResult.querySelector("[data-impact-warnings]");
+    const fingerprints = impactResult.querySelector("[data-impact-fingerprints]");
+    summary.replaceChildren();
+    const headline = impactElement(
+      "strong", "",
+      payload.summary.results_changed
+        ? `${payload.summary.results_changed} решений изменятся`
+        : "Расчётные результаты не изменятся"
+    );
+    const summaryText = impactElement(
+      "span", "",
+      `${payload.summary.documents_affected} документов затронуто · ${payload.calculation_status}`
+    );
+    summary.append(headline, summaryText);
+
+    inputChanges.replaceChildren();
+    const inputTitle = impactElement("h3", "", "Изменённые исходные данные");
+    inputChanges.append(inputTitle);
+    if (!payload.input_changes.length) {
+      inputChanges.append(impactElement("p", "impact-empty", "Значения совпадают с текущим проектом."));
+    } else {
+      const list = impactElement("div", "impact-change-chips");
+      payload.input_changes.forEach((item) => {
+        const chip = impactElement("span");
+        const label = impactElement("b", "", item.label);
+        const value = impactElement(
+          "small", "",
+          `${item.before}${item.unit ? ` ${item.unit}` : ""} → ${item.after}${item.unit ? ` ${item.unit}` : ""}`
+        );
+        chip.append(label, value);
+        list.append(chip);
+      });
+      inputChanges.append(list);
+    }
+
+    deltas.replaceChildren();
+    [...payload.deltas]
+      .sort((left, right) => Number(right.changed) - Number(left.changed))
+      .forEach((item) => {
+        const row = impactElement("article", `impact-delta ${item.changed ? "changed" : "unchanged"}`);
+        const system = impactElement("span", "proof-system", item.system);
+        const copy = impactElement("div", "impact-delta-copy");
+        copy.append(
+          impactElement("b", "", item.label),
+          impactElement("small", "", item.detail)
+        );
+        const values = impactElement("div", "impact-values");
+        values.append(
+          impactElement("span", "", item.before),
+          impactElement("i", "", "→"),
+          impactElement("strong", "", item.after),
+          impactElement("small", "", item.unit)
+        );
+        const state = impactElement(
+          "span",
+          "impact-delta-state",
+          item.changed ? "изменится" : "без изменений"
+        );
+        row.append(system, copy, values, state);
+        deltas.append(row);
+      });
+
+    documents.replaceChildren();
+    if (payload.affected_documents.length) {
+      payload.affected_documents.forEach((name) => {
+        documents.append(impactElement("span", "", name));
+      });
+    } else {
+      documents.append(impactElement("span", "", "нет"));
+    }
+    warnings.replaceChildren();
+    if (payload.warnings.length) {
+      payload.warnings.forEach((warning) => {
+        warnings.append(impactElement("li", "", warning));
+      });
+    } else {
+      warnings.append(impactElement("li", "impact-ok", "Новых предупреждений нет."));
+    }
+    fingerprints.textContent =
+      `ТЕКУЩИЙ ${payload.baseline_fingerprint} · ПРЕДПРОСМОТР ${payload.preview_fingerprint}`;
+    impactResult.hidden = false;
+    impactResult.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  impactForm?.addEventListener("reset", () => {
+    setTimeout(() => {
+      if (impactResult) impactResult.hidden = true;
+      if (impactError) impactError.hidden = true;
+    }, 0);
+  });
+  impactForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = impactForm.querySelector("button[type='submit']");
+    const consumers = [...impactForm.querySelectorAll("[data-impact-consumer]:not(:disabled)")];
+    const payload = {};
+    if (consumers.length) {
+      payload.consumer_counts = consumers
+        .sort((left, right) => Number(left.dataset.impactConsumer) - Number(right.dataset.impactConsumer))
+        .map((input) => Number.parseInt(input.value, 10));
+    }
+    impactForm.querySelectorAll("[data-impact-field]").forEach((input) => {
+      if (input.value === "") return;
+      const name = input.dataset.impactField;
+      payload[name] = name === "floors"
+        ? Number.parseInt(input.value, 10)
+        : Number.parseFloat(input.value.replace(",", "."));
+    });
+    if (impactError) impactError.hidden = true;
+    if (impactResult) impactResult.hidden = true;
+    if (impactLoading) impactLoading.hidden = false;
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = "Считаем…";
+    }
+    try {
+      const response = await fetch(impactForm.dataset.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || "Предпросмотр не выполнен");
+      renderImpact(result);
+    } catch (error) {
+      if (impactError) {
+        impactError.textContent = error.message || "Предпросмотр не выполнен";
+        impactError.hidden = false;
+      }
+    } finally {
+      if (impactLoading) impactLoading.hidden = true;
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = "Сравнить варианты";
+      }
+    }
+  });
+
   const form = document.querySelector("form[data-design-form]");
   if (form) {
     form.addEventListener("submit", () => {

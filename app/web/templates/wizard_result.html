@@ -5,8 +5,8 @@
 <title>Заря — комплект ИОС2 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260728-1">
-<script defer src="/static/wizard.js"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260728-2">
+<script defer src="/static/wizard.js?v=20260728-2"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
@@ -80,6 +80,7 @@
         {% endfor %}
       </div>
       <div class="proof-actions">
+        <button class="button-primary" type="button" data-impact-open>Что изменится?</button>
         <button class="button-secondary" type="button" data-proof-open="{{ proof.decisions[0].id }}">Открыть первый разбор</button>
         <a class="button-secondary" href="/wizard/proof/{{ run_id }}" download>Скачать доказательства JSON</a>
       </div>
@@ -165,6 +166,62 @@
       </footer>
     </article>
     {% endfor %}
+  </div>
+</dialog>
+
+<dialog class="proof-dialog impact-dialog" data-impact-dialog aria-label="Предпросмотр изменений">
+  <div class="proof-dialog-shell">
+    <button class="proof-close" type="button" data-impact-close aria-label="Закрыть предпросмотр">×</button>
+    <section class="impact-panel">
+      <header class="impact-head">
+        <p class="proof-overline">Zarya Impact Preview</p>
+        <h2>Что изменится?</h2>
+        <p>Измените исходные данные и получите новый расчёт рядом с текущим. Проект и документы не сохраняются.</p>
+      </header>
+      <form class="impact-form" data-impact-form data-endpoint="/wizard/impact/{{ run_id }}">
+        {% if impact.consumer_groups %}
+        <fieldset class="impact-group">
+          <legend>Потребители</legend>
+          <div class="impact-fields">
+            {% for group in impact.consumer_groups %}
+            <label>
+              <span>{{ group.name }}</span>
+              <input type="number" min="1" step="1" value="{{ group.count }}" data-impact-consumer="{{ group.index }}" data-original="{{ group.count }}" {% if not impact.consumer_editable %}disabled{% endif %}>
+              <small>{{ group.unit }} · {{ group.code }}</small>
+            </label>
+            {% endfor %}
+          </div>
+          {% if not impact.consumer_editable %}<p class="impact-note">Количество задаётся узлами расчётной топологии В1 и в этом окне не изменяется.</p>{% endif %}
+        </fieldset>
+        {% endif %}
+        <fieldset class="impact-group">
+          <legend>Здание и ТУ</legend>
+          <div class="impact-fields">
+            <label><span>Этажность</span><input type="number" min="1" step="1" value="{{ impact.floors }}" data-impact-field="floors" data-original="{{ impact.floors }}"><small>надземных этажей</small></label>
+            <label><span>Высота здания</span><input type="number" min="0.1" step="0.1" value="{{ impact.building_height_m }}" data-impact-field="building_height_m" data-original="{{ impact.building_height_m }}"><small>м</small></label>
+            <label><span>Пожарно-техническая высота</span><input type="number" min="0.1" step="0.1" value="{{ impact.fire_height_m or '' }}" data-impact-field="fire_height_m" data-original="{{ impact.fire_height_m or '' }}"><small>м · режим {{ impact.fire_mode }}</small></label>
+            <label><span>Гарантированный напор</span><input type="number" min="0" step="0.1" value="{{ impact.guaranteed_head_m if impact.guaranteed_head_m is not none else '' }}" data-impact-field="guaranteed_head_m" data-original="{{ impact.guaranteed_head_m if impact.guaranteed_head_m is not none else '' }}"><small>м · по ТУ</small></label>
+          </div>
+        </fieldset>
+        <div class="impact-form-actions">
+          <div><strong>Безопасный предпросмотр</strong><span>Расчётное ядро то же, PDF не перевыпускаются.</span></div>
+          <button class="button-secondary" type="reset">Сбросить</button>
+          <button class="button-primary" type="submit">Сравнить варианты</button>
+        </div>
+      </form>
+      <div class="impact-loading" data-impact-loading hidden>Пересчитываем зависимости…</div>
+      <div class="impact-error" data-impact-error hidden role="alert"></div>
+      <section class="impact-result" data-impact-result hidden aria-live="polite">
+        <div class="impact-summary" data-impact-summary></div>
+        <div class="impact-input-changes" data-impact-input-changes></div>
+        <div class="impact-deltas" data-impact-deltas></div>
+        <div class="impact-output-grid">
+          <section><h3>Затронутые документы</h3><div class="proof-chips" data-impact-documents></div></section>
+          <section><h3>Предупреждения расчёта</h3><ul data-impact-warnings></ul></section>
+        </div>
+        <footer class="impact-fingerprints" data-impact-fingerprints></footer>
+      </section>
+    </section>
   </div>
 </dialog>
 </body></html>

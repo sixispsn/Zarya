@@ -22,7 +22,7 @@ import os
 import uuid
 from typing import Dict
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -35,8 +35,14 @@ from app.intake.advisories import review_request
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.pz.generator import cold_meter_loss
+from app.pz.impact import (
+    ImpactValidationError,
+    calculate_impact_preview,
+    impact_form_context,
+)
 from app.pz.proof import build_proof_graph
 from app.pz.rules import calc_required_head
+from app.schemas.impact import ImpactPreviewInput
 from app.data.sp30_tables import list_consumer_norms
 from app.data.storm_cities import list_cities
 
@@ -224,6 +230,7 @@ async def wizard_design(request: Request):
     _RUNS[run_id] = {
         "bundle": bundle, "outdir": outdir, "project_id": project_id,
         "advisories": advisories,
+        "request": req,
         "proof_graph": build_proof_graph(
             bundle.project, bundle.commission_report,
         ),
@@ -261,6 +268,7 @@ def wizard_result(request: Request, run_id: str):
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
         "proof": proof_graph,
+        "impact": impact_form_context(run["request"]),
         "warnings": b.warnings + [
             f"{item.message} ({item.reference})"
             for item in run.get("advisories", [])
@@ -312,6 +320,24 @@ def wizard_proof(run_id: str):
         graph.to_dict(),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/impact/{run_id}")
+def wizard_impact(run_id: str, data: ImpactPreviewInput):
+    """Предпросмотр «было → станет» без сохранения и выпуска документов."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="прогон не найден")
+    try:
+        preview = calculate_impact_preview(
+            run["request"],
+            run["bundle"].project,
+            run["bundle"].commission_report,
+            data,
+        )
+    except ImpactValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return JSONResponse(preview.to_dict())
 
 
 @router.get("/file/{run_id}/{name}")

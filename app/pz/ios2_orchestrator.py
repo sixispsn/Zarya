@@ -73,6 +73,7 @@ def design_ios2(
     dn_by_segment: Optional[dict] = None,
     hydraulic_report: Optional[object] = None,
     scenario_filter: Optional[object] = None,
+    render_documents: bool = True,
 ) -> IOS2DesignBundle:
     """Координатор комплекта ИОС2.
 
@@ -85,6 +86,8 @@ def design_ios2(
     dn_by_segment: карта {segment_id: Ду} для аудита диаметров.
     hydraulic_report: готовый FireHydraulicReport (для режима 2, если сеть не дана).
     scenario_filter: предикат допустимости сценария (напр. разные стояки).
+    render_documents: False выполняет тот же расчётный конвейер, но не создаёт
+        PDF. Используется только для несохраняемого предпросмотра изменений.
 
     Возвращает IOS2DesignBundle с путями к PDF и промежуточными результатами.
     Пропущенные шаги отражены в warnings/status.
@@ -551,6 +554,13 @@ def design_ios2(
     for pump_system in (project.pumps, project.fire_pumps):
         pump_system.frequency_drive_required = project.normative.frequency_drive_required
         pump_system.dispatch_required = project.normative.pump_dispatch_required
+
+    if not render_documents:
+        bundle.commission_report = build_commission_report(project)
+        bundle.status.append(
+            "preview: расчётный конвейер выполнен без генерации документов"
+        )
+        return bundle
 
     bundle.pz_pdf = generate_pz_pdf(project, os.path.join(output_dir, "ПЗ.pdf"))
     bundle.status.append("ПЗ.pdf собран")

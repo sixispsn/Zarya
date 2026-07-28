@@ -15,6 +15,7 @@ def test_wizard_router_importable():
     assert "/wizard/design" in paths
     assert "/wizard/result/{run_id}" in paths
     assert "/wizard/proof/{run_id}" in paths
+    assert "/wizard/impact/{run_id}" in paths
     assert "/wizard/file/{run_id}/{name}" in paths
 
 
@@ -116,6 +117,9 @@ def test_result_template_shows_key_numbers():
     assert 'data-proof-open="v1-head"' in html
     assert 'data-proof-dialog' in html
     assert "Скачать доказательства JSON" in html
+    assert "Что изменится?" in html
+    assert 'data-impact-dialog' in html
+    assert 'data-endpoint="/wizard/impact/{{ run_id }}"' in html
 
 
 def test_blueprint_ui_marks_edited_sections():
@@ -145,6 +149,9 @@ def test_proof_ui_is_interactive_and_responsive():
     assert ".proof-impact-grid" in css
     assert 'document.querySelectorAll("[data-proof-open]")' in js
     assert 'proofDialog.showModal()' in js
+    assert 'fetch(impactForm.dataset.endpoint' in js
+    assert ".impact-delta.changed" in css
+    assert ".impact-output-grid" in css
 
 
 def test_live_normative_advisories_are_wired():
