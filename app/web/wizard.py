@@ -23,7 +23,7 @@ import uuid
 from typing import Dict
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.intake.request_dto import (
@@ -35,6 +35,7 @@ from app.intake.advisories import review_request
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.pz.generator import cold_meter_loss
+from app.pz.proof import build_proof_graph
 from app.pz.rules import calc_required_head
 from app.data.sp30_tables import list_consumer_norms
 from app.data.storm_cities import list_cities
@@ -223,6 +224,9 @@ async def wizard_design(request: Request):
     _RUNS[run_id] = {
         "bundle": bundle, "outdir": outdir, "project_id": project_id,
         "advisories": advisories,
+        "proof_graph": build_proof_graph(
+            bundle.project, bundle.commission_report,
+        ),
     }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -233,6 +237,7 @@ def wizard_result(request: Request, run_id: str):
     if run is None:
         return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
     b = run["bundle"]
+    proof_graph = run["proof_graph"]
     pdfs = []
     for label, path in (("Пояснительная записка", b.pz_pdf),
                         ("Паспорт проекта и нормативный контроль",
@@ -255,6 +260,7 @@ def wizard_result(request: Request, run_id: str):
         "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
+        "proof": proof_graph,
         "warnings": b.warnings + [
             f"{item.message} ({item.reference})"
             for item in run.get("advisories", [])
@@ -292,6 +298,20 @@ def wizard_result(request: Request, run_id: str):
         "pump_duty": (b.fire_hydraulic_result.pump_duty
                       if b.fire_hydraulic_result else None),
     })
+
+
+@router.get("/proof/{run_id}")
+def wizard_proof(run_id: str):
+    """Машиночитаемый доказательный граф того же расчётного прогона."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        return JSONResponse({"detail": "прогон не найден"}, status_code=404)
+    graph = run["proof_graph"]
+    filename = f"zarya-proof-{graph.project_fingerprint}.json"
+    return JSONResponse(
+        graph.to_dict(),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/file/{run_id}/{name}")

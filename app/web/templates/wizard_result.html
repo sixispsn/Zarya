@@ -5,12 +5,12 @@
 <title>Заря — комплект ИОС2 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260727-2">
+<link rel="stylesheet" href="/static/wizard.css?v=20260728-1">
 <script defer src="/static/wizard.js"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+  <nav class="topnav" aria-label="Основная навигация"><a href="#project-proof">Доказательства</a><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
 </header>
 <main class="result-shell">
   <section class="result-hero">
@@ -23,29 +23,66 @@
     <section class="card">
       <div class="card-kicker"><h2>Хозяйственно-питьевой водопровод</h2><span class="system-tag">В1</span></div>
       <div class="metric-grid">
-        <div class="metric"><b>Суточный расход</b><strong>{{ v1.q_day|ru_num(1) }}</strong><small>м³/сут</small></div>
-        <div class="metric"><b>Секундный расход</b><strong>{{ v1.q_sec|ru_num(3) }}</strong><small>л/с</small></div>
-        <div class="metric"><b>Требуемый напор</b><strong>{{ v1.required_head|ru_num(2) }}</strong><small>м вод. ст.</small></div>
-        <div class="metric"><b>Гарантированный напор</b><strong>{{ v1.guaranteed_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
+        <button class="metric proof-trigger" type="button" data-proof-open="v1-q-day"><b>Суточный расход</b><strong>{{ v1.q_day|ru_num(1) }}</strong><small>м³/сут · обосновать</small></button>
+        <button class="metric proof-trigger" type="button" data-proof-open="v1-q-sec"><b>Секундный расход</b><strong>{{ v1.q_sec|ru_num(3) }}</strong><small>л/с · обосновать</small></button>
+        <button class="metric proof-trigger" type="button" data-proof-open="v1-head"><b>Требуемый напор</b><strong>{{ v1.required_head|ru_num(2) }}</strong><small>м вод. ст. · обосновать</small></button>
+        <button class="metric proof-trigger" type="button" data-proof-open="v1-head"><b>Гарантированный напор</b><strong>{{ v1.guaranteed_head|ru_num(1) }}</strong><small>м вод. ст. · источник</small></button>
       </div>
-      {% if v1.pump_required %}<div class="equipment"><strong>{{ v1.pump_model or 'Модель требует уточнения' }}</strong>Насосная В1 · Q = {{ v1.pump_q|ru_num(2) }} м³/ч · H = {{ v1.pump_h|ru_num(1) }} м</div>{% else %}<div class="equipment"><strong>Повышение давления не требуется</strong>Гарантированный напор покрывает расчётную потребность В1.</div>{% endif %}
+      {% if v1.pump_required %}<button class="equipment equipment-proof" type="button" data-proof-open="v1-pump"><strong>{{ v1.pump_model or 'Модель требует уточнения' }}</strong>Насосная В1 · Q = {{ v1.pump_q|ru_num(2) }} м³/ч · H = {{ v1.pump_h|ru_num(1) }} м<span>Показать рабочую точку и происхождение →</span></button>{% else %}<button class="equipment equipment-proof" type="button" data-proof-open="v1-pump"><strong>Повышение давления не требуется</strong>Гарантированный напор покрывает расчётную потребность В1.<span>Показать обоснование →</span></button>{% endif %}
     </section>
 
     <section class="card">
       <div class="card-kicker"><h2>Противопожарный водопровод</h2><span class="system-tag">В2</span></div>
       {% if fire.required %}
       <div class="metric-grid">
-        <div class="metric"><b>Пожарный расход</b><strong>{{ fire.flow|ru_num(1) }}</strong><small>л/с</small></div>
+        <button class="metric proof-trigger" type="button" data-proof-open="v2-requirement"><b>Пожарный расход</b><strong>{{ fire.flow|ru_num(1) }}</strong><small>л/с · СП 10</small></button>
         <div class="metric"><b>Размещено ПК</b><strong>{{ fire.pk_total }}</strong><small>шт.</small></div>
-        <div class="metric"><b>Требуемый напор</b><strong>{{ fire.required_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
-        <div class="metric"><b>Доступный напор</b><strong>{{ fire.available_head|ru_num(1) }}</strong><small>м вод. ст.</small></div>
+        <button class="metric proof-trigger" type="button" data-proof-open="v2-hydraulics"><b>Требуемый напор</b><strong>{{ fire.required_head|ru_num(1) }}</strong><small>м вод. ст. · обосновать</small></button>
+        <button class="metric proof-trigger" type="button" data-proof-open="v2-hydraulics"><b>Доступный напор</b><strong>{{ fire.available_head|ru_num(1) }}</strong><small>м вод. ст. · источник</small></button>
       </div>
       <p class="hint" style="margin-top:13px">{{ fire.note }}</p>
       {% if fire.needs_pump %}<div class="equipment"><strong>{{ fire_pump.model or 'Модель требует уточнения' }}</strong>Пожарная насосная · Q = {{ fire_pump.q|ru_num(1) }} м³/ч · H = {{ fire_pump.h|ru_num(1) }} м{% if pump_duty %} · расчётный режим {{ pump_duty.flow_lps|ru_num(1) }} л/с{% endif %}</div>{% else %}<div class="equipment"><strong>Пожарная насосная не требуется</strong>Напор источника покрывает расчетный режим В2.</div>{% endif %}
       <p class="hint" style="margin-top:13px">Диктующий сценарий: {{ fire.dictating or 'не определён' }}</p>
       {% else %}
-      <div class="equipment"><strong>ВПВ не требуется</strong>{{ fire.note }}</div>
+      <button class="equipment equipment-proof" type="button" data-proof-open="v2-requirement"><strong>ВПВ не требуется</strong>{{ fire.note }}<span>Показать проверку по СП 10 →</span></button>
       {% endif %}
+    </section>
+
+    <section class="card full proof-card" id="project-proof">
+      <div class="card-kicker">
+        <div>
+          <p class="proof-overline">Zarya Proof 1.0</p>
+          <h2>Рентген проекта</h2>
+        </div>
+        <span class="system-tag">от числа к источнику</span>
+      </div>
+      <div class="proof-hero">
+        <div class="proof-intro">
+          <strong>{{ proof.proven_count }} из {{ proof.decisions|length }} решений подтверждены</strong>
+          <p>Нажмите на решение: «Заря» покажет исходные данные, норматив, расчёт, вывод и документы, в которые передан результат.</p>
+          <div class="proof-fingerprint">PROJECT {{ proof.project_fingerprint }} · LEGACY {{ proof.legacy_fingerprint }} · BUILD {{ proof.build_commit }}</div>
+        </div>
+        <div class="proof-counters" aria-label="Статусы доказательств">
+          <div><b>{{ proof.proven_count }}</b><span>подтверждено</span></div>
+          <div><b>{{ proof.missing_count }}</b><span>нужны данные</span></div>
+          <div><b>{{ proof.stage_r_count }}</b><span>стадия Р</span></div>
+        </div>
+      </div>
+      <div class="proof-index">
+        {% for item in proof.decisions %}
+        <button class="proof-row" type="button" data-proof-open="{{ item.id }}">
+          <span class="proof-system">{{ item.system }}</span>
+          <span class="proof-row-copy"><b>{{ item.title }}</b><small>{{ item.summary }}</small></span>
+          <span class="proof-row-value">{{ item.value }}{% if item.unit %}<small>{{ item.unit }}</small>{% endif %}</span>
+          <span class="proof-status" data-status="{{ item.status }}">{{ item.status_label }}</span>
+          <span class="proof-arrow" aria-hidden="true">→</span>
+        </button>
+        {% endfor %}
+      </div>
+      <div class="proof-actions">
+        <button class="button-secondary" type="button" data-proof-open="{{ proof.decisions[0].id }}">Открыть первый разбор</button>
+        <a class="button-secondary" href="/wizard/proof/{{ run_id }}" download>Скачать доказательства JSON</a>
+      </div>
     </section>
 
     {% if commission %}
@@ -80,4 +117,54 @@
     <a class="button-secondary" href="/wizard">Новый расчёт</a>
     <a class="button-secondary" href="/wizard/projects">Все проекты</a>
   </div>
-</main></body></html>
+</main>
+
+<dialog class="proof-dialog" data-proof-dialog aria-label="Доказательная цепочка">
+  <div class="proof-dialog-shell">
+    <button class="proof-close" type="button" data-proof-close aria-label="Закрыть разбор">×</button>
+    {% for item in proof.decisions %}
+    <article class="proof-panel" data-proof-panel="{{ item.id }}" hidden>
+      <header class="proof-panel-head">
+        <div>
+          <p class="proof-overline">{{ item.system }} · доказательная цепочка</p>
+          <h2>{{ item.title }}</h2>
+          <p>{{ item.summary }}</p>
+        </div>
+        <div class="proof-panel-result">
+          <span class="proof-status" data-status="{{ item.status }}">{{ item.status_label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.unit }}</small>
+        </div>
+      </header>
+      <ol class="proof-chain">
+        {% for step in item.steps %}
+        <li class="proof-step" data-kind="{{ step.kind }}">
+          <span class="proof-step-index">{{ '%02d'|format(loop.index) }}</span>
+          <div>
+            <small>{{ step.kind_label }}</small>
+            <b>{{ step.label }}</b>
+            <strong>{{ step.value }}</strong>
+            {% if step.detail %}<p>{{ step.detail }}</p>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      <div class="proof-impact-grid">
+        <section>
+          <h3>Связанные документы</h3>
+          <div class="proof-chips">{% for artifact in item.artifacts %}<span>{{ artifact }}</span>{% endfor %}</div>
+        </section>
+        <section>
+          <h3>Что затронет изменение</h3>
+          <ul>{% for impact in item.impact %}<li>{{ impact }}</li>{% endfor %}</ul>
+        </section>
+      </div>
+      <footer class="proof-panel-foot">
+        <span>PROJECT {{ proof.project_fingerprint }}</span>
+        <span>LEGACY {{ proof.legacy_fingerprint }}</span>
+      </footer>
+    </article>
+    {% endfor %}
+  </div>
+</dialog>
+</body></html>

@@ -207,6 +207,42 @@ document.addEventListener("DOMContentLoaded", () => {
     sections.forEach((section) => observer.observe(section));
   }
 
+  const proofDialog = document.querySelector("[data-proof-dialog]");
+  const proofPanels = proofDialog
+    ? [...proofDialog.querySelectorAll("[data-proof-panel]")]
+    : [];
+  const proofClose = proofDialog?.querySelector("[data-proof-close]");
+  let lastProofTrigger = null;
+  const closeProof = () => {
+    if (!proofDialog) return;
+    if (typeof proofDialog.close === "function") proofDialog.close();
+    else proofDialog.removeAttribute("open");
+    lastProofTrigger?.focus();
+  };
+  const openProof = (id, trigger) => {
+    if (!proofDialog) return;
+    const selected = proofPanels.find((panel) => panel.dataset.proofPanel === id);
+    if (!selected) return;
+    proofPanels.forEach((panel) => { panel.hidden = panel !== selected; });
+    lastProofTrigger = trigger;
+    if (typeof proofDialog.showModal === "function") {
+      if (!proofDialog.open) proofDialog.showModal();
+    } else {
+      proofDialog.setAttribute("open", "");
+    }
+    proofClose?.focus();
+  };
+  document.querySelectorAll("[data-proof-open]").forEach((trigger) => {
+    trigger.addEventListener("click", () => openProof(trigger.dataset.proofOpen, trigger));
+  });
+  proofClose?.addEventListener("click", closeProof);
+  proofDialog?.addEventListener("click", (event) => {
+    if (event.target === proofDialog) closeProof();
+  });
+  proofDialog?.addEventListener("close", () => {
+    proofPanels.forEach((panel) => { panel.hidden = true; });
+  });
+
   const form = document.querySelector("form[data-design-form]");
   if (form) {
     form.addEventListener("submit", () => {

@@ -14,6 +14,7 @@ def test_wizard_router_importable():
     assert "/wizard" in paths
     assert "/wizard/design" in paths
     assert "/wizard/result/{run_id}" in paths
+    assert "/wizard/proof/{run_id}" in paths
     assert "/wizard/file/{run_id}/{name}" in paths
 
 
@@ -110,6 +111,11 @@ def test_result_template_shows_key_numbers():
     for token in ("fire.pk_total", "fire.required_head", "fire.note", "pdfs", "status"):
         assert token in html
     assert '<details class="protocol">' in html
+    assert 'id="project-proof"' in html
+    assert 'data-proof-open="v1-q-day"' in html
+    assert 'data-proof-open="v1-head"' in html
+    assert 'data-proof-dialog' in html
+    assert "Скачать доказательства JSON" in html
 
 
 def test_blueprint_ui_marks_edited_sections():
@@ -129,6 +135,16 @@ def test_dark_theme_is_default_and_responsive():
     assert "@media (max-width: 680px)" in css
     assert ".building-row { grid-template-columns: repeat(3,minmax(0,1fr)); }" in css
     assert 'localStorage.setItem("zarya-theme"' in js
+
+
+def test_proof_ui_is_interactive_and_responsive():
+    css = open("app/web/static/wizard.css", encoding="utf-8").read()
+    js = open("app/web/static/wizard.js", encoding="utf-8").read()
+    assert ".proof-dialog::backdrop" in css
+    assert ".proof-status[data-status=\"missing\"]" in css
+    assert ".proof-impact-grid" in css
+    assert 'document.querySelectorAll("[data-proof-open]")' in js
+    assert 'proofDialog.showModal()' in js
 
 
 def test_live_normative_advisories_are_wired():
