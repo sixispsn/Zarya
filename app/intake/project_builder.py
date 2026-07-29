@@ -21,7 +21,7 @@ from app.pz.project import (
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
     V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
-    InsulationDesign,
+    InsulationDesign, SewageRiserSpec, SewerPipeSpec,
 )
 from app.pz.normative import derive_requirements, decide_grease_trap, decide_storm_system
 
@@ -213,12 +213,31 @@ def build_project(req: IOS2Request) -> Project:
         if counts:
             p.consumer_groups = list(counts.items())
     p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
+    p.sewage.risers = [SewageRiserSpec(**vars(row)) for row in req.sewage_risers]
+    p.sewage.pipes = [SewerPipeSpec(**vars(row)) for row in req.sewer_pipes]
+    p.sewage.outlets_count = req.sewage_outlets_count
     p.storm_city = req.storm_city
     p.storm = decide_storm_system(req.roof_type, req.floors)
     p.storm.city_code = req.storm_city
     p.storm.roof_area_m2 = req.storm_roof_area_m2
     p.storm.walls_area_m2 = req.storm_walls_area_m2
     p.storm.period_years = req.storm_period_years
+    p.storm.roof_sections = req.storm_roof_sections
+    p.storm.funnels_count = req.storm_funnels_count
+    p.storm.sectional_residential_single_funnel = (
+        req.storm_sectional_residential_single_funnel
+    )
+    p.storm.max_funnel_spacing_m = req.storm_max_funnel_spacing_m
+    p.storm.selected_funnel_capacity_lps = (
+        req.storm_selected_funnel_capacity_lps
+    )
+    p.storm.max_funnel_flow_lps = req.storm_max_funnel_flow_lps
+    p.storm.risers_count = req.storm_risers_count
+    p.storm.selected_riser_dn_mm = req.storm_selected_riser_dn_mm
+    p.storm.max_riser_flow_lps = req.storm_max_riser_flow_lps
+    p.storm.funnels_on_different_levels = (
+        req.storm_funnels_on_different_levels
+    )
     p.grease_trap = decide_grease_trap(
         req.catering_type,
         req.catering_seats,

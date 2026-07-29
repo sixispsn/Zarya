@@ -33,6 +33,8 @@ CATERING_TYPES = ("none", "semi_finished", "raw", "school")
 SOURCE_KINDS = ("city_main", "reservoir", "pond", "well")
 SPACE_KINDS = ("corridor", "room", "hall", "storage")
 PLACEMENT_MODES = ("one_side", "two_opposite_sides")
+SEWAGE_MATERIALS = ("pvc", "pp", "cast_iron_socket", "sml")
+SEWAGE_VENTILATION = ("ventilated", "vacuum_valve", "unventilated")
 
 
 @dataclass
@@ -214,6 +216,41 @@ class V1NetworkRequest:
 
 
 @dataclass
+class SewageRiserRequest:
+    """Явный расчётный узел стояка К1 по приложению К СП 30."""
+    riser_id: str
+    design_flow_lps: float
+    material: str
+    ventilation: str
+    riser_dn_mm: int
+    branch_dn_mm: int
+    branch_angle_deg: float
+    has_toilet: bool = True
+    working_height_m: Optional[float] = None
+
+
+@dataclass
+class SewerPipeRequest:
+    """Явно посчитанная труба К1/К2 для спецификации стадии П.
+
+    Наружный диаметр и толщина стенки задаются отдельно, чтобы ПЗ и
+    спецификация не подменяли фактическую геометрию условным DN.
+    """
+    system: str
+    section_id: str
+    purpose: str
+    material: str
+    standard: str
+    outer_diameter_mm: float
+    wall_thickness_mm: float
+    length_m: float
+
+    @property
+    def inner_diameter_mm(self) -> float:
+        return self.outer_diameter_mm - 2.0 * self.wall_thickness_mm
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -248,6 +285,9 @@ class IOS2Request:
     v1_sections: List[V1SectionRequest] = field(default_factory=list)
     v1_network: Optional[V1NetworkRequest] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
+    sewage_risers: List[SewageRiserRequest] = field(default_factory=list)
+    sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
+    sewage_outlets_count: int = 0
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
     apartments: int = 0
     owner_groups_count: int = 1
@@ -255,6 +295,16 @@ class IOS2Request:
     storm_roof_area_m2: float = 0.0
     storm_walls_area_m2: float = 0.0
     storm_period_years: int = 1
+    storm_roof_sections: int = 0
+    storm_funnels_count: int = 0
+    storm_sectional_residential_single_funnel: bool = False
+    storm_max_funnel_spacing_m: Optional[float] = None
+    storm_selected_funnel_capacity_lps: Optional[float] = None
+    storm_max_funnel_flow_lps: Optional[float] = None
+    storm_risers_count: int = 0
+    storm_selected_riser_dn_mm: int = 0
+    storm_max_riser_flow_lps: Optional[float] = None
+    storm_funnels_on_different_levels: bool = False
     catering_type: str = "none"
     catering_seats: int = 0
     catering_conditional_dishes: int = 0
@@ -301,6 +351,68 @@ class IOS2Request:
             p.append("compact_jet_m должен быть 6, 8, 10, 12, 14, 16, 18 или 20")
         if self.sewage_max_fixture_lps < 0:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
+        if self.sewage_outlets_count < 0:
+            p.append("sewage_outlets_count не может быть отрицательным")
+        seen_sewage_risers = set()
+        for i, riser in enumerate(self.sewage_risers):
+            if not riser.riser_id or riser.riser_id in seen_sewage_risers:
+                p.append(
+                    f"sewage_risers[{i}]: марка пустая или повторяется"
+                )
+            seen_sewage_risers.add(riser.riser_id)
+            if riser.design_flow_lps <= 0:
+                p.append(
+                    f"sewage_risers[{i}].design_flow_lps должен быть > 0"
+                )
+            if min(riser.riser_dn_mm, riser.branch_dn_mm) <= 0:
+                p.append(f"sewage_risers[{i}]: диаметры должны быть > 0")
+            if riser.material not in SEWAGE_MATERIALS:
+                p.append(
+                    f"sewage_risers[{i}].material должен быть одним из "
+                    f"{SEWAGE_MATERIALS}"
+                )
+            if riser.ventilation not in SEWAGE_VENTILATION:
+                p.append(
+                    f"sewage_risers[{i}].ventilation должен быть одним из "
+                    f"{SEWAGE_VENTILATION}"
+                )
+            if riser.branch_angle_deg not in (45.0, 60.0, 87.5):
+                p.append(
+                    f"sewage_risers[{i}].branch_angle_deg должен быть "
+                    "45, 60 или 87,5"
+                )
+            if riser.working_height_m is not None and riser.working_height_m <= 0:
+                p.append(
+                    f"sewage_risers[{i}].working_height_m должен быть > 0"
+                )
+        seen_sewer_sections = set()
+        for i, pipe in enumerate(self.sewer_pipes):
+            if pipe.system not in ("K1", "K2"):
+                p.append(f"sewer_pipes[{i}].system должен быть K1 или K2")
+            if not pipe.section_id or pipe.section_id in seen_sewer_sections:
+                p.append(
+                    f"sewer_pipes[{i}]: обозначение пустое или повторяется"
+                )
+            seen_sewer_sections.add(pipe.section_id)
+            if min(
+                pipe.outer_diameter_mm,
+                pipe.wall_thickness_mm,
+                pipe.length_m,
+            ) <= 0:
+                p.append(
+                    f"sewer_pipes[{i}]: наружный диаметр, стенка и длина "
+                    "должны быть > 0"
+                )
+            if pipe.inner_diameter_mm <= 0:
+                p.append(
+                    f"sewer_pipes[{i}]: толщина стенки исключает проходное "
+                    "сечение"
+                )
+            if not pipe.material.strip() or not pipe.standard.strip():
+                p.append(
+                    f"sewer_pipes[{i}]: материал и стандарт/ТУ обязательны "
+                    "для точной спецификации"
+                )
         if self.apartments < 0:
             p.append("apartments не может быть отрицательным")
         if self.owner_groups_count < 1:
@@ -311,6 +423,35 @@ class IOS2Request:
             p.append("площади кровли и примыкающих стен не могут быть отрицательными")
         if self.storm_period_years not in (1, 2, 3, 5, 10):
             p.append("storm_period_years должен быть 1, 2, 3, 5 или 10")
+        if min(
+            self.storm_roof_sections,
+            self.storm_funnels_count,
+            self.storm_risers_count,
+            self.storm_selected_riser_dn_mm,
+        ) < 0:
+            p.append(
+                "число секций, воронок, стояков и DN К2 не может быть "
+                "отрицательным"
+            )
+        if (
+            self.storm_sectional_residential_single_funnel
+            and self.building_type != "residential"
+        ):
+            p.append(
+                "исключение «одна воронка на секцию» применимо только "
+                "к секционному жилому зданию"
+            )
+        for name, value in (
+            ("storm_max_funnel_spacing_m", self.storm_max_funnel_spacing_m),
+            (
+                "storm_selected_funnel_capacity_lps",
+                self.storm_selected_funnel_capacity_lps,
+            ),
+            ("storm_max_funnel_flow_lps", self.storm_max_funnel_flow_lps),
+            ("storm_max_riser_flow_lps", self.storm_max_riser_flow_lps),
+        ):
+            if value is not None and value <= 0:
+                p.append(f"{name} должен быть > 0")
         if self.catering_type not in CATERING_TYPES:
             p.append(f"catering_type '{self.catering_type}' не из {CATERING_TYPES}")
         if min(self.catering_seats, self.catering_conditional_dishes) < 0:

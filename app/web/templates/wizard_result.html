@@ -5,8 +5,8 @@
 <title>Заря — комплект ИОС2 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260728-2">
-<script defer src="/static/wizard.js?v=20260728-2"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-2">
+<script defer src="/static/wizard.js?v=20260730-2"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
@@ -45,6 +45,32 @@
       <p class="hint" style="margin-top:13px">Диктующий сценарий: {{ fire.dictating or 'не определён' }}</p>
       {% else %}
       <button class="equipment equipment-proof" type="button" data-proof-open="v2-requirement"><strong>ВПВ не требуется</strong>{{ fire.note }}<span>Показать проверку по СП 10 →</span></button>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-kicker"><h2>Хозяйственно-бытовая канализация</h2><span class="system-tag">К1</span></div>
+      <div class="metric-grid">
+        <button class="metric proof-trigger" type="button" data-proof-open="k1-flow"><b>Расчётный расход</b><strong>{{ sewage.flow|ru_num(3) }}</strong><small>л/с · формула (5) СП 30</small></button>
+        <div class="metric"><b>Стояков задано</b><strong>{{ sewage.riser_count }}</strong><small>характерных</small></div>
+        <div class="metric"><b>Таблично проверено</b><strong>{{ sewage.checked_count }}</strong><small>по приложению К</small></div>
+        <div class="metric"><b>Выпусков</b><strong>{{ sewage.outlets_count or '—' }}</strong><small>шт. · только явные данные</small></div>
+      </div>
+      <div class="equipment"><strong>Без фиктивной гидравлики</strong>Общий расход не делится между стояками; горизонтальная сеть и выпуски рассчитываются по аксонометрии стадии Р.</div>
+    </section>
+
+    <section class="card">
+      <div class="card-kicker"><h2>Внутренний водосток</h2><span class="system-tag">К2</span></div>
+      {% if storm.required %}
+      <div class="metric-grid">
+        <button class="metric proof-trigger" type="button" data-proof-open="k2-flow"><b>Дождевой расход</b><strong>{{ storm.flow|ru_num(3) }}</strong><small>л/с · СП 30</small></button>
+        <div class="metric"><b>Воронок</b><strong>{{ storm.funnels_count or '—' }}</strong><small>шт.</small></div>
+        <div class="metric"><b>Стояков</b><strong>{{ storm.risers_count or '—' }}</strong><small>шт.</small></div>
+        <div class="metric"><b>Проверка сети</b><strong>{{ 'OK' if storm.status == 'verified' else '!' if storm.status == 'fail' else 'Р' }}</strong><small>{{ storm.status }}</small></div>
+      </div>
+      <div class="equipment"><strong>Нагрузки элементов — по плану</strong>Расход между воронками и стояками автоматически не распределяется.</div>
+      {% else %}
+      <div class="equipment"><strong>Внутренний К2 не назначен</strong>Решение зависит от типа кровли и исходных данных АР.</div>
       {% endif %}
     </section>
 

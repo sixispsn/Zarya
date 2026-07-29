@@ -5,8 +5,8 @@
 <title>Заря — проектирование ИОС2</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260727-2">
-<script defer src="/static/wizard.js"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-2">
+<script defer src="/static/wizard.js?v=20260730-2"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
@@ -98,19 +98,64 @@
 <fieldset id="systems"><legend class="visually-hidden">Инженерные системы</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">05</span><span class="section-copy"><span class="section-title">Инженерные системы</span><span class="section-value">В1 {{ prefill.risers_v1 if prefill else 8 }} стояков · Т3/Т4 {{ prefill.risers_t3 if prefill else 8 }}/{{ prefill.risers_t4 if prefill else 8 }} · В2 {{ prefill.network.risers|length if prefill and prefill.network else 4 }} стояка</span></span><span class="section-meta"><span class="source-tag">СХЕМЫ</span><span class="accepted">принято</span></span></summary><div class="section-body">
   <details class="advanced-section"><summary>В1 / Т3 / Т4 · укрупнённые данные стадии П</summary><div class="advanced-body"><div class="row"><label>Стояков В1<input name="risers_v1" value="{{ prefill.risers_v1 if prefill else 8 }}"></label><label>Стояков Т3<input name="risers_t3" value="{{ prefill.risers_t3 if prefill else 8 }}"></label><label>Стояков Т4<input name="risers_t4" value="{{ prefill.risers_t4 if prefill else 8 }}"></label><label>Место прокладки<select name="insulation_location"><option value="room_hot"{% if not prefill or prefill.insulation_location == 'room_hot' %} selected{% endif %}>отапливаемое помещение</option><option value="room_cold"{% if prefill and prefill.insulation_location == 'room_cold' %} selected{% endif %}>неотапливаемое помещение</option><option value="parking"{% if prefill and prefill.insulation_location == 'parking' %} selected{% endif %}>подземная стоянка</option></select></label><label>t помещения, °C<input name="insulation_t_room" value="{{ prefill.insulation_t_room_manual if prefill else 5 }}"></label><label>Влажность, %<select name="insulation_humidity">{% for h in [40,50,60,70,80,90] %}<option value="{{ h }}"{% if (prefill.insulation_humidity if prefill else 60) == h %} selected{% endif %}>{{ h }}</option>{% endfor %}</select></label><label>t ХВС, °C<input name="insulation_hvs_temp" value="{{ prefill.insulation_hvs_water_temp if prefill else 10 }}"></label><label>t ГВС, °C<input name="insulation_gvs_temp" value="{{ prefill.insulation_gvs_water_temp if prefill else 60 }}"></label></div></div></details>
 
-  <details class="advanced-section"><summary>К2 / общепит / раздельный учёт · требования СП 118</summary><div class="advanced-body">
+  <details class="advanced-section"><summary>К1 · расход, характерные стояки и фактические трубы</summary><div class="advanced-body">
+    <div class="row">
+      <label>q₀s прибора, л/с<input name="sewage_max_fixture_lps" value="{{ prefill.sewage_max_fixture_lps if prefill else 1.6 }}"></label>
+      <label>Выпусков К1, шт.<input name="sewage_outlets_count" value="{{ prefill.sewage_outlets_count if prefill else 0 }}"></label>
+    </div>
+    <p class="technical-label">Характерные стояки К1 · расход каждого стояка задаётся по аксонометрии</p>
+    <div class="table-wrap"><table class="grid"><tr><th>Марка</th><th>q, л/с</th><th>Материал</th><th>Схема</th><th>DN стояка</th><th>DN отвода</th><th>Угол, °</th><th>Унитазы</th><th>Hраб, м</th></tr>
+    {% for i in range(3) %}{% set r = prefill.sewage_risers[i] if prefill and i < prefill.sewage_risers|length else none %}
+    <tr>
+      <td><input name="sewage_riser{{ i + 1 }}_id" value="{{ r.riser_id if r else '' }}" placeholder="К1-Ст1"></td>
+      <td><input name="sewage_riser{{ i + 1 }}_flow" value="{{ r.design_flow_lps if r else '' }}"></td>
+      <td><select name="sewage_riser{{ i + 1 }}_material"><option value="pp"{% if not r or r.material == 'pp' %} selected{% endif %}>ПП</option><option value="pvc"{% if r and r.material == 'pvc' %} selected{% endif %}>ПВХ</option><option value="sml"{% if r and r.material == 'sml' %} selected{% endif %}>SML</option><option value="cast_iron_socket"{% if r and r.material == 'cast_iron_socket' %} selected{% endif %}>чугун раструбный</option></select></td>
+      <td><select name="sewage_riser{{ i + 1 }}_ventilation"><option value="ventilated"{% if not r or r.ventilation == 'ventilated' %} selected{% endif %}>вентилируемый</option><option value="vacuum_valve"{% if r and r.ventilation == 'vacuum_valve' %} selected{% endif %}>с воздушным клапаном</option><option value="unventilated"{% if r and r.ventilation == 'unventilated' %} selected{% endif %}>без вентиляции</option></select></td>
+      <td><input name="sewage_riser{{ i + 1 }}_dn" value="{{ r.riser_dn_mm if r else 110 }}"></td>
+      <td><input name="sewage_riser{{ i + 1 }}_branch_dn" value="{{ r.branch_dn_mm if r else 110 }}"></td>
+      <td><select name="sewage_riser{{ i + 1 }}_angle">{% for a in [45,60,87.5] %}<option value="{{ a }}"{% if (r.branch_angle_deg if r else 87.5) == a %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></td>
+      <td><label class="check-label compact-check"><input type="checkbox" name="sewage_riser{{ i + 1 }}_toilet"{% if not r or r.has_toilet %} checked{% endif %}>есть</label></td>
+      <td><input name="sewage_riser{{ i + 1 }}_height" value="{{ r.working_height_m if r and r.working_height_m is not none else '' }}"></td>
+    </tr>{% endfor %}</table></div>
+    <p class="technical-label">Трубы К1/К2 · только фактически посчитанные длины</p>
+    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th></tr>
+    {% for i in range(6) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
+    <tr>
+      <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option></select></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_id" value="{{ r.section_id if r else '' }}" placeholder="К1-М1"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_purpose" value="{{ r.purpose if r else '' }}" placeholder="стояки"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_material" value="{{ r.material if r else '' }}" placeholder="ПП"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}" placeholder="ГОСТ / ТУ"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_outer" value="{{ r.outer_diameter_mm if r else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_wall" value="{{ r.wall_thickness_mm if r else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_length" value="{{ r.length_m if r else '' }}"></td>
+    </tr>{% endfor %}</table></div>
+    <p class="hint">Общий расход К1 считается как q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub>. Заря не делит его между стояками и не назначает длины. Точная проверка стояка выполняется только для заполненной строки приложения К; горизонтальная гидравлика остаётся стадией Р без аксонометрии.</p>
+  </div></details>
+
+  <details class="advanced-section"><summary>К2 / общепит / раздельный учёт · СП 30 и СП 118</summary><div class="advanced-body">
     <div class="row">
       <label>Тип кровли<select name="roof_type"><option value="not_set"{% if not prefill or prefill.roof_type == 'not_set' %} selected{% endif %}>не задан</option><option value="flat"{% if prefill and prefill.roof_type == 'flat' %} selected{% endif %}>плоская</option><option value="sloped"{% if prefill and prefill.roof_type == 'sloped' %} selected{% endif %}>скатная</option></select></label>
       <label>Город для К2<select name="storm_city"><option value="">не задан</option>{% for city in storm_cities %}<option value="{{ city.code }}"{% if prefill and prefill.storm_city == city.code %} selected{% endif %}>{{ city.name }}</option>{% endfor %}</select></label>
       <label>Площадь кровли, м²<input name="storm_roof_area" value="{{ prefill.storm_roof_area_m2 if prefill else 0 }}"></label>
       <label>Примыкающие стены, м²<input name="storm_walls_area" value="{{ prefill.storm_walls_area_m2 if prefill else 0 }}"></label>
       <label>Период P, лет<select name="storm_period_years">{% for p in [1,2,3,5,10] %}<option value="{{ p }}"{% if (prefill.storm_period_years if prefill else 1) == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      <label>Секций / ендов<input name="storm_roof_sections" value="{{ prefill.storm_roof_sections if prefill else 0 }}"></label>
+      <label>Воронок, шт.<input name="storm_funnels_count" value="{{ prefill.storm_funnels_count if prefill else 0 }}"></label>
+      <label>Макс. шаг, м<input name="storm_max_funnel_spacing_m" value="{{ prefill.storm_max_funnel_spacing_m if prefill and prefill.storm_max_funnel_spacing_m is not none else '' }}"></label>
+      <label>q пасп. воронки, л/с<input name="storm_selected_funnel_capacity_lps" value="{{ prefill.storm_selected_funnel_capacity_lps if prefill and prefill.storm_selected_funnel_capacity_lps is not none else '' }}"></label>
+      <label>q дикт. воронки, л/с<input name="storm_max_funnel_flow_lps" value="{{ prefill.storm_max_funnel_flow_lps if prefill and prefill.storm_max_funnel_flow_lps is not none else '' }}"></label>
+      <label>Стояков К2, шт.<input name="storm_risers_count" value="{{ prefill.storm_risers_count if prefill else 0 }}"></label>
+      <label>DN стояка К2<select name="storm_selected_riser_dn_mm"><option value="0"{% if not prefill or prefill.storm_selected_riser_dn_mm == 0 %} selected{% endif %}>не задан</option>{% for d in [85,100,150,200] %}<option value="{{ d }}"{% if prefill and prefill.storm_selected_riser_dn_mm == d %} selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+      <label>q дикт. стояка, л/с<input name="storm_max_riser_flow_lps" value="{{ prefill.storm_max_riser_flow_lps if prefill and prefill.storm_max_riser_flow_lps is not none else '' }}"></label>
+      <label class="check-label"><input type="checkbox" name="storm_sectional_residential_single_funnel"{% if prefill and prefill.storm_sectional_residential_single_funnel %} checked{% endif %}>Секционный жилой дом: одна воронка на секцию</label>
+      <label class="check-label"><input type="checkbox" name="storm_funnels_on_different_levels"{% if prefill and prefill.storm_funnels_on_different_levels %} checked{% endif %}>К одному стояку подключены разные уровни</label>
       <label>Общепит<select name="catering_type"><option value="none"{% if not prefill or prefill.catering_type == 'none' %} selected{% endif %}>нет / не задан</option><option value="semi_finished"{% if prefill and prefill.catering_type == 'semi_finished' %} selected{% endif %}>на полуфабрикатах</option><option value="raw"{% if prefill and prefill.catering_type == 'raw' %} selected{% endif %}>на сырье</option><option value="school"{% if prefill and prefill.catering_type == 'school' %} selected{% endif %}>пищеблок школы/ДОО</option></select></label>
       <label>Мест в залах<input name="catering_seats" value="{{ prefill.catering_seats if prefill else 0 }}"></label>
       <label>Условных блюд<input name="catering_conditional_dishes" value="{{ prefill.catering_conditional_dishes if prefill else 0 }}"></label>
       <label class="check-label"><input type="checkbox" name="school_grease_by_assignment"{% if prefill and prefill.school_grease_by_assignment %} checked{% endif %}>Жироуловитель задан ТЗ для школы/ДОО</label>
     </div>
-    <p class="hint">К2 рассчитывается только при заданных городе и площади кровли. Количество воронок, диаметры и трассировка требуют плана кровли и аксонометрии стадии Р. Жироуловители проверяются по порогам п. 8.7 СП 118; их производительность не назначается без задания ТХ.</p>
+    <p class="hint">К2 рассчитывается только при заданных городе и площади кровли. Проверка количества воронок, шага, паспортной пропускной способности и стояка выполняется только по заполненным значениям; общий расход между ними автоматически не делится. Жироуловители проверяются по порогам п. 8.7 СП 118; производительность не назначается без задания ТХ.</p>
   </div></details>
 
   <details class="advanced-section"><summary>В2 · расчётная схема и источник</summary><div class="advanced-body">

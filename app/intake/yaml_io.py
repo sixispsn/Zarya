@@ -45,6 +45,7 @@ import yaml
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
+    SewageRiserRequest, SewerPipeRequest,
 )
 
 
@@ -87,6 +88,7 @@ def load_request(text: str) -> IOS2Request:
     fire = sect("fire", required=False)
     source_data_s = sect("source_data", required=False)
     insulation_s = sect("insulation", required=False)
+    sewage_s = sect("sewage", required=False)
     storm_s = sect("storm", required=False)
     catering_s = sect("catering", required=False)
     net_s = sect("network", required=False)
@@ -202,6 +204,38 @@ def load_request(text: str) -> IOS2Request:
                     str(x.get("code", "")), int(x.get("count", 0)),
                     str(x.get("name", "")))
                  for x in (data.get("consumers") or []) if isinstance(x, dict)]
+    sewage_risers = [
+        SewageRiserRequest(
+            riser_id=str(x.get("id", x.get("riser_id", ""))),
+            design_flow_lps=float(x.get("design_flow_lps", 0)),
+            material=str(x.get("material", "pp")),
+            ventilation=str(x.get("ventilation", "ventilated")),
+            riser_dn_mm=int(x.get("riser_dn_mm", 110)),
+            branch_dn_mm=int(x.get("branch_dn_mm", 110)),
+            branch_angle_deg=float(x.get("branch_angle_deg", 87.5)),
+            has_toilet=bool(x.get("has_toilet", True)),
+            working_height_m=(
+                float(x["working_height_m"])
+                if x.get("working_height_m") is not None else None
+            ),
+        )
+        for x in (sewage_s.get("risers") or [])
+        if isinstance(x, dict)
+    ]
+    sewer_pipes = [
+        SewerPipeRequest(
+            system=str(x.get("system", "K1")),
+            section_id=str(x.get("id", x.get("section_id", ""))),
+            purpose=str(x.get("purpose", "")),
+            material=str(x.get("material", "")),
+            standard=str(x.get("standard", "")),
+            outer_diameter_mm=float(x.get("outer_diameter_mm", 0)),
+            wall_thickness_mm=float(x.get("wall_thickness_mm", 0)),
+            length_m=float(x.get("length_m", 0)),
+        )
+        for x in (sewage_s.get("pipes") or [])
+        if isinstance(x, dict)
+    ]
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
@@ -233,6 +267,38 @@ def load_request(text: str) -> IOS2Request:
         storm_roof_area_m2=float(storm_s.get("roof_area_m2", 0)),
         storm_walls_area_m2=float(storm_s.get("walls_area_m2", 0)),
         storm_period_years=int(storm_s.get("period_years", 1)),
+        storm_roof_sections=int(storm_s.get("roof_sections", 0)),
+        storm_funnels_count=int(storm_s.get("funnels_count", 0)),
+        storm_sectional_residential_single_funnel=bool(
+            storm_s.get("sectional_residential_single_funnel", False)
+        ),
+        storm_max_funnel_spacing_m=(
+            float(storm_s["max_funnel_spacing_m"])
+            if storm_s.get("max_funnel_spacing_m") is not None else None
+        ),
+        storm_selected_funnel_capacity_lps=(
+            float(storm_s["selected_funnel_capacity_lps"])
+            if storm_s.get("selected_funnel_capacity_lps") is not None else None
+        ),
+        storm_max_funnel_flow_lps=(
+            float(storm_s["max_funnel_flow_lps"])
+            if storm_s.get("max_funnel_flow_lps") is not None else None
+        ),
+        storm_risers_count=int(storm_s.get("risers_count", 0)),
+        storm_selected_riser_dn_mm=int(
+            storm_s.get("selected_riser_dn_mm", 0)
+        ),
+        storm_max_riser_flow_lps=(
+            float(storm_s["max_riser_flow_lps"])
+            if storm_s.get("max_riser_flow_lps") is not None else None
+        ),
+        storm_funnels_on_different_levels=bool(
+            storm_s.get("funnels_on_different_levels", False)
+        ),
+        sewage_max_fixture_lps=float(sewage_s.get("max_fixture_lps", 1.6)),
+        sewage_risers=sewage_risers,
+        sewer_pipes=sewer_pipes,
+        sewage_outlets_count=int(sewage_s.get("outlets_count", 0)),
         catering_type=str(catering_s.get("type", "none")),
         catering_seats=int(catering_s.get("seats", 0)),
         catering_conditional_dishes=int(catering_s.get("conditional_dishes", 0)),
@@ -300,6 +366,44 @@ def dump_request(req: IOS2Request) -> str:
             "roof_area_m2": req.storm_roof_area_m2,
             "walls_area_m2": req.storm_walls_area_m2,
             "period_years": req.storm_period_years,
+            "roof_sections": req.storm_roof_sections,
+            "funnels_count": req.storm_funnels_count,
+            "sectional_residential_single_funnel":
+                req.storm_sectional_residential_single_funnel,
+            "max_funnel_spacing_m": req.storm_max_funnel_spacing_m,
+            "selected_funnel_capacity_lps":
+                req.storm_selected_funnel_capacity_lps,
+            "max_funnel_flow_lps": req.storm_max_funnel_flow_lps,
+            "risers_count": req.storm_risers_count,
+            "selected_riser_dn_mm": req.storm_selected_riser_dn_mm,
+            "max_riser_flow_lps": req.storm_max_riser_flow_lps,
+            "funnels_on_different_levels":
+                req.storm_funnels_on_different_levels,
+        },
+        "sewage": {
+            "max_fixture_lps": req.sewage_max_fixture_lps,
+            "outlets_count": req.sewage_outlets_count,
+            "risers": [{
+                "id": x.riser_id,
+                "design_flow_lps": x.design_flow_lps,
+                "material": x.material,
+                "ventilation": x.ventilation,
+                "riser_dn_mm": x.riser_dn_mm,
+                "branch_dn_mm": x.branch_dn_mm,
+                "branch_angle_deg": x.branch_angle_deg,
+                "has_toilet": x.has_toilet,
+                "working_height_m": x.working_height_m,
+            } for x in req.sewage_risers],
+            "pipes": [{
+                "system": x.system,
+                "id": x.section_id,
+                "purpose": x.purpose,
+                "material": x.material,
+                "standard": x.standard,
+                "outer_diameter_mm": x.outer_diameter_mm,
+                "wall_thickness_mm": x.wall_thickness_mm,
+                "length_m": x.length_m,
+            } for x in req.sewer_pipes],
         },
         "catering": {
             "type": req.catering_type,

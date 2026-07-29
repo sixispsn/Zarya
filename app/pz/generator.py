@@ -129,6 +129,7 @@ def generate_pz_html(project: Project) -> str:
         v1_hydraulics=project.v1_hydraulic_result,
         v1_stage_p=project.v1_stage_p_result,
         normative=project.normative,
+        sewage=project.sewage,
         storm=project.storm,
         grease_trap=project.grease_trap,
     )
@@ -189,7 +190,7 @@ def generate_balance_pdf(project: Project, output_path: str) -> str:
     return output_path
 
 
-# ── РАСЧЁТНЫЙ ЛИСТ В1 / Т3 / К1 (отдельное приложение) ──────────────────
+# ── РАСЧЁТНЫЙ ЛИСТ В1 / Т3 (отдельное приложение) ────────────────────────
 
 def generate_v1_calculation_html(project: Project) -> str:
     """Собрать отдельный расчётный лист без дублирования расчётной логики.
@@ -203,7 +204,7 @@ def generate_v1_calculation_html(project: Project) -> str:
     doc = replace(
         project.document,
         cipher=_document_cipher(cipher, ".РВ1"),
-        sheet_title="Расчёты систем В1, Т3 и К1",
+        sheet_title="Расчёты систем В1 и Т3",
         sheet_no="1",
         sheet_total="—",
     )
@@ -222,13 +223,13 @@ def generate_v1_calculation_html(project: Project) -> str:
     )
     return env.get_template("document.html").render(
         doc=doc,
-        document_title="Расчётные обоснования систем В1, Т3 и К1",
+        document_title="Расчётные обоснования систем В1 и Т3",
         body_html=body_html,
     )
 
 
 def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
-    """Сформировать самостоятельный PDF расчётов В1 / Т3 / К1 на листах А4."""
+    """Сформировать самостоятельный PDF расчётов В1 / Т3 на листах А4."""
     html_str = generate_v1_calculation_html(project)
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
@@ -236,6 +237,88 @@ def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
     ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets,
+    )
+    return output_path
+
+
+# ── РАСЧЁТНЫЕ ОБОСНОВАНИЯ К1 / К2 ─────────────────────────────────────
+
+def generate_wastewater_calculation_html(project: Project) -> str:
+    """Собрать отдельное приложение К1/К2 из результатов расчётного ядра."""
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".РК"),
+        sheet_title="Расчётные обоснования систем К1 и К2",
+        sheet_no="1",
+        sheet_total="—",
+    )
+    body_html = env.get_template("wastewater_calculation_body.html").render(
+        sewage=project.sewage,
+        storm=project.storm,
+        grease_trap=project.grease_trap,
+    )
+    return env.get_template("document.html").render(
+        doc=doc,
+        document_title="Расчётные обоснования систем К1 и К2",
+        body_html=body_html,
+    )
+
+
+def generate_wastewater_calculation_pdf(
+    project: Project,
+    output_path: str,
+) -> str:
+    """Сформировать самостоятельный PDF расчётов К1/К2 на листах А4."""
+    html_str = generate_wastewater_calculation_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*_CSS_FILES, "wastewater.css")
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=stylesheets,
+    )
+    return output_path
+
+
+def generate_wastewater_scheme_html(project: Project) -> str:
+    """Принципиальная схема К1/К2 стадии П без вымышленной трассировки."""
+    env = _build_env()
+    cipher = project.document.cipher or ""
+    doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".СК"),
+        sheet_title="Принципиальная схема систем К1 и К2",
+        sheet_no="1",
+        sheet_total="1",
+    )
+    body_html = env.get_template("wastewater_scheme_body.html").render(
+        sewage=project.sewage,
+        storm=project.storm,
+        grease_trap=project.grease_trap,
+    )
+    return env.get_template("document.html").render(
+        doc=doc,
+        document_title="Принципиальная схема систем К1 и К2",
+        body_html=body_html,
+    )
+
+
+def generate_wastewater_scheme_pdf(
+    project: Project,
+    output_path: str,
+) -> str:
+    """Сформировать лист принципиальной схемы К1/К2 стадии П."""
+    html_str = generate_wastewater_scheme_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*_CSS_FILES, "wastewater.css")
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=stylesheets,
     )
     return output_path
 

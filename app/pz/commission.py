@@ -18,7 +18,7 @@ from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, decide_fire_network
 
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 NORMATIVE_EDITIONS = (
     "ПП РФ № 87; ГОСТ Р 21.619-2023; СП 30.13330.2020; "
     "СП 10.13130.2020; СП 54.13330.2022; СП 118.13330.2022; "
@@ -161,6 +161,21 @@ def _project_fingerprint(project: Project) -> str:
             "roof_area_m2": project.storm.roof_area_m2,
             "walls_area_m2": project.storm.walls_area_m2,
             "period_years": project.storm.period_years,
+            "roof_sections": project.storm.roof_sections,
+            "funnels_count": project.storm.funnels_count,
+            "max_funnel_spacing_m": project.storm.max_funnel_spacing_m,
+            "funnel_capacity_lps":
+                project.storm.selected_funnel_capacity_lps,
+            "max_funnel_flow_lps": project.storm.max_funnel_flow_lps,
+            "risers_count": project.storm.risers_count,
+            "riser_dn_mm": project.storm.selected_riser_dn_mm,
+            "max_riser_flow_lps": project.storm.max_riser_flow_lps,
+        },
+        "sewage": {
+            "q0s_lps": project.sewage_max_fixture_lps,
+            "outlets_count": project.sewage.outlets_count,
+            "risers": [vars(row) for row in project.sewage.risers],
+            "pipes": [vars(row) for row in project.sewage.pipes],
         },
         "catering": {
             "type": project.grease_trap.preparation_type,
@@ -259,7 +274,7 @@ def build_commission_report(
     flow_ok = bool(project.consumer_groups) and project.flows.q_day_tot > 0
     trace_rows = [
         TraceRow(
-            "Расчётные расходы В1/Т3/К1",
+            "Расчётные расходы В1/Т3",
             "СП 30.13330.2020, приложение А",
             _consumer_source(project),
             (
@@ -269,6 +284,20 @@ def build_commission_report(
             ),
             "ПЗ, подп. г; Расчёты В1; Баланс ВиВ",
             "verified" if flow_ok else "missing",
+        ),
+        TraceRow(
+            "Расчётный расход К1",
+            "СП 30.13330.2020, п. 5.5, формула (5)",
+            (
+                f"qtot={_ru(project.flows.q_sec_tot, 3, ' л/с')}; "
+                f"q0s={_ru(project.sewage_max_fixture_lps, 3, ' л/с')}"
+            ),
+            (
+                f"qs={_ru(project.sewage.result.total.q_sewage_lps, 3, ' л/с')}"
+                if project.sewage.result else "расчёт не подтверждён"
+            ),
+            "ПЗ; Расчёты К1/К2; схема К1/К2",
+            "verified" if project.sewage.result else "missing",
         ),
         TraceRow(
             "Требуемый напор В1",
@@ -372,7 +401,7 @@ def build_commission_report(
         storm_result = project.storm.result
         trace_rows.append(TraceRow(
             "Система К2 и расход дождевых вод",
-            "СП 118.13330.2022, пп. 8.3–8.6; СП 30, раздел 21",
+            "СП 30.13330.2020, пп. 21.5–21.12",
             (
                 f"кровля={project.storm.roof_type}; город={project.storm.city_code or 'не задан'}; "
                 f"Fкр={_ru(project.storm.roof_area_m2, 1, ' м²')}"
@@ -381,7 +410,7 @@ def build_commission_report(
                 f"{project.storm.system_note} Q={_ru(storm_result.q_total_l_per_s, 3, ' л/с')}"
                 if storm_result else project.storm.system_note
             ),
-            "ПЗ, подп. в; спецификация К2",
+            "ПЗ; Расчёты К1/К2; схема К1/К2; спецификация К2",
             "verified" if storm_result else "missing",
         ))
     if project.grease_trap.preparation_type != "none":
@@ -509,6 +538,53 @@ def build_commission_report(
             "Подтвердить марки и сигналы диспетчеризации на стадии Р",
             "СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27",
         )
+    sewage_ok = project.sewage.result is not None
+    add(
+        "K1-00", "Расчётный расход К1 подтверждён",
+        "verified" if sewage_ok else "missing",
+        (
+            f"Q={_ru(project.sewage.result.total.q_sewage_lps, 3, ' л/с')}"
+            if sewage_ok else "нет групп потребителей"
+        ),
+        "Нет действий" if sewage_ok else "Заполнить группы потребителей",
+        "СП 30.13330.2020, п. 5.5, формула (5)",
+        blocking=not sewage_ok,
+    )
+    if project.sewage.risers:
+        failed_risers = [
+            row.riser_id for row in project.sewage.result.risers
+            if row.status == "fail"
+        ] if sewage_ok else []
+        pending_risers = [
+            row.riser_id for row in project.sewage.result.risers
+            if row.status in ("missing", "stage_r")
+        ] if sewage_ok else []
+        riser_status = (
+            "missing" if not sewage_ok or failed_risers
+            else "stage_r" if pending_risers
+            else "verified"
+        )
+        add(
+            "K1-02", "Характерные стояки К1 проверены по приложению К",
+            riser_status,
+            (
+                "общий расход К1 не рассчитан"
+                if not sewage_ok else
+                "не соответствуют: " + ", ".join(failed_risers)
+                if failed_risers else
+                "требуют точной аксонометрии: " + ", ".join(pending_risers)
+                if pending_risers else
+                f"проверено {len(project.sewage.result.risers)} стояков"
+            ),
+            (
+                "Проверить диаметр и назначенную нагрузку"
+                if failed_risers else
+                "Завершить по аксонометрии стадии Р"
+                if pending_risers else "Нет действий"
+            ),
+            "СП 30.13330.2020, пп. 19.7–19.8, приложение К",
+            blocking=bool(failed_risers),
+        )
     if project.storm.system_kind == "internal":
         storm_ok = project.storm.result is not None
         add(
@@ -522,12 +598,28 @@ def build_commission_report(
             "СП 30.13330.2020, раздел 21",
             blocking=not storm_ok,
         )
+        assessment = project.storm.network_assessment
+        assessment_status = (
+            "missing" if assessment and assessment.status == "fail"
+            else assessment.status if assessment else "stage_r"
+        )
         add(
-            "K2-02", "Воронки, стояки и выпуски К2 увязаны с планом кровли",
-            "stage_r",
-            "точная геометрия не назначается без планов и аксонометрии",
-            "Разработать планы и аксонометрию на стадии Р",
-            "СП 30.13330.2020, раздел 21",
+            "K2-02", "Воронки и стояки К2 проверены по плану кровли",
+            assessment_status,
+            (
+                "; ".join(assessment.notes)
+                if assessment else
+                "точная геометрия и нагрузки элементов не заданы"
+            ),
+            (
+                "Исправить несоответствие исходных данных"
+                if assessment and assessment.status == "fail"
+                else "Разработать планы и аксонометрию на стадии Р"
+                if assessment_status == "stage_r"
+                else "Нет действий"
+            ),
+            "СП 30.13330.2020, пп. 21.5, 21.6, таблица 21.1",
+            blocking=bool(assessment and assessment.status == "fail"),
         )
     if project.grease_trap.required:
         add(

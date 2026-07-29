@@ -1,0 +1,102 @@
+<p class="subitem no-indent">
+  Расчётный лист объединяет хозяйственно-бытовую канализацию К1 и внутренний
+  водосток К2. Все численные значения получены расчётным ядром. Общие расходы
+  не распределяются между стояками и воронками без плана и аксонометрии.
+</p>
+
+<p class="subhead">1. Расчётный расход хозяйственно-бытовых стоков К1</p>
+{% if sewage.result %}
+<p class="formula">
+  q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub> =
+  {{ sewage.result.total.q_water_total_lps|num(3) }} +
+  {{ sewage.result.total.q_fixture_max_lps|num(3) }} =
+  <b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b>.
+</p>
+<table class="data calc-table compact-calc">
+  <tr><th>Максимальный секундный расход воды q<sub>tot</sub></th><td>{{ sewage.result.total.q_water_total_lps|num(3) }} л/с</td></tr>
+  <tr><th>Расход прибора с максимальным водоотведением q<sub>0s</sub></th><td>{{ sewage.result.total.q_fixture_max_lps|num(3) }} л/с</td></tr>
+  <tr><th>Расчётный расход К1 q<sub>s</sub></th><td><b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b></td></tr>
+</table>
+<p class="source-line">СП 30.13330.2020, п. 5.5, формула (5). Значение q<sub>0s</sub> принимается по фактически установленному прибору с максимальным водоотведением.</p>
+{% else %}
+<p class="stage-note">Расход К1 не определён: группы потребителей отсутствуют. Условный расход не подставляется.</p>
+{% endif %}
+
+<p class="subhead">2. Проверка характерных стояков К1</p>
+{% if sewage.result and sewage.result.risers %}
+<table class="data calc-table riser-calc">
+  <thead><tr><th>Стояк</th><th>q, л/с</th><th>Материал / схема</th><th>DN стояка / отвода</th><th>Угол</th><th>Допустимо, л/с</th><th>Результат</th></tr></thead>
+  <tbody>
+  {% for r in sewage.result.risers %}
+    <tr>
+      <td>{{ r.riser_id }}</td>
+      <td>{{ r.design_flow_lps|num(3) }}</td>
+      <td>{{ r.material_label }}<br>{{ r.ventilation_label }}</td>
+      <td>{{ r.riser_dn_mm }} / {{ r.branch_dn_mm }}</td>
+      <td>{{ r.branch_angle_deg|compact(1) }}°</td>
+      <td>{{ r.capacity_lps|num(3) }}</td>
+      <td><b>{{ "соответствует" if r.status == "verified" else "не соответствует" if r.status == "fail" else "требует данных" }}</b><br>{{ r.note }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="source-line">Проверка выполнена по точным узлам таблиц {{ sewage.result.risers|map(attribute="table")|unique|join(", ") }} приложения К СП 30. Интерполяция не применялась.</p>
+{% else %}
+<p class="stage-note">Расходы характерных стояков не заданы. Общий расход К1 между стояками автоматически не распределяется; проверка приложения К переносится на стадию Р после разработки аксонометрии.</p>
+{% endif %}
+
+<p class="subhead">3. Граница гидравлического расчёта К1</p>
+<p class="subitem no-indent">
+  На стадии П подтверждены общий расход системы и заполненные табличные проверки
+  стояков. Диаметры горизонтальных участков, наполнение, скорость, уклон,
+  местные сопротивления и диктующий выпуск рассчитываются после назначения
+  приборов и длин по точной аксонометрии. Эти значения программой не имитируются.
+</p>
+
+{% if sewage.pipes %}
+<table class="data calc-table pipe-calc">
+  <thead><tr><th>Система / участок</th><th>Назначение</th><th>Материал, стандарт</th><th>Øнар × стенка, мм</th><th>Øвн, мм</th><th>L, м</th></tr></thead>
+  <tbody>{% for p in sewage.pipes %}
+    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+
+<p class="subhead">4. Расчёт дождевого расхода К2</p>
+{% if storm.result %}
+<table class="data calc-table compact-calc">
+  <tr><th>Район строительства; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
+  <tr><th>Период P; коэффициент γ</th><td>{{ storm.result.period_years }} лет; {{ storm.result.gamma|num(2) }}</td></tr>
+  <tr><th>Приведённая площадь F = F<sub>кр</sub> + 0,3F<sub>ст</sub></th><td>{{ storm.result.f_calculated_m2|num(1) }} м²</td></tr>
+  <tr><th>q<sub>5</sub> = 4<sup>n</sup> · q<sub>20</sub> · γ</th><td>{{ storm.result.q5|num(2) }} л/(с·га)</td></tr>
+  <tr><th>Q = F · q<sub>5</sub> / 10000</th><td><b>{{ storm.result.q_total_l_per_s|num(3) }} л/с</b></td></tr>
+</table>
+<p class="source-line">СП 30.13330.2020 с изменениями № 1–5, пп. 21.10–21.12. Алгоритм и округление соответствуют legacy SP calculator.</p>
+{% else %}
+<p class="stage-note">Расход К2 не определён: требуется задать город и площадь кровли.</p>
+{% endif %}
+
+<p class="subhead">5. Проверка воронок и стояков К2</p>
+{% if storm.network_assessment %}
+{% set a = storm.network_assessment %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Проверка</th><th>Исходные данные</th><th>Результат</th></tr></thead>
+  <tbody>
+    <tr><td>Минимальное число воронок плоской кровли</td><td>секций {{ a.roof_sections }}; принято {{ a.funnels_count }}; минимум {{ a.minimum_funnels if a.minimum_funnels is not none else "—" }}</td><td>{{ "соответствует" if a.funnels_count_ok is sameas true else "не соответствует" if a.funnels_count_ok is sameas false else "требует плана" }}</td></tr>
+    <tr><td>Максимальное расстояние между воронками</td><td>{{ a.max_funnel_spacing_m|num(2) }} м</td><td>{{ "≤ 48 м" if a.spacing_ok is sameas true else "> 48 м" if a.spacing_ok is sameas false else "не задано" }}</td></tr>
+    <tr><td>Паспортная способность диктующей воронки</td><td>нагрузка {{ a.max_funnel_flow_lps|num(3) }} л/с; паспорт {{ a.selected_funnel_capacity_lps|num(3) }} л/с</td><td>{{ "соответствует" if a.funnel_capacity_ok is sameas true else "не соответствует" if a.funnel_capacity_ok is sameas false else "не проверено" }}</td></tr>
+    <tr><td>Суммарная паспортная способность воронок</td><td>{{ a.aggregate_funnel_capacity_lps|num(3) }} л/с при Q<sub>К2</sub> {{ storm.result.q_total_l_per_s|num(3) }} л/с</td><td>{{ "достаточна" if a.aggregate_funnel_capacity_ok is sameas true else "недостаточна" if a.aggregate_funnel_capacity_ok is sameas false else "не проверено" }}</td></tr>
+    <tr><td>Пропускная способность диктующего стояка</td><td>DN {{ a.selected_riser_dn_mm or "—" }}; нагрузка {{ a.max_riser_flow_lps|num(3) }} л/с; допустимо {{ a.effective_riser_capacity_lps|num(3) }} л/с</td><td>{{ "соответствует" if a.riser_capacity_ok is sameas true else "не соответствует" if a.riser_capacity_ok is sameas false else "не проверено" }}</td></tr>
+    <tr><td>Суммарная табличная способность стояков</td><td>{{ a.aggregate_riser_capacity_lps|num(3) }} л/с при Q<sub>К2</sub> {{ storm.result.q_total_l_per_s|num(3) }} л/с</td><td>{{ "достаточна" if a.aggregate_riser_capacity_ok is sameas true else "недостаточна" if a.aggregate_riser_capacity_ok is sameas false else "не проверено" }}</td></tr>
+  </tbody>
+</table>
+{% for note in a.notes %}<p class="source-line">• {{ note }}</p>{% endfor %}
+<p class="source-line">Проверки: СП 30.13330.2020, пп. 21.5, 21.6 и таблица 21.1. При подключении воронок с разных уровней пропускная способность стояка принята с коэффициентом 0,7.</p>
+{% else %}
+<p class="stage-note">План кровли и нагрузки на диктующие воронку/стояк не заданы. Общий расход К2 между элементами автоматически не делится.</p>
+{% endif %}
+
+{% if grease_trap.required %}
+<p class="subhead">6. Производственные стоки общепита</p>
+<p class="subitem no-indent">{{ grease_trap.decision_note }} Число и производительность жироуловителей определяются по заданию ТХ и схеме выпусков; условный подбор не выполняется.</p>
+{% endif %}

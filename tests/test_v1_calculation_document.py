@@ -16,7 +16,7 @@ def test_v1_calculation_html_uses_existing_results(tmp_path):
     bundle = design_ios2(build_project(_request()), output_dir=str(tmp_path))
     html = generate_v1_calculation_html(bundle.project)
 
-    assert "Расчётные обоснования систем В1, Т3 и К1" in html
+    assert "Расчётные обоснования систем В1 и Т3" in html
     assert "Исходные нормы и суточные расходы" in html
     assert "Свободный напор перед диктующим прибором" in html
     assert f"{bundle.project.flows.q_day_tot:.3f}".replace(".", ",") in html
@@ -33,10 +33,20 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     appendix_text = _text(str(appendix))
     pz_text = _text(bundle.pz_pdf)
 
-    assert "Расчётные обоснования систем В1, Т3 и К1" in appendix_text
-    assert "Расчётный расход стоков К1" in appendix_text
+    assert "Расчётные обоснования систем В1 и Т3" in appendix_text
+    assert "Расчётный расход стоков К1" not in appendix_text
     assert "Расчёт требуемого напора В1" in appendix_text
-    assert "Расчётные обоснования систем В1, Т3 и К1" in pz_text
+    assert "Расчётные обоснования систем В1 и Т3" in pz_text
+    wastewater = Path(bundle.wastewater_calculation_pdf)
+    assert wastewater.name == "Расчеты_К1_К2.pdf"
+    assert wastewater.exists()
+    wastewater_text = _text(str(wastewater))
+    assert "Расчётные обоснования систем К1 и К2" in wastewater_text
+    assert "Расчётный расход хозяйственно-бытовых стоков К1" in wastewater_text
+    assert "Расчётные обоснования систем К1 и К2" in pz_text
+    wastewater_scheme = Path(bundle.wastewater_scheme_pdf)
+    assert wastewater_scheme.name == "Схема_К1_К2.pdf"
+    assert wastewater_scheme.exists()
     assert commission.name == "Паспорт_и_нормативный_контроль.pdf"
     assert commission.exists()
     commission_text = _text(str(commission))

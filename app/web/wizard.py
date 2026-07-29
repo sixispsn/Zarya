@@ -29,6 +29,7 @@ from fastapi.templating import Jinja2Templates
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
+    SewageRiserRequest, SewerPipeRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
@@ -148,6 +149,42 @@ async def wizard_design(request: Request):
             fi("consumer_count"),
         ))
 
+    sewage_risers = []
+    for i in range(1, 4):
+        riser_id = fv(f"sewage_riser{i}_id")
+        if riser_id:
+            sewage_risers.append(SewageRiserRequest(
+                riser_id=riser_id,
+                design_flow_lps=ff(f"sewage_riser{i}_flow"),
+                material=fv(f"sewage_riser{i}_material", "pp"),
+                ventilation=fv(
+                    f"sewage_riser{i}_ventilation", "ventilated"
+                ),
+                riser_dn_mm=fi(f"sewage_riser{i}_dn", 110),
+                branch_dn_mm=fi(f"sewage_riser{i}_branch_dn", 110),
+                branch_angle_deg=ff(f"sewage_riser{i}_angle", 87.5),
+                has_toilet=bool(form.get(f"sewage_riser{i}_toilet")),
+                working_height_m=(
+                    ff(f"sewage_riser{i}_height")
+                    if fv(f"sewage_riser{i}_height") else None
+                ),
+            ))
+
+    sewer_pipes = []
+    for i in range(1, 7):
+        section_id = fv(f"sewer_pipe{i}_id")
+        if section_id:
+            sewer_pipes.append(SewerPipeRequest(
+                system=fv(f"sewer_pipe{i}_system", "K1"),
+                section_id=section_id,
+                purpose=fv(f"sewer_pipe{i}_purpose"),
+                material=fv(f"sewer_pipe{i}_material"),
+                standard=fv(f"sewer_pipe{i}_standard"),
+                outer_diameter_mm=ff(f"sewer_pipe{i}_outer"),
+                wall_thickness_mm=ff(f"sewer_pipe{i}_wall"),
+                length_m=ff(f"sewer_pipe{i}_length"),
+            ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -174,10 +211,40 @@ async def wizard_design(request: Request):
         apartments=fi("apartments"),
         owner_groups_count=fi("owner_groups_count", 1),
         roof_type=fv("roof_type", "not_set"),
+        sewage_max_fixture_lps=ff("sewage_max_fixture_lps", 1.6),
+        sewage_risers=sewage_risers,
+        sewer_pipes=sewer_pipes,
+        sewage_outlets_count=fi("sewage_outlets_count"),
         storm_city=fv("storm_city"),
         storm_roof_area_m2=ff("storm_roof_area"),
         storm_walls_area_m2=ff("storm_walls_area"),
         storm_period_years=fi("storm_period_years", 1),
+        storm_roof_sections=fi("storm_roof_sections"),
+        storm_funnels_count=fi("storm_funnels_count"),
+        storm_sectional_residential_single_funnel=bool(
+            form.get("storm_sectional_residential_single_funnel")
+        ),
+        storm_max_funnel_spacing_m=(
+            ff("storm_max_funnel_spacing_m")
+            if fv("storm_max_funnel_spacing_m") else None
+        ),
+        storm_selected_funnel_capacity_lps=(
+            ff("storm_selected_funnel_capacity_lps")
+            if fv("storm_selected_funnel_capacity_lps") else None
+        ),
+        storm_max_funnel_flow_lps=(
+            ff("storm_max_funnel_flow_lps")
+            if fv("storm_max_funnel_flow_lps") else None
+        ),
+        storm_risers_count=fi("storm_risers_count"),
+        storm_selected_riser_dn_mm=fi("storm_selected_riser_dn_mm"),
+        storm_max_riser_flow_lps=(
+            ff("storm_max_riser_flow_lps")
+            if fv("storm_max_riser_flow_lps") else None
+        ),
+        storm_funnels_on_different_levels=bool(
+            form.get("storm_funnels_on_different_levels")
+        ),
         catering_type=fv("catering_type", "none"),
         catering_seats=fi("catering_seats"),
         catering_conditional_dishes=fi("catering_conditional_dishes"),
@@ -249,8 +316,12 @@ def wizard_result(request: Request, run_id: str):
     for label, path in (("Пояснительная записка", b.pz_pdf),
                         ("Паспорт проекта и нормативный контроль",
                          getattr(b, "commission_control_pdf", None)),
-                        ("Расчётные обоснования В1, Т3 и К1",
+                        ("Расчётные обоснования В1 и Т3",
                          getattr(b, "v1_calculation_pdf", None)),
+                        ("Расчётные обоснования К1 и К2",
+                         getattr(b, "wastewater_calculation_pdf", None)),
+                        ("Принципиальная схема К1 и К2",
+                         getattr(b, "wastewater_scheme_pdf", None)),
                         ("Баланс водопотребления и водоотведения",
                          getattr(b, "balance_pdf", None)),
                         ("Расчёт и подбор насосов", getattr(b, "pump_selection_pdf", None)),
@@ -302,6 +373,29 @@ def wizard_result(request: Request, run_id: str):
             "model": p.fire_pumps.model,
             "q": p.fire_pumps.wp_q or p.fire_pumps.q_m3h,
             "h": p.fire_pumps.wp_h or p.fire_pumps.head_m,
+        },
+        "sewage": {
+            "flow": (
+                p.sewage.result.total.q_sewage_lps
+                if p.sewage.result else None
+            ),
+            "riser_count": len(p.sewage.risers),
+            "checked_count": (
+                p.sewage.result.checked_risers if p.sewage.result else 0
+            ),
+            "outlets_count": p.sewage.outlets_count,
+        },
+        "storm": {
+            "required": p.storm.system_kind == "internal",
+            "flow": (
+                p.storm.result.q_total_l_per_s if p.storm.result else None
+            ),
+            "funnels_count": p.storm.funnels_count,
+            "risers_count": p.storm.risers_count,
+            "status": (
+                p.storm.network_assessment.status
+                if p.storm.network_assessment else "stage_r"
+            ),
         },
         "pump_duty": (b.fire_hydraulic_result.pump_duty
                       if b.fire_hydraulic_result else None),

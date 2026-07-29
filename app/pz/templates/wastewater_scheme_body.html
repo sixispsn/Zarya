@@ -1,0 +1,45 @@
+<p class="subitem no-indent">
+  Схема показывает состав и направление потоков на стадии П. Она не является
+  аксонометрией и не задаёт высоты, уклоны, длины или распределение расходов.
+</p>
+
+<div class="system-scheme">
+  <section class="scheme-lane">
+    <header><b>К1</b><span>хозяйственно-бытовая и производственная канализация</span></header>
+    <div class="scheme-flow">
+      <div class="scheme-node">Санитарные приборы<br><small>q<sub>0s</sub> по прибору</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node accent">Стояки К1<br><small>{% if sewage.risers %}характерных: {{ sewage.risers|length }}{% else %}число по планам{% endif %}</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node">Горизонтальная сеть<br><small>уклоны и DN — стадия Р</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node accent">Выпуски К1<br><small>{% if sewage.outlets_count %}{{ sewage.outlets_count }} шт.{% else %}число не задано{% endif %}</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node terminal">Наружная сеть канализации<br><small>по ТУ / ИОС3</small></div>
+    </div>
+    {% if grease_trap.required %}<div class="scheme-branch">Производственные стоки общепита → жироуловитель по заданию ТХ → самостоятельный выпуск</div>{% endif %}
+    <p>{% if sewage.result %}Q<sub>К1</sub> = {{ sewage.result.total.q_sewage_lps|num(3) }} л/с{% else %}Q<sub>К1</sub> требует групп потребителей{% endif %}</p>
+  </section>
+
+  <section class="scheme-lane">
+    <header><b>К2</b><span>внутренний водосток</span></header>
+    <div class="scheme-flow">
+      <div class="scheme-node">Кровля / ендовы<br><small>план АР</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node accent">Воронки К2<br><small>{% if storm.funnels_count %}{{ storm.funnels_count }} шт.{% else %}число по плану кровли{% endif %}</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node accent">Стояки К2<br><small>{% if storm.risers_count %}{{ storm.risers_count }} шт.; DN {{ storm.selected_riser_dn_mm or "—" }}{% else %}число и DN по аксонометрии{% endif %}</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node">Выпуски К2<br><small>давление/безнапорность по п. 21.14</small></div>
+      <div class="scheme-arrow">→</div>
+      <div class="scheme-node terminal">Наружная дождевая сеть<br><small>по ТУ / ИОС3</small></div>
+    </div>
+    <p>{% if storm.result %}Q<sub>К2</sub> = {{ storm.result.q_total_l_per_s|num(3) }} л/с{% else %}Q<sub>К2</sub> требует города и площади кровли{% endif %}</p>
+  </section>
+</div>
+
+<table class="data scheme-legend">
+  <tr><th>Что подтверждает схема стадии П</th><td>состав систем, раздельность потоков, направления отвода, расчётные общие расходы</td></tr>
+  <tr><th>Что требует стадии Р</th><td>аксонометрия, привязки, отметки, уклоны, длины, нагрузки отдельных элементов, узлы проходок и ревизий</td></tr>
+</table>
+

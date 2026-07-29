@@ -23,6 +23,7 @@ STATUS_LABELS = {
     "stage_r": "стадия Р",
     "missing": "нужны данные",
     "not_applicable": "не требуется",
+    "fail": "не соответствует",
 }
 
 KIND_LABELS = {
@@ -82,7 +83,7 @@ class ProofGraph:
 
     @property
     def missing_count(self) -> int:
-        return sum(item.status == "missing" for item in self.decisions)
+        return sum(item.status in {"missing", "fail"} for item in self.decisions)
 
     @property
     def stage_r_count(self) -> int:
@@ -772,6 +773,96 @@ def _optional_normative_decisions(project: Project) -> list[ProofDecision]:
             artifacts=["Пояснительная записка", "Спецификация"],
             impact=["количество комплектов", "спецификация В1"],
         ))
+    sewage = project.sewage
+    sewage_result = sewage.result
+    decisions.append(ProofDecision(
+        "k1-flow", "К1", "Расчётный расход стоков",
+        (
+            _ru(sewage_result.total.q_sewage_lps, 3)
+            if sewage_result is not None else "нужны данные"
+        ),
+        "л/с",
+        "verified" if sewage_result is not None else "missing",
+        (
+            "Расход К1 получен тем же принятым алгоритмом, что и legacy."
+            if sewage_result is not None else
+            "Группы потребителей не заданы; условный расход не подставлен."
+        ),
+        steps=[
+            ProofStep(
+                "source", "Расход воды и диктующий прибор",
+                (
+                    f"qtot={_ru(sewage_result.total.q_water_total_lps, 3)} л/с; "
+                    f"q0s={_ru(sewage_result.total.q_fixture_max_lps, 3)} л/с"
+                    if sewage_result is not None else "не определены"
+                ),
+            ),
+            ProofStep(
+                "norm", "Расчёт водоотведения",
+                "СП 30.13330.2020, п. 5.5, формула (5)",
+            ),
+            ProofStep(
+                "calculation", "qₛ = qtot + q0s",
+                (
+                    f"{_ru(sewage_result.total.q_sewage_lps, 3)} л/с"
+                    if sewage_result is not None else "не рассчитан"
+                ),
+            ),
+            ProofStep(
+                "artifact", "Где использовано",
+                "ПЗ · расчёты К1/К2 · схема К1/К2 · спецификация",
+            ),
+        ],
+        artifacts=[
+            "Пояснительная записка",
+            "Расчёты К1/К2",
+            "Схема К1/К2",
+            "Спецификация",
+        ],
+        impact=["стояки К1", "выпуски К1", "спецификация"],
+    ))
+    for row in (sewage_result.risers if sewage_result else []):
+        decisions.append(ProofDecision(
+            f"k1-riser-{row.riser_id}", "К1",
+            f"Стояк {row.riser_id}",
+            (
+                _ru(row.capacity_lps, 3)
+                if row.capacity_lps is not None else "требует данных"
+            ),
+            "л/с",
+            (
+                "verified" if row.status == "verified"
+                else "missing" if row.status == "missing"
+                else "stage_r" if row.status == "stage_r"
+                else "fail"
+            ),
+            row.note,
+            steps=[
+                ProofStep(
+                    "source", "Назначенная нагрузка",
+                    f"{_ru(row.design_flow_lps, 3)} л/с",
+                ),
+                ProofStep(
+                    "source", "Конфигурация",
+                    (
+                        f"{row.material_label}; {row.ventilation_label}; "
+                        f"DN {row.riser_dn_mm}/{row.branch_dn_mm}; "
+                        f"{_ru(row.branch_angle_deg, 1)}°"
+                    ),
+                ),
+                ProofStep(
+                    "norm", "Точный табличный узел",
+                    f"СП 30.13330.2020, приложение К, таблица {row.table}",
+                ),
+                ProofStep(
+                    "decision", "Проверка",
+                    row.note,
+                ),
+            ],
+            artifacts=["Расчёты К1/К2"],
+            impact=["диаметр стояка", "аксонометрия", "спецификация"],
+        ))
+
     if project.storm.roof_type != "not_set":
         storm = project.storm
         result = storm.result
@@ -796,7 +887,10 @@ def _optional_normative_decisions(project: Project) -> list[ProofDecision]:
                         f"F={_ru(storm.roof_area_m2, 1)} м²"
                     ),
                 ),
-                ProofStep("norm", "Внутренние водостоки", "СП 30.13330.2020, раздел 21"),
+                ProofStep(
+                    "norm", "Внутренние водостоки",
+                    "СП 30.13330.2020, пп. 21.10–21.12",
+                ),
                 ProofStep(
                     "calculation", "Расход К2",
                     (
@@ -804,10 +898,60 @@ def _optional_normative_decisions(project: Project) -> list[ProofDecision]:
                         if result is not None else "не рассчитан"
                     ),
                 ),
-                ProofStep("artifact", "Где использовано", "ПЗ · спецификация К2"),
+                ProofStep(
+                    "artifact", "Где использовано",
+                    "ПЗ · расчёты К1/К2 · схема К1/К2 · спецификация К2",
+                ),
             ],
-            artifacts=["Пояснительная записка", "Спецификация"],
+            artifacts=[
+                "Пояснительная записка",
+                "Расчёты К1/К2",
+                "Схема К1/К2",
+                "Спецификация",
+            ],
             impact=["воронки и стояки К2", "выпуски", "спецификация"],
+        ))
+        assessment = storm.network_assessment
+        decisions.append(ProofDecision(
+            "k2-network", "К2", "Воронки и стояки",
+            (
+                "проверено" if assessment and assessment.status == "verified"
+                else "ошибка" if assessment and assessment.status == "fail"
+                else "стадия Р"
+            ),
+            "",
+            (
+                assessment.status
+                if assessment and assessment.status in (
+                    "verified", "stage_r", "missing", "fail"
+                )
+                else "missing"
+            ),
+            (
+                "; ".join(assessment.notes)
+                if assessment else
+                "Нагрузки элементов и геометрия по плану кровли не заданы."
+            ),
+            steps=[
+                ProofStep(
+                    "source", "Явные данные",
+                    (
+                        f"воронок={storm.funnels_count}; "
+                        f"стояков={storm.risers_count}; "
+                        f"DN={storm.selected_riser_dn_mm or '—'}"
+                    ),
+                ),
+                ProofStep(
+                    "norm", "Проверяемые требования",
+                    "СП 30.13330.2020, пп. 21.5, 21.6, таблица 21.1",
+                ),
+                ProofStep(
+                    "decision", "Автораспределение",
+                    "общий расход между элементами не распределялся",
+                ),
+            ],
+            artifacts=["Расчёты К1/К2", "Схема К1/К2"],
+            impact=["число воронок", "DN стояка", "план кровли"],
         ))
     if project.grease_trap.required:
         decisions.append(ProofDecision(

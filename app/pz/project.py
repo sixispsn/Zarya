@@ -533,6 +533,44 @@ class NormativeRequirements:
 
 
 @dataclass
+class SewageRiserSpec:
+    riser_id: str = ""
+    design_flow_lps: float = 0.0
+    material: str = "pp"
+    ventilation: str = "ventilated"
+    riser_dn_mm: int = 110
+    branch_dn_mm: int = 110
+    branch_angle_deg: float = 87.5
+    has_toilet: bool = True
+    working_height_m: Optional[float] = None
+
+
+@dataclass
+class SewerPipeSpec:
+    system: str = "K1"
+    section_id: str = ""
+    purpose: str = ""
+    material: str = ""
+    standard: str = ""
+    outer_diameter_mm: float = 0.0
+    wall_thickness_mm: float = 0.0
+    length_m: float = 0.0
+
+    @property
+    def inner_diameter_mm(self) -> float:
+        return self.outer_diameter_mm - 2.0 * self.wall_thickness_mm
+
+
+@dataclass
+class SewageDesign:
+    """К1: расчёт системы и явно подтверждённые данные стадии П."""
+    risers: List[SewageRiserSpec] = field(default_factory=list)
+    pipes: List[SewerPipeSpec] = field(default_factory=list)
+    outlets_count: int = 0
+    result: Optional[object] = None
+
+
+@dataclass
 class StormDesign:
     """Проектное решение и расчёт К2 на стадии П."""
     roof_type: str = "not_set"  # not_set / flat / sloped
@@ -542,7 +580,18 @@ class StormDesign:
     roof_area_m2: float = 0.0
     walls_area_m2: float = 0.0
     period_years: int = 1
+    roof_sections: int = 0
+    funnels_count: int = 0
+    sectional_residential_single_funnel: bool = False
+    max_funnel_spacing_m: Optional[float] = None
+    selected_funnel_capacity_lps: Optional[float] = None
+    max_funnel_flow_lps: Optional[float] = None
+    risers_count: int = 0
+    selected_riser_dn_mm: int = 0
+    max_riser_flow_lps: Optional[float] = None
+    funnels_on_different_levels: bool = False
     result: Optional[object] = None
+    network_assessment: Optional[object] = None
 
 
 @dataclass
@@ -564,6 +613,7 @@ class Project:
     materials: PipeMaterials = field(default_factory=PipeMaterials)
     insulation: InsulationDesign = field(default_factory=InsulationDesign)
     normative: NormativeRequirements = field(default_factory=NormativeRequirements)
+    sewage: SewageDesign = field(default_factory=SewageDesign)
     storm: StormDesign = field(default_factory=StormDesign)
     grease_trap: GreaseTrapDesign = field(default_factory=GreaseTrapDesign)
     flows: FlowsData = field(default_factory=FlowsData)

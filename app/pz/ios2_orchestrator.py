@@ -32,6 +32,7 @@ from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
+    generate_wastewater_calculation_pdf, generate_wastewater_scheme_pdf,
     generate_commission_control_pdf, append_pdf,
 )
 
@@ -53,6 +54,8 @@ class IOS2DesignBundle:
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
     v1_calculation_pdf: Optional[str] = None
+    wastewater_calculation_pdf: Optional[str] = None
+    wastewater_scheme_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     commission_control_pdf: Optional[str] = None
     commission_report: Optional[object] = None
@@ -322,13 +325,28 @@ def design_ios2(
                     # Прямой технологический/приборный расход входит и в расход
                     # корневого участка, и в расчётный секундный расход водомера.
                     if hws == "local":
+                        q_total = v1_result.source_flow_lps
                         project.flows = replace(
-                            project.flows, q_sec_tot=v1_result.source_flow_lps)
+                            project.flows,
+                            q_sec_tot=q_total,
+                            sewage_l_per_s=round(
+                                q_total + project.sewage_max_fixture_lps,
+                                3,
+                            ),
+                        )
                     else:
+                        q_total = round(
+                            project.flows.q_sec_tot + direct_q,
+                            3,
+                        )
                         project.flows = replace(
                             project.flows,
                             q_sec_c=v1_result.source_flow_lps,
-                            q_sec_tot=round(project.flows.q_sec_tot + direct_q, 3),
+                            q_sec_tot=q_total,
+                            sewage_l_per_s=round(
+                                q_total + project.sewage_max_fixture_lps,
+                                3,
+                            ),
                         )
                 dictating = next(x for x in v1_result.node_checks
                                  if x.node_id == v1_result.dictating_node_id)
@@ -529,10 +547,46 @@ def design_ios2(
             "water_demand: группы потребителей не заданы — расходы В1 нулевые, "
             "ПЗ покажет прочерки (задайте consumers в запросе)")
 
+    # К1: общий расход — канонический legacy-алгоритм; нагрузка на стояки
+    # принимается только из явных данных аксонометрии.
+    from app.calc.sewage import SewageRiserInput, calculate_sewage_system
+    if project.flows.q_sec_tot > 0 or project.flows.sewage_l_per_s > 0:
+        project.sewage.result = calculate_sewage_system(
+            project.flows.q_sec_tot,
+            project.sewage_max_fixture_lps,
+            [SewageRiserInput(**vars(row)) for row in project.sewage.risers],
+        )
+        if (
+            abs(
+                project.sewage.result.total.q_sewage_lps
+                - project.flows.sewage_l_per_s
+            )
+            > 0.0005
+        ):
+            raise RuntimeError(
+                "parity К1 нарушен: результат модуля sewage не совпадает "
+                "с каноническим расходом legacy"
+            )
+        bundle.status.append(
+            "sewage_k1: "
+            f"Q={project.sewage.result.total.q_sewage_lps:.3f} л/с; "
+            f"характерных стояков задано {len(project.sewage.risers)}"
+        )
+    else:
+        project.sewage.result = None
+        bundle.warnings.append(
+            "sewage_k1: расход не определён — группы потребителей не заданы"
+        )
+
     # К2 считается только при полном наборе исходных данных. Формулы и
     # округление перенесены из legacy/sp30_calculator.html в app.calc.storm.
     if project.storm.city_code and project.storm.roof_area_m2 > 0:
-        from app.calc.storm import StormInput, calculate_storm
+        from app.calc.storm import (
+            StormInput,
+            StormNetworkInput,
+            assess_storm_network,
+            calculate_storm,
+        )
         try:
             project.storm.result = calculate_storm(StormInput(
                 city_code=project.storm.city_code,
@@ -542,6 +596,35 @@ def design_ios2(
             ))
             bundle.status.append(
                 f"storm_k2: Q={project.storm.result.q_total_l_per_s:.3f} л/с")
+            project.storm.network_assessment = assess_storm_network(
+                project.storm.result,
+                StormNetworkInput(
+                    roof_type=project.storm.roof_type,
+                    roof_sections=project.storm.roof_sections,
+                    funnels_count=project.storm.funnels_count,
+                    sectional_residential_single_funnel=(
+                        project.storm.sectional_residential_single_funnel
+                    ),
+                    max_funnel_spacing_m=project.storm.max_funnel_spacing_m,
+                    selected_funnel_capacity_lps=(
+                        project.storm.selected_funnel_capacity_lps
+                    ),
+                    max_funnel_flow_lps=project.storm.max_funnel_flow_lps,
+                    risers_count=project.storm.risers_count,
+                    selected_riser_dn_mm=(
+                        project.storm.selected_riser_dn_mm
+                    ),
+                    max_riser_flow_lps=project.storm.max_riser_flow_lps,
+                    funnels_on_different_levels=(
+                        project.storm.funnels_on_different_levels
+                    ),
+                ),
+            )
+            bundle.status.append(
+                "storm_k2_network: "
+                f"{project.storm.network_assessment.status}; "
+                "общий расход не распределялся автоматически"
+            )
         except Exception as e:
             bundle.warnings.append(f"storm_k2: расчёт не выполнен ({e})")
     elif project.storm.system_kind == "internal":
@@ -569,8 +652,24 @@ def design_ios2(
         project, os.path.join(output_dir, "Расчеты_В1.pdf"))
     append_pdf(bundle.pz_pdf, bundle.v1_calculation_pdf)
     bundle.status.append(
-        "Расчеты_В1.pdf собран отдельным расчётным приложением "
+        "Расчеты_В1.pdf собран отдельным расчётным приложением В1/Т3 "
         "и добавлен в конец ПЗ.pdf")
+
+    bundle.wastewater_calculation_pdf = generate_wastewater_calculation_pdf(
+        project, os.path.join(output_dir, "Расчеты_К1_К2.pdf")
+    )
+    append_pdf(bundle.pz_pdf, bundle.wastewater_calculation_pdf)
+    bundle.status.append(
+        "Расчеты_К1_К2.pdf собран отдельным расчётным приложением "
+        "и добавлен в конец ПЗ.pdf"
+    )
+
+    bundle.wastewater_scheme_pdf = generate_wastewater_scheme_pdf(
+        project, os.path.join(output_dir, "Схема_К1_К2.pdf")
+    )
+    bundle.status.append(
+        "Схема_К1_К2.pdf собрана как принципиальная схема стадии П"
+    )
 
     bundle.balance_pdf = generate_balance_pdf(
         project, os.path.join(output_dir, "Баланс_ВиВ.pdf"))
@@ -612,10 +711,12 @@ def design_ios2(
     bundle.commission_report = build_commission_report(project, artifacts={
         "Пояснительная записка": bool(bundle.pz_pdf),
         "Расчёты В1": bool(bundle.v1_calculation_pdf),
+        "Расчёты К1/К2": bool(bundle.wastewater_calculation_pdf),
         "Баланс ВиВ": bool(bundle.balance_pdf),
         "Подбор насосов": bool(bundle.pump_selection_pdf),
         "Спецификация": bool(bundle.spec_pdf),
         "Принципиальная схема": bool(bundle.scheme_pdf),
+        "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
         "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),
     })
     bundle.commission_control_pdf = generate_commission_control_pdf(

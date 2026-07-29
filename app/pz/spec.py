@@ -782,19 +782,60 @@ def build_specification(project: Project) -> Specification:
         sec.rows += sealant_rows(fire_sealant_l(), firestop=True)
         sections.append(sec)
 
-    # ── Раздел К1/К2: только подтверждённые позиции стадии П ──
-    if project.grease_trap.required:
+    # ── Раздел К1/К2: только явно подтверждённые позиции стадии П ──
+    k1_pipes = [row for row in project.sewage.pipes if row.system == "K1"]
+    k2_pipes = [row for row in project.sewage.pipes if row.system == "K2"]
+    if (
+        project.grease_trap.required
+        or project.sewage.outlets_count
+        or k1_pipes
+        or project.flows.sewage_l_per_s > 0
+    ):
         sec = SpecSection(
             title="К1 — бытовая и производственная канализация",
             division="Водоотведение",
         )
-        sec.rows.append(SpecRow(
-            next_pos(),
-            "Жироуловитель для производственных стоков предприятия общественного питания",
-            manufacturer="по проекту", unit="компл.", qty=None,
-            note="на выпусках производственных стоков; число и производительность "
-                 "по заданию ТХ и схеме выпусков стадии Р; СП 118.13330.2022, п. 8.7",
-        ))
+        if project.grease_trap.required:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Жироуловитель для производственных стоков предприятия общественного питания",
+                manufacturer="по проекту", unit="компл.", qty=None,
+                note="на выпусках производственных стоков; число и производительность "
+                     "по заданию ТХ и схеме выпусков стадии Р; СП 118.13330.2022, п. 8.7",
+            ))
+        for pipe in k1_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                f"Труба канализационная {pipe.material}",
+                type_mark=(
+                    f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}; "
+                    f"dвн={pipe.inner_diameter_mm:g} мм"
+                ).replace(".", ","),
+                code=pipe.standard,
+                manufacturer="по проекту",
+                unit="м",
+                qty=round(pipe.length_m, 2),
+                note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
+            ))
+        if project.sewage.outlets_count:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Выпуск хозяйственно-бытовой канализации К1",
+                manufacturer="по проекту",
+                unit="шт.",
+                qty=project.sewage.outlets_count,
+                note="диаметр и узел присоединения по плану/профилю",
+            ))
+        if not k1_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Трубопроводы, фасонные части, ревизии и прочистки системы К1",
+                manufacturer="по проекту",
+                unit="компл.",
+                qty=None,
+                note="длины и количество по планам и аксонометрии стадии Р; "
+                     "условные объёмы не подставлены",
+            ))
         sections.append(sec)
 
     if project.storm.system_kind == "internal":
@@ -804,10 +845,35 @@ def build_specification(project: Project) -> Specification:
         )
         sec.rows.append(SpecRow(
             next_pos(), "Воронка водосточная для внутреннего водостока",
-            manufacturer="по проекту", unit="шт.", qty=None,
-            note="количество и тип по плану кровли и расчётной пропускной способности; "
-                 "СП 118.13330.2022, пп. 8.3–8.4",
+            manufacturer="по проекту", unit="шт.",
+            qty=(project.storm.funnels_count or None),
+            note="тип и паспортная пропускная способность по плану кровли; "
+                 "СП 30.13330.2020, пп. 21.5, 21.12",
         ))
+        for pipe in k2_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                f"Труба водосточная {pipe.material}",
+                type_mark=(
+                    f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}; "
+                    f"dвн={pipe.inner_diameter_mm:g} мм"
+                ).replace(".", ","),
+                code=pipe.standard,
+                manufacturer="по проекту",
+                unit="м",
+                qty=round(pipe.length_m, 2),
+                note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
+            ))
+        if not k2_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Трубопроводы, фасонные части и ревизии системы К2",
+                manufacturer="по проекту",
+                unit="компл.",
+                qty=None,
+                note="длины и количество по планам и аксонометрии стадии Р; "
+                     "условные объёмы не подставлены",
+            ))
         sections.append(sec)
 
     # ГОСТ 21.601-2011, пп. 9.3–9.4: сначала раздел холодного

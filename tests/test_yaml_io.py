@@ -54,6 +54,8 @@ def test_roundtrip_preserves_optional_fields():
 
 
 def test_roundtrip_preserves_sp54_118_253_inputs():
+    from app.intake.request_dto import SewageRiserRequest, SewerPipeRequest
+
     req = load_request(GOOD)
     req.apartments = 240
     req.owner_groups_count = 3
@@ -66,6 +68,21 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
     req.catering_seats = 200
     req.catering_conditional_dishes = 1500
     req.school_grease_by_assignment = True
+    req.sewage_risers = [SewageRiserRequest(
+        "К1-Ст1", 3.5, "pp", "ventilated", 110, 110, 87.5, True,
+    )]
+    req.sewer_pipes = [SewerPipeRequest(
+        "K1", "К1-М1", "стояк", "ПП", "ТУ изготовителя", 110, 3.4, 48,
+    )]
+    req.sewage_outlets_count = 2
+    req.storm_roof_sections = 2
+    req.storm_funnels_count = 4
+    req.storm_max_funnel_spacing_m = 40
+    req.storm_selected_funnel_capacity_lps = 12
+    req.storm_max_funnel_flow_lps = 10
+    req.storm_risers_count = 2
+    req.storm_selected_riser_dn_mm = 100
+    req.storm_max_riser_flow_lps = 10
     assert load_request(dump_request(req)) == req
 
 
