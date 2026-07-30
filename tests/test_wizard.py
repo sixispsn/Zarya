@@ -75,7 +75,7 @@ def test_form_template_has_all_sections():
         **_form_context(errors=[]))
     assert html.count("<fieldset") == 5
     assert html.count('<details class="input-section"') == 5
-    assert html.count('<details class="input-section" open') == 3
+    assert html.count('<details class="input-section" open') == 1
     assert 'data-design-form novalidate' in html
     assert 'name="fire_height" value=""' in html
     assert html.count('name="fire_height"') == 1
@@ -93,7 +93,7 @@ def test_form_template_has_all_sections():
     assert '<div class="row building-row">' in html
     assert (
         '<span class="field-caption">Пожарно-техническая высота '
-        'h<sub>пт</sub>, м</span>'
+        'h<sub>пт</sub>, м '
     ) in html
     assert "ГОСТ Р 21.619-2023" in html
 
@@ -133,16 +133,34 @@ def test_interface_presents_ios2_and_ios3_as_one_project():
     projects = open(
         "app/web/templates/wizard_projects.html", encoding="utf-8").read()
 
-    assert "ZARYA / IOS2 + IOS3 DESIGN SYSTEM" in form
+    assert "ZARYA / IOS2 + IOS3" in form
     assert "Инженерные системы ИОС2 / ИОС3" in form
     assert "Собрать ИОС2 + ИОС3" in form
-    assert "ИОС2 — В1, В2, Т3 и Т4" in form
-    assert "ИОС3 — К1 и К2" in form
+    assert "ИОС2 · В1 В2 Т3 Т4" in form
+    assert "ИОС3 · К1 К2" in form
     assert "Базовый шифр проекта" in form
-    assert "ИОС2 → ИОС3" in form
+    assert "автоматически заменяется на ИОС3" in form
     assert "ИОС2 + ИОС3 · комплект успешно собран" in result
     assert 'data-discipline="{{ group.key }}"' in result
     assert "ИОС2 + ИОС3 · локальное хранилище" in projects
+
+
+def test_form_marks_only_blocking_inputs_with_status_lamps():
+    from app.web.wizard import _TPL, _form_context
+
+    form = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]))
+
+    for field in ("floors", "height", "fire_height", "streams"):
+        assert f'data-required-for="{field}"' in form
+    assert form.count('data-required-rule="positive"') == 2
+    assert 'data-required-rule="fire-auto"' in form
+    assert 'data-required-rule="fire-manual"' in form
+    assert 'name="total_area"' in form
+    total_area = form.split('name="total_area"', 1)[1].split("</label>", 1)[0]
+    assert "required" not in total_area
+    assert '<details class="validation-panel"' in form
+    assert form.count('<details class="field-help">') >= 6
 
 
 def test_blueprint_ui_marks_edited_sections():

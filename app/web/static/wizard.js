@@ -16,6 +16,69 @@ document.addEventListener("DOMContentLoaded", () => {
   }));
   renderTheme();
 
+  const requiredControls = [...document.querySelectorAll("[data-required-rule]")];
+  const fireModeControl = document.querySelector('[name="fire_mode"]');
+  const requiredLamp = (control) =>
+    document.querySelector(`[data-required-for="${control.name}"]`);
+  const positiveNumber = (control) => {
+    const value = Number.parseFloat((control.value || "").replace(",", "."));
+    return Number.isFinite(value) && value > 0;
+  };
+  const requiredIsActive = (control) => {
+    if (control.dataset.requiredRule === "fire-auto") {
+      return (fireModeControl?.value || "auto") === "auto";
+    }
+    if (control.dataset.requiredRule === "fire-manual") {
+      return fireModeControl?.value === "manual";
+    }
+    return true;
+  };
+  const requiredIsValid = (control) => {
+    if (control.dataset.requiredRule === "fire-manual") {
+      return ["1", "2"].includes(control.value.trim());
+    }
+    return positiveNumber(control);
+  };
+  const syncRequiredFields = () => {
+    let firstMissing = null;
+    requiredControls.forEach((control) => {
+      const active = requiredIsActive(control);
+      const valid = !active || requiredIsValid(control);
+      const lamp = requiredLamp(control);
+      control.required = active;
+      control.setAttribute("aria-required", String(active));
+      control.dataset.requiredActive = String(active);
+      if (active && !valid) {
+        const message = control.dataset.requiredRule === "fire-manual"
+          ? "В ручном режиме задайте 1 или 2 расчётные струи."
+          : "Введите положительное значение — без него расчёт не запускается.";
+        control.setCustomValidity(message);
+        if (!firstMissing) firstMissing = control;
+      } else {
+        control.setCustomValidity("");
+      }
+      if (lamp) {
+        lamp.hidden = !active;
+        lamp.classList.toggle("is-complete", active && valid);
+        lamp.title = valid
+          ? "Обязательное поле заполнено"
+          : "Обязательно для запуска расчёта";
+      }
+    });
+    document.querySelectorAll(".input-section").forEach((section) => {
+      const missing = [...section.querySelectorAll("[data-required-active='true']")]
+        .some((control) => !requiredIsValid(control));
+      section.dataset.requiredMissing = String(missing);
+    });
+    return firstMissing;
+  };
+  requiredControls.forEach((control) => {
+    control.addEventListener("input", syncRequiredFields);
+    control.addEventListener("change", syncRequiredFields);
+  });
+  fireModeControl?.addEventListener("change", syncRequiredFields);
+  syncRequiredFields();
+
   const links = [...document.querySelectorAll(".stepnav a[href^='#']")];
   const sections = links
     .map((link) => document.querySelector(link.getAttribute("href")))
@@ -420,7 +483,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const form = document.querySelector("form[data-design-form]");
   if (form) {
-    form.addEventListener("submit", () => {
+    form.addEventListener("submit", (event) => {
+      const firstMissing = syncRequiredFields();
+      if (firstMissing) {
+        event.preventDefault();
+        let ancestor = firstMissing.parentElement;
+        while (ancestor) {
+          if (ancestor.tagName === "DETAILS") ancestor.open = true;
+          ancestor = ancestor.parentElement;
+        }
+        firstMissing.focus();
+        firstMissing.reportValidity();
+        return;
+      }
       const button = form.querySelector("button[type='submit']");
       if (!button) return;
       button.disabled = true;
