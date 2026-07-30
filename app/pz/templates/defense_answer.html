@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Протокол ответа на вопрос</title></head>
+<body>
+  <main>
+    <header class="document-head">
+      <div>
+        <p class="overline">ZARYA DEFENSE · ПРОТОКОЛ ДОКАЗАТЕЛЬСТВА</p>
+        <h1>Ответ на вопрос по проектному решению</h1>
+      </div>
+      <span class="system">{{ decision.system }}</span>
+    </header>
+
+    <section class="passport">
+      <div><small>Объект</small><strong>{{ project.document.object_name or 'не задан' }}</strong></div>
+      <div><small>Шифр / стадия</small><strong>{{ project.document.cipher or 'без шифра' }} / {{ project.document.stage_label }}</strong></div>
+      <div><small>Версия проекта</small><strong>{{ proof.project_fingerprint }}</strong></div>
+      <div><small>Сформировано</small><strong>{{ proof.generated_at }}</strong></div>
+    </section>
+
+    <section class="question">
+      <small>Вопрос комиссии</small>
+      <h2>{{ question }}</h2>
+    </section>
+
+    <section class="answer">
+      <div>
+        <small>Проектное решение</small>
+        <h2>{{ decision.title }}</h2>
+        <p>{{ decision.summary }}</p>
+      </div>
+      <div class="result" data-status="{{ decision.status }}">
+        <span>{{ decision.status_label }}</span>
+        <strong>{{ decision.value }}</strong>
+        <small>{{ decision.unit }}</small>
+      </div>
+    </section>
+
+    <ol class="proof-chain">
+      {% for step in decision.steps %}
+      <li>
+        <span>{{ "%02d"|format(loop.index) }}</span>
+        <div>
+          <small>{{ step.kind_label }}</small>
+          <h3>{{ step.label }}</h3>
+          <strong>{{ step.value }}</strong>
+          {% if step.detail %}<p>{{ step.detail }}</p>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+
+    <section class="documents">
+      <h2>Проверяемые места в комплекте</h2>
+      {% if documents %}
+      <table>
+        <thead><tr><th>Документ</th><th>Место</th><th>Статус привязки</th></tr></thead>
+        <tbody>
+        {% for document in documents %}
+          <tr>
+            <td>{{ document.label }}</td>
+            <td>{% if document.page %}стр. {{ document.page }} из {{ document.page_count }}{% else %}документ целиком{% endif %}</td>
+            <td>{% if document.page %}маркер найден в выпущенном PDF{% else %}файл выпущен, страница требует просмотра{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>Связанный документ в текущем комплекте не сформирован.</p>
+      {% endif %}
+    </section>
+
+    <footer>
+      <p>Протокол объясняет результат текущего расчётного прогона и не изменяет исходные данные, расчёты или документы проекта.</p>
+      <div>
+        <span>PROJECT {{ proof.project_fingerprint }}</span>
+        <span>LEGACY {{ proof.legacy_fingerprint }}</span>
+        <span>BUILD {{ proof.build_commit }}</span>
+      </div>
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,642 @@
+.defense-body {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 47% -25%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 39%),
+    var(--canvas);
+}
+
+.defense-topbar {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  display: flex;
+  align-items: center;
+  min-height: 62px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+.defense-project-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 28px;
+  color: var(--quiet);
+  font: 9px var(--mono);
+}
+.defense-project-id strong {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--accent-bright);
+  font-weight: 700;
+}
+.defense-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.defense-top-actions > a,
+.defense-top-actions > button:not(.theme-toggle) {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font: 650 11px/1.5 inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.defense-top-actions > a:hover,
+.defense-top-actions > button:not(.theme-toggle):hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+
+.defense-shell {
+  width: 100%;
+  max-width: 1920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.defense-brief {
+  display: grid;
+  grid-template-columns: minmax(310px, 1fr) minmax(340px, .8fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow);
+}
+.defense-overline {
+  margin: 0 0 6px;
+  color: var(--accent-bright);
+  font: 700 8px var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.defense-brief h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(20px, 2vw, 30px);
+  font-weight: 620;
+  line-height: 1.1;
+  letter-spacing: -.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.defense-brief > div:first-child > p:last-child {
+  margin: 8px 0 0;
+  color: var(--quiet);
+  font: 10px var(--mono);
+}
+.defense-readiness {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 54px;
+  padding: 9px 13px;
+  border-left: 1px solid var(--line);
+}
+.defense-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 5px var(--ok-pale), 0 0 16px color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.defense-readiness[data-state="attention"] .defense-live-dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 5px var(--warn-pale);
+}
+.defense-readiness small,
+.defense-readiness strong {
+  display: block;
+}
+.defense-readiness small {
+  color: var(--quiet);
+  font: 8px var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.defense-readiness strong {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.defense-score {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.defense-score div {
+  min-width: 78px;
+  padding: 9px 11px;
+  border-left: 1px solid var(--line);
+  text-align: center;
+}
+.defense-score div:first-child { border-left: 0; }
+.defense-score strong,
+.defense-score span {
+  display: block;
+}
+.defense-score strong { font-size: 19px; font-weight: 620; }
+.defense-score span { color: var(--quiet); font: 7px var(--mono); text-transform: uppercase; }
+.defense-score div:first-child strong { color: var(--ok); }
+.defense-score div:nth-child(2) strong { color: var(--warn); }
+.defense-score div:nth-child(3) strong { color: var(--danger); }
+
+.defense-workspace {
+  display: grid;
+  grid-template-columns: minmax(245px, 17vw) minmax(430px, 1fr) minmax(400px, 38vw);
+  gap: 12px;
+  align-items: start;
+}
+.defense-index,
+.defense-proof,
+.defense-viewer-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.defense-index,
+.defense-viewer-panel {
+  position: sticky;
+  top: 76px;
+  height: calc(100dvh - 100px);
+}
+.defense-index {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.defense-index > header,
+.defense-panel-head,
+.defense-question > header,
+.defense-challenge > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 55px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.defense-index > header {
+  display: grid;
+  grid-template-columns: 27px 1fr;
+}
+.defense-index > header > span,
+.defense-panel-head > div > span,
+.defense-question > header > div > span,
+.defense-challenge > summary > span {
+  color: var(--accent-bright);
+  font: 700 9px var(--mono);
+}
+.defense-index header strong,
+.defense-index header small,
+.defense-panel-head strong,
+.defense-panel-head small,
+.defense-question header strong,
+.defense-question header small,
+.defense-challenge summary strong,
+.defense-challenge summary small {
+  display: block;
+}
+.defense-index header strong,
+.defense-panel-head strong,
+.defense-question header strong,
+.defense-challenge summary strong {
+  font-size: 11px;
+}
+.defense-index header small,
+.defense-panel-head small,
+.defense-question header small,
+.defense-challenge summary small {
+  margin-top: 2px;
+  color: var(--quiet);
+  font-size: 8px;
+}
+.defense-decision-list { overflow-y: auto; padding: 7px; }
+.defense-decision-list button {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr) 8px;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.defense-decision-list button:hover { background: var(--surface-hover); }
+.defense-decision-list button.active {
+  background: var(--accent-pale);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.defense-decision-list button > span {
+  color: var(--accent-bright);
+  font: 700 9px var(--mono);
+}
+.defense-decision-list button strong,
+.defense-decision-list button small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.defense-decision-list button strong { font-size: 10px; }
+.defense-decision-list button small {
+  margin-top: 3px;
+  color: var(--quiet);
+  font: 8px var(--mono);
+}
+.defense-decision-list i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-pale);
+}
+.defense-decision-list button[data-status="stage_r"] i {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-pale);
+}
+.defense-decision-list button[data-status="missing"] i,
+.defense-decision-list button[data-status="fail"] i {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-pale);
+}
+.defense-index > footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--quiet);
+  font: 7px var(--mono);
+}
+
+.defense-proof {
+  min-height: calc(100dvh - 100px);
+}
+.defense-panel-head > div,
+.defense-question > header > div,
+.defense-challenge > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.defense-proof-status {
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line));
+  border-radius: 999px;
+  color: var(--ok);
+  background: var(--ok-pale);
+  font: 700 7px var(--mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.defense-proof-status[data-status="stage_r"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+  background: var(--warn-pale);
+}
+.defense-proof-status[data-status="missing"],
+.defense-proof-status[data-status="fail"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  background: var(--danger-pale);
+}
+.defense-proof-content { padding: 18px; }
+.defense-proof-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: start;
+  padding: 2px 2px 18px;
+}
+.defense-proof-result h2 {
+  margin: 0;
+  font-size: clamp(23px, 2.2vw, 34px);
+  font-weight: 620;
+  line-height: 1.08;
+  letter-spacing: -.04em;
+}
+.defense-proof-result p:not(.defense-overline) {
+  max-width: 650px;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.defense-proof-result > div:last-child {
+  min-width: 130px;
+  text-align: right;
+}
+.defense-proof-result > div:last-child strong,
+.defense-proof-result > div:last-child small { display: block; }
+.defense-proof-result > div:last-child strong {
+  font-size: 22px;
+  font-weight: 620;
+}
+.defense-proof-result > div:last-child small {
+  color: var(--quiet);
+  font: 8px var(--mono);
+}
+.defense-chain {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  list-style: none;
+}
+.defense-chain li {
+  display: grid;
+  grid-template-columns: 38px 100px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 68px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+.defense-chain li:first-child { border-top: 0; }
+.defense-chain > li > span {
+  color: var(--quiet);
+  font: 9px var(--mono);
+}
+.defense-chain > li > small {
+  color: var(--accent-bright);
+  font: 700 7px var(--mono);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.defense-chain strong,
+.defense-chain b,
+.defense-chain p { display: block; }
+.defense-chain b { font-size: 10px; }
+.defense-chain strong { margin-top: 3px; color: var(--ink-soft); font-size: 10px; }
+.defense-chain p { margin: 5px 0 0; color: var(--quiet); font-size: 9px; }
+.defense-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.defense-documents button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--input);
+  font-size: 9px;
+  cursor: pointer;
+}
+.defense-documents button:hover,
+.defense-documents button.active {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--accent-pale);
+}
+.defense-documents button span {
+  color: var(--accent-bright);
+  font: 700 7px var(--mono);
+}
+.defense-documents .defense-no-document {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.defense-question {
+  margin: 0 18px 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+}
+.defense-question > header > span {
+  color: var(--ok);
+  font: 7px var(--mono);
+  text-transform: uppercase;
+}
+.defense-question form { padding: 12px; }
+.defense-question textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  outline: none;
+  color: var(--ink);
+  background: var(--surface);
+  font: 12px/1.5 inherit;
+}
+.defense-question textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-pale);
+}
+.defense-question form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 9px;
+}
+.defense-question-presets {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 12px 12px;
+}
+.defense-question-presets button {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 8px;
+  cursor: pointer;
+}
+.defense-question-presets button:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.defense-challenge {
+  margin: 0 18px 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+}
+.defense-challenge > summary {
+  border-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.defense-challenge > summary::-webkit-details-marker { display: none; }
+.defense-challenge[open] > summary { border-bottom: 1px solid var(--line); }
+.defense-challenge > summary b {
+  margin-left: auto;
+  color: var(--cyan);
+  font: 700 7px var(--mono);
+}
+.defense-challenge form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+.defense-challenge label {
+  gap: 4px;
+  font-size: 8px;
+}
+.defense-challenge input,
+.defense-challenge select { height: 36px; font-size: 11px; }
+.defense-challenge form > button {
+  align-self: end;
+  min-height: 36px;
+}
+.defense-impact-result {
+  margin: 0 12px 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.defense-impact-result > strong {
+  display: block;
+  color: var(--accent-bright);
+  font-size: 12px;
+}
+.defense-impact-result > span {
+  display: block;
+  margin-top: 3px;
+  color: var(--quiet);
+  font-size: 9px;
+}
+.defense-impact-result ul { margin: 10px 0 0; padding: 0; list-style: none; }
+.defense-impact-result li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+}
+.defense-impact-result li b { color: var(--accent-bright); }
+.defense-impact-result li strong { color: var(--ink); }
+.defense-impact-result li:not(.changed) { opacity: .55; }
+
+.defense-viewer-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.defense-panel-head > a {
+  color: var(--accent-bright);
+  font: 8px var(--mono);
+  text-decoration: none;
+}
+.defense-viewer-panel iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #34343b;
+}
+.defense-viewer-empty {
+  display: grid;
+  place-content: center;
+  min-height: 450px;
+  padding: 30px;
+  text-align: center;
+}
+.defense-viewer-empty strong { font-size: 13px; }
+.defense-viewer-empty p {
+  max-width: 310px;
+  margin: 7px auto 0;
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+@media (max-width: 1320px) {
+  .defense-workspace {
+    grid-template-columns: 260px minmax(430px, 1fr);
+  }
+  .defense-viewer-panel {
+    position: static;
+    grid-column: 1 / -1;
+    height: 780px;
+  }
+}
+
+@media (max-width: 900px) {
+  .defense-topbar { padding: 0 12px; }
+  .defense-project-id { display: none; }
+  .defense-top-actions > a:first-child,
+  .defense-top-actions > button:not(.theme-toggle) { display: none; }
+  .defense-shell { padding: 12px; }
+  .defense-brief {
+    grid-template-columns: 1fr auto;
+  }
+  .defense-readiness {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .defense-workspace { grid-template-columns: 1fr; }
+  .defense-index,
+  .defense-viewer-panel {
+    position: static;
+    height: auto;
+  }
+  .defense-decision-list {
+    display: flex;
+    overflow-x: auto;
+  }
+  .defense-decision-list button { flex: 0 0 230px; }
+  .defense-index > footer { display: none; }
+  .defense-proof { min-height: 0; }
+  .defense-viewer-panel { grid-column: auto; height: 650px; }
+}
+
+@media (max-width: 620px) {
+  .defense-top-actions > a { display: none; }
+  .defense-brief { grid-template-columns: 1fr; padding: 15px; }
+  .defense-brief h1 { white-space: normal; }
+  .defense-score { width: 100%; }
+  .defense-score div { flex: 1; min-width: 0; }
+  .defense-proof-content { padding: 14px; }
+  .defense-proof-result { grid-template-columns: 1fr; gap: 10px; }
+  .defense-proof-result > div:last-child { text-align: left; }
+  .defense-chain li { grid-template-columns: 28px minmax(0, 1fr); }
+  .defense-chain > li > small { grid-column: 2; grid-row: 1; }
+  .defense-chain > li > div { grid-column: 2; }
+  .defense-question,
+  .defense-challenge { margin-right: 14px; margin-left: 14px; }
+  .defense-question > header > span { display: none; }
+  .defense-question form > div { display: grid; grid-template-columns: 1fr; }
+  .defense-challenge form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .defense-challenge form > button { grid-column: 1 / -1; }
+  .defense-viewer-panel { height: 520px; }
+}

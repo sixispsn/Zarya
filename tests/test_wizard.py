@@ -16,6 +16,9 @@ def test_wizard_router_importable():
     assert "/wizard/result/{run_id}" in paths
     assert "/wizard/proof/{run_id}" in paths
     assert "/wizard/impact/{run_id}" in paths
+    assert "/wizard/defense/{run_id}" in paths
+    assert "/wizard/defense/{run_id}/answer" in paths
+    assert "/wizard/view/{run_id}/{name}" in paths
     assert "/wizard/file/{run_id}/{name}" in paths
 
 
@@ -63,7 +66,8 @@ def test_document_stage_label_preserves_string_stage():
 def test_templates_exist_and_valid_jinja():
     from app.web.wizard import _TPL
     tdir = "app/web/templates"
-    for name in ("wizard_form.html", "wizard_result.html"):
+    for name in ("wizard_form.html", "wizard_result.html",
+                 "wizard_defense.html"):
         assert os.path.exists(os.path.join(tdir, name))
         _TPL.env.get_template(name)   # парсится с фильтрами веб-приложения
 

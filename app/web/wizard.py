@@ -45,6 +45,10 @@ from app.pz.impact import (
     impact_form_context,
 )
 from app.pz.proof import build_proof_graph
+from app.pz.defense import (
+    build_defense_payload,
+    generate_expert_response_pdf,
+)
 from app.pz.rules import calc_required_head
 from app.schemas.impact import ImpactPreviewInput
 from app.data.sp30_tables import list_consumer_norms
@@ -64,6 +68,35 @@ _CONSUMER_NORMS = list_consumer_norms()
 _STORM_CITIES = list_cities()
 _DEMO_PROJECT = Path(__file__).parents[2] / "demo" / "demo_project.yaml"
 
+_DOCUMENT_GROUPS = (
+    ("common", "00", "Основной комплект",
+     "Общие документы, баланс и сводные материалы проекта"),
+    ("ios2", "ИОС2", "Система водоснабжения",
+     "В1, В2, Т3 и Т4: расчёты и обоснования принятых решений"),
+    ("ios3", "ИОС3", "Система водоотведения",
+     "К1 и К2: отдельная ПЗ, расчёты, схема и спецификация"),
+)
+
+_DOCUMENTS = (
+    ("common", "Пояснительная записка", "pz_pdf"),
+    ("common", "Паспорт проекта и нормативный контроль",
+     "commission_control_pdf"),
+    ("common", "Баланс водопотребления и водоотведения", "balance_pdf"),
+    ("common", "Сводная спецификация", "spec_pdf"),
+    ("common", "Сводная принципиальная схема", "scheme_pdf"),
+    ("ios2", "Расчётные обоснования В1 и Т3", "v1_calculation_pdf"),
+    ("ios2", "Расчёт и подбор насосов", "pump_selection_pdf"),
+    ("ios2", "Гидравлический расчёт В2", "hydraulic_pdf"),
+    ("ios2", "Проверка живучести кольца В2", "resilience_pdf"),
+    ("ios3", "Комплект пояснительной записки К1 и К2",
+     "wastewater_package_pdf"),
+    ("ios3", "Пояснительная записка К1 и К2", "wastewater_pz_pdf"),
+    ("ios3", "Расчётные обоснования К1 и К2",
+     "wastewater_calculation_pdf"),
+    ("ios3", "Принципиальная схема К1 и К2", "wastewater_scheme_pdf"),
+    ("ios3", "Спецификация К1 и К2", "wastewater_spec_pdf"),
+)
+
 
 def _form_context(**values):
     return {
@@ -73,6 +106,50 @@ def _form_context(**values):
         "example_mode": False,
         **values,
     }
+
+
+def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
+    """Единый каталог фактически выпущенных PDF для результата и Defense."""
+    groups = {
+        key: {
+            "key": key,
+            "code": code,
+            "label": label,
+            "description": description,
+            "documents": [],
+        }
+        for key, code, label, description in _DOCUMENT_GROUPS
+    }
+    documents = []
+    for group, label, attribute in _DOCUMENTS:
+        path = getattr(bundle, attribute, None)
+        if not path:
+            continue
+        document = {
+            "group": group,
+            "label": label,
+            "name": os.path.basename(path),
+        }
+        documents.append(document)
+        groups[group]["documents"].append(document)
+    document_groups = [
+        groups[key] for key, *_ in _DOCUMENT_GROUPS
+        if groups[key]["documents"]
+    ]
+    return documents, document_groups
+
+
+def _run_file(run: dict, name: str) -> str | None:
+    if not name or os.path.basename(name) != name:
+        return None
+    path = os.path.join(run["outdir"], name)
+    if (
+        not os.path.isfile(path)
+        or os.path.dirname(os.path.abspath(path))
+        != os.path.abspath(run["outdir"])
+    ):
+        return None
+    return path
 
 
 @router.get("", response_class=HTMLResponse)
@@ -334,57 +411,7 @@ def wizard_result(request: Request, run_id: str):
         return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
     b = run["bundle"]
     proof_graph = run["proof_graph"]
-    group_defs = (
-        ("common", "00", "Основной комплект",
-         "Общие документы, баланс и сводные материалы проекта"),
-        ("ios2", "ИОС2", "Система водоснабжения",
-         "В1, В2, Т3 и Т4: расчёты и обоснования принятых решений"),
-        ("ios3", "ИОС3", "Система водоотведения",
-         "К1 и К2: отдельная ПЗ, расчёты, схема и спецификация"),
-    )
-    groups = {
-        key: {
-            "key": key,
-            "code": code,
-            "label": label,
-            "description": description,
-            "documents": [],
-        }
-        for key, code, label, description in group_defs
-    }
-    pdfs = []
-    for group, label, path in (
-            ("common", "Пояснительная записка", b.pz_pdf),
-            ("common", "Паспорт проекта и нормативный контроль",
-             getattr(b, "commission_control_pdf", None)),
-            ("common", "Баланс водопотребления и водоотведения",
-             getattr(b, "balance_pdf", None)),
-            ("common", "Сводная спецификация", b.spec_pdf),
-            ("common", "Сводная принципиальная схема", b.scheme_pdf),
-            ("ios2", "Расчётные обоснования В1 и Т3",
-             getattr(b, "v1_calculation_pdf", None)),
-            ("ios2", "Расчёт и подбор насосов",
-             getattr(b, "pump_selection_pdf", None)),
-            ("ios2", "Гидравлический расчёт В2", b.hydraulic_pdf),
-            ("ios2", "Проверка живучести кольца В2",
-             getattr(b, "resilience_pdf", None)),
-            ("ios3", "Комплект пояснительной записки К1 и К2",
-             getattr(b, "wastewater_package_pdf", None)),
-            ("ios3", "Пояснительная записка К1 и К2",
-             getattr(b, "wastewater_pz_pdf", None)),
-            ("ios3", "Расчётные обоснования К1 и К2",
-             getattr(b, "wastewater_calculation_pdf", None)),
-            ("ios3", "Принципиальная схема К1 и К2",
-             getattr(b, "wastewater_scheme_pdf", None)),
-            ("ios3", "Спецификация К1 и К2",
-             getattr(b, "wastewater_spec_pdf", None))):
-        if path:
-            document = {"label": label, "name": os.path.basename(path)}
-            pdfs.append(document)
-            groups[group]["documents"].append(document)
-    document_groups = [
-        groups[key] for key, *_ in group_defs if groups[key]["documents"]
-    ]
+    pdfs, document_groups = _bundle_documents(b)
     f = b.project.fire
     p = b.project
     head = calc_required_head(p.source, h_vod_m=cold_meter_loss(p.meters))
@@ -489,13 +516,127 @@ def wizard_impact(run_id: str, data: ImpactPreviewInput):
     return JSONResponse(preview.to_dict())
 
 
+@router.get("/defense/{run_id}", response_class=HTMLResponse)
+def wizard_defense(request: Request, run_id: str):
+    """Полноэкранный режим живой защиты выпущенного расчётного прогона."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
+    bundle = run["bundle"]
+    documents, _ = _bundle_documents(bundle)
+    defense = run.get("defense_payload")
+    if defense is None:
+        defense = build_defense_payload(
+            run["proof_graph"],
+            documents,
+            run["outdir"],
+            run_id=run_id,
+        )
+        run["defense_payload"] = defense
+    primary_id = "v1-pump"
+    if not any(row["id"] == primary_id for row in defense["decisions"]):
+        primary_id = defense["decisions"][0]["id"]
+    passport = next(
+        (
+            document for document in documents
+            if document["label"] == "Паспорт проекта и нормативный контроль"
+        ),
+        None,
+    )
+    project = bundle.project
+    commission = bundle.commission_report
+    return _TPL.TemplateResponse(request, "wizard_defense.html", {
+        "run_id": run_id,
+        "defense": defense,
+        "primary_id": primary_id,
+        "passport": passport,
+        "impact": impact_form_context(run["request"]),
+        "commission": commission,
+        "project": {
+            "title": project.document.object_name or "Комплект без реквизитов",
+            "cipher": project.document.cipher,
+            "stage": project.document.stage_label,
+            "purpose": project.building.purpose.value,
+            "floors": project.building.floors_above,
+            "height": project.building.height_m,
+            "fire_height": project.building.fire_height_m,
+        },
+    })
+
+
+@router.post("/defense/{run_id}/answer")
+def wizard_defense_answer(
+    run_id: str,
+    decision_id: str = Form(...),
+    question: str = Form(""),
+):
+    """Сформировать проверяемый PDF-ответ по уже рассчитанному решению."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="прогон не найден")
+    if len(question) > 1000:
+        raise HTTPException(status_code=422, detail="вопрос длиннее 1000 знаков")
+    decision = next(
+        (
+            row for row in run["proof_graph"].decisions
+            if row.id == decision_id
+        ),
+        None,
+    )
+    if decision is None:
+        raise HTTPException(status_code=404, detail="решение не найдено")
+    documents, _ = _bundle_documents(run["bundle"])
+    defense = run.get("defense_payload") or build_defense_payload(
+        run["proof_graph"],
+        documents,
+        run["outdir"],
+        run_id=run_id,
+    )
+    run["defense_payload"] = defense
+    evidence = next(
+        row["documents"] for row in defense["decisions"]
+        if row["id"] == decision_id
+    )
+    output_name = f"Ответ_эксперту_{decision_id}.pdf"
+    output_path = os.path.join(run["outdir"], output_name)
+    generate_expert_response_pdf(
+        run["bundle"].project,
+        run["proof_graph"],
+        decision,
+        question,
+        evidence,
+        output_path,
+    )
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=output_name,
+    )
+
+
+@router.get("/view/{run_id}/{name}")
+def wizard_view(run_id: str, name: str):
+    """Открыть выпущенный PDF внутри Defense без принудительного скачивания."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        return HTMLResponse("нет прогона", status_code=404)
+    path = _run_file(run, name)
+    if path is None:
+        return HTMLResponse("нет файла", status_code=404)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline"},
+    )
+
+
 @router.get("/file/{run_id}/{name}")
 def wizard_file(run_id: str, name: str):
     run = _RUNS.get(run_id)
     if run is None:
         return HTMLResponse("нет прогона", status_code=404)
-    path = os.path.join(run["outdir"], name)
-    if not os.path.isfile(path) or os.path.dirname(os.path.abspath(path)) != os.path.abspath(run["outdir"]):
+    path = _run_file(run, name)
+    if path is None:
         return HTMLResponse("нет файла", status_code=404)
     return FileResponse(path, media_type="application/pdf", filename=name)
 

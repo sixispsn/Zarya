@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Zarya Defense — защита проекта</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/wizard.css?v=20260730-6">
+  <link rel="stylesheet" href="/static/defense.css?v=20260730-1">
+  <script defer src="/static/wizard.js?v=20260730-6"></script>
+  <script defer src="/static/defense.js?v=20260730-1"></script>
+</head>
+<body class="defense-body">
+  <header class="defense-topbar">
+    <a class="brand" href="/wizard/result/{{ run_id }}">
+      <span class="brand-mark">З</span>
+      <span class="brand-copy"><strong>Zarya Defense</strong><span>цифровая защита проекта</span></span>
+    </a>
+    <div class="defense-project-id">
+      <span>{{ project.cipher or 'без шифра' }} · стадия {{ project.stage }}</span>
+      <strong>{{ defense.project_fingerprint }}</strong>
+    </div>
+    <div class="defense-top-actions">
+      {% if passport %}<a href="/wizard/file/{{ run_id }}/{{ passport.name }}" target="_blank">Паспорт PDF</a>{% endif %}
+      <button type="button" data-defense-copy>Скопировать ссылку</button>
+      <a href="/wizard/result/{{ run_id }}">Выйти из защиты</a>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span></button>
+    </div>
+  </header>
+
+  <main class="defense-shell">
+    <section class="defense-brief">
+      <div>
+        <p class="defense-overline">LIVE PROJECT DEFENSE · {{ defense.generated_at }}</p>
+        <h1>{{ project.title }}</h1>
+        <p>{{ project.floors }} эт. · {{ project.height|ru_num(1) }} м · h<sub>пт</sub> {{ project.fire_height|ru_num(1) }} м</p>
+      </div>
+      <div class="defense-readiness" data-state="{{ 'ready' if commission and commission.blocking_count == 0 else 'attention' }}">
+        <span class="defense-live-dot"></span>
+        <div>
+          <small>Готовность к рассмотрению</small>
+          <strong>{{ commission.release_status if commission else 'Статус не сформирован' }}</strong>
+        </div>
+      </div>
+      <div class="defense-score">
+        <div><strong>{{ defense.summary.proven }}</strong><span>подтверждено</span></div>
+        <div><strong>{{ defense.summary.stage_r }}</strong><span>граница Р</span></div>
+        <div><strong>{{ defense.summary.missing }}</strong><span>нужны данные</span></div>
+      </div>
+    </section>
+
+    <section class="defense-workspace">
+      <aside class="defense-index" aria-label="Проектные решения">
+        <header>
+          <span>01</span>
+          <div><strong>Карта решений</strong><small>Нажмите на любой вывод</small></div>
+        </header>
+        <div class="defense-decision-list">
+          {% for item in defense.decisions %}
+          <button type="button" data-defense-decision="{{ item.id }}" data-status="{{ item.status }}" {% if item.id == primary_id %}class="active"{% endif %}>
+            <span>{{ item.system }}</span>
+            <div><strong>{{ item.title }}</strong><small>{{ item.value }}{% if item.unit %} {{ item.unit }}{% endif %}</small></div>
+            <i aria-label="{{ item.status_label }}"></i>
+          </button>
+          {% endfor %}
+        </div>
+        <footer>
+          <span>PROOF {{ defense.version }}</span>
+          <span>BUILD {{ defense.build_commit }}</span>
+        </footer>
+      </aside>
+
+      <section class="defense-proof" aria-live="polite">
+        <header class="defense-panel-head">
+          <div>
+            <span>02</span>
+            <div><strong>Доказательная цепочка</strong><small>От исходных данных к документу</small></div>
+          </div>
+          <span class="defense-proof-status" data-defense-status></span>
+        </header>
+
+        <article class="defense-proof-content">
+          <div class="defense-proof-result">
+            <div>
+              <p class="defense-overline" data-defense-system></p>
+              <h2 data-defense-title></h2>
+              <p data-defense-summary></p>
+            </div>
+            <div>
+              <strong data-defense-value></strong>
+              <small data-defense-unit></small>
+            </div>
+          </div>
+          <ol class="defense-chain" data-defense-chain></ol>
+          <div class="defense-documents" data-defense-documents></div>
+        </article>
+
+        <section class="defense-question">
+          <header>
+            <div><span>03</span><div><strong>Вопрос комиссии</strong><small>Поиск только по доказательствам текущего проекта</small></div></div>
+            <span>без нормативных фантазий</span>
+          </header>
+          <form method="post" action="/wizard/defense/{{ run_id }}/answer" target="_blank" data-defense-answer>
+            <input type="hidden" name="decision_id" value="{{ primary_id }}" data-defense-answer-id>
+            <textarea name="question" rows="2" maxlength="1000" data-defense-question aria-label="Вопрос комиссии"></textarea>
+            <div>
+              <button type="button" class="button-secondary" data-defense-find>Найти доказательство</button>
+              <button type="submit" class="button-primary">Сформировать ответ PDF</button>
+            </div>
+          </form>
+          <div class="defense-question-presets">
+            <button type="button" data-defense-preset="v1-head">Почему такой напор?</button>
+            <button type="button" data-defense-preset="v1-pump">Почему этот насос?</button>
+            <button type="button" data-defense-preset="v2-requirement">Требуется ли В2?</button>
+            <button type="button" data-defense-preset="k1-flow">Как посчитан К1?</button>
+          </div>
+        </section>
+
+        <details class="defense-challenge">
+          <summary><span>04</span><div><strong>Оспорить исходные данные</strong><small>Без сохранения проекта и перевыпуска PDF</small></div><b>WHAT IF</b></summary>
+          <form data-defense-impact data-endpoint="/wizard/impact/{{ run_id }}">
+            {% if impact.consumer_groups %}
+            <label>
+              <span>Группа потребителей</span>
+              <select data-defense-consumer-select>
+                {% for group in impact.consumer_groups %}<option value="{{ group.index }}" data-count="{{ group.count }}">{{ group.name }}</option>{% endfor %}
+              </select>
+            </label>
+            <label><span>Количество</span><input type="number" min="1" step="1" value="{{ impact.consumer_groups[0].count }}" data-defense-consumer-count></label>
+            {% endif %}
+            <label><span>Этажность</span><input type="number" min="1" step="1" value="{{ impact.floors }}" data-defense-impact-field="floors"></label>
+            <label><span>Высота, м</span><input type="number" min="0.1" step="0.1" value="{{ impact.building_height_m }}" data-defense-impact-field="building_height_m"></label>
+            <label><span>h<sub>пт</sub>, м</span><input type="number" min="0.1" step="0.1" value="{{ impact.fire_height_m or '' }}" data-defense-impact-field="fire_height_m"></label>
+            <label><span>H<sub>гар</sub>, м</span><input type="number" min="0" step="0.1" value="{{ impact.guaranteed_head_m if impact.guaranteed_head_m is not none else '' }}" data-defense-impact-field="guaranteed_head_m"></label>
+            <button type="submit" class="button-primary">Пересчитать влияние</button>
+          </form>
+          <div class="defense-impact-result" data-defense-impact-result hidden></div>
+        </details>
+      </section>
+
+      <aside class="defense-viewer-panel">
+        <header class="defense-panel-head">
+          <div><span>05</span><div><strong>Фактический документ</strong><small data-defense-viewer-caption>Выберите доказательство</small></div></div>
+          <a href="#" target="_blank" data-defense-viewer-open>Открыть отдельно</a>
+        </header>
+        <div class="defense-viewer-empty" data-defense-viewer-empty>
+          <strong>Выберите связанный документ</strong>
+          <p>Если маркер найден, PDF откроется сразу на фактической странице выпуска.</p>
+        </div>
+        <iframe title="Предпросмотр документа проекта" data-defense-viewer hidden></iframe>
+      </aside>
+    </section>
+  </main>
+
+  <script type="application/json" id="defense-data">{{ defense|tojson }}</script>
+</body>
+</html>

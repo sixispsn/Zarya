@@ -18,6 +18,7 @@
     <h1>{{ project.title or 'Комплект без реквизитов' }}</h1>
     <p>{% if project.cipher %}{{ project.cipher }} · {% endif %}стадия {{ project.stage }} · сформировано документов: {{ pdfs|length }}</p>
     <div class="result-disciplines"><span data-discipline="ios2"><b>ИОС2</b> В1 · В2 · Т3 · Т4</span><span data-discipline="ios3"><b>ИОС3</b> К1 · К2</span></div>
+    <div class="result-hero-actions"><a class="button-primary" href="/wizard/defense/{{ run_id }}">Защитить проект →</a><span>Живой разбор решений, страниц PDF и вопросов комиссии</span></div>
   </section>
 
   <div class="result-grid">

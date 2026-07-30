@@ -97,6 +97,9 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .hero h1 { margin: 0; max-width: 860px; font-size: clamp(30px, 3.2vw, 46px); font-weight: 620; line-height: 1.08; letter-spacing: -.04em; }
 .hero p:not(.eyebrow) { max-width: 800px; margin: 14px 0 0; color: var(--muted); font-size: 15px; }
 .hero-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.result-hero-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+.result-hero-actions .button-primary { width: auto; min-height: 42px; padding: 10px 16px; }
+.result-hero-actions > span { color: var(--quiet); font: 9px var(--mono); }
 .example-actions { flex-basis: 100%; display: flex; justify-content: flex-end; }
 .example-actions a { color: var(--accent-bright); font: 700 9px var(--mono); letter-spacing: .04em; text-decoration: none; text-transform: uppercase; }
 .example-actions a:hover { text-decoration: underline; }
@@ -626,6 +629,8 @@ table.grid .compact-check input[type="checkbox"] {
   .hero h1 { font-size: 30px; }
   .hero p:not(.eyebrow) { font-size: 14px; }
   .hero-meta { justify-content: flex-start; }
+  .result-hero-actions { align-items: stretch; flex-direction: column; }
+  .result-hero-actions .button-primary { width: 100%; }
   .section-head { grid-template-columns: 38px minmax(0,1fr) 20px; min-height: 74px; gap: 9px; padding: 12px; }
   .section-meta { display: none; }
   .section-title { font-size: 14px; }
