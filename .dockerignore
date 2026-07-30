@@ -12,7 +12,6 @@ venv
 dist
 tmp
 temp
-demo
 demo_backup
 docs
 legacy
