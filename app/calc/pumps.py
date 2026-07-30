@@ -181,7 +181,11 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         elif q_err < 0.2:
             score += 10
 
-        npsh_ok = (data.npsh_a >= pump.npshr + 0.5) if data.npsh_a is not None else None
+        npsh_ok = (
+            data.npsh_a >= pump.npshr + 0.5
+            if data.npsh_a is not None and pump.npshr is not None
+            else None
+        )
         if npsh_ok is False:
             score -= 50
 
@@ -203,10 +207,15 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         else:
             reasons.append("✗ напора недостаточно")
 
-        if npsh_ok is False:
+        if npsh_ok is False and pump.npshr is not None:
             reasons.append(f"✗ КАВИТАЦИЯ: NPSHa={data.npsh_a}м < NPSHr+0.5={pump.npshr + 0.5:.1f}м")
-        elif npsh_ok is True:
+        elif npsh_ok is True and pump.npshr is not None:
             reasons.append(f"✓ кавитации нет: NPSHa={data.npsh_a}м > {pump.npshr + 0.5:.1f}м")
+        elif pump.npshr is None:
+            reasons.append(
+                "⚠ NPSHr не опубликован в каталоге установки — "
+                "проверить по характеристике базового насоса"
+            )
         else:
             reasons.append("⚠ NPSHa не задан — кавитационную проверку выполнить по данным изготовителя и схеме всасывания")
 

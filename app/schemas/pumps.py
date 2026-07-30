@@ -34,7 +34,7 @@ class PumpInfoOutput(BaseModel):
     type: str
     p_kw: float
     p_max_bar: float
-    npshr: float
+    npshr: Optional[float]
     q_opt: float
     note: str
     archived: bool

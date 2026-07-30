@@ -267,11 +267,21 @@ def compute_fire_pump_from_duty(
     ]
 
     suction_check = next(c for c in ps.sp10_checks if c.clause == "12.20-12.21")
-    if npsh_a_m is not None and res.candidates:
+    if (
+        npsh_a_m is not None
+        and res.candidates
+        and res.candidates[0].pump.npshr is not None
+    ):
         npshr = res.candidates[0].pump.npshr
         ok = npsh_a_m >= npshr + 0.5
         suction_check.decision = f"NPSHa={npsh_a_m:.1f} м; NPSHr+0,5={npshr + 0.5:.1f} м"
         suction_check.status = "verified" if ok else "fail"
+    elif res.candidates and res.candidates[0].pump.npshr is None:
+        suction_check.decision = (
+            "Каталог установки не публикует NPSHr; получить характеристику "
+            "базового насоса и проверить NPSHa >= NPSHr + 0,5 м"
+        )
+        suction_check.status = "pending"
 
     if maximum_source_head_m is None:
         ps.sp10_checks.append(PumpComplianceCheck(

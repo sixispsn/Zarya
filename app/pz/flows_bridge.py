@@ -111,6 +111,7 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
     for c in res.candidates:
         wp = c.working_point
         p2, motor_min = _pump_power(c.pump, wp.q, wp.h)
+        raw_npshr = _g(c.pump, "npshr", default=None)
         top3.append(PumpCandidate(
             model=str(_g(c.pump, "model", "name", default="")),
             brand=str(_g(c.pump, "brand", "manufacturer", default="")),
@@ -119,7 +120,7 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
             wp_q=wp.q, wp_h=wp.h,
             p2_kw=p2, motor_min_kw=motor_min,
             p_max_bar=float(_g(c.pump, "p_max_bar", "pmax_bar", default=0) or 0),
-            npshr=float(_g(c.pump, "npshr", default=0) or 0),
+            npshr=(float(raw_npshr) if raw_npshr is not None else None),
             score=c.score,
             reasons=[_clean_reason(r) for r in (c.reasons or [])],
             archived=bool(_g(c.pump, "archived", default=False)),

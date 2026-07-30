@@ -11,14 +11,15 @@ def test_fire_pump_selected_by_main_duty_point():
     result = compute_fire_pump_from_duty(
         duty, npsh_a_m=8.0, maximum_source_head_m=30.0)
     assert result.required is True
-    assert result.model == "Grundfos Hydro MX-A CR15-9"
+    assert result.model == "CNP / Aikon PFFS 2 CDM10-9 DS 16 S"
     assert result.wp_q > 0 and result.wp_h > 0
     assert result.q_design_m3h == 9.36
     assert result.h_design_m == 70.0
     assert result.top3[0].type_label == "пожарный"
     assert "1 рабочий + 1 резервный" in result.count_note
-    assert result.selection_note.startswith("Предварительный подбор")
-    assert any("кавитации нет" in reason for reason in result.top3[0].reasons)
+    assert result.selection_note == ""
+    assert "Каталог PFFS" in result.top3[0].source_note
+    assert any("NPSHr не опубликован" in reason for reason in result.top3[0].reasons)
     assert result.pump_head_at_design_m >= result.h_design_m
     assert result.maximum_system_pressure_bar < result.top3[0].p_max_bar
     checks = {check.clause: check for check in result.sp10_checks}
@@ -26,7 +27,8 @@ def test_fire_pump_selected_by_main_duty_point():
     assert checks["12.3"].status == "specified"
     assert checks["12.27"].status == "specified"
     assert result.working_units == 1 and result.reserve_units == 1
-    assert result.sp10_compliant is None  # размещение насосной подтверждает АР
+    assert checks["12.20-12.21"].status == "pending"
+    assert result.sp10_compliant is None  # NPSHr и размещение подтверждаются отдельно
 
 
 def test_fire_pump_keeps_required_duty_when_catalog_has_no_candidate():
@@ -67,8 +69,18 @@ def test_fire_pump_bridge_includes_current_catalog(monkeypatch):
     assert ("fire", True) in calls
 
 
-def test_sp10_rejects_legacy_candidate_that_misses_full_duty_head():
+def test_sp10_rejects_legacy_candidate_that_misses_full_duty_head(monkeypatch):
     """Legacy допускает близкую точку, но В2 обязан дать Hрасч при полном Qрасч."""
+    import app.calc.pumps as pumps_module
+
+    original = pumps_module.list_pumps
+    monkeypatch.setattr(
+        pumps_module,
+        "list_pumps",
+        lambda pump_type=None, *, include_current=False: original(
+            pump_type, include_current=False
+        ),
+    )
     duty = PumpDutyPoint(
         required_head_m=100.0,
         flow_lps=2.0 / 3.6,
@@ -99,7 +111,7 @@ def test_pz_and_spec_show_separate_fire_pump_selection():
         duty, npsh_a_m=8.0, maximum_source_head_m=30.0)
 
     html = generate_pz_html(project)
-    assert "Grundfos Hydro MX-A CR15-9" in html
+    assert "CNP / Aikon PFFS 2 CDM10-9 DS 16 S" in html
     assert "Расчётная точка системы" in html
     assert "1 рабочий + 1 резервный" in html
     assert "Проверка пожарной насосной установки по СП 10.13130.2020" in html

@@ -308,7 +308,7 @@ class PumpCandidate:
     p2_kw: float = 0.0          # потребляемая мощность в раб. точке, кВт
     motor_min_kw: float = 0.0   # мин. мощность двигателя (запас 15%), кВт
     p_max_bar: float = 0.0
-    npshr: float = 0.0
+    npshr: Optional[float] = None
     score: float = 0.0
     reasons: list = field(default_factory=list)  # list[str] — обоснование
     archived: bool = False        # архивная каталожная кривая, требует подтверждения

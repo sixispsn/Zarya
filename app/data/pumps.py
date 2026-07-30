@@ -30,7 +30,7 @@ class Pump:
     p_kw: float              # мощность, кВт
     p_max_bar: float         # макс. давление, бар
     t_max: float             # макс. температура, °С
-    npshr: float             # требуемый кавитационный запас, м
+    npshr: float | None      # требуемый кавитационный запас, м; None — нет в источнике
     q_opt: float             # оптимальный расход (BEP), м³/ч
     note: str
     curve: tuple[PumpCurvePoint, ...]
@@ -90,6 +90,59 @@ PUMPS: list[Pump] = [
 # - артикул 4200993, P2=4 кВт, PN16, Tmax=120 °C — карточка Wilo;
 # - точки Q-H перенесены из официального SVG интерактивной характеристики;
 # - NPSHr=1,8 м принят по официальной NPSH-кривой в зоне BEP Q≈17,5 м³/ч.
+#
+# CNP / Aikon:
+# - PFFS — пожарные установки, кривая «1» одного рабочего насоса; резервный
+#   агрегат не суммируется с рабочим;
+# - PBS — повысительные установки, кривая «1» одного рабочего насоса;
+# - TD — циркуляционный in-line насос с табличной характеристикой;
+# - Q-H PFFS/PBS оцифрованы по координатной сетке официальных каталогов
+#   версии 2025. Погрешность чтения графика не более 0,5 м;
+# - каталоги PFFS/PBS требуют определять NPSHr по отдельной характеристике
+#   насоса CDM, но не публикуют её. Поэтому NPSHr оставлен неизвестным, а не
+#   подменён нулём. Трассировка и SHA-256 приведены в docs/catalogs/cnp_2025.md.
+
+_CNP_CDM10_6 = (
+    PumpCurvePoint(0, 66.0), PumpCurvePoint(2, 65.8),
+    PumpCurvePoint(4, 64.5), PumpCurvePoint(6, 61.8),
+    PumpCurvePoint(8, 58.0), PumpCurvePoint(10, 52.0),
+    PumpCurvePoint(12, 44.0), PumpCurvePoint(14, 34.0),
+)
+_CNP_CDM10_7 = (
+    PumpCurvePoint(0, 78.5), PumpCurvePoint(2, 78.0),
+    PumpCurvePoint(4, 76.0), PumpCurvePoint(6, 73.0),
+    PumpCurvePoint(8, 68.5), PumpCurvePoint(10, 61.5),
+    PumpCurvePoint(12, 52.0), PumpCurvePoint(14, 40.0),
+)
+_CNP_CDM10_8 = (
+    PumpCurvePoint(0, 89.5), PumpCurvePoint(2, 89.0),
+    PumpCurvePoint(4, 87.0), PumpCurvePoint(6, 83.5),
+    PumpCurvePoint(8, 78.0), PumpCurvePoint(10, 70.5),
+    PumpCurvePoint(12, 60.0), PumpCurvePoint(14, 47.0),
+)
+_CNP_CDM10_9 = (
+    PumpCurvePoint(0, 101.0), PumpCurvePoint(2, 100.0),
+    PumpCurvePoint(4, 96.5), PumpCurvePoint(6, 92.0),
+    PumpCurvePoint(8, 87.0), PumpCurvePoint(10, 80.0),
+    PumpCurvePoint(12, 68.0), PumpCurvePoint(14, 52.0),
+)
+_CNP_CDM10_10 = (
+    PumpCurvePoint(0, 113.0), PumpCurvePoint(2, 112.0),
+    PumpCurvePoint(4, 109.5), PumpCurvePoint(6, 105.0),
+    PumpCurvePoint(8, 99.0), PumpCurvePoint(10, 90.0),
+    PumpCurvePoint(12, 77.0), PumpCurvePoint(14, 60.0),
+)
+_CNP_CDM15_7 = (
+    PumpCurvePoint(0, 96.0), PumpCurvePoint(5, 92.0),
+    PumpCurvePoint(10, 87.0), PumpCurvePoint(15, 80.0),
+    PumpCurvePoint(20, 68.0), PumpCurvePoint(24, 52.0),
+)
+_CNP_CDM15_9 = (
+    PumpCurvePoint(0, 124.0), PumpCurvePoint(5, 118.0),
+    PumpCurvePoint(10, 112.0), PumpCurvePoint(15, 103.0),
+    PumpCurvePoint(20, 90.0), PumpCurvePoint(24, 70.0),
+)
+
 CURRENT_PUMPS: list[Pump] = [
     Pump(
         model="Helix FIRST V 1606-5/16/E/S/400-50",
@@ -125,6 +178,171 @@ CURRENT_PUMPS: list[Pump] = [
             "helix-first-v-1606-5-16-e-s-400-50?t=1"
         ),
         source_note="Wilo, артикул 4200993; Q-H/NPSH проверены 23.07.2026",
+    ),
+    Pump(
+        model="PBS CDM10-6",
+        brand="CNP / Aikon",
+        type="boost",
+        p_kw=2.2,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
+        curve=_CNP_CDM10_6,
+        source_note=(
+            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
+            "мощность стр. 46-47; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PBS CDM10-8",
+        brand="CNP / Aikon",
+        type="boost",
+        p_kw=3.0,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
+        curve=_CNP_CDM10_8,
+        source_note=(
+            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
+            "мощность стр. 46-47; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PBS CDM10-10",
+        brand="CNP / Aikon",
+        type="boost",
+        p_kw=4.0,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
+        curve=_CNP_CDM10_10,
+        source_note=(
+            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
+            "мощность стр. 46-47; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM10-6 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=2.2,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM10_6,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM10-7 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=3.0,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM10_7,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM10-8 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=3.0,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM10_8,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM10-9 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=4.0,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=10.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM10_9,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM15-7 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=5.5,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=15.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM15_7,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 18-19, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="PFFS 2 CDM15-9 DS 16 S",
+        brand="CNP / Aikon",
+        type="fire",
+        p_kw=7.5,
+        p_max_bar=16.0,
+        t_max=70.0,
+        npshr=None,
+        q_opt=15.0,
+        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
+        curve=_CNP_CDM15_9,
+        source_note=(
+            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 18-19, "
+            "мощность стр. 38-39; оцифровка ±0,5 м"
+        ),
+    ),
+    Pump(
+        model="TD32-10(I)/2",
+        brand="CNP",
+        type="circ",
+        p_kw=0.37,
+        p_max_bar=16.0,
+        t_max=120.0,
+        npshr=1.1,
+        q_opt=6.5,
+        note="Циркуляционный in-line DN32; табличная Q-H характеристика",
+        curve=(
+            PumpCurvePoint(2, 11.0), PumpCurvePoint(3, 10.8),
+            PumpCurvePoint(4, 10.6), PumpCurvePoint(5, 10.3),
+            PumpCurvePoint(6, 10.0), PumpCurvePoint(7, 9.2),
+            PumpCurvePoint(8, 7.8), PumpCurvePoint(9, 6.0),
+        ),
+        source_note=(
+            "CNP «Каталог TD, LLT», версия 15.08.2025, стр. 74-75: "
+            "таблица Q-H и график NPSH"
+        ),
     ),
 ]
 

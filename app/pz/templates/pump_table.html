@@ -46,7 +46,8 @@ H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
 
 {% if accepted %}
 <p class="equip-verdict">Основные характеристики принятого варианта:
-Pмакс = {{ accepted.p_max_bar | num(1) }} бар; NPSHr = {{ accepted.npshr | num(1) }} м;
+Pмакс = {{ accepted.p_max_bar | num(1) }} бар;
+{% if accepted.npshr is not none %}NPSHr = {{ accepted.npshr | num(1) }} м{% else %}NPSHr требует проверки по характеристике базового насоса{% endif %};
 расчётная мощность = {{ accepted.p2_kw | num(2) }} кВт.
 {% if accepted.archived %}Каталожная кривая архивная — марку, исполнение и актуальную характеристику подтвердить у изготовителя.{% endif %}</p>
 {% if accepted.source_note %}
