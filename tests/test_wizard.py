@@ -79,9 +79,9 @@ def test_form_template_has_all_sections():
     assert 'data-design-form novalidate' in html
     assert 'name="fire_height" value=""' in html
     assert html.count('name="fire_height"') == 1
-    assert html.count('<span class="accepted">принято</span>') == 5
+    assert html.count('data-state="не задано">не задано</span>') == 5
     for field in ("cipher", "object_name", "building_type", "floors", "height",
-                  "fire_mode", "fire_height",
+                  "fire_mode", "fire_height", "fire_category",
                   "consumer1_name", "consumer1_code", "consumer1_count",
                   "room_name", "run1_from", "riser1_name", "source_node"):
         assert f'name="{field}"' in html
@@ -96,6 +96,10 @@ def test_form_template_has_all_sections():
         'h<sub>пт</sub>, м '
     ) in html
     assert "ГОСТ Р 21.619-2023" in html
+    assert 'name="consumer1_count" aria-label="Количество потребителей 1" value=""' in html
+    assert 'name="run1_from" value=""' in html
+    assert 'name="available_head" value=""' in html
+    assert "Загрузить учебный пример" in html
 
 
 def test_form_exposes_all_sp30_consumer_norms():
@@ -151,11 +155,14 @@ def test_form_marks_only_blocking_inputs_with_status_lamps():
     form = _TPL.env.get_template("wizard_form.html").render(
         **_form_context(errors=[]))
 
-    for field in ("floors", "height", "fire_height", "streams"):
+    for field in ("building_type", "floors", "height", "fire_height",
+                  "fire_category", "streams"):
         assert f'data-required-for="{field}"' in form
     assert form.count('data-required-rule="positive"') == 2
     assert 'data-required-rule="fire-auto"' in form
     assert 'data-required-rule="fire-manual"' in form
+    assert 'data-required-rule="fire-category-auto"' in form
+    assert 'data-required-rule="nonempty"' in form
     assert 'name="total_area"' in form
     total_area = form.split('name="total_area"', 1)[1].split("</label>", 1)[0]
     assert "required" not in total_area
@@ -207,6 +214,17 @@ def test_live_normative_advisories_are_wired():
     assert "height > 50" in js
     assert "fireHeight >= 30" in js
     assert "пп. 1.1, 7.5–7.6" in js
+    assert "больше не подменяет общественное здание офисной строкой" in js
+
+
+def test_demo_is_available_only_by_explicit_query():
+    from app.web.wizard import _DEMO_PROJECT
+    from app.intake.yaml_io import load_request_file
+
+    demo = load_request_file(str(_DEMO_PROJECT))
+    assert demo.consumers[0].count == 480
+    assert demo.fire_category == "residential_f13"
+    assert demo.fire_geometry_confirmed is True
 
 
 def test_invalid_form_keeps_entered_values():

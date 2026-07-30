@@ -141,6 +141,7 @@ def compute_fire_pump_from_duty(
         h_pr=0.0,
         h_gar=0.0,
         npsh_a=npsh_a_m,
+        include_current_catalog=True,
     ))
 
     # СП 10, п. 12.1 требует обеспечить именно максимальные расчётные Q/H.

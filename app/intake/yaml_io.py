@@ -253,8 +253,23 @@ def load_request(text: str) -> IOS2Request:
         insulation_hvs_water_temp=float(insulation_s.get("hvs_water_temp", 10.0)),
         insulation_gvs_water_temp=float(insulation_s.get("gvs_water_temp", 60.0)),
         fire_mode=str(fire.get("mode", "auto")),
-        fire_height_m=float(
-            fire.get("height_m", bld.get("fire_height_m", bld.get("height_m", 0)))
+        fire_height_m=(
+            float(fire["height_m"])
+            if fire.get("height_m") is not None else None
+        ),
+        fire_category=str(fire.get("category", "")),
+        fire_hall_seats=(
+            int(fire["hall_seats"])
+            if fire.get("hall_seats") is not None else None
+        ),
+        fire_area_m2=(
+            float(fire["area_m2"])
+            if fire.get("area_m2") is not None else None
+        ),
+        # Наличие геометрии в YAML/импорте уже является явным действием.
+        # Wizard передаёт отдельный checkbox и не пользуется этим fallback.
+        fire_geometry_confirmed=bool(
+            fire.get("geometry_confirmed", bool(rooms or network is not None))
         ),
         streams=(int(fire_streams) if fire_streams is not None else None),
         q_per_stream_lps=float(fire.get("q_per_stream_lps", 2.6)),
@@ -346,6 +361,12 @@ def dump_request(req: IOS2Request) -> str:
         "fire": {
             "mode": req.fire_mode,
             **({"height_m": req.fire_height_m} if req.fire_height_m is not None else {}),
+            **({"category": req.fire_category} if req.fire_category else {}),
+            **({"hall_seats": req.fire_hall_seats}
+               if req.fire_hall_seats is not None else {}),
+            **({"area_m2": req.fire_area_m2}
+               if req.fire_area_m2 is not None else {}),
+            "geometry_confirmed": req.fire_geometry_confirmed,
             **({"streams": req.streams} if req.streams is not None else {}),
             "q_per_stream_lps": req.q_per_stream_lps,
             "hose_length_m": req.hose_length_m,

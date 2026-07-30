@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from pathlib import Path
 from typing import Dict
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -36,6 +37,7 @@ from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
+from app.intake.yaml_io import load_request_file
 from app.pz.generator import cold_meter_loss
 from app.pz.impact import (
     ImpactValidationError,
@@ -60,6 +62,7 @@ _OUT_ROOT = "/tmp/zarya_wizard_runs"
 _STORE = ProjectStore()
 _CONSUMER_NORMS = list_consumer_norms()
 _STORM_CITIES = list_cities()
+_DEMO_PROJECT = Path(__file__).parents[2] / "demo" / "demo_project.yaml"
 
 
 def _form_context(**values):
@@ -67,14 +70,24 @@ def _form_context(**values):
         "consumer_norms": _CONSUMER_NORMS,
         "storm_cities": _STORM_CITIES,
         "advisories": [],
+        "example_mode": False,
         **values,
     }
 
 
 @router.get("", response_class=HTMLResponse)
-def wizard_form(request: Request):
+def wizard_form(request: Request, example: bool = False):
+    prefill = load_request_file(str(_DEMO_PROJECT)) if example else None
     return _TPL.TemplateResponse(
-        request, "wizard_form.html", _form_context(errors=[]))
+        request,
+        "wizard_form.html",
+        _form_context(
+            errors=[],
+            prefill=prefill,
+            example_mode=example,
+            advisories=(review_request(prefill) if prefill else []),
+        ),
+    )
 
 
 @router.post("/design")
@@ -193,7 +206,7 @@ async def wizard_design(request: Request):
             object_part=fv("object_part"), stage=fv("stage", "П"),
             developer=fv("developer"), inspector=fv("inspector"),
             dept_head=fv("dept_head"), gip=fv("gip"), norm_control=fv("norm_control")),
-        building_type=fv("building_type", "residential"),
+        building_type=fv("building_type"),
         floors=fi("floors"), building_height_m=ff("height"),
         total_area_m2=ff("total_area"),
         risers_v1=fi("risers_v1"), risers_t3=fi("risers_t3"),
@@ -205,6 +218,14 @@ async def wizard_design(request: Request):
         insulation_gvs_water_temp=ff("insulation_gvs_temp", 60.0),
         fire_mode=fv("fire_mode", "auto"),
         fire_height_m=(ff("fire_height") if fv("fire_height") else None),
+        fire_category=fv("fire_category"),
+        fire_hall_seats=(
+            fi("fire_hall_seats") if fv("fire_hall_seats") else None
+        ),
+        fire_area_m2=(
+            ff("fire_area_m2") if fv("fire_area_m2") else None
+        ),
+        fire_geometry_confirmed=bool(form.get("fire_geometry_confirmed")),
         streams=(fi("streams") if fv("streams") else None),
         nozzle_mm=fi("nozzle_mm", 13),
         compact_jet_m=fi("compact_jet_m", 12),

@@ -97,6 +97,9 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .hero h1 { margin: 0; max-width: 860px; font-size: clamp(30px, 3.2vw, 46px); font-weight: 620; line-height: 1.08; letter-spacing: -.04em; }
 .hero p:not(.eyebrow) { max-width: 800px; margin: 14px 0 0; color: var(--muted); font-size: 15px; }
 .hero-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.example-actions { flex-basis: 100%; display: flex; justify-content: flex-end; }
+.example-actions a { color: var(--accent-bright); font: 700 9px var(--mono); letter-spacing: .04em; text-decoration: none; text-transform: uppercase; }
+.example-actions a:hover { text-decoration: underline; }
 .chip { padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface); font: 700 10px var(--mono); letter-spacing: .04em; white-space: nowrap; }
 .discipline-chip[data-discipline="ios2"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--accent-bright); background: var(--accent-pale); }
 .discipline-chip[data-discipline="ios3"] { border-color: color-mix(in srgb, var(--cyan) 55%, var(--line)); color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, var(--surface)); }
@@ -165,6 +168,11 @@ fieldset { scroll-margin-top: 84px; min-width: 0; margin: 0; padding: 0; border:
 .source-tag { padding: 4px 7px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .05em; }
 .accepted { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font: 700 10px var(--mono); text-transform: uppercase; }
 .accepted::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px var(--ok-pale); }
+.accepted[data-state="не задано"] { color: var(--quiet); }
+.accepted[data-state="не задано"]::before, .accepted[data-state="ошибка"]::before { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-pale); }
+.accepted[data-state="ошибка"] { color: var(--danger); }
+.accepted[data-state="пример"] { color: var(--accent-bright); }
+.accepted[data-state="пример"]::before { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-pale); }
 .accepted.changed { color: var(--warn); }
 .accepted.changed::before { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-pale); }
 .section-body { padding: 26px 22px 28px 70px; border-top: 1px solid var(--line); animation: reveal .18s ease-out; }
@@ -244,6 +252,7 @@ table.grid .compact-check input[type="checkbox"] {
 .advanced-body { padding: 18px; border-top: 1px solid var(--line); }
 .technical-label { margin: 18px 0 9px; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .source-row { margin-top: 20px; }
+.geometry-confirm { margin: 16px 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 42%, var(--line)); border-radius: 8px; color: var(--ink-soft); background: var(--warn-pale); flex-direction: row; align-items: center; text-transform: none; }
 .discipline-overview { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-bottom: 17px; }
 .discipline-card { display: grid; grid-template-columns: 63px minmax(0,1fr); gap: 12px; align-items: center; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--input); }
 .discipline-card[data-discipline="ios2"] { border-top-color: var(--accent); }

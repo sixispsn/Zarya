@@ -41,5 +41,8 @@ def test_residential_with_pool_is_mixed_use_not_high_rise():
         ConsumerGroupRequest("residential_central_hw", 480, "Жилая часть"),
         ConsumerGroupRequest("sport_pool", 120, "Бассейн"),
     ]))
-    assert [item.code for item in warnings] == ["sp30_mixed_use"]
+    assert [item.code for item in warnings] == [
+        "sp30_mixed_use",
+        "sp10_fire_category_missing",
+    ]
     assert warnings[0].reference == "СП 30.13330.2020, пп. 1.1, 7.5–7.6"

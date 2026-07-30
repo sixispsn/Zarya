@@ -8,6 +8,8 @@ def _find_font():
            "/root/.fonts/osifont.ttf",
            os.path.expanduser("~/.fonts/osifont.ttf"),
            "/usr/share/fonts/truetype/osifont/osifont.ttf",
+           "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+           "/System/Library/Fonts/Supplemental/Arial.ttf",
            os.path.join(os.path.dirname(__file__),"fonts","osifont.ttf")]
     for p in cands:
         if p and os.path.exists(p): return p

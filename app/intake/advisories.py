@@ -75,6 +75,18 @@ def review_request(req: IOS2Request) -> list[InputAdvisory]:
             reference="СП 30.13330.2020, пп. 1.1, 7.5–7.6",
         ))
 
+    if req.fire_mode == "auto" and not req.fire_category:
+        result.append(InputAdvisory(
+            level="warning",
+            code="sp10_fire_category_missing",
+            message=(
+                "Не выбрана диктующая функциональная категория В2. "
+                "Общественное или смешанное здание нельзя автоматически "
+                "подменять офисной строкой."
+            ),
+            reference="СП 10.13130.2020, таблица 7.1",
+        ))
+
     high_rise = (
         req.building_type == "residential" and height > 75
         or req.building_type == "public" and height > 50

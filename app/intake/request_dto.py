@@ -28,6 +28,15 @@ from typing import List, Optional
 
 BUILDING_TYPES = ("residential", "public", "industrial")
 FIRE_MODES = ("auto", "not_required", "manual")
+FIRE_CATEGORIES = (
+    "residential_f13",
+    "office_public",
+    "hospital_f11",
+    "theatre_f21",
+    "library_sport",
+    "museum_trade",
+    "dormitory_f12",
+)
 ROOF_TYPES = ("not_set", "flat", "sloped")
 CATERING_TYPES = ("none", "semi_finished", "raw", "school")
 SOURCE_KINDS = ("city_main", "reservoir", "pond", "well")
@@ -269,6 +278,10 @@ class IOS2Request:
     # ВПВ
     fire_mode: str = "auto"                       # auto / not_required / manual
     fire_height_m: Optional[float] = None          # пожарно-техническая высота
+    fire_category: str = ""                        # строка таблицы 7.1 СП 10
+    fire_hall_seats: Optional[int] = None           # для Ф2.1
+    fire_area_m2: Optional[float] = None            # площадь расчётной части
+    fire_geometry_confirmed: bool = True            # геометрия явно введена/импортирована
     streams: Optional[int] = None                  # только ручной override
     q_per_stream_lps: float = 2.6
     hose_length_m: int = 20
@@ -330,6 +343,10 @@ class IOS2Request:
             p.append("insulation_humidity должна быть 40, 50, 60, 70, 80 или 90")
         if self.fire_mode not in FIRE_MODES:
             p.append(f"fire_mode '{self.fire_mode}' не из {FIRE_MODES}")
+        if self.fire_category and self.fire_category not in FIRE_CATEGORIES:
+            p.append(
+                f"fire_category '{self.fire_category}' не из {FIRE_CATEGORIES}"
+            )
         if self.fire_mode == "auto":
             if self.fire_height_m is None or self.fire_height_m <= 0:
                 p.append(
@@ -341,6 +358,47 @@ class IOS2Request:
                     "автомат В2 для производственного здания требует категории, "
                     "степени огнестойкости, класса и объёма; используйте ручной режим"
                 )
+            if self.building_type == "public" and not self.fire_category:
+                p.append(
+                    "для общественного здания выберите функциональную категорию "
+                    "В2 по строке таблицы 7.1 СП 10"
+                )
+            has_public_part = any(
+                group.code and not group.code.startswith("residential_")
+                for group in self.consumers
+            )
+            if (
+                self.building_type == "residential"
+                and has_public_part
+                and not self.fire_category
+            ):
+                p.append(
+                    "для смешанного жилого здания явно выберите диктующую "
+                    "функциональную категорию В2"
+                )
+            if (
+                self.fire_category == "theatre_f21"
+                and (self.fire_hall_seats is None or self.fire_hall_seats <= 0)
+            ):
+                p.append(
+                    "для театра/кино/клуба Ф2.1 задайте вместимость зала"
+                )
+            if (
+                self.fire_category == "library_sport"
+                and (self.fire_area_m2 or self.total_area_m2) <= 0
+            ):
+                p.append(
+                    "для библиотеки/архива/спортивной части задайте её площадь"
+                )
+        if self.fire_hall_seats is not None and self.fire_hall_seats <= 0:
+            p.append("fire_hall_seats должен быть > 0")
+        if self.fire_area_m2 is not None and self.fire_area_m2 <= 0:
+            p.append("fire_area_m2 должен быть > 0")
+        if (self.rooms or self.network is not None) and not self.fire_geometry_confirmed:
+            p.append(
+                "геометрия В2 должна быть явно подтверждена как введённая "
+                "по плану/расчётной схеме"
+            )
         if self.fire_mode == "manual" and self.streams not in (1, 2):
             p.append("для ручного режима В2 задайте streams=1 или 2")
         if self.streams is not None and self.streams not in (1, 2):

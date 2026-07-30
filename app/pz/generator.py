@@ -83,7 +83,7 @@ def _subitems_template_name(purpose: BuildingPurpose) -> str:
     if name is None:
         raise ValueError(
             f"Шаблон для типа объекта '{purpose.value}' пока не реализован. "
-            "На данном этапе доступен только общественный (public)."
+            "На данном этапе доступны жилой и общественный типы."
         )
     return name
 

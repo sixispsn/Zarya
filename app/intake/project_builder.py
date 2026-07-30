@@ -40,6 +40,16 @@ _BUILDING_MAP = {
     "industrial": BuildingPurpose.INDUSTRIAL,
 }
 
+_FIRE_CATEGORY_MAP = {
+    "residential_f13": "f13",
+    "office_public": "f_office",
+    "hospital_f11": "f11",
+    "theatre_f21": "f21_theater",
+    "library_sport": "f21_lib",
+    "museum_trade": "f22",
+    "dormitory_f12": "f12_hostel",
+}
+
 
 def build_project(req: IOS2Request) -> Project:
     """IOS2Request → Project. Валидация намерения → маппинг → сборка."""
@@ -116,10 +126,11 @@ def build_project(req: IOS2Request) -> Project:
         from app.calc.fire import FireInput, calculate_fire
         from app.pz.flows_bridge import fire_from_calc
 
-        fire_type = {
-            "residential": "f13",
-            "public": "f_office",
-        }[req.building_type]
+        # Для жилого здания без смешанных частей строка 1 таблицы 7.1
+        # однозначна. Для общественного/смешанного объекта категория приходит
+        # только явным выбором проектировщика и не подменяется «офисом».
+        category = req.fire_category or "residential_f13"
+        fire_type = _FIRE_CATEGORY_MAP[category]
         corridor_length = next(
             (room.length_m for room in req.rooms
              if room.space_kind == "corridor"),
@@ -130,7 +141,8 @@ def build_project(req: IOS2Request) -> Project:
             floors=req.floors,
             height_m=req.fire_height_m,
             corridor_length_m=corridor_length,
-            area_m2=(req.total_area_m2 or None),
+            seats=req.fire_hall_seats,
+            area_m2=(req.fire_area_m2 or req.total_area_m2 or None),
             dn=req.cabinet_dn,
             nozzle_mm=req.nozzle_mm,
             hose_m=req.hose_length_m,

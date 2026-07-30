@@ -25,6 +25,7 @@ RUN pip install --requirement requirements.txt
 RUN python -c "import cairosvg; assert cairosvg.svg2pdf(bytestring=b'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>').startswith(b'%PDF')"
 
 COPY app ./app
+COPY demo ./demo
 
 RUN useradd --create-home --uid 10001 zarya \
     && mkdir -p /data/projects \

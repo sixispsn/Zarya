@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isFinite(value) && value > 0;
   };
   const requiredIsActive = (control) => {
-    if (control.dataset.requiredRule === "fire-auto") {
+    if (["fire-auto", "fire-category-auto"].includes(control.dataset.requiredRule)) {
       return (fireModeControl?.value || "auto") === "auto";
     }
     if (control.dataset.requiredRule === "fire-manual") {
@@ -77,6 +77,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   };
   const requiredIsValid = (control) => {
+    if (["nonempty", "fire-category-auto"].includes(control.dataset.requiredRule)) {
+      return Boolean(control.value.trim());
+    }
     if (control.dataset.requiredRule === "fire-manual") {
       return ["1", "2"].includes(control.value.trim());
     }
@@ -94,7 +97,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (active && !valid) {
         const message = control.dataset.requiredRule === "fire-manual"
           ? "В ручном режиме задайте 1 или 2 расчётные струи."
-          : "Введите положительное значение — без него расчёт не запускается.";
+          : control.dataset.requiredRule === "fire-category-auto"
+            ? "Выберите функциональную категорию по таблице 7.1 СП 10."
+            : control.dataset.requiredRule === "nonempty"
+              ? "Выберите значение — без него расчёт не запускается."
+              : "Введите положительное значение — без него расчёт не запускается.";
         control.setCustomValidity(message);
         if (!firstMissing) firstMissing = control;
       } else {
@@ -209,6 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fireHeightRaw = document.querySelector('[name="fire_height"]')?.value || "0";
     const fireHeight = Number.parseFloat(fireHeightRaw.replace(",", ".")) || 0;
     const fireMode = document.querySelector('[name="fire_mode"]')?.value || "auto";
+    const fireCategory = document.querySelector('[name="fire_category"]')?.value || "";
     const buildingType = document.querySelector('[name="building_type"]')?.value;
     const purposes = new Set(
       [...document.querySelectorAll("[data-consumer-select]")]
@@ -228,6 +236,13 @@ document.addEventListener("DOMContentLoaded", () => {
         level: "warning",
         message: `При ${floors} этажах ВПВ включается по пожарно-технической высоте ${fireHeight} м. Подтвердите показатель по АР.`,
         reference: "СП 10.13130.2020, таблица 7.1, строка 1"
+      });
+    }
+    if (fireMode === "auto" && !fireCategory) {
+      advisories.push({
+        level: "warning",
+        message: "Выберите диктующую функциональную категорию В2: Заря больше не подменяет общественное здание офисной строкой.",
+        reference: "СП 10.13130.2020, таблица 7.1"
       });
     }
     if (buildingType === "residential" && height > 75) {

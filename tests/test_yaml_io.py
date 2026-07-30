@@ -13,7 +13,7 @@ document:
   object_name: Объект
   organization: Орг
 building: {type: residential, floors: 16, height_m: 48}
-fire: {streams: 2}
+fire: {height_m: 48, category: residential_f13, streams: 2, geometry_confirmed: true}
 rooms:
   - {name: Коридор, length_m: 42, width_m: 2.4, height_m: 3.0}
 network:
@@ -51,6 +51,18 @@ def test_roundtrip_preserves_optional_fields():
     req.network.node_elevations = {"К2": -1.5}
     req2 = load_request(dump_request(req))
     assert req2.network.node_elevations == {"К2": -1.5}
+
+
+def test_roundtrip_preserves_explicit_fire_category_and_inputs():
+    req = load_request(GOOD)
+    req.fire_category = "theatre_f21"
+    req.fire_hall_seats = 450
+    req.fire_area_m2 = 1800
+    req2 = load_request(dump_request(req))
+    assert req2.fire_category == "theatre_f21"
+    assert req2.fire_hall_seats == 450
+    assert req2.fire_area_m2 == 1800
+    assert req2.fire_geometry_confirmed is True
 
 
 def test_roundtrip_preserves_sp54_118_253_inputs():
@@ -144,9 +156,19 @@ def test_full_chain_yaml_to_project():
 
 
 def test_streams_absent_means_none():
-    y = GOOD.replace("fire: {streams: 2}", "fire: {}")
+    y = GOOD.replace(
+        "fire: {height_m: 48, category: residential_f13, streams: 2, geometry_confirmed: true}",
+        "fire: {height_m: 48, category: residential_f13, geometry_confirmed: true}",
+    )
     req = load_request(y)
     assert req.streams is None
+
+
+def test_fire_height_is_not_silently_copied_from_building_height():
+    y = GOOD.replace("height_m: 48, category:", "category:")
+    req = load_request(y)
+    assert req.fire_height_m is None
+    assert any("fire_height_m" in problem for problem in req.validate())
 
 
 def test_demo_yaml_is_valid_complete_and_roundtrips():

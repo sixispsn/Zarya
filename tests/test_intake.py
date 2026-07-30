@@ -15,7 +15,7 @@ def _req(**overrides):
         document=DocumentRequest(cipher="Т-ИОС2", object_name="Объект",
                                  organization="Орг"),
         building_type="residential", floors=16, building_height_m=48.0,
-        fire_height_m=48.0,
+        fire_height_m=48.0, fire_category="residential_f13",
         streams=2,
         rooms=[RoomRequest("Коридор", 42.0, 2.4, 3.0)],
         network=NetworkRequest(
@@ -147,6 +147,49 @@ def test_builder_streams_none_uses_sp10_auto():
     p = build_project(_req(streams=None))
     assert p.fire.required is True
     assert p.fire.streams == 2
+
+
+def test_public_auto_requires_explicit_table_7_1_category():
+    problems = _req(
+        building_type="public",
+        fire_category="",
+        streams=None,
+    ).validate()
+    assert any("функциональную категорию" in problem for problem in problems)
+
+
+def test_public_hospital_uses_table_7_1_row_3_not_office_row():
+    p = build_project(_req(
+        building_type="public",
+        floors=3,
+        building_height_m=8.0,
+        fire_height_m=8.0,
+        fire_category="hospital_f11",
+        streams=None,
+        rooms=[],
+        network=None,
+    ))
+    assert p.fire.required is True
+    assert p.fire.streams == 1
+    assert "стр. 3" in p.fire.normative_note
+
+
+def test_mixed_object_requires_explicit_governing_fire_category():
+    from app.intake.request_dto import ConsumerGroupRequest
+
+    request = _req(
+        fire_category="",
+        consumers=[
+            ConsumerGroupRequest("residential_full_bath", 500, "Жильё"),
+            ConsumerGroupRequest("office", 100, "Офисы"),
+        ],
+    )
+    assert any("смешанного" in problem for problem in request.validate())
+
+
+def test_wizard_geometry_requires_explicit_confirmation():
+    request = _req(fire_geometry_confirmed=False)
+    assert any("геометрия В2" in problem for problem in request.validate())
 
 
 def test_nine_floors_below_30m_has_no_vpv():

@@ -119,7 +119,9 @@ def test_form_without_prefill_has_no_demo_document_data():
     assert "DEMO-ТУ-01" not in h
     assert "Демонстрационный водоканал" not in h
     assert "Аникин А.В." not in h
-    assert "РС-1" in h
+    assert "РС-1" not in h
+    assert 'name="run1_from" value=""' in h
+    assert 'name="tu_guaranteed_head" value=""' in h
     assert 'name="consumer1_name"' in h
     assert 'name="consumer1_code"' in h
     assert 'name="consumer1_count"' in h

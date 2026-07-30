@@ -22,6 +22,8 @@ building:
 fire:
   mode: auto
   height_m: 48.0
+  category: residential_f13
+  geometry_confirmed: true
   q_per_stream_lps: 2.6
   hose_length_m: 20
   cabinet_dn: 50

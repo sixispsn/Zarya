@@ -48,6 +48,25 @@ def test_fire_pump_not_selected_without_duty():
     assert compute_fire_pump_from_duty(None).required is False
 
 
+def test_fire_pump_bridge_includes_current_catalog(monkeypatch):
+    import app.calc.pumps as pumps_module
+
+    original = pumps_module.list_pumps
+    calls = []
+
+    def spy(pump_type=None, *, include_current=False):
+        calls.append((pump_type, include_current))
+        return original(pump_type, include_current=include_current)
+
+    monkeypatch.setattr(pumps_module, "list_pumps", spy)
+    compute_fire_pump_from_duty(PumpDutyPoint(
+        required_head_m=70.0,
+        flow_lps=2.6,
+        source_kind=SourceKind.CITY_MAIN,
+    ))
+    assert ("fire", True) in calls
+
+
 def test_sp10_rejects_legacy_candidate_that_misses_full_duty_head():
     """Legacy допускает близкую точку, но В2 обязан дать Hрасч при полном Qрасч."""
     duty = PumpDutyPoint(
