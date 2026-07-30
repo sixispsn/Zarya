@@ -61,6 +61,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const requiredControls = [...document.querySelectorAll("[data-required-rule]")];
   const fireModeControl = document.querySelector('[name="fire_mode"]');
+  const buildingTypeControl = document.querySelector('[name="building_type"]');
+  const fireCategoryControl = document.querySelector('[name="fire_category"]');
+  const totalAreaControl = document.querySelector('[name="total_area"]');
   const requiredLamp = (control) =>
     document.querySelector(`[data-required-for="${control.name}"]`);
   const positiveNumber = (control) => {
@@ -68,19 +71,39 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isFinite(value) && value > 0;
   };
   const requiredIsActive = (control) => {
-    if (["fire-auto", "fire-category-auto"].includes(control.dataset.requiredRule)) {
+    const rule = control.dataset.requiredRule;
+    if (rule === "fire-auto") {
       return (fireModeControl?.value || "auto") === "auto";
     }
-    if (control.dataset.requiredRule === "fire-manual") {
+    if (rule === "fire-category-auto") {
+      if ((fireModeControl?.value || "auto") !== "auto") return false;
+      const hasPublicPart = [...document.querySelectorAll("[data-consumer-select]")]
+        .some((select) =>
+          select.selectedOptions[0]?.dataset.purpose === "public"
+        );
+      return buildingTypeControl?.value === "public"
+        || (buildingTypeControl?.value === "residential" && hasPublicPart);
+    }
+    if (rule === "fire-theatre") {
+      return (fireModeControl?.value || "auto") === "auto"
+        && fireCategoryControl?.value === "theatre_f21";
+    }
+    if (rule === "fire-area") {
+      return (fireModeControl?.value || "auto") === "auto"
+        && fireCategoryControl?.value === "library_sport"
+        && !positiveNumber(totalAreaControl);
+    }
+    if (rule === "fire-manual") {
       return fireModeControl?.value === "manual";
     }
     return true;
   };
   const requiredIsValid = (control) => {
-    if (["nonempty", "fire-category-auto"].includes(control.dataset.requiredRule)) {
+    const rule = control.dataset.requiredRule;
+    if (["nonempty", "fire-category-auto"].includes(rule)) {
       return Boolean(control.value.trim());
     }
-    if (control.dataset.requiredRule === "fire-manual") {
+    if (rule === "fire-manual") {
       return ["1", "2"].includes(control.value.trim());
     }
     return positiveNumber(control);
@@ -99,6 +122,10 @@ document.addEventListener("DOMContentLoaded", () => {
           ? "В ручном режиме задайте 1 или 2 расчётные струи."
           : control.dataset.requiredRule === "fire-category-auto"
             ? "Выберите функциональную категорию по таблице 7.1 СП 10."
+            : control.dataset.requiredRule === "fire-theatre"
+              ? "Для строки Ф2.1 задайте вместимость зала."
+              : control.dataset.requiredRule === "fire-area"
+                ? "Для строки 5 задайте площадь расчётной части или общую площадь здания."
             : control.dataset.requiredRule === "nonempty"
               ? "Выберите значение — без него расчёт не запускается."
               : "Введите положительное значение — без него расчёт не запускается.";
@@ -127,6 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
     control.addEventListener("change", syncRequiredFields);
   });
   fireModeControl?.addEventListener("change", syncRequiredFields);
+  totalAreaControl?.addEventListener("input", syncRequiredFields);
   syncRequiredFields();
 
   const links = [...document.querySelectorAll(".stepnav a[href^='#']")];
@@ -173,13 +201,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const bindConsumerRow = (row) => {
     row.querySelectorAll("input, select").forEach(bindControl);
     const select = row.querySelector("[data-consumer-select]");
-    if (select) select.addEventListener("input", () => updateConsumerUnit(row));
+    if (select) {
+      select.addEventListener("input", () => {
+        updateConsumerUnit(row);
+        syncRequiredFields();
+      });
+    }
     const remove = row.querySelector(".consumer-remove");
     if (remove) remove.addEventListener("click", () => {
       if (consumerRows.querySelectorAll("[data-consumer-row]").length <= 1) return;
       row.remove();
       markChanged(consumerRows);
       runAdvisories();
+      syncRequiredFields();
     });
     updateConsumerUnit(row);
   };
@@ -200,6 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
       row.querySelector("input")?.focus();
       markChanged(row);
       runAdvisories();
+      syncRequiredFields();
     });
   }
 

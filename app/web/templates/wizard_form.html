@@ -5,8 +5,8 @@
 <title>Заря — проектирование ИОС2 + ИОС3</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260730-6">
-<script defer src="/static/wizard.js?v=20260730-6"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-7">
+<script defer src="/static/wizard.js?v=20260730-7"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
@@ -14,7 +14,7 @@
 </header>
 {% set d = prefill.document if prefill else none %}
 {% set sd = prefill.source_data if prefill and prefill.source_data else none %}
-{% set input_state = 'ошибка' if errors else ('пример' if example_mode else ('принято' if prefill else 'не задано')) %}
+{% set input_state = 'пример' if example_mode else ('принято' if prefill else 'не задано') %}
 <main class="shell">
 <section class="hero">
   <div><p class="eyebrow">ZARYA / IOS2 + IOS3</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Один расчёт — два самостоятельных подраздела стадии П.</p></div>
@@ -169,8 +169,8 @@
     <div class="row">
       <label>Режим В2<select name="fire_mode"><option value="auto"{% if not prefill or prefill.fire_mode == 'auto' %} selected{% endif %}>Автоматически по СП 10</option><option value="not_required"{% if prefill and prefill.fire_mode == 'not_required' %} selected{% endif %}>ВПВ не требуется</option><option value="manual"{% if prefill and prefill.fire_mode == 'manual' %} selected{% endif %}>Ручное решение</option></select></label>
       <label><span class="field-caption">Диктующая функциональная категория В2 <span class="required-lamp" data-required-for="fire_category" title="Обязательно в автоматическом режиме В2"></span></span><select name="fire_category" data-required-rule="fire-category-auto"><option value="">Выберите строку таблицы 7.1</option><option value="residential_f13"{% if prefill and prefill.fire_category == 'residential_f13' %} selected{% endif %}>МКД Ф1.3 · строка 1</option><option value="office_public"{% if prefill and prefill.fire_category == 'office_public' %} selected{% endif %}>Общественные / офисы / гостиницы · строка 2</option><option value="hospital_f11"{% if prefill and prefill.fire_category == 'hospital_f11' %} selected{% endif %}>Больницы / интернаты Ф1.1 · строка 3</option><option value="theatre_f21"{% if prefill and prefill.fire_category == 'theatre_f21' %} selected{% endif %}>Театры / кино / клубы Ф2.1 · строка 4</option><option value="library_sport"{% if prefill and prefill.fire_category == 'library_sport' %} selected{% endif %}>Библиотеки / архивы / спорт · строка 5</option><option value="museum_trade"{% if prefill and prefill.fire_category == 'museum_trade' %} selected{% endif %}>Музеи / выставки / торговля · строка 6</option><option value="dormitory_f12"{% if prefill and prefill.fire_category == 'dormitory_f12' %} selected{% endif %}>Общежития коридорного типа Ф1.2 · строка 7</option></select></label>
-      <label>Мест в зале Ф2.1<input name="fire_hall_seats" value="{{ prefill.fire_hall_seats if prefill and prefill.fire_hall_seats is not none else '' }}" placeholder="Только для строки 4"></label>
-      <label>Площадь расчётной части, м²<input name="fire_area_m2" value="{{ prefill.fire_area_m2 if prefill and prefill.fire_area_m2 is not none else '' }}" placeholder="Для строки 5 / смешанного объекта"></label>
+      <label><span class="field-caption">Мест в зале Ф2.1 <span class="required-lamp" data-required-for="fire_hall_seats" title="Обязательно только для строки 4"></span></span><input name="fire_hall_seats" value="{{ prefill.fire_hall_seats if prefill and prefill.fire_hall_seats is not none else '' }}" data-required-rule="fire-theatre" placeholder="Только для строки 4"></label>
+      <label><span class="field-caption">Площадь расчётной части, м² <span class="required-lamp" data-required-for="fire_area_m2" title="Обязательно для строки 5, если общая площадь не задана"></span></span><input name="fire_area_m2" value="{{ prefill.fire_area_m2 if prefill and prefill.fire_area_m2 is not none else '' }}" data-required-rule="fire-area" placeholder="Для строки 5 / смешанного объекта"></label>
       <label><span class="field-caption">Расчётных струй · ручной режим <span class="required-lamp" data-required-for="streams" title="Обязательно только в ручном режиме В2"></span></span><input name="streams" value="{{ prefill.streams if prefill and prefill.streams is not none else '' }}" data-required-rule="fire-manual"></label>
       <label>Диаметр насадка, мм<select name="nozzle_mm">{% for d in [13,16,19] %}<option value="{{ d }}"{% if (prefill.nozzle_mm if prefill else 13) == d %} selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
       <label>Компактная струя, м<select name="compact_jet_m">{% for h in [6,8,10,12,14,16,18,20] %}<option value="{{ h }}"{% if (prefill.compact_jet_m if prefill else 12) == h %} selected{% endif %}>{{ h }}</option>{% endfor %}</select></label>

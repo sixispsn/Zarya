@@ -12,7 +12,7 @@ from app.web import passport, reference_analysis, wizard
 app = FastAPI(
     title="Заря API",
     description="Расчёты внутреннего водоснабжения и канализации по СП 30.13330.2020",
-    version="0.6.0",
+    version="0.6.1",
 )
 
 # CORS — разрешаем фронтенду обращаться к API

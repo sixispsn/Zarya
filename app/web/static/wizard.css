@@ -196,15 +196,11 @@ fieldset { scroll-margin-top: 84px; min-width: 0; margin: 0; padding: 0; border:
 .section-value { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .section-meta { display: flex; align-items: center; gap: 10px; }
 .source-tag { padding: 4px 7px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .05em; }
-.accepted { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font: 700 10px var(--mono); text-transform: uppercase; }
-.accepted::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px var(--ok-pale); }
+.accepted { display: inline-flex; align-items: center; color: var(--ok); font: 700 10px var(--mono); text-transform: uppercase; }
 .accepted[data-state="не задано"] { color: var(--quiet); }
-.accepted[data-state="не задано"]::before, .accepted[data-state="ошибка"]::before { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-pale); }
 .accepted[data-state="ошибка"] { color: var(--danger); }
 .accepted[data-state="пример"] { color: var(--accent-bright); }
-.accepted[data-state="пример"]::before { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-pale); }
 .accepted.changed { color: var(--warn); }
-.accepted.changed::before { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-pale); }
 .section-body { padding: 26px 22px 28px 70px; border-top: 1px solid var(--line); animation: reveal .18s ease-out; }
 @keyframes reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 .row { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 20px; margin-bottom: 22px; }

@@ -160,18 +160,25 @@ def test_form_marks_only_blocking_inputs_with_status_lamps():
         **_form_context(errors=[]))
 
     for field in ("building_type", "floors", "height", "fire_height",
-                  "fire_category", "streams"):
+                  "fire_category", "fire_hall_seats", "fire_area_m2",
+                  "streams"):
         assert f'data-required-for="{field}"' in form
     assert form.count('data-required-rule="positive"') == 2
     assert 'data-required-rule="fire-auto"' in form
     assert 'data-required-rule="fire-manual"' in form
     assert 'data-required-rule="fire-category-auto"' in form
+    assert 'data-required-rule="fire-theatre"' in form
+    assert 'data-required-rule="fire-area"' in form
     assert 'data-required-rule="nonempty"' in form
     assert 'name="total_area"' in form
     total_area = form.split('name="total_area"', 1)[1].split("</label>", 1)[0]
     assert "required" not in total_area
     assert '<details class="validation-panel"' in form
     assert form.count('<details class="field-help">') >= 6
+    object_block = form.split('<fieldset id="object"', 1)[1].split(
+        "</fieldset>", 1
+    )[0]
+    assert "required-lamp" not in object_block
 
 
 def test_blueprint_ui_marks_edited_sections():
@@ -179,6 +186,7 @@ def test_blueprint_ui_marks_edited_sections():
     css = open("app/web/static/wizard.css", encoding="utf-8").read()
     assert 'state.textContent = "изменено"' in js
     assert ".accepted.changed" in css
+    assert ".accepted::before" not in css
 
 
 def test_dark_theme_is_default_and_responsive():
