@@ -7,12 +7,12 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import fire, insulation, irrigation, pumps, storm, water_demand, water_meters
-from app.web import wizard
+from app.web import reference_analysis, wizard
 
 app = FastAPI(
     title="Заря API",
     description="Расчёты внутреннего водоснабжения и канализации по СП 30.13330.2020",
-    version="0.3.2",
+    version="0.4.0",
 )
 
 # CORS — разрешаем фронтенду обращаться к API
@@ -31,6 +31,7 @@ app.include_router(storm.router)
 app.include_router(water_meters.router)
 app.include_router(fire.router)
 app.include_router(wizard.router)
+app.include_router(reference_analysis.router)
 app.include_router(insulation.router)
 app.include_router(pumps.router)
 app.mount(

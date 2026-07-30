@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Заря — анализ проекта</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-5">
+<script defer src="/static/wizard.js?v=20260730-5"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/analyze" aria-current="page">Анализ проекта</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+</header>
+<main class="analysis-shell">
+  <section class="analysis-hero">
+    <div><p class="eyebrow">ZARYA REFERENCE / 01</p><h1>Разбор проекта-аналога</h1><p>Загрузите проект, заключение экспертизы и расчёты. «Заря» восстановит проверяемые решения и покажет расхождения с точностью до страницы.</p></div>
+    <span class="analysis-mode">PDF TEXT · LOCAL</span>
+  </section>
+
+  {% if errors %}<div class="errors" role="alert"><strong>Комплект не принят</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+
+  <div class="analysis-layout">
+    <section class="card upload-card">
+      <div class="card-kicker"><h2>Новый разбор</h2><span class="system-tag">PDF / ZIP</span></div>
+      <form method="post" action="/wizard/analyze" enctype="multipart/form-data" data-analysis-upload>
+        <label>Название проекта<input name="title" value="{{ title or '' }}" placeholder="Например: МКД 16 этажей · положительное заключение"></label>
+        <label class="upload-zone" data-upload-zone>
+          <input type="file" name="files" accept=".pdf,.zip,application/pdf,application/zip" multiple required data-upload-input>
+          <span class="upload-icon">＋</span>
+          <strong>Выберите PDF или ZIP</strong>
+          <small data-upload-label>Можно загрузить ПЗ, расчёты, спецификацию, схемы и заключение одним комплектом</small>
+        </label>
+        <div class="upload-limits"><span>до 30 PDF</span><span>до 100 МБ</span><span>текстовый слой</span></div>
+        <label class="analysis-consent"><input type="checkbox" name="confirm_rights" value="yes" required><span>У меня есть право загрузить документы; лишние персональные данные удалены.</span></label>
+        <button class="button-primary" type="submit">Начать анализ</button>
+      </form>
+      <p class="analysis-privacy">Файлы хранятся в закрытом контуре проекта. Полный извлечённый текст в отчёт не копируется — сохраняются только короткие доказательные фрагменты.</p>
+    </section>
+
+    <aside class="analysis-steps">
+      <div><span>01</span><strong>Классификация</strong><p>ПЗ, расчёты, схема, спецификация и заключение.</p></div>
+      <div><span>02</span><strong>Извлечение</strong><p>Расходы, напоры, насосные точки, системы и нормативы.</p></div>
+      <div><span>03</span><strong>Сверка</strong><p>Разные значения между документами и прежние редакции СП.</p></div>
+      <div><span>04</span><strong>Доказательства</strong><p>Каждый факт связан с PDF и номером страницы.</p></div>
+    </aside>
+  </div>
+
+  <section class="analysis-history">
+    <div class="analysis-section-head"><div><p class="eyebrow">Архив аналогов</p><h2>Предыдущие разборы</h2></div><span>{{ analyses|length }}</span></div>
+    {% if analyses %}
+    <div class="analysis-list">
+      {% for item in analyses %}
+      <a href="/wizard/analyze/{{ item.analysis_id }}">
+        <span class="analysis-list-code">{{ item.analysis_id }}</span>
+        <span><strong>{{ item.title }}</strong><small>{{ item.summary.documents }} PDF · {{ item.summary.pages }} стр. · {{ item.summary.evidence }} фактов</small></span>
+        <span class="analysis-list-state{% if item.summary.conflicts %} has-conflict{% endif %}">{{ item.summary.conflicts }} расх.</span>
+        <span class="analysis-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="analysis-empty">Первый загруженный проект станет началом базы инженерных аналогов.</div>
+    {% endif %}
+  </section>
+</main></body></html>

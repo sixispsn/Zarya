@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Заря — {{ analysis.title }}</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-5">
+<script defer src="/static/wizard.js?v=20260730-5"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/analyze" aria-current="page">Анализ проекта</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+</header>
+<main class="analysis-shell">
+  <section class="analysis-result-hero">
+    <div><p class="eyebrow">PROJECT EVIDENCE / {{ analysis.analysis_id }}</p><h1>{{ analysis.title }}</h1><p>Fingerprint {{ analysis.fingerprint }} · {{ analysis.created_at[:16].replace('T', ' ') }}</p></div>
+    <div class="analysis-result-actions"><a class="button-secondary" href="/wizard/analyze">Новый разбор</a><a class="button-secondary" href="/wizard/analyze/{{ analysis.analysis_id }}/report.json">JSON</a><button class="button-primary" type="button" onclick="window.print()">Печать отчёта</button></div>
+  </section>
+
+  <section class="analysis-summary-grid">
+    <div><span>Документы</span><strong>{{ analysis.summary.documents }}</strong><small>{{ analysis.summary.pages }} страниц</small></div>
+    <div><span>Извлечено</span><strong>{{ analysis.summary.evidence }}</strong><small>проверяемых фактов</small></div>
+    <div data-state="{% if analysis.summary.conflicts %}danger{% else %}ok{% endif %}"><span>Расхождения</span><strong>{{ analysis.summary.conflicts }}</strong><small>между документами</small></div>
+    <div data-state="{% if analysis.summary.scanned %}warning{% else %}ok{% endif %}"><span>OCR</span><strong>{{ analysis.summary.scanned }}</strong><small>непрочитанных PDF</small></div>
+  </section>
+
+  <section class="analysis-verdict">
+    <div><span class="verdict-light" data-state="{% if analysis.summary.conflicts %}danger{% elif analysis.summary.review %}warning{% else %}ok{% endif %}"></span><div><strong>{% if analysis.summary.conflicts %}Есть значения для инженерной сверки{% elif analysis.summary.review %}Проект разобран, требуются уточнения{% else %}Автоматические проверки пройдены{% endif %}</strong><p>Прошедший экспертизу проект используется только как аналог. Он не заменяет действующие нормы и расчётное ядро «Зари».</p></div></div>
+    <div class="system-coverage">{% for system in analysis.systems %}<span>{{ system }}</span>{% else %}<span>Системы не распознаны</span>{% endfor %}</div>
+  </section>
+
+  <div class="analysis-result-grid">
+    <section class="card analysis-findings">
+      <div class="card-kicker"><h2>Выводы системы</h2><span class="system-tag">{{ analysis.findings|length }}</span></div>
+      <div class="finding-list">
+        {% for finding in analysis.findings %}
+        <article data-status="{{ finding.status }}">
+          <span class="finding-status">{{ finding.status_label }}</span>
+          <h3>{{ finding.title }}</h3>
+          <p>{{ finding.message }}</p>
+          {% if finding.sources %}<div class="finding-sources">{% for source in finding.sources %}<a href="/wizard/analyze/{{ analysis.analysis_id }}/file/{{ analysis.documents|selectattr('id', 'equalto', source.document_id)|map(attribute='stored_name')|first }}#page={{ source.page }}" target="_blank">{{ source.document_name }} · стр. {{ source.page }}</a>{% endfor %}</div>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card analysis-documents">
+      <div class="card-kicker"><h2>Состав комплекта</h2><span class="system-tag">{{ analysis.documents|length }} PDF</span></div>
+      <div class="analysis-document-list">
+        {% for document in analysis.documents %}
+        <a href="/wizard/analyze/{{ analysis.analysis_id }}/file/{{ document.stored_name }}" target="_blank">
+          <span class="document-kind">{{ document.category_label }}</span>
+          <strong>{{ document.original_name }}</strong>
+          <small>{{ document.pages }} стр. · {{ document.status_label }}{% if document.systems %} · {{ document.systems|join(' ') }}{% endif %}</small>
+          <i data-status="{{ document.status }}"></i>
+        </a>
+        {% endfor %}
+      </div>
+      {% if analysis.ignored_files %}<details class="field-help"><summary>Пропущено файлов: {{ analysis.ignored_files|length }}</summary><p>{{ analysis.ignored_files|join('; ') }}</p></details>{% endif %}
+    </section>
+  </div>
+
+  <section class="card analysis-evidence">
+    <div class="card-kicker"><div><p class="proof-overline">От числа к источнику</p><h2>Извлечённые показатели</h2></div><span class="system-tag">{{ analysis.evidence|length }}</span></div>
+    {% if analysis.evidence %}
+    <div class="evidence-grid">
+      {% for item in analysis.evidence %}
+      <article>
+        <header><span>{{ item.system }}</span><small>{{ item.confidence }}</small></header>
+        <h3>{{ item.label }}</h3>
+        <strong>{{ item.display_value }} <small>{{ item.unit }}</small></strong>
+        <blockquote>{{ item.quote }}</blockquote>
+        <a href="/wizard/analyze/{{ analysis.analysis_id }}/file/{{ analysis.documents|selectattr('id', 'equalto', item.document_id)|map(attribute='stored_name')|first }}#page={{ item.page }}" target="_blank">{{ item.document_name }} · стр. {{ item.page }} →</a>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="analysis-empty">В текстовом слое не найдены показатели поддерживаемых типов.</div>
+    {% endif %}
+  </section>
+
+  <section class="card analysis-norms">
+    <div class="card-kicker"><h2>Нормативные ссылки</h2><span class="system-tag">{{ analysis.summary.norms }}</span></div>
+    {% if analysis.norms %}
+    <div class="norm-list">
+      {% for item in analysis.norms %}
+      <a href="/wizard/analyze/{{ analysis.analysis_id }}/file/{{ analysis.documents|selectattr('id', 'equalto', item.document_id)|map(attribute='stored_name')|first }}#page={{ item.page }}" target="_blank"{% if item.replacement %} data-status="previous"{% endif %}><strong>{{ item.reference }}</strong>{% if item.replacement %}<span>проверить → {{ item.replacement }}</span>{% else %}<span>{{ item.document_name }} · стр. {{ item.page }}</span>{% endif %}</a>
+      {% endfor %}
+    </div>
+    {% else %}<div class="analysis-empty">Нормативные ссылки не распознаны.</div>{% endif %}
+  </section>
+
+  <footer class="analysis-footer">
+    <p>{{ analysis.method.notice }}</p>
+    <form method="post" action="/wizard/analyze/{{ analysis.analysis_id }}/delete" onsubmit="return confirm('Удалить разбор и загруженные PDF?')"><button class="delete-button" type="submit">Удалить разбор и файлы</button></form>
+  </footer>
+</main></body></html>

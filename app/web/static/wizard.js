@@ -16,6 +16,49 @@ document.addEventListener("DOMContentLoaded", () => {
   }));
   renderTheme();
 
+  const uploadInput = document.querySelector("[data-upload-input]");
+  const uploadZone = document.querySelector("[data-upload-zone]");
+  const uploadLabel = document.querySelector("[data-upload-label]");
+  const uploadForm = document.querySelector("form[data-analysis-upload]");
+  const updateUploadLabel = () => {
+    if (!uploadInput || !uploadLabel) return;
+    const files = [...uploadInput.files];
+    if (!files.length) {
+      uploadLabel.textContent = "Можно загрузить ПЗ, расчёты, спецификацию, схемы и заключение одним комплектом";
+      return;
+    }
+    const bytes = files.reduce((total, file) => total + file.size, 0);
+    const megabytes = (bytes / 1024 / 1024).toLocaleString("ru-RU", {
+      maximumFractionDigits: 1
+    });
+    uploadLabel.textContent = `${files.length} файл(а) · ${megabytes} МБ`;
+  };
+  uploadInput?.addEventListener("change", updateUploadLabel);
+  ["dragenter", "dragover"].forEach((name) => {
+    uploadZone?.addEventListener(name, (event) => {
+      event.preventDefault();
+      uploadZone.classList.add("is-dragging");
+    });
+  });
+  uploadZone?.addEventListener("dragleave", () => {
+    uploadZone.classList.remove("is-dragging");
+  });
+  uploadZone?.addEventListener("drop", (event) => {
+    event.preventDefault();
+    uploadZone.classList.remove("is-dragging");
+    if (uploadInput && event.dataTransfer?.files?.length) {
+      uploadInput.files = event.dataTransfer.files;
+      updateUploadLabel();
+    }
+  });
+  uploadForm?.addEventListener("submit", () => {
+    const button = uploadForm.querySelector("button[type='submit']");
+    if (!button) return;
+    button.disabled = true;
+    button.textContent = "Анализируем комплект…";
+    uploadForm.setAttribute("aria-busy", "true");
+  });
+
   const requiredControls = [...document.querySelectorAll("[data-required-rule]")];
   const fireModeControl = document.querySelector('[name="fire_mode"]');
   const requiredLamp = (control) =>
