@@ -22,6 +22,17 @@
   <p class="commission-note">Документ сформирован {{ report.generated_at }}. Совпадение fingerprint
   подтверждает неизменность набора исходных данных. Изменение любого значимого параметра
   объекта, расходов, напоров, В2, К2 или технологического задания изменяет fingerprint.</p>
+  {% if digital_passport %}
+  <div class="commission-digital-passport">
+    <img src="{{ digital_passport.qr_data_uri }}" alt="QR-код цифрового паспорта">
+    <div>
+      <span>Цифровой паспорт выпуска</span>
+      <strong>{{ digital_passport.passport_id }}</strong>
+      <small>{{ digital_passport.url }}</small>
+      <p>Защищённый read-only снимок доказательств и PDF с контролем SHA-256.</p>
+    </div>
+  </div>
+  {% endif %}
 </section>
 
 <section class="commission-page">

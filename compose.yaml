@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     environment:
       ZARYA_PROJECTS_DIR: /data/projects
+      ZARYA_PASSPORTS_DIR: /data/projects/_passports
+      ZARYA_PUBLIC_URL: https://${ZARYA_DOMAIN:-localhost}
       OSIFONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
       TZ: Europe/Moscow
     volumes:

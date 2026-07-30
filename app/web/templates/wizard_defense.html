@@ -23,8 +23,9 @@
       <strong>{{ defense.project_fingerprint }}</strong>
     </div>
     <div class="defense-top-actions">
+      {% if passport_url %}<a href="{{ passport_url }}" target="_blank">Цифровой паспорт</a>{% endif %}
       {% if passport %}<a href="/wizard/file/{{ run_id }}/{{ passport.name }}" target="_blank">Паспорт PDF</a>{% endif %}
-      <button type="button" data-defense-copy>Скопировать ссылку</button>
+      <button type="button" data-defense-copy data-copy-url="{{ passport_url or '' }}">Скопировать паспорт</button>
       <a href="/wizard/result/{{ run_id }}">Выйти из защиты</a>
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span></button>
     </div>
@@ -49,6 +50,7 @@
         <div><strong>{{ defense.summary.stage_r }}</strong><span>граница Р</span></div>
         <div><strong>{{ defense.summary.missing }}</strong><span>нужны данные</span></div>
       </div>
+      {% if passport_url %}<a class="defense-seal" href="{{ passport_url }}" target="_blank"><span></span><div><small>Постоянный снимок выпуска</small><strong>{{ passport_id }}</strong></div></a>{% endif %}
     </section>
 
     <section class="defense-workspace">

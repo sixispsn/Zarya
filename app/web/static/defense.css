@@ -154,6 +154,24 @@
 .defense-score div:first-child strong { color: var(--ok); }
 .defense-score div:nth-child(2) strong { color: var(--warn); }
 .defense-score div:nth-child(3) strong { color: var(--danger); }
+.defense-seal {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.defense-seal > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px var(--ok-pale);
+}
+.defense-seal small,
+.defense-seal strong { display: block; }
+.defense-seal small { color: var(--quiet); font: 7px var(--mono); text-transform: uppercase; }
+.defense-seal strong { margin-top: 2px; font: 8px var(--mono); }
 
 .defense-workspace {
   display: grid;
@@ -604,6 +622,7 @@
     border-top: 1px solid var(--line);
     border-left: 0;
   }
+  .defense-seal { display: flex; }
   .defense-workspace { grid-template-columns: 1fr; }
   .defense-index,
   .defense-viewer-panel {

@@ -24,6 +24,14 @@ class Stage(str, Enum):
     R = "Р"
 
 
+@dataclass(frozen=True)
+class DigitalPassportInfo:
+    """Ссылка на неизменяемый снимок конкретного выпуска документов."""
+    passport_id: str
+    url: str
+    qr_data_uri: str
+
+
 @dataclass
 class DocumentInfo:
     cipher: str = ""
@@ -634,3 +642,4 @@ class Project:
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None
+    digital_passport: Optional[DigitalPassportInfo] = None

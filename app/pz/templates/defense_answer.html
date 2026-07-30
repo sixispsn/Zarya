@@ -70,6 +70,18 @@
       {% endif %}
     </section>
 
+    {% if project.digital_passport %}
+    <section class="answer-digital-passport">
+      <img src="{{ project.digital_passport.qr_data_uri }}" alt="QR-код цифрового паспорта">
+      <div>
+        <small>Постоянный цифровой паспорт выпуска</small>
+        <strong>{{ project.digital_passport.passport_id }}</strong>
+        <span>{{ project.digital_passport.url }}</span>
+        <p>Read-only снимок исходного выпуска с контролем SHA-256.</p>
+      </div>
+    </section>
+    {% endif %}
+
     <footer>
       <p>Протокол объясняет результат текущего расчётного прогона и не изменяет исходные данные, расчёты или документы проекта.</p>
       <div>

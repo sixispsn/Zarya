@@ -18,7 +18,7 @@ from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, decide_fire_network
 
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 NORMATIVE_EDITIONS = (
     "ПП РФ № 87; ГОСТ Р 21.619-2023; ГОСТ 21.110-2013; "
     "ГОСТ 21.601-2011; СП 30.13330.2020; "

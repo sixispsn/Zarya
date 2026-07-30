@@ -86,6 +86,51 @@
   text-align: justify;
 }
 
+.commission-digital-passport {
+  display: grid;
+  grid-template-columns: 27mm 1fr;
+  gap: 4mm;
+  align-items: center;
+  margin-top: 4mm;
+  padding: 3mm;
+  border: .3mm solid #315ecb;
+  break-inside: avoid;
+  font-family: "Liberation Sans", Arial, sans-serif;
+}
+.commission-digital-passport img {
+  display: block;
+  width: 24mm;
+  height: 24mm;
+}
+.commission-digital-passport span,
+.commission-digital-passport strong,
+.commission-digital-passport small {
+  display: block;
+}
+.commission-digital-passport span {
+  color: #315ecb;
+  font-size: 7pt;
+  font-weight: bold;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.commission-digital-passport strong {
+  margin-top: 1mm;
+  font-family: monospace;
+  font-size: 8pt;
+}
+.commission-digital-passport small {
+  margin-top: .7mm;
+  overflow-wrap: anywhere;
+  color: #333;
+  font-size: 6.8pt;
+}
+.commission-digital-passport p {
+  margin: 1mm 0 0;
+  color: #444;
+  font-size: 7pt;
+}
+
 .commission-table {
   width: 100%;
   border-collapse: collapse;

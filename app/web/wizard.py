@@ -37,6 +37,7 @@ from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
+from app.intake.passport_store import PassportStore
 from app.intake.yaml_io import load_request_file
 from app.pz.generator import cold_meter_loss
 from app.pz.impact import (
@@ -49,6 +50,7 @@ from app.pz.defense import (
     build_defense_payload,
     generate_expert_response_pdf,
 )
+from app.pz.digital_passport import build_passport_info, new_passport_id
 from app.pz.rules import calc_required_head
 from app.schemas.impact import ImpactPreviewInput
 from app.data.sp30_tables import list_consumer_norms
@@ -64,6 +66,7 @@ _TPL.env.filters["ru_num"] = lambda value, precision=1: (
 _RUNS: Dict[str, dict] = {}
 _OUT_ROOT = "/tmp/zarya_wizard_runs"
 _STORE = ProjectStore()
+_PASSPORT_STORE = PassportStore()
 _CONSUMER_NORMS = list_consumer_norms()
 _STORM_CITIES = list_cities()
 _DEMO_PROJECT = Path(__file__).parents[2] / "demo" / "demo_project.yaml"
@@ -150,6 +153,16 @@ def _run_file(run: dict, name: str) -> str | None:
     ):
         return None
     return path
+
+
+def _public_base_url(request: Request) -> str:
+    configured = os.environ.get("ZARYA_PUBLIC_URL", "").strip()
+    if configured:
+        return configured.rstrip("/")
+    try:
+        return str(request.base_url).rstrip("/")
+    except Exception:
+        return "http://127.0.0.1:8000"
 
 
 @router.get("", response_class=HTMLResponse)
@@ -379,6 +392,12 @@ async def wizard_design(request: Request):
             "prefill": req, "project_id": pid,
         }))
 
+    passport_id = new_passport_id()
+    project.digital_passport = build_passport_info(
+        passport_id,
+        _public_base_url(request),
+    )
+
     # персистентность: намерение сохраняется (source of truth — вход)
     project_id = _STORE.save(req, project_id=(pid if pid and _STORE.exists(pid) else None))
 
@@ -393,13 +412,43 @@ async def wizard_design(request: Request):
             "prefill": req,
             "project_id": project_id,
         }), status_code=422)
+    proof_graph = build_proof_graph(
+        bundle.project, bundle.commission_report,
+    )
+    documents, _ = _bundle_documents(bundle)
+    defense_payload = build_defense_payload(
+        proof_graph,
+        documents,
+        outdir,
+        run_id=run_id,
+    )
+    try:
+        passport_manifest = _PASSPORT_STORE.publish(
+            passport_id=passport_id,
+            canonical_url=bundle.project.digital_passport.url,
+            project_id=project_id,
+            project=bundle.project,
+            commission=bundle.commission_report,
+            defense_payload=defense_payload,
+            documents=documents,
+            outdir=outdir,
+        )
+    except Exception as exc:
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
+            "errors": [f"Цифровой паспорт выпуска не сохранён: {exc}"],
+            "advisories": advisories,
+            "prefill": req,
+            "project_id": project_id,
+        }), status_code=422)
     _RUNS[run_id] = {
         "bundle": bundle, "outdir": outdir, "project_id": project_id,
         "advisories": advisories,
         "request": req,
-        "proof_graph": build_proof_graph(
-            bundle.project, bundle.commission_report,
-        ),
+        "proof_graph": proof_graph,
+        "defense_payload": defense_payload,
+        "passport_id": passport_id,
+        "passport_url": bundle.project.digital_passport.url,
+        "passport_manifest": passport_manifest,
     }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -418,6 +467,8 @@ def wizard_result(request: Request, run_id: str):
     return _TPL.TemplateResponse(request, "wizard_result.html", {
         "run_id": run_id, "pdfs": pdfs, "document_groups": document_groups,
         "project_id": run.get("project_id"),
+        "passport_id": run.get("passport_id"),
+        "passport_url": run.get("passport_url"),
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
         "proof": proof_graph,
@@ -550,6 +601,8 @@ def wizard_defense(request: Request, run_id: str):
         "defense": defense,
         "primary_id": primary_id,
         "passport": passport,
+        "passport_id": run.get("passport_id"),
+        "passport_url": run.get("passport_url"),
         "impact": impact_form_context(run["request"]),
         "commission": commission,
         "project": {

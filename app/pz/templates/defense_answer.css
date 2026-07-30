@@ -118,6 +118,48 @@ h1 { margin: 0; font-size: 18pt; line-height: 1.15; }
 table { width: 100%; border-collapse: collapse; font-size: 7.8pt; }
 th, td { padding: 2.2mm; border: .6pt solid #cbd0d6; text-align: left; }
 th { color: #596571; background: #f1f3f5; font-size: 7pt; text-transform: uppercase; }
+.answer-digital-passport {
+  display: grid;
+  grid-template-columns: 25mm 1fr;
+  gap: 4mm;
+  align-items: center;
+  margin-top: 5mm;
+  padding: 3mm;
+  border: .6pt solid #5e5ce6;
+  break-inside: avoid;
+}
+.answer-digital-passport img {
+  display: block;
+  width: 22mm;
+  height: 22mm;
+}
+.answer-digital-passport small,
+.answer-digital-passport strong,
+.answer-digital-passport span {
+  display: block;
+}
+.answer-digital-passport small {
+  color: #5e5ce6;
+  font-size: 7pt;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.answer-digital-passport strong {
+  margin-top: 1mm;
+  font-family: monospace;
+  font-size: 8pt;
+}
+.answer-digital-passport span {
+  margin-top: .5mm;
+  overflow-wrap: anywhere;
+  color: #56616d;
+  font-size: 7pt;
+}
+.answer-digital-passport p {
+  margin: 1mm 0 0;
+  color: #626d78;
+  font-size: 7pt;
+}
 footer {
   margin-top: 7mm;
   padding-top: 4mm;

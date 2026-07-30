@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Цифровой паспорт — {{ passport.project.title }}</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/wizard.css?v=20260730-7">
+  <link rel="stylesheet" href="/static/passport.css?v=20260730-1">
+  <script defer src="/static/wizard.js?v=20260730-7"></script>
+</head>
+<body>
+  <header class="passport-topbar">
+    <a class="brand" href="/wizard">
+      <span class="brand-mark">З</span>
+      <span class="brand-copy"><strong>Заря</strong><span>цифровой паспорт выпуска</span></span>
+    </a>
+    <div class="passport-mode"><span></span>READ ONLY</div>
+    <div class="passport-top-actions">
+      <a href="{{ passport.canonical_url }}/manifest.json">Скачать манифест</a>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span></button>
+    </div>
+  </header>
+
+  <main class="passport-shell">
+    <section class="passport-hero">
+      <div>
+        <p class="passport-overline">ZARYA VERIFIED RELEASE · {{ passport.created_at }}</p>
+        <h1>{{ passport.project.title }}</h1>
+        <p>{% if passport.project.cipher %}{{ passport.project.cipher }} · {% endif %}стадия {{ passport.project.stage }} · {{ passport.project.floors }} эт. · {{ passport.project.height_m|ru_num(1) }} м</p>
+        <div class="passport-systems">{% for system in passport.project.systems %}<span>{{ system }}</span>{% endfor %}</div>
+      </div>
+      <div class="passport-verdict" data-state="{{ 'valid' if verification.valid else 'invalid' }}">
+        <span class="passport-verdict-light"></span>
+        <div>
+          <small>Целостность выпуска</small>
+          <strong>{{ 'Подтверждена' if verification.valid else 'Нарушена' }}</strong>
+          <p>{{ 'Манифест и все PDF совпадают с SHA-256.' if verification.valid else 'Обнаружено расхождение манифеста или документов.' }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="passport-summary">
+      <div><span>Статус стадии П</span><strong>{{ passport.release.status }}</strong></div>
+      <div><span>Доказательств</span><strong>{{ passport.proof.summary.proven }} / {{ passport.proof.summary.total }}</strong><small>подтверждено</small></div>
+      <div><span>Граница стадии Р</span><strong>{{ passport.proof.summary.stage_r }}</strong><small>честно зафиксировано</small></div>
+      <div><span>Документов</span><strong>{{ passport.documents|length }}</strong><small>контроль SHA-256</small></div>
+    </section>
+
+    <div class="passport-grid">
+      <section class="passport-card passport-identity">
+        <header><div><p class="passport-overline">01 · ИДЕНТИЧНОСТЬ</p><h2>Отпечатки версии</h2></div><span>SEALED</span></header>
+        <dl>
+          <div><dt>Исходные данные</dt><dd>{{ passport.fingerprints.project }}</dd></div>
+          <div><dt>Legacy-эталон</dt><dd>{{ passport.fingerprints.legacy }}</dd></div>
+          <div><dt>Commit сборки</dt><dd>{{ passport.fingerprints.build_commit }}</dd></div>
+          <div><dt>Seal манифеста</dt><dd>{{ passport.seal_sha256 }}</dd></div>
+          <div><dt>ID выпуска</dt><dd>{{ passport.passport_id }}</dd></div>
+        </dl>
+      </section>
+
+      <section class="passport-card passport-decisions">
+        <header><div><p class="passport-overline">02 · ДОКАЗАТЕЛЬСТВА</p><h2>Проектные решения</h2></div><span>{{ passport.proof.decisions|length }}</span></header>
+        <div>
+          {% for decision in passport.proof.decisions %}
+          <details data-status="{{ decision.status }}" {% if loop.first %}open{% endif %}>
+            <summary>
+              <span>{{ decision.system }}</span>
+              <div><strong>{{ decision.title }}</strong><small>{{ decision.summary }}</small></div>
+              <b>{{ decision.value }}{% if decision.unit %} {{ decision.unit }}{% endif %}</b>
+              <i></i>
+            </summary>
+            <ol>
+              {% for step in decision.steps %}
+              <li><span>{{ "%02d"|format(loop.index) }}</span><div><small>{{ step.kind_label }}</small><strong>{{ step.label }}</strong><p>{{ step.value }}</p>{% if step.detail %}<em>{{ step.detail }}</em>{% endif %}</div></li>
+              {% endfor %}
+            </ol>
+            {% if decision.documents %}
+            <footer>
+              {% for document in decision.documents %}
+              <a href="{{ document.view_url }}{% if document.page %}#page={{ document.page }}{% endif %}" target="_blank">{{ document.label }}{% if document.page %} · стр. {{ document.page }}{% endif %}</a>
+              {% endfor %}
+            </footer>
+            {% endif %}
+          </details>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="passport-card passport-documents">
+        <header><div><p class="passport-overline">03 · ФАЙЛЫ ВЫПУСКА</p><h2>Неизменяемые документы</h2></div><span>{{ 'OK' if verification.documents_valid else '!' }}</span></header>
+        <div class="passport-document-list">
+          {% for document in passport.documents %}
+          <a href="{{ document.url }}" target="_blank">
+            <span>{{ document.group }}</span>
+            <div><strong>{{ document.label }}</strong><small>{{ document.stored_name }} · {{ document.size_bytes|file_size }}</small></div>
+            <code>{{ document.sha256 }}</code>
+            <i></i>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <footer class="passport-footer">
+      <p>Паспорт является снимком конкретного расчётного выпуска. Он не позволяет редактировать проект и не заменяет подписи ответственных специалистов.</p>
+      <span>SCHEMA {{ passport.schema_version }} · {{ passport.passport_id }}</span>
+    </footer>
+  </main>
+</body>
+</html>

@@ -86,5 +86,28 @@
 
 {{ body_html|safe }}
 
+{% if digital_passport %}
+<section class="digital-passport-sheet">
+  <div class="digital-passport-copy">
+    <p class="digital-passport-overline">ЦИФРОВОЙ ПАСПОРТ ВЫПУСКА</p>
+    <h2>Проверка проектной версии</h2>
+    <p>QR-код ведёт на защищённый снимок настоящего выпуска: доказательную
+    цепочку принятых решений, контрольные суммы SHA-256 и копии сформированных
+    документов. Снимок доступен только для чтения.</p>
+    <table>
+      <tr><th>Идентификатор</th><td>{{ digital_passport.passport_id }}</td></tr>
+      <tr><th>Адрес проверки</th><td>{{ digital_passport.url }}</td></tr>
+    </table>
+    <p class="digital-passport-note">Для проверки отсканируйте QR-код и
+    сопоставьте fingerprint проекта и контрольные суммы документов с паспортом.</p>
+  </div>
+  <div class="digital-passport-qr">
+    <img src="{{ digital_passport.qr_data_uri }}" alt="QR-код цифрового паспорта">
+    <strong>ZARYA VERIFIED</strong>
+    <small>read-only release</small>
+  </div>
+</section>
+{% endif %}
+
 </body>
 </html>

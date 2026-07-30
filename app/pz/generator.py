@@ -155,7 +155,11 @@ def generate_pz_html(project: Project) -> str:
     )
 
     doc_tpl = env.get_template("document.html")
-    return doc_tpl.render(doc=project.document, body_html=body_html)
+    return doc_tpl.render(
+        doc=project.document,
+        body_html=body_html,
+        digital_passport=project.digital_passport,
+    )
 
 
 def generate_pz_pdf(project: Project, output_path: str) -> str:
@@ -474,6 +478,7 @@ def generate_commission_control_html(project: Project, report=None) -> str:
     body_html = env.get_template("commission_control_body.html").render(
         report=report,
         status_labels=_COMMISSION_STATUS_LABELS,
+        digital_passport=project.digital_passport,
     )
     return env.get_template("document.html").render(
         doc=doc,

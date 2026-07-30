@@ -153,14 +153,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.querySelector("[data-defense-copy]")?.addEventListener("click", async (event) => {
+    const copyUrl = event.currentTarget.dataset.copyUrl || window.location.href;
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(copyUrl);
       const button = event.currentTarget;
       const label = button.textContent;
       button.textContent = "Ссылка скопирована";
       setTimeout(() => { button.textContent = label; }, 1600);
     } catch (_) {
-      window.prompt("Скопируйте ссылку", window.location.href);
+      window.prompt("Скопируйте ссылку", copyUrl);
     }
   });
 

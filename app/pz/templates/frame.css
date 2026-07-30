@@ -52,6 +52,87 @@ table.data.head-summary { break-inside: avoid; page-break-inside: avoid; }
 table.data.head-summary tr { break-inside: avoid; page-break-inside: avoid; }
 .normative-k2 { break-inside: avoid; page-break-inside: avoid; }
 
+/* ── ДОПОЛНИТЕЛЬНЫЙ ЛИСТ ЦИФРОВОГО ПАСПОРТА ВЫПУСКА ── */
+.digital-passport-sheet {
+  display: grid;
+  grid-template-columns: 1fr 48mm;
+  gap: 10mm;
+  align-items: center;
+  min-height: 205mm;
+  break-before: page;
+  page-break-before: always;
+}
+.digital-passport-overline {
+  margin: 0 0 4mm;
+  color: #315ecb;
+  font-family: "Liberation Sans", Arial, sans-serif;
+  font-size: 8pt;
+  font-weight: bold;
+  letter-spacing: .12em;
+}
+.digital-passport-copy h2 {
+  margin: 0 0 5mm;
+  font-family: "Liberation Sans", Arial, sans-serif;
+  font-size: 19pt;
+}
+.digital-passport-copy > p:not(.digital-passport-overline) {
+  margin: 0 0 6mm;
+  font-family: "Liberation Sans", Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.5;
+  text-align: left;
+}
+.digital-passport-copy table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: "Liberation Sans", Arial, sans-serif;
+  font-size: 8pt;
+}
+.digital-passport-copy th,
+.digital-passport-copy td {
+  border: .25mm solid #444;
+  padding: 2.5mm;
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: top;
+}
+.digital-passport-copy th {
+  width: 30%;
+  background: #edf2ff;
+}
+.digital-passport-note {
+  margin-top: 5mm !important;
+  color: #444;
+  font-size: 8.5pt !important;
+}
+.digital-passport-qr {
+  padding: 5mm;
+  border: .4mm solid #315ecb;
+  text-align: center;
+}
+.digital-passport-qr img {
+  display: block;
+  width: 37mm;
+  height: 37mm;
+  margin: 0 auto 4mm;
+}
+.digital-passport-qr strong,
+.digital-passport-qr small {
+  display: block;
+  font-family: "Liberation Sans", Arial, sans-serif;
+}
+.digital-passport-qr strong {
+  color: #315ecb;
+  font-size: 9pt;
+  letter-spacing: .08em;
+}
+.digital-passport-qr small {
+  margin-top: 1mm;
+  color: #555;
+  font-size: 7pt;
+}
+
 /* ── Штамп форма 3 — первый лист (40 мм) ── */
 .stamp3 { position: running(stamp3); width: 185mm; }
 .stamp3 table { width: 185mm; border-collapse: collapse; table-layout: fixed; }

@@ -100,6 +100,33 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .result-hero-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
 .result-hero-actions .button-primary { width: auto; min-height: 42px; padding: 10px 16px; }
 .result-hero-actions > span { color: var(--quiet); font: 9px var(--mono); }
+.passport-release-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--ok) 38%, var(--line));
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--ok-pale);
+  text-decoration: none;
+}
+.passport-release-link > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.passport-release-link b,
+.passport-release-link small { display: block; }
+.passport-release-link b { font-size: 10px; }
+.passport-release-link small {
+  margin-top: 2px;
+  color: var(--quiet);
+  font: 7px var(--mono);
+}
 .example-actions { flex-basis: 100%; display: flex; justify-content: flex-end; }
 .example-actions a { color: var(--accent-bright); font: 700 9px var(--mono); letter-spacing: .04em; text-decoration: none; text-transform: uppercase; }
 .example-actions a:hover { text-decoration: underline; }
@@ -631,6 +658,7 @@ table.grid .compact-check input[type="checkbox"] {
   .hero-meta { justify-content: flex-start; }
   .result-hero-actions { align-items: stretch; flex-direction: column; }
   .result-hero-actions .button-primary { width: 100%; }
+  .passport-release-link { justify-content: center; }
   .section-head { grid-template-columns: 38px minmax(0,1fr) 20px; min-height: 74px; gap: 9px; padding: 12px; }
   .section-meta { display: none; }
   .section-title { font-size: 14px; }
