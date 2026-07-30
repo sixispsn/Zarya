@@ -109,7 +109,8 @@ def test_form_exposes_all_sp30_consumer_norms():
 
 def test_result_template_shows_key_numbers():
     html = open("app/web/templates/wizard_result.html", encoding="utf-8").read()
-    for token in ("fire.pk_total", "fire.required_head", "fire.note", "pdfs", "status"):
+    for token in ("fire.pk_total", "fire.required_head", "fire.note",
+                  "pdfs", "document_groups", "status"):
         assert token in html
     assert '<details class="protocol">' in html
     assert 'id="project-proof"' in html
@@ -120,6 +121,28 @@ def test_result_template_shows_key_numbers():
     assert "Что изменится?" in html
     assert 'data-impact-dialog' in html
     assert 'data-endpoint="/wizard/impact/{{ run_id }}"' in html
+
+
+def test_interface_presents_ios2_and_ios3_as_one_project():
+    from app.web.wizard import _TPL, _form_context
+
+    form = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]))
+    result = open(
+        "app/web/templates/wizard_result.html", encoding="utf-8").read()
+    projects = open(
+        "app/web/templates/wizard_projects.html", encoding="utf-8").read()
+
+    assert "ZARYA / IOS2 + IOS3 DESIGN SYSTEM" in form
+    assert "Инженерные системы ИОС2 / ИОС3" in form
+    assert "Собрать ИОС2 + ИОС3" in form
+    assert "ИОС2 — В1, В2, Т3 и Т4" in form
+    assert "ИОС3 — К1 и К2" in form
+    assert "Базовый шифр проекта" in form
+    assert "ИОС2 → ИОС3" in form
+    assert "ИОС2 + ИОС3 · комплект успешно собран" in result
+    assert 'data-discipline="{{ group.key }}"' in result
+    assert "ИОС2 + ИОС3 · локальное хранилище" in projects
 
 
 def test_blueprint_ui_marks_edited_sections():

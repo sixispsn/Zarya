@@ -424,7 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const button = form.querySelector("button[type='submit']");
       if (!button) return;
       button.disabled = true;
-      button.textContent = "Собираем комплект…";
+      button.textContent = "Собираем ИОС2 + ИОС3…";
       form.setAttribute("aria-busy", "true");
     });
   }

@@ -2,28 +2,28 @@
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<title>Заря — проектирование ИОС2</title>
+<title>Заря — проектирование ИОС2 + ИОС3</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260730-2">
-<script defer src="/static/wizard.js?v=20260730-2"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-3">
+<script defer src="/static/wizard.js?v=20260730-3"></script>
 </head><body>
 <header class="topbar">
-  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
   <nav class="topnav" aria-label="Основная навигация"><a href="/wizard" aria-current="page">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
 </header>
 {% set d = prefill.document if prefill else none %}
 {% set sd = prefill.source_data if prefill and prefill.source_data else none %}
 <main class="shell">
 <section class="hero">
-  <div><p class="eyebrow">ZARYA / IOS2 DESIGN SYSTEM</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Расчёт начинается с функциональных частей объекта и групп потребителей по таблице А.2 СП 30. Техническая геометрия В2 вынесена из основного сценария.</p></div>
-  <div class="hero-meta"><span class="chip">СП 30</span><span class="chip">СП 10</span><span class="chip">ПП 87</span><span class="chip">ГОСТ Р 21.619-2023</span></div>
+  <div><p class="eyebrow">ZARYA / IOS2 + IOS3 DESIGN SYSTEM</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Единые исходные данные для двух подразделов: ИОС2 — В1, В2, Т3 и Т4; ИОС3 — К1 и К2. На выходе формируются раздельные ПЗ, расчёты, схемы и спецификации.</p></div>
+  <div class="hero-meta"><span class="chip discipline-chip" data-discipline="ios2">ИОС2 · В1 В2 Т3 Т4</span><span class="chip discipline-chip" data-discipline="ios3">ИОС3 · К1 К2</span><span class="chip">СП 30</span><span class="chip">СП 10</span><span class="chip">ПП 87</span><span class="chip">ГОСТ Р 21.619-2023</span></div>
 </section>
 <div class="workspace">
 <nav class="stepnav" aria-label="Разделы исходных данных">
   <div class="stepnav-title">Исходные данные</div>
-  <a class="active" href="#object" data-step="1">Объект</a><a href="#consumers" data-step="2">Потребители</a><a href="#building" data-step="3">Здание</a><a href="#source-v1" data-step="4">Технические условия</a><a href="#systems" data-step="5">Системы</a>
-  <p class="stepnav-note">01—05 / основной сценарий<br>геометрия В2 — внутри систем</p>
+  <a class="active" href="#object" data-step="1">Объект</a><a href="#consumers" data-step="2">Потребители</a><a href="#building" data-step="3">Здание</a><a href="#source-v1" data-step="4">Технические условия</a><a href="#systems" data-step="5">Системы ИОС2 / ИОС3</a>
+  <p class="stepnav-note">01—05 / единый сценарий<br>ИОС2 + ИОС3 — один проект</p>
 </nav>
 <div class="form-stack">
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
@@ -36,13 +36,13 @@
 
 <fieldset id="object"><legend class="visually-hidden">Объект и реквизиты</legend><details class="input-section"{% if errors or not d %} open{% endif %}><summary class="section-head"><span class="step-badge">01</span><span class="section-copy"><span class="section-title">Объект и реквизиты</span><span class="section-value">{{ d.cipher if d and d.cipher else 'Реквизиты не заданы' }}{% if d and d.object_part %} · {{ d.object_part }}{% endif %} · стадия {{ d.stage if d else 'П' }}</span></span><span class="section-meta"><span class="source-tag">ТЗ</span><span class="accepted">принято</span></span></summary><div class="section-body">
   <div class="row">
-    <label>Шифр комплекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '' }}" placeholder="Можно заполнить позже"></label>
+    <label>Базовый шифр проекта<input class="w-m" name="cipher" value="{{ d.cipher if d else '' }}" placeholder="Можно заполнить позже"></label>
     <label>Наименование объекта<input class="w-l" name="object_name" value="{{ d.object_name if d else '' }}" placeholder="Можно заполнить позже"></label>
     <label>Часть<input class="w-m" name="object_part" value="{{ d.object_part if d else '' }}" placeholder="Корпус, секция или этап"></label>
     <label>Стадия<select name="stage"><option{% if not d or d.stage == 'П' %} selected{% endif %}>П</option><option{% if d and d.stage == 'Р' %} selected{% endif %}>Р</option></select></label>
   </div>
   <div class="row"><label>Организация<input class="w-l" name="organization" value="{{ d.organization if d else '' }}" placeholder="Можно заполнить позже"></label><label>Адрес<input class="w-l" name="address" value="{{ d.object_address if d else '' }}" placeholder="Адрес объекта"></label></div>
-  <p class="hint">Реквизиты не блокируют расчёт. Если оставить поля пустыми, комплект сформируется с пустыми графами штампа.</p>
+  <p class="hint">Реквизиты не блокируют расчёт. Если базовый шифр оканчивается на ИОС2, шифр ИОС3 формируется автоматически заменой ИОС2 → ИОС3. Если оставить поля пустыми, оба подраздела сформируются с пустыми графами штампа.</p>
   <div class="row"><label>Разработал<input name="developer" value="{{ d.developer if d else '' }}" placeholder="Фамилия И.О."></label><label>Проверил<input name="inspector" value="{{ d.inspector if d else '' }}" placeholder="Фамилия И.О."></label><label>Нач. отдела<input name="dept_head" value="{{ d.dept_head if d else '' }}" placeholder="Фамилия И.О."></label><label>ГИП<input name="gip" value="{{ d.gip if d else '' }}" placeholder="Фамилия И.О."></label><label>Н. контроль<input name="norm_control" value="{{ d.norm_control if d else '' }}" placeholder="Фамилия И.О."></label></div>
 </div></details></fieldset>
 
@@ -95,10 +95,14 @@
   <div class="row"><label>Зоны охраны<input class="w-l" name="water_protection_note" value="{{ sd.water_protection_note if sd else '' }}" placeholder="По ГПЗУ / ИОС1"></label><label>Резервирование воды<input class="w-l" name="reserve_water_note" value="{{ sd.reserve_water_note if sd else 'Решения по резервированию хозяйственно-питьевого водоснабжения принимаются согласно ТУ' }}"></label></div>
 </div></details></fieldset>
 
-<fieldset id="systems"><legend class="visually-hidden">Инженерные системы</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">05</span><span class="section-copy"><span class="section-title">Инженерные системы</span><span class="section-value">В1 {{ prefill.risers_v1 if prefill else 8 }} стояков · Т3/Т4 {{ prefill.risers_t3 if prefill else 8 }}/{{ prefill.risers_t4 if prefill else 8 }} · В2 {{ prefill.network.risers|length if prefill and prefill.network else 4 }} стояка</span></span><span class="section-meta"><span class="source-tag">СХЕМЫ</span><span class="accepted">принято</span></span></summary><div class="section-body">
-  <details class="advanced-section"><summary>В1 / Т3 / Т4 · укрупнённые данные стадии П</summary><div class="advanced-body"><div class="row"><label>Стояков В1<input name="risers_v1" value="{{ prefill.risers_v1 if prefill else 8 }}"></label><label>Стояков Т3<input name="risers_t3" value="{{ prefill.risers_t3 if prefill else 8 }}"></label><label>Стояков Т4<input name="risers_t4" value="{{ prefill.risers_t4 if prefill else 8 }}"></label><label>Место прокладки<select name="insulation_location"><option value="room_hot"{% if not prefill or prefill.insulation_location == 'room_hot' %} selected{% endif %}>отапливаемое помещение</option><option value="room_cold"{% if prefill and prefill.insulation_location == 'room_cold' %} selected{% endif %}>неотапливаемое помещение</option><option value="parking"{% if prefill and prefill.insulation_location == 'parking' %} selected{% endif %}>подземная стоянка</option></select></label><label>t помещения, °C<input name="insulation_t_room" value="{{ prefill.insulation_t_room_manual if prefill else 5 }}"></label><label>Влажность, %<select name="insulation_humidity">{% for h in [40,50,60,70,80,90] %}<option value="{{ h }}"{% if (prefill.insulation_humidity if prefill else 60) == h %} selected{% endif %}>{{ h }}</option>{% endfor %}</select></label><label>t ХВС, °C<input name="insulation_hvs_temp" value="{{ prefill.insulation_hvs_water_temp if prefill else 10 }}"></label><label>t ГВС, °C<input name="insulation_gvs_temp" value="{{ prefill.insulation_gvs_water_temp if prefill else 60 }}"></label></div></div></details>
+<fieldset id="systems"><legend class="visually-hidden">Инженерные системы ИОС2 и ИОС3</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">05</span><span class="section-copy"><span class="section-title">Инженерные системы ИОС2 / ИОС3</span><span class="section-value">ИОС2: В1 {{ prefill.risers_v1 if prefill else 8 }} · Т3/Т4 {{ prefill.risers_t3 if prefill else 8 }}/{{ prefill.risers_t4 if prefill else 8 }} · В2 {{ prefill.network.risers|length if prefill and prefill.network else 4 }} · ИОС3: К1 {{ prefill.sewage_risers|length if prefill and prefill.sewage_risers else 0 }} · К2 {{ prefill.storm_risers_count if prefill else 0 }}</span></span><span class="section-meta"><span class="source-tag">ИОС2</span><span class="source-tag">ИОС3</span><span class="accepted">принято</span></span></summary><div class="section-body">
+  <div class="discipline-overview" aria-label="Состав подразделов">
+    <article class="discipline-card" data-discipline="ios2"><span class="discipline-code">ИОС2</span><div><strong>Система водоснабжения</strong><b>В1 · В2 · Т3 · Т4</b><p>Расходы, требуемый напор, насосы, водомеры, противопожарная проверка и решения стадии П.</p></div></article>
+    <article class="discipline-card" data-discipline="ios3"><span class="discipline-code">ИОС3</span><div><strong>Система водоотведения</strong><b>К1 · К2</b><p>Баланс стоков, характерные стояки, внутренний водосток, расчёты, схема и отдельная спецификация.</p></div></article>
+  </div>
+  <details class="advanced-section discipline-section" data-discipline="ios2"><summary>ИОС2 · В1 / Т3 / Т4 · укрупнённые данные стадии П</summary><div class="advanced-body"><div class="row"><label>Стояков В1<input name="risers_v1" value="{{ prefill.risers_v1 if prefill else 8 }}"></label><label>Стояков Т3<input name="risers_t3" value="{{ prefill.risers_t3 if prefill else 8 }}"></label><label>Стояков Т4<input name="risers_t4" value="{{ prefill.risers_t4 if prefill else 8 }}"></label><label>Место прокладки<select name="insulation_location"><option value="room_hot"{% if not prefill or prefill.insulation_location == 'room_hot' %} selected{% endif %}>отапливаемое помещение</option><option value="room_cold"{% if prefill and prefill.insulation_location == 'room_cold' %} selected{% endif %}>неотапливаемое помещение</option><option value="parking"{% if prefill and prefill.insulation_location == 'parking' %} selected{% endif %}>подземная стоянка</option></select></label><label>t помещения, °C<input name="insulation_t_room" value="{{ prefill.insulation_t_room_manual if prefill else 5 }}"></label><label>Влажность, %<select name="insulation_humidity">{% for h in [40,50,60,70,80,90] %}<option value="{{ h }}"{% if (prefill.insulation_humidity if prefill else 60) == h %} selected{% endif %}>{{ h }}</option>{% endfor %}</select></label><label>t ХВС, °C<input name="insulation_hvs_temp" value="{{ prefill.insulation_hvs_water_temp if prefill else 10 }}"></label><label>t ГВС, °C<input name="insulation_gvs_temp" value="{{ prefill.insulation_gvs_water_temp if prefill else 60 }}"></label></div></div></details>
 
-  <details class="advanced-section"><summary>К1 · расход, характерные стояки и фактические трубы</summary><div class="advanced-body">
+  <details class="advanced-section discipline-section" data-discipline="ios3"><summary>ИОС3 · К1 · расход, характерные стояки и фактические трубы</summary><div class="advanced-body">
     <div class="row">
       <label>q₀s прибора, л/с<input name="sewage_max_fixture_lps" value="{{ prefill.sewage_max_fixture_lps if prefill else 1.6 }}"></label>
       <label>Выпусков К1, шт.<input name="sewage_outlets_count" value="{{ prefill.sewage_outlets_count if prefill else 0 }}"></label>
@@ -133,7 +137,7 @@
     <p class="hint">Общий расход К1 считается как q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub>. Заря не делит его между стояками и не назначает длины. Точная проверка стояка выполняется только для заполненной строки приложения К; горизонтальная гидравлика остаётся стадией Р без аксонометрии.</p>
   </div></details>
 
-  <details class="advanced-section"><summary>К2 / общепит / раздельный учёт · СП 30 и СП 118</summary><div class="advanced-body">
+  <details class="advanced-section discipline-section" data-discipline="ios3"><summary>ИОС3 · К2 / общепит / раздельный учёт · СП 30 и СП 118</summary><div class="advanced-body">
     <div class="row">
       <label>Тип кровли<select name="roof_type"><option value="not_set"{% if not prefill or prefill.roof_type == 'not_set' %} selected{% endif %}>не задан</option><option value="flat"{% if prefill and prefill.roof_type == 'flat' %} selected{% endif %}>плоская</option><option value="sloped"{% if prefill and prefill.roof_type == 'sloped' %} selected{% endif %}>скатная</option></select></label>
       <label>Город для К2<select name="storm_city"><option value="">не задан</option>{% for city in storm_cities %}<option value="{{ city.code }}"{% if prefill and prefill.storm_city == city.code %} selected{% endif %}>{{ city.name }}</option>{% endfor %}</select></label>
@@ -158,7 +162,7 @@
     <p class="hint">К2 рассчитывается только при заданных городе и площади кровли. Проверка количества воронок, шага, паспортной пропускной способности и стояка выполняется только по заполненным значениям; общий расход между ними автоматически не делится. Жироуловители проверяются по порогам п. 8.7 СП 118; производительность не назначается без задания ТХ.</p>
   </div></details>
 
-  <details class="advanced-section"><summary>В2 · расчётная схема и источник</summary><div class="advanced-body">
+  <details class="advanced-section discipline-section" data-discipline="ios2"><summary>ИОС2 · В2 · расчётная схема и источник</summary><div class="advanced-body">
     <div class="row">
       <label>Режим В2<select name="fire_mode"><option value="auto"{% if not prefill or prefill.fire_mode == 'auto' %} selected{% endif %}>Автоматически по СП 10</option><option value="not_required"{% if prefill and prefill.fire_mode == 'not_required' %} selected{% endif %}>ВПВ не требуется</option><option value="manual"{% if prefill and prefill.fire_mode == 'manual' %} selected{% endif %}>Ручное решение</option></select></label>
       <label>Расчётных струй (только ручной режим)<input name="streams" value="{{ prefill.streams if prefill and prefill.streams is not none else '' }}"></label>
@@ -176,7 +180,7 @@
   </div></details>
 </div></details></fieldset>
 
-<div class="actions"><div class="actions-copy"><strong>Состав объекта и исходные данные приняты</strong><span>Изменяйте только спорные позиции или сразу соберите комплект</span></div><button class="button-primary" type="submit">Собрать комплект ИОС2</button></div>
+<div class="actions"><div class="actions-copy"><strong>Состав объекта и исходные данные приняты</strong><span>Один запуск сформирует документы ИОС2 и ИОС3</span></div><button class="button-primary" type="submit">Собрать ИОС2 + ИОС3</button></div>
 </form>
 </div></div>
 </main></body></html>

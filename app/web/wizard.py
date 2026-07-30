@@ -313,36 +313,63 @@ def wizard_result(request: Request, run_id: str):
         return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
     b = run["bundle"]
     proof_graph = run["proof_graph"]
+    group_defs = (
+        ("common", "00", "Основной комплект",
+         "Общие документы, баланс и сводные материалы проекта"),
+        ("ios2", "ИОС2", "Система водоснабжения",
+         "В1, В2, Т3 и Т4: расчёты и обоснования принятых решений"),
+        ("ios3", "ИОС3", "Система водоотведения",
+         "К1 и К2: отдельная ПЗ, расчёты, схема и спецификация"),
+    )
+    groups = {
+        key: {
+            "key": key,
+            "code": code,
+            "label": label,
+            "description": description,
+            "documents": [],
+        }
+        for key, code, label, description in group_defs
+    }
     pdfs = []
-    for label, path in (("Пояснительная записка", b.pz_pdf),
-                        ("Комплект пояснительной записки К1 и К2",
-                         getattr(b, "wastewater_package_pdf", None)),
-                        ("Пояснительная записка К1 и К2",
-                         getattr(b, "wastewater_pz_pdf", None)),
-                        ("Паспорт проекта и нормативный контроль",
-                         getattr(b, "commission_control_pdf", None)),
-                        ("Расчётные обоснования В1 и Т3",
-                         getattr(b, "v1_calculation_pdf", None)),
-                        ("Расчётные обоснования К1 и К2",
-                         getattr(b, "wastewater_calculation_pdf", None)),
-                        ("Принципиальная схема К1 и К2",
-                         getattr(b, "wastewater_scheme_pdf", None)),
-                        ("Спецификация К1 и К2",
-                         getattr(b, "wastewater_spec_pdf", None)),
-                        ("Баланс водопотребления и водоотведения",
-                         getattr(b, "balance_pdf", None)),
-                        ("Расчёт и подбор насосов", getattr(b, "pump_selection_pdf", None)),
-                        ("Спецификация", b.spec_pdf),
-                        ("Схема", b.scheme_pdf),
-                        ("Гидравлический расчёт", b.hydraulic_pdf),
-                        ("Проверка живучести кольца", getattr(b, "resilience_pdf", None))):
+    for group, label, path in (
+            ("common", "Пояснительная записка", b.pz_pdf),
+            ("common", "Паспорт проекта и нормативный контроль",
+             getattr(b, "commission_control_pdf", None)),
+            ("common", "Баланс водопотребления и водоотведения",
+             getattr(b, "balance_pdf", None)),
+            ("common", "Сводная спецификация", b.spec_pdf),
+            ("common", "Сводная принципиальная схема", b.scheme_pdf),
+            ("ios2", "Расчётные обоснования В1 и Т3",
+             getattr(b, "v1_calculation_pdf", None)),
+            ("ios2", "Расчёт и подбор насосов",
+             getattr(b, "pump_selection_pdf", None)),
+            ("ios2", "Гидравлический расчёт В2", b.hydraulic_pdf),
+            ("ios2", "Проверка живучести кольца В2",
+             getattr(b, "resilience_pdf", None)),
+            ("ios3", "Комплект пояснительной записки К1 и К2",
+             getattr(b, "wastewater_package_pdf", None)),
+            ("ios3", "Пояснительная записка К1 и К2",
+             getattr(b, "wastewater_pz_pdf", None)),
+            ("ios3", "Расчётные обоснования К1 и К2",
+             getattr(b, "wastewater_calculation_pdf", None)),
+            ("ios3", "Принципиальная схема К1 и К2",
+             getattr(b, "wastewater_scheme_pdf", None)),
+            ("ios3", "Спецификация К1 и К2",
+             getattr(b, "wastewater_spec_pdf", None))):
         if path:
-            pdfs.append({"label": label, "name": os.path.basename(path)})
+            document = {"label": label, "name": os.path.basename(path)}
+            pdfs.append(document)
+            groups[group]["documents"].append(document)
+    document_groups = [
+        groups[key] for key, *_ in group_defs if groups[key]["documents"]
+    ]
     f = b.project.fire
     p = b.project
     head = calc_required_head(p.source, h_vod_m=cold_meter_loss(p.meters))
     return _TPL.TemplateResponse(request, "wizard_result.html", {
-        "run_id": run_id, "pdfs": pdfs, "project_id": run.get("project_id"),
+        "run_id": run_id, "pdfs": pdfs, "document_groups": document_groups,
+        "project_id": run.get("project_id"),
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
         "proof": proof_graph,

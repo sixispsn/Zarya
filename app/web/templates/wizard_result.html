@@ -2,21 +2,22 @@
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<title>Заря — комплект ИОС2 готов</title>
+<title>Заря — комплект ИОС2 + ИОС3 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260730-2">
-<script defer src="/static/wizard.js?v=20260730-2"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260730-3">
+<script defer src="/static/wizard.js?v=20260730-3"></script>
 </head><body>
 <header class="topbar">
-  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2</span></span></a>
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
   <nav class="topnav" aria-label="Основная навигация"><a href="#project-proof">Доказательства</a><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
 </header>
 <main class="result-shell">
   <section class="result-hero">
-    <p class="eyebrow">Комплект успешно собран</p>
+    <p class="eyebrow">ИОС2 + ИОС3 · комплект успешно собран</p>
     <h1>{{ project.title or 'Комплект без реквизитов' }}</h1>
     <p>{% if project.cipher %}{{ project.cipher }} · {% endif %}стадия {{ project.stage }} · сформировано документов: {{ pdfs|length }}</p>
+    <div class="result-disciplines"><span data-discipline="ios2"><b>ИОС2</b> В1 · В2 · Т3 · Т4</span><span data-discipline="ios3"><b>ИОС3</b> К1 · К2</span></div>
   </section>
 
   <div class="result-grid">
@@ -127,8 +128,15 @@
 
     <section class="card full">
       <div class="card-kicker"><h2>Комплект документов</h2><span class="system-tag">{{ pdfs|length }} PDF</span></div>
-      <div class="doc-grid">
-        {% for p in pdfs %}<a class="doc-link" href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }}</a>{% endfor %}
+      <div class="doc-groups">
+        {% for group in document_groups %}
+        <section class="doc-group" data-discipline="{{ group.key }}">
+          <header class="doc-group-head"><span>{{ group.code }}</span><div><strong>{{ group.label }}</strong><small>{{ group.description }}</small></div><b>{{ group.documents|length }}</b></header>
+          <div class="doc-grid">
+            {% for p in group.documents %}<a class="doc-link" href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }}</a>{% endfor %}
+          </div>
+        </section>
+        {% endfor %}
       </div>
     </section>
 
