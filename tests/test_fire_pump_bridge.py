@@ -19,7 +19,8 @@ def test_fire_pump_selected_by_main_duty_point():
     assert "1 рабочий + 1 резервный" in result.count_note
     assert result.selection_note == ""
     assert "Каталог PFFS" in result.top3[0].source_note
-    assert any("NPSHr не опубликован" in reason for reason in result.top3[0].reasons)
+    assert result.top3[0].npshr == 2.0
+    assert any("кавитации нет" in reason for reason in result.top3[0].reasons)
     assert result.pump_head_at_design_m >= result.h_design_m
     assert result.maximum_system_pressure_bar < result.top3[0].p_max_bar
     checks = {check.clause: check for check in result.sp10_checks}
@@ -27,8 +28,8 @@ def test_fire_pump_selected_by_main_duty_point():
     assert checks["12.3"].status == "specified"
     assert checks["12.27"].status == "specified"
     assert result.working_units == 1 and result.reserve_units == 1
-    assert checks["12.20-12.21"].status == "pending"
-    assert result.sp10_compliant is None  # NPSHr и размещение подтверждаются отдельно
+    assert checks["12.20-12.21"].status == "verified"
+    assert result.sp10_compliant is None  # размещение насосной подтверждает АР
 
 
 def test_fire_pump_keeps_required_duty_when_catalog_has_no_candidate():

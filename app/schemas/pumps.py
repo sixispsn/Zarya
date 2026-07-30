@@ -47,6 +47,7 @@ class PumpCandidateOutput(BaseModel):
     h_excess_pct: float
     q_ratio: float
     npsh_ok: Optional[bool]
+    npshr_at_working_point: Optional[float]
     reasons: list[str]
     curve: list[CurvePointOutput]  # для построения графика на фронте
 

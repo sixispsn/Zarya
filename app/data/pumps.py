@@ -34,6 +34,7 @@ class Pump:
     q_opt: float             # оптимальный расход (BEP), м³/ч
     note: str
     curve: tuple[PumpCurvePoint, ...]
+    npsh_curve: tuple[PumpCurvePoint, ...] = ()  # Q-NPSHr; h = NPSHr, м
     archived: bool = False   # архивная база (Grundfos)
     source_url: str = ""     # официальная карточка/кривая изготовителя
     source_note: str = ""    # идентификатор изделия и дата проверки
@@ -96,52 +97,154 @@ PUMPS: list[Pump] = [
 #   агрегат не суммируется с рабочим;
 # - PBS — повысительные установки, кривая «1» одного рабочего насоса;
 # - TD — циркуляционный in-line насос с табличной характеристикой;
-# - Q-H PFFS/PBS оцифрованы по координатной сетке официальных каталогов
-#   версии 2025. Погрешность чтения графика не более 0,5 м;
-# - каталоги PFFS/PBS требуют определять NPSHr по отдельной характеристике
-#   насоса CDM, но не публикуют её. Поэтому NPSHr оставлен неизвестным, а не
-#   подменён нулём. Трассировка и SHA-256 приведены в docs/catalogs/cnp_2025.md.
+# - Q-H CDM10/CDM15 перенесены из таблиц официального каталога CDM/CDMF
+#   версии 24.11.2025, без оцифровки графика;
+# - Q-NPSHr перенесены из векторных кривых того же каталога и округлены до
+#   0,1 м. В расчёте NPSHr интерполируется при расходе рабочей точки;
+# - трассировка, страницы и SHA-256 приведены в docs/catalogs/cnp_2025.md.
 
-_CNP_CDM10_6 = (
-    PumpCurvePoint(0, 66.0), PumpCurvePoint(2, 65.8),
-    PumpCurvePoint(4, 64.5), PumpCurvePoint(6, 61.8),
-    PumpCurvePoint(8, 58.0), PumpCurvePoint(10, 52.0),
-    PumpCurvePoint(12, 44.0), PumpCurvePoint(14, 34.0),
+
+def _curve_from_table(
+    q_values: tuple[float, ...],
+    h_values: tuple[float, ...],
+) -> tuple[PumpCurvePoint, ...]:
+    """Собрать дословную табличную характеристику изготовителя."""
+    if len(q_values) != len(h_values):
+        raise ValueError("Число расходов и напоров каталожной кривой не совпадает")
+    return tuple(PumpCurvePoint(q, h) for q, h in zip(q_values, h_values))
+
+
+_CNP_CDM10_Q = (0, 5, 6, 8, 10, 12, 14)
+_CNP_CDM10_HEADS = {
+    2: (22.2, 21, 20.5, 19, 16.5, 13.5, 9.5),
+    3: (33.3, 31.5, 31, 28.5, 25.5, 22, 16.5),
+    4: (44.5, 42, 41, 38, 34, 29, 22),
+    5: (56, 52.5, 51, 48, 43, 37, 28),
+    6: (67, 63, 62, 58, 52, 44, 34),
+    7: (78.5, 74, 73, 69, 62, 52, 40),
+    8: (90, 85, 84, 79, 71, 60, 46),
+    9: (101.5, 96, 94, 89, 80, 67, 52),
+    10: (113, 107, 105, 98, 89, 76, 58),
+    11: (124, 118, 115, 108, 98, 84, 64),
+    13: (147, 140, 138, 130, 116, 99, 76),
+    15: (171, 162, 159, 149, 134, 114, 88),
+}
+_CNP_CDM10_CURVES = {
+    stage: _curve_from_table(_CNP_CDM10_Q, heads)
+    for stage, heads in _CNP_CDM10_HEADS.items()
+}
+_CNP_CDM10_NPSH = _curve_from_table(
+    _CNP_CDM10_Q,
+    (1.0, 1.3, 1.4, 1.7, 2.0, 2.3, 2.8),
 )
-_CNP_CDM10_7 = (
-    PumpCurvePoint(0, 78.5), PumpCurvePoint(2, 78.0),
-    PumpCurvePoint(4, 76.0), PumpCurvePoint(6, 73.0),
-    PumpCurvePoint(8, 68.5), PumpCurvePoint(10, 61.5),
-    PumpCurvePoint(12, 52.0), PumpCurvePoint(14, 40.0),
+
+_CNP_CDM15_Q = (0, 8, 10, 12, 14, 15, 16, 18, 20, 22, 24)
+_CNP_CDM15_HEADS = {
+    1: (12.6, 12.2, 12, 11.8, 11.5, 11, 10.5, 10, 9, 8, 6.5),
+    2: (26, 24.5, 24, 23.5, 23, 22.5, 21.5, 20, 18, 16, 13.5),
+    3: (40, 37.5, 37, 36.5, 35.5, 34.5, 34, 32, 29, 25, 21),
+    4: (54, 50.5, 50, 49, 47.5, 47, 46, 43, 39, 34, 28.5),
+    5: (68, 63, 62, 61, 59, 58, 57, 53, 48, 42.5, 36),
+    7: (96, 89, 88, 86, 83, 81, 79, 74, 68, 61, 51),
+    9: (124, 115, 113, 111, 108, 106, 103, 96, 88, 78, 67),
+    11: (151, 142, 140, 137, 133, 130, 126, 117, 107, 95, 83),
+}
+_CNP_CDM15_CURVES = {
+    stage: _curve_from_table(_CNP_CDM15_Q, heads)
+    for stage, heads in _CNP_CDM15_HEADS.items()
+}
+_CNP_CDM15_NPSH = _curve_from_table(
+    _CNP_CDM15_Q,
+    (1.3, 1.5, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.3, 2.7, 3.4),
 )
-_CNP_CDM10_8 = (
-    PumpCurvePoint(0, 89.5), PumpCurvePoint(2, 89.0),
-    PumpCurvePoint(4, 87.0), PumpCurvePoint(6, 83.5),
-    PumpCurvePoint(8, 78.0), PumpCurvePoint(10, 70.5),
-    PumpCurvePoint(12, 60.0), PumpCurvePoint(14, 47.0),
-)
-_CNP_CDM10_9 = (
-    PumpCurvePoint(0, 101.0), PumpCurvePoint(2, 100.0),
-    PumpCurvePoint(4, 96.5), PumpCurvePoint(6, 92.0),
-    PumpCurvePoint(8, 87.0), PumpCurvePoint(10, 80.0),
-    PumpCurvePoint(12, 68.0), PumpCurvePoint(14, 52.0),
-)
-_CNP_CDM10_10 = (
-    PumpCurvePoint(0, 113.0), PumpCurvePoint(2, 112.0),
-    PumpCurvePoint(4, 109.5), PumpCurvePoint(6, 105.0),
-    PumpCurvePoint(8, 99.0), PumpCurvePoint(10, 90.0),
-    PumpCurvePoint(12, 77.0), PumpCurvePoint(14, 60.0),
-)
-_CNP_CDM15_7 = (
-    PumpCurvePoint(0, 96.0), PumpCurvePoint(5, 92.0),
-    PumpCurvePoint(10, 87.0), PumpCurvePoint(15, 80.0),
-    PumpCurvePoint(20, 68.0), PumpCurvePoint(24, 52.0),
-)
-_CNP_CDM15_9 = (
-    PumpCurvePoint(0, 124.0), PumpCurvePoint(5, 118.0),
-    PumpCurvePoint(10, 112.0), PumpCurvePoint(15, 103.0),
-    PumpCurvePoint(20, 90.0), PumpCurvePoint(24, 70.0),
-)
+
+_CNP_CDM10_POWER = {
+    2: 0.75, 3: 1.1, 4: 1.5, 5: 2.2, 6: 2.2, 7: 3.0,
+    8: 3.0, 9: 4.0, 10: 4.0, 11: 4.0, 13: 5.5, 15: 5.5,
+}
+_CNP_CDM15_POWER = {
+    1: 1.1, 2: 2.2, 3: 3.0, 4: 4.0, 5: 4.0,
+    7: 5.5, 9: 7.5, 11: 11.0,
+}
+
+_CNP_PBS_MODELS = {
+    10: (3, 4, 6, 8, 10, 13, 15),
+    15: (2, 3, 5, 7, 9, 11),
+}
+_CNP_PFFS_MODELS = {
+    10: (2, 3, 4, 5, 6, 7, 8, 9, 11, 15),
+    15: (1, 2, 3, 4, 5, 7, 9, 11),
+}
+
+
+def _cnp_series_data(series: int):
+    if series == 10:
+        return (
+            _CNP_CDM10_CURVES,
+            _CNP_CDM10_NPSH,
+            _CNP_CDM10_POWER,
+            10.0,
+            "стр. 26-27",
+        )
+    return (
+        _CNP_CDM15_CURVES,
+        _CNP_CDM15_NPSH,
+        _CNP_CDM15_POWER,
+        15.0,
+        "стр. 28-29",
+    )
+
+
+def _cnp_boost_pumps() -> list[Pump]:
+    pumps: list[Pump] = []
+    for series, stages in _CNP_PBS_MODELS.items():
+        curves, npsh_curve, powers, q_opt, cdm_pages = _cnp_series_data(series)
+        for stage in stages:
+            pumps.append(Pump(
+                model=f"PBS CDM{series}-{stage}",
+                brand="CNP / Aikon",
+                type="boost",
+                p_kw=powers[stage],
+                p_max_bar=16.0,
+                t_max=70.0,
+                npshr=None,
+                q_opt=q_opt,
+                note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
+                curve=curves[stage],
+                npsh_curve=npsh_curve,
+                source_note=(
+                    "CNP/Aikon «Каталог PBS», 12.05.2025, стр. 46-47; "
+                    f"«Каталог CDM/CDMF», 24.11.2025, {cdm_pages}: "
+                    "табличная Q-H и векторная NPSH"
+                ),
+            ))
+    return pumps
+
+
+def _cnp_fire_pumps() -> list[Pump]:
+    pumps: list[Pump] = []
+    for series, stages in _CNP_PFFS_MODELS.items():
+        curves, npsh_curve, powers, q_opt, cdm_pages = _cnp_series_data(series)
+        for stage in stages:
+            pumps.append(Pump(
+                model=f"PFFS 2 CDM{series}-{stage} DS 16 S",
+                brand="CNP / Aikon",
+                type="fire",
+                p_kw=powers[stage],
+                p_max_bar=16.0,
+                t_max=70.0,
+                npshr=None,
+                q_opt=q_opt,
+                note="1 рабочий + 1 резервный; кривая одного рабочего насоса",
+                curve=curves[stage],
+                npsh_curve=npsh_curve,
+                source_note=(
+                    "CNP/Aikon «Каталог PFFS», 27.06.2025, стр. 38-39; "
+                    f"«Каталог CDM/CDMF», 24.11.2025, {cdm_pages}: "
+                    "табличная Q-H и векторная NPSH"
+                ),
+            ))
+    return pumps
 
 CURRENT_PUMPS: list[Pump] = [
     Pump(
@@ -179,150 +282,8 @@ CURRENT_PUMPS: list[Pump] = [
         ),
         source_note="Wilo, артикул 4200993; Q-H/NPSH проверены 23.07.2026",
     ),
-    Pump(
-        model="PBS CDM10-6",
-        brand="CNP / Aikon",
-        type="boost",
-        p_kw=2.2,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
-        curve=_CNP_CDM10_6,
-        source_note=(
-            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
-            "мощность стр. 46-47; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PBS CDM10-8",
-        brand="CNP / Aikon",
-        type="boost",
-        p_kw=3.0,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
-        curve=_CNP_CDM10_8,
-        source_note=(
-            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
-            "мощность стр. 46-47; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PBS CDM10-10",
-        brand="CNP / Aikon",
-        type="boost",
-        p_kw=4.0,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="Повысительная установка с ПЧ; кривая одного рабочего насоса",
-        curve=_CNP_CDM10_10,
-        source_note=(
-            "CNP/Aikon «Каталог PBS», версия 12.05.2025: Q-H стр. 20-21, "
-            "мощность стр. 46-47; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM10-6 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=2.2,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM10_6,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM10-7 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=3.0,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM10_7,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM10-8 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=3.0,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM10_8,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM10-9 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=4.0,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=10.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM10_9,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 14-15, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM15-7 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=5.5,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=15.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM15_7,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 18-19, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
-    Pump(
-        model="PFFS 2 CDM15-9 DS 16 S",
-        brand="CNP / Aikon",
-        type="fire",
-        p_kw=7.5,
-        p_max_bar=16.0,
-        t_max=70.0,
-        npshr=None,
-        q_opt=15.0,
-        note="1 рабочий + 1 резервный; кривая «1» одного рабочего насоса",
-        curve=_CNP_CDM15_9,
-        source_note=(
-            "CNP/Aikon «Каталог PFFS», версия 27.06.2025: Q-H стр. 18-19, "
-            "мощность стр. 38-39; оцифровка ±0,5 м"
-        ),
-    ),
+    *_cnp_boost_pumps(),
+    *_cnp_fire_pumps(),
     Pump(
         model="TD32-10(I)/2",
         brand="CNP",

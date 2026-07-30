@@ -111,7 +111,9 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
     for c in res.candidates:
         wp = c.working_point
         p2, motor_min = _pump_power(c.pump, wp.q, wp.h)
-        raw_npshr = _g(c.pump, "npshr", default=None)
+        raw_npshr = _g(c, "npshr_at_working_point", default=None)
+        if raw_npshr is None:
+            raw_npshr = _g(c.pump, "npshr", default=None)
         top3.append(PumpCandidate(
             model=str(_g(c.pump, "model", "name", default="")),
             brand=str(_g(c.pump, "brand", "manufacturer", default="")),

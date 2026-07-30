@@ -57,6 +57,7 @@ def calculate(request: PumpRequest):
                 h_excess_pct=c.h_excess_pct,
                 q_ratio=c.q_ratio,
                 npsh_ok=c.npsh_ok,
+                npshr_at_working_point=c.npshr_at_working_point,
                 reasons=c.reasons,
                 curve=[CurvePointOutput(q=p.q, h=p.h) for p in c.eff_curve],
             )

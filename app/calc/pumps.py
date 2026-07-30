@@ -51,6 +51,7 @@ class PumpCandidate:
     h_excess_pct: float
     q_ratio: float
     npsh_ok: Optional[bool]
+    npshr_at_working_point: Optional[float]
     reasons: list[str] = field(default_factory=list)
     eff_curve: list[PumpCurvePoint] = field(default_factory=list)
 
@@ -85,6 +86,28 @@ def interpolate_pump_head(curve, q: float) -> float:
     нормативным проверкам, чтобы не дублировать алгоритм кривой.
     """
     return _interp_h(list(curve), q)
+
+
+def interpolate_pump_npshr(pump: Pump, q: float) -> Optional[float]:
+    """NPSHr насоса при расходе одного агрегата.
+
+    Для каталога с Q-NPSHr применяется линейная интерполяция между
+    опубликованными точками. Для legacy-позиций сохраняется скалярное
+    каталожное значение. За границами Q-NPSHr используется крайняя точка,
+    чтобы проверка не превращалась в фиктивный ноль.
+    """
+    curve = pump.npsh_curve
+    if not curve:
+        return pump.npshr
+    if q <= curve[0].q:
+        return curve[0].h
+    if q >= curve[-1].q:
+        return curve[-1].h
+    for left, right in zip(curve, curve[1:]):
+        if left.q <= q <= right.q:
+            ratio = (q - left.q) / (right.q - left.q)
+            return left.h + ratio * (right.h - left.h)
+    return None
 
 
 def _build_effective_curve(curve: tuple[PumpCurvePoint, ...], mode: PumpMode) -> list[PumpCurvePoint]:
@@ -181,9 +204,11 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         elif q_err < 0.2:
             score += 10
 
+        q_per_pump = wp.q / 2 if data.mode == "2p" else wp.q
+        npshr_at_wp = interpolate_pump_npshr(pump, q_per_pump)
         npsh_ok = (
-            data.npsh_a >= pump.npshr + 0.5
-            if data.npsh_a is not None and pump.npshr is not None
+            data.npsh_a >= npshr_at_wp + 0.5
+            if data.npsh_a is not None and npshr_at_wp is not None
             else None
         )
         if npsh_ok is False:
@@ -207,11 +232,17 @@ def calculate_pump(data: PumpInput) -> PumpResult:
         else:
             reasons.append("✗ напора недостаточно")
 
-        if npsh_ok is False and pump.npshr is not None:
-            reasons.append(f"✗ КАВИТАЦИЯ: NPSHa={data.npsh_a}м < NPSHr+0.5={pump.npshr + 0.5:.1f}м")
-        elif npsh_ok is True and pump.npshr is not None:
-            reasons.append(f"✓ кавитации нет: NPSHa={data.npsh_a}м > {pump.npshr + 0.5:.1f}м")
-        elif pump.npshr is None:
+        if npsh_ok is False and npshr_at_wp is not None:
+            reasons.append(
+                f"✗ КАВИТАЦИЯ: NPSHa={data.npsh_a}м < "
+                f"NPSHr+0.5={npshr_at_wp + 0.5:.1f}м"
+            )
+        elif npsh_ok is True and npshr_at_wp is not None:
+            reasons.append(
+                f"✓ кавитации нет: NPSHa={data.npsh_a}м > "
+                f"NPSHr+0.5={npshr_at_wp + 0.5:.1f}м"
+            )
+        elif npshr_at_wp is None:
             reasons.append(
                 "⚠ NPSHr не опубликован в каталоге установки — "
                 "проверить по характеристике базового насоса"
@@ -231,6 +262,9 @@ def calculate_pump(data: PumpInput) -> PumpResult:
             h_excess_pct=round(h_excess, 1),
             q_ratio=round(q_ratio, 2),
             npsh_ok=npsh_ok,
+            npshr_at_working_point=(
+                round(npshr_at_wp, 2) if npshr_at_wp is not None else None
+            ),
             reasons=reasons,
             eff_curve=eff_curve,
         ))
