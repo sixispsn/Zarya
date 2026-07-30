@@ -118,4 +118,4 @@ def test_missing_required_artifact_blocks_commission_release():
         "Гидравлический расчёт В2": False,
     })
     blocking_codes = {row.code for row in report.checks if row.blocking}
-    assert {"DOC-01", "DOC-02"}.issubset(blocking_codes)
+    assert {"DOC-01", "DOC-02", "DOC-03"}.issubset(blocking_codes)

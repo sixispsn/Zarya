@@ -12,7 +12,7 @@ from app.web import wizard
 app = FastAPI(
     title="Заря API",
     description="Расчёты внутреннего водоснабжения и канализации по СП 30.13330.2020",
-    version="0.1.0",
+    version="0.3.0",
 )
 
 # CORS — разрешаем фронтенду обращаться к API

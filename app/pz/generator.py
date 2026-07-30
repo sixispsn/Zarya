@@ -16,7 +16,11 @@ from dataclasses import replace
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
-from app.pz.spec import build_specification, format_spec_qty
+from app.pz.spec import (
+    build_specification,
+    build_wastewater_specification,
+    format_spec_qty,
+)
 from app.pz.commission import build_commission_report
 from app.pz.scheme import build_scheme, SchemeParams, SchemeResult, W as SCHEME_W, H as SCHEME_H
 
@@ -32,6 +36,22 @@ def _document_cipher(cipher: str, suffix: str) -> str:
     if not cipher:
         return ""
     return cipher if cipher.endswith(suffix) else cipher + suffix
+
+
+def _wastewater_document_cipher(cipher: str) -> str:
+    """Получить самостоятельный шифр подраздела ИОС3 из шифра комплекта.
+
+    Пустой шифр остаётся пустым. Если пользователь уже ввёл ИОС3, значение не
+    меняется; распространённое окончание ИОС2 заменяется без двойного суффикса.
+    """
+    if not cipher:
+        return ""
+    for marker in ("-ИОС2", ".ИОС2"):
+        if cipher.endswith(marker):
+            return cipher[: -len(marker)] + marker[:-1] + "3"
+    if cipher.endswith(("-ИОС3", ".ИОС3")):
+        return cipher
+    return cipher + ".ИОС3"
 
 
 def _build_env() -> Environment:
@@ -246,10 +266,10 @@ def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
 def generate_wastewater_calculation_html(project: Project) -> str:
     """Собрать отдельное приложение К1/К2 из результатов расчётного ядра."""
     env = _build_env()
-    cipher = project.document.cipher or ""
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
         project.document,
-        cipher=_document_cipher(cipher, ".РК"),
+        cipher=_document_cipher(cipher, ".РР"),
         sheet_title="Расчётные обоснования систем К1 и К2",
         sheet_no="1",
         sheet_total="—",
@@ -283,10 +303,71 @@ def generate_wastewater_calculation_pdf(
     return output_path
 
 
+def generate_wastewater_pz_html(project: Project) -> str:
+    """Самостоятельная текстовая часть подраздела «Система водоотведения»."""
+    env = _build_env()
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    doc = replace(
+        project.document,
+        cipher=cipher,
+        sheet_title="Текстовая часть. Система водоотведения",
+        sheet_no="1",
+        sheet_total="—",
+    )
+    balance_rows = getattr(project.balance, "rows", None) or []
+    sewage_day_m3 = (
+        sum(
+            row.sewage_domestic_m3_day
+            + row.sewage_clean_m3_day
+            + row.sewage_mechanical_m3_day
+            + row.sewage_chemical_m3_day
+            for row in balance_rows
+        )
+        if balance_rows else None
+    )
+    roof_labels = {
+        "not_set": "не задана",
+        "flat": "плоская",
+        "sloped": "скатная",
+    }
+    body_html = env.get_template("wastewater_pz_body.html").render(
+        doc=doc,
+        building=project.building,
+        normative=project.normative,
+        balance=project.balance,
+        sewage=project.sewage,
+        sewage_day_m3=sewage_day_m3,
+        storm=project.storm,
+        grease_trap=project.grease_trap,
+        roof_type_label=roof_labels.get(
+            project.storm.roof_type, project.storm.roof_type
+        ),
+    )
+    return env.get_template("document.html").render(
+        doc=doc,
+        document_title="Подраздел 5.3 «Система водоотведения»",
+        body_html=body_html,
+    )
+
+
+def generate_wastewater_pz_pdf(project: Project, output_path: str) -> str:
+    """Сформировать самостоятельную ПЗ К1/К2 на листах А4."""
+    html_str = generate_wastewater_pz_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*_CSS_FILES, "wastewater.css")
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=stylesheets,
+    )
+    return output_path
+
+
 def generate_wastewater_scheme_html(project: Project) -> str:
     """Принципиальная схема К1/К2 стадии П без вымышленной трассировки."""
     env = _build_env()
-    cipher = project.document.cipher or ""
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
         project.document,
         cipher=_document_cipher(cipher, ".СК"),
@@ -430,6 +511,19 @@ def append_pdf(base_path: str, appendix_path: str) -> str:
     return str(base)
 
 
+def merge_pdfs(source_paths: list[str], output_path: str) -> str:
+    """Собрать единый PDF из готовых документов без изменения их страниц."""
+    from pypdf import PdfReader, PdfWriter
+
+    writer = PdfWriter()
+    for source in source_paths:
+        for page in PdfReader(source).pages:
+            writer.add_page(page)
+    with Path(output_path).open("wb") as fh:
+        writer.write(fh)
+    return output_path
+
+
 # ── СПЕЦИФИКАЦИЯ (отдельный документ, шифр .С, форма 3) ────────────────────
 
 def generate_spec_html(project: Project) -> str:
@@ -455,6 +549,37 @@ def generate_spec_pdf(project: Project, output_path: str) -> str:
     ]
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path, stylesheets=stylesheets
+    )
+    return output_path
+
+
+def generate_wastewater_spec_html(project: Project) -> str:
+    """HTML самостоятельной спецификации оборудования и материалов К1/К2."""
+    env = _build_env()
+    spec = build_wastewater_specification(project)
+    body_html = env.get_template("spec_table.html").render(spec=spec)
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    spec_doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".СО"),
+        sheet_title="Спецификация оборудования, изделий и материалов К1/К2",
+    )
+    return env.get_template("spec_document.html").render(
+        doc=spec_doc,
+        body_html=body_html,
+    )
+
+
+def generate_wastewater_spec_pdf(project: Project, output_path: str) -> str:
+    """PDF самостоятельной спецификации К1/К2 по ГОСТ 21.110."""
+    html_str = generate_wastewater_spec_html(project)
+    stylesheets = [
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in ("spec_frame.css", "spec.css")
+    ]
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=stylesheets,
     )
     return output_path
 

@@ -32,8 +32,9 @@ from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
-    generate_wastewater_calculation_pdf, generate_wastewater_scheme_pdf,
-    generate_commission_control_pdf, append_pdf,
+    generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
+    generate_wastewater_scheme_pdf, generate_wastewater_spec_pdf,
+    generate_commission_control_pdf, append_pdf, merge_pdfs,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -54,8 +55,11 @@ class IOS2DesignBundle:
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
     v1_calculation_pdf: Optional[str] = None
+    wastewater_pz_pdf: Optional[str] = None
     wastewater_calculation_pdf: Optional[str] = None
     wastewater_scheme_pdf: Optional[str] = None
+    wastewater_spec_pdf: Optional[str] = None
+    wastewater_package_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     commission_control_pdf: Optional[str] = None
     commission_report: Optional[object] = None
@@ -664,11 +668,43 @@ def design_ios2(
         "и добавлен в конец ПЗ.pdf"
     )
 
+    bundle.wastewater_pz_pdf = generate_wastewater_pz_pdf(
+        project, os.path.join(output_dir, "ПЗ_К1_К2.pdf")
+    )
+    append_pdf(
+        bundle.wastewater_pz_pdf,
+        bundle.wastewater_calculation_pdf,
+    )
+    bundle.status.append(
+        "ПЗ_К1_К2.pdf собрана как самостоятельная текстовая часть "
+        "подраздела 5.3 по пункту 18 ПП РФ № 87; расчётные листы приложены"
+    )
+
     bundle.wastewater_scheme_pdf = generate_wastewater_scheme_pdf(
         project, os.path.join(output_dir, "Схема_К1_К2.pdf")
     )
     bundle.status.append(
         "Схема_К1_К2.pdf собрана как принципиальная схема стадии П"
+    )
+
+    bundle.wastewater_spec_pdf = generate_wastewater_spec_pdf(
+        project, os.path.join(output_dir, "Спецификация_К1_К2.pdf")
+    )
+    bundle.status.append(
+        "Спецификация_К1_К2.pdf собрана только из подтверждённых позиций К1/К2"
+    )
+
+    bundle.wastewater_package_pdf = merge_pdfs(
+        [
+            bundle.wastewater_pz_pdf,
+            bundle.wastewater_scheme_pdf,
+            bundle.wastewater_spec_pdf,
+        ],
+        os.path.join(output_dir, "Комплект_К1_К2.pdf"),
+    )
+    bundle.status.append(
+        "Комплект_К1_К2.pdf собран единым файлом: ПЗ с расчётами, "
+        "принципиальная схема и спецификация"
     )
 
     bundle.balance_pdf = generate_balance_pdf(
@@ -712,11 +748,14 @@ def design_ios2(
         "Пояснительная записка": bool(bundle.pz_pdf),
         "Расчёты В1": bool(bundle.v1_calculation_pdf),
         "Расчёты К1/К2": bool(bundle.wastewater_calculation_pdf),
+        "Пояснительная записка К1/К2": bool(bundle.wastewater_pz_pdf),
         "Баланс ВиВ": bool(bundle.balance_pdf),
         "Подбор насосов": bool(bundle.pump_selection_pdf),
         "Спецификация": bool(bundle.spec_pdf),
         "Принципиальная схема": bool(bundle.scheme_pdf),
         "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
+        "Спецификация К1/К2": bool(bundle.wastewater_spec_pdf),
+        "Комплект К1/К2": bool(bundle.wastewater_package_pdf),
         "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),
     })
     bundle.commission_control_pdf = generate_commission_control_pdf(

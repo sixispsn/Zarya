@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional
 
 from app.pz.project import BuildingPurpose, Project
@@ -923,4 +923,40 @@ def build_specification(project: Project) -> Specification:
               "в спецификацию не включены (ГОСТ 21.601-2011 п.9.4). "
               "Состав разделов, порядок групп и единицы измерения — по ГОСТ 21.601-2011 "
               "пп.9.3–9.5; форма таблицы — по ГОСТ 21.110-2013."),
+    )
+
+
+def build_wastewater_specification(project: Project) -> Specification:
+    """Выделить самостоятельную спецификацию К1/К2 из общего комплекта.
+
+    Источник строк остаётся единым: ``build_specification``. Фильтр ничего не
+    досчитывает и не добавляет условных количеств. Позиции перенумеровываются
+    только внутри самостоятельного документа ИОС3.
+    """
+    full = build_specification(project)
+    sections: List[SpecSection] = []
+    position = 0
+    for section in full.sections:
+        if section.division != "Водоотведение":
+            continue
+        rows: List[SpecRow] = []
+        for row in section.rows:
+            if row.pos is not None:
+                position += 1
+                rows.append(replace(row, pos=position))
+            else:
+                rows.append(replace(row))
+        sections.append(replace(section, rows=rows))
+    return Specification(
+        sections=sections,
+        note=(
+            "В самостоятельную спецификацию К1/К2 включены только явно "
+            "подтверждённые исходными данными позиции стадии «П». Длины труб "
+            "приведены только для участков с заданными наружным диаметром, "
+            "толщиной стенки и длиной; условный метраж по площади здания не "
+            "применяется. Количество фасонных частей, ревизий, прочисток, "
+            "креплений, гильз и заделочных материалов определяется по планам, "
+            "аксонометрии и узлам стадии «Р». Форма таблицы — по ГОСТ "
+            "21.110-2013; состав и единицы измерения — по ГОСТ 21.601-2011."
+        ),
     )

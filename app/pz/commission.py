@@ -18,9 +18,10 @@ from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import calc_required_head, decide_fire_network
 
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 NORMATIVE_EDITIONS = (
-    "ПП РФ № 87; ГОСТ Р 21.619-2023; СП 30.13330.2020; "
+    "ПП РФ № 87; ГОСТ Р 21.619-2023; ГОСТ 21.110-2013; "
+    "ГОСТ 21.601-2011; СП 30.13330.2020; "
     "СП 10.13130.2020; СП 54.13330.2022; СП 118.13330.2022; "
     "СП 253.1325800.2016"
 )
@@ -296,7 +297,7 @@ def build_commission_report(
                 f"qs={_ru(project.sewage.result.total.q_sewage_lps, 3, ' л/с')}"
                 if project.sewage.result else "расчёт не подтверждён"
             ),
-            "ПЗ; Расчёты К1/К2; схема К1/К2",
+            "ПЗ К1/К2; Расчёты К1/К2; схема К1/К2",
             "verified" if project.sewage.result else "missing",
         ),
         TraceRow(
@@ -410,7 +411,7 @@ def build_commission_report(
                 f"{project.storm.system_note} Q={_ru(storm_result.q_total_l_per_s, 3, ' л/с')}"
                 if storm_result else project.storm.system_note
             ),
-            "ПЗ; Расчёты К1/К2; схема К1/К2; спецификация К2",
+            "ПЗ К1/К2; Расчёты К1/К2; схема К1/К2; спецификация К1/К2",
             "verified" if storm_result else "missing",
         ))
     if project.grease_trap.preparation_type != "none":
@@ -666,6 +667,32 @@ def build_commission_report(
             "Нет действий" if not missing_documents else "Устранить ошибку сборки документа",
             "ПП РФ № 87; ГОСТ Р 21.619-2023",
             blocking=bool(missing_documents),
+        )
+        wastewater_names = (
+            "Пояснительная записка К1/К2",
+            "Расчёты К1/К2",
+            "Принципиальная схема К1/К2",
+            "Спецификация К1/К2",
+            "Комплект К1/К2",
+        )
+        missing_wastewater = [
+            name for name in wastewater_names if not artifacts.get(name)
+        ]
+        add(
+            "DOC-03", "Самостоятельный комплект К1/К2 сформирован",
+            "verified" if not missing_wastewater else "missing",
+            (
+                "ПЗ К1/К2 с расчётным приложением, схема, спецификация "
+                "и единый PDF сформированы"
+                if not missing_wastewater else
+                "не сформированы: " + ", ".join(missing_wastewater)
+            ),
+            (
+                "Нет действий" if not missing_wastewater
+                else "Устранить ошибку сборки комплекта К1/К2"
+            ),
+            "ПП РФ № 87, пункт 18; СП 30.13330.2020",
+            blocking=bool(missing_wastewater),
         )
         hydraulic_exists = bool(artifacts.get("Гидравлический расчёт В2"))
         add(

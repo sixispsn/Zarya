@@ -3,7 +3,10 @@ from pathlib import Path
 from pypdf import PdfReader
 
 from app.intake.project_builder import build_project
-from app.pz.generator import generate_v1_calculation_html
+from app.pz.generator import (
+    generate_v1_calculation_html,
+    generate_wastewater_pz_html,
+)
 from app.pz.ios2_orchestrator import design_ios2
 from tests.test_pump_bridge import _request
 
@@ -47,6 +50,25 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     wastewater_scheme = Path(bundle.wastewater_scheme_pdf)
     assert wastewater_scheme.name == "Схема_К1_К2.pdf"
     assert wastewater_scheme.exists()
+    wastewater_pz = Path(bundle.wastewater_pz_pdf)
+    assert wastewater_pz.name == "ПЗ_К1_К2.pdf"
+    assert wastewater_pz.exists()
+    wastewater_pz_text = _text(str(wastewater_pz))
+    assert "Подраздел 5.3 «Система водоотведения»" in wastewater_pz_text
+    assert "пункту 18" in wastewater_pz_text
+    assert "Расчётные обоснования систем К1 и К2" in wastewater_pz_text
+    wastewater_spec = Path(bundle.wastewater_spec_pdf)
+    assert wastewater_spec.name == "Спецификация_К1_К2.pdf"
+    assert wastewater_spec.exists()
+    wastewater_package = Path(bundle.wastewater_package_pdf)
+    assert wastewater_package.name == "Комплект_К1_К2.pdf"
+    assert wastewater_package.exists()
+    package_text = _text(str(wastewater_package))
+    assert "Подраздел 5.3 «Система водоотведения»" in package_text
+    assert "Расчётные обоснования систем К1 и К2" in package_text
+    assert "Принципиальная схема систем К1 и К2" in package_text
+    assert "Спецификация оборудования" in package_text
+    assert "материалов К1/К2" in package_text
     assert commission.name == "Паспорт_и_нормативный_контроль.pdf"
     assert commission.exists()
     commission_text = _text(str(commission))
@@ -55,3 +77,13 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert "Протокол автоматических проверок" in commission_text
     assert bundle.commission_report.project_fingerprint in commission_text
     assert "Матрица нормативной трассировки" in pz_text
+
+
+def test_wastewater_pz_has_ios3_cipher_and_no_fake_requisites():
+    project = build_project(_request())
+    project.document.cipher = "2026-14-ИОС2"
+    html = generate_wastewater_pz_html(project)
+
+    assert "2026-14-ИОС3" in html
+    assert "2026-14-ИОС2.ИОС3" not in html
+    assert "демонстрац" not in html.lower()

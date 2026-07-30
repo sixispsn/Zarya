@@ -3,7 +3,8 @@
 app/web/wizard.py — Wizard: веб-форма ввода объекта ИОС2 (слой 3 цепочки ввода).
 
 Форма НЕ знает Project: она собирает IOS2Request (намерение) из полей,
-отдаёт его в ProjectBuilder и показывает результат design_ios2 (4 PDF).
+отдаёт его в ProjectBuilder и показывает результат design_ios2, включая
+самостоятельный комплект К1/К2.
 
     браузер → GET /wizard           форма (одна страница, секциями)
             → POST /wizard/design   сборка DTO → Builder → design_ios2
@@ -314,6 +315,10 @@ def wizard_result(request: Request, run_id: str):
     proof_graph = run["proof_graph"]
     pdfs = []
     for label, path in (("Пояснительная записка", b.pz_pdf),
+                        ("Комплект пояснительной записки К1 и К2",
+                         getattr(b, "wastewater_package_pdf", None)),
+                        ("Пояснительная записка К1 и К2",
+                         getattr(b, "wastewater_pz_pdf", None)),
                         ("Паспорт проекта и нормативный контроль",
                          getattr(b, "commission_control_pdf", None)),
                         ("Расчётные обоснования В1 и Т3",
@@ -322,6 +327,8 @@ def wizard_result(request: Request, run_id: str):
                          getattr(b, "wastewater_calculation_pdf", None)),
                         ("Принципиальная схема К1 и К2",
                          getattr(b, "wastewater_scheme_pdf", None)),
+                        ("Спецификация К1 и К2",
+                         getattr(b, "wastewater_spec_pdf", None)),
                         ("Баланс водопотребления и водоотведения",
                          getattr(b, "balance_pdf", None)),
                         ("Расчёт и подбор насосов", getattr(b, "pump_selection_pdf", None)),
