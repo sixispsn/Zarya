@@ -189,6 +189,10 @@ def meters_from_calc(res) -> MetersSystem:
         has_bypass=any(r.need_bypass for r in rows) or note_bypass,
         rows=rows,
         single_input_bypass_note=note_bypass,
+        inputs_count=max(int(getattr(res, "inputs_count", 1) or 1), 1),
+        fire_flow_through_meter=bool(
+            getattr(res, "fire_flow_through_meter", False)
+        ),
     )
 
 

@@ -22,6 +22,7 @@ from app.pz.project import (
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
     V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
     InsulationDesign, SewageRiserSpec, SewerPipeSpec,
+    HwsType,
 )
 from app.pz.normative import derive_requirements, decide_grease_trap, decide_storm_system
 
@@ -72,6 +73,7 @@ def build_project(req: IOS2Request) -> Project:
         floors_above=req.floors, height_m=req.building_height_m,
         fire_height_m=req.fire_height_m, zones=req.zones,
         apartments=req.apartments,
+        hws_type=HwsType(req.hws_type),
         total_area_m2=req.total_area_m2, risers_v1=req.risers_v1,
         risers_t3=req.risers_t3, risers_t4=req.risers_t4)
     p.insulation = InsulationDesign(
@@ -99,6 +101,9 @@ def build_project(req: IOS2Request) -> Project:
             h_geom_m=sd.h_geom_m, il_dict_m=sd.il_dict_m, h_il_m=sd.h_il_m,
             network_kind=sd.network_kind, h_pr_m=sd.h_pr_m,
             h_tepl_m=sd.h_tepl_m, il_vvod_m=sd.il_vvod_m,
+            h_apartment_c_meter_m=sd.h_apartment_c_meter_m,
+            h_apartment_h_meter_m=sd.h_apartment_h_meter_m,
+            hws_heater_in_scope=sd.hws_heater_in_scope,
             h_vvod_m=sd.h_vvod_m, water_use_period_h=sd.water_use_period_h,
             inputs_count=sd.inputs_count, npsh_available_m=sd.npsh_available_m)
 
@@ -109,6 +114,9 @@ def build_project(req: IOS2Request) -> Project:
             normative_note="ВПВ не требуется — решение подтверждено проектировщиком.",
             nozzle_dn=req.cabinet_dn,
             hose_length_m=req.hose_length_m,
+            network_topology=req.fire_topology,
+            topology_basis=req.fire_topology_basis,
+            branch_electric_valves=req.fire_branch_electric_valves,
         )
     elif req.fire_mode == "manual":
         streams = int(req.streams or 0)
@@ -121,6 +129,9 @@ def build_project(req: IOS2Request) -> Project:
             q_total=round(streams * req.q_per_stream_lps, 3),
             nozzle_dn=req.cabinet_dn,
             hose_length_m=req.hose_length_m,
+            network_topology=req.fire_topology,
+            topology_basis=req.fire_topology_basis,
+            branch_electric_valves=req.fire_branch_electric_valves,
         )
     else:
         from app.calc.fire import FireInput, calculate_fire
@@ -155,11 +166,18 @@ def build_project(req: IOS2Request) -> Project:
         )
         p.fire.determination_mode = "auto"
         p.fire.normative_note = fire_result.message
+        p.fire.network_topology = req.fire_topology
+        p.fire.topology_basis = req.fire_topology_basis
+        p.fire.branch_electric_valves = req.fire_branch_electric_valves
 
     # Без ВПВ система В1 не может оставаться «объединённой В1+В2».
     # Нормализуем старые анкеты, в которых combined был скрытым UI-дефолтом.
     if not p.fire.required and p.source.network_kind == "combined":
         p.source.network_kind = "domestic"
+    elif p.fire.required:
+        p.source.network_kind = (
+            "combined" if p.fire.network_topology == "combined" else "domestic"
+        )
 
     p.pumps = PumpSystem(required=req.needs_booster_pumps)
     p.flows = FlowsData()

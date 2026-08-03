@@ -4,7 +4,7 @@ from pypdf import PdfReader
 
 from app.intake.project_builder import build_project
 from app.pz.generator import (
-    generate_v1_calculation_html,
+    generate_pz_html, generate_scheme_svg, generate_v1_calculation_html,
     generate_wastewater_pz_html,
 )
 from app.pz.ios2_orchestrator import design_ios2
@@ -24,6 +24,61 @@ def test_v1_calculation_html_uses_existing_results(tmp_path):
     assert "Свободный напор перед диктующим прибором" in html
     assert f"{bundle.project.flows.q_day_tot:.3f}".replace(".", ",") in html
     assert "демонстрац" not in html.lower()
+
+
+def test_ios2_text_does_not_contain_k1_or_k2_calculation_paragraphs(tmp_path):
+    bundle = design_ios2(
+        build_project(_request()), output_dir=str(tmp_path), render_documents=False,
+    )
+    html = generate_pz_html(bundle.project)
+
+    assert "Расчётный расход хозяйственно-бытовых стоков определён" not in html
+    assert "Пропускная способность стояков, горизонтальные участки" not in html
+    assert "Показатель расчёта К2" not in html
+
+
+def test_twelve_fire_cabinets_promote_two_inlets_everywhere(tmp_path):
+    project = build_project(_request())
+    project.fire.pk_total = 12
+    project.source.inputs_count = 1
+    project.fire_rooms = []
+    project.fire_network = None
+    bundle = design_ios2(
+        project, output_dir=str(tmp_path), render_documents=False,
+    )
+
+    assert bundle.project.source.inputs_count == 2
+    assert bundle.project.meters.inputs_count == 2
+    assert "Ввод водопровода 2x" in generate_scheme_svg(bundle.project)
+
+
+def test_itp_in_scope_uses_legacy_common_input_and_hot_branch_path(tmp_path):
+    request = _request()
+    request.hws_type = "central"
+    request.source_data.hws_heater_in_scope = True
+    request.source_data.h_tepl_m = 3.0
+    request.source_data.h_apartment_c_meter_m = 0.4
+    request.source_data.h_apartment_h_meter_m = 0.5
+    bundle = design_ios2(
+        build_project(request), output_dir=str(tmp_path), render_documents=False,
+    )
+
+    labels = [row.label.lower() for row in bundle.project.meters.rows]
+    assert any("вводе" in label for label in labels)
+    assert any("водонагревател" in label for label in labels)
+    assert bundle.project.head_paths.hot.head.h_required_m > bundle.project.head_paths.cold.head.h_required_m
+
+
+def test_no_hws_does_not_create_hot_meter_or_hot_head_path(tmp_path):
+    request = _request()
+    request.hws_type = "none"
+    bundle = design_ios2(
+        build_project(request), output_dir=str(tmp_path), render_documents=False,
+    )
+
+    labels = [row.label.lower() for row in bundle.project.meters.rows]
+    assert all("гвс" not in label and "горяч" not in label for label in labels)
+    assert bundle.project.head_paths.hot is None
 
 
 def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):

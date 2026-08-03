@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.pz.project import BuildingPurpose, Project
-from app.pz.rules import calc_required_head, decide_fire_network
+from app.pz.rules import decide_fire_network, project_governing_head
 
 
 APP_VERSION = "0.6.1"
@@ -243,12 +243,14 @@ def build_commission_report(
     commit = _git_commit(repo_root)
     project_hash = _project_fingerprint(project)
     generated_at = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M %Z")
-    head = calc_required_head(
-        project.source,
-        h_vod_m=_cold_meter_loss(project),
+    head = project_governing_head(
+        project, fallback_h_vod_m=_cold_meter_loss(project),
     )
     fire_net = decide_fire_network(
         project.fire, project.materials, project.normative,
+    )
+    head_paths_complete = (
+        project.head_paths is None or project.head_paths.complete
     )
 
     passport = [
@@ -316,7 +318,7 @@ def build_commission_report(
                 else "исходные данные недостаточны"
             ),
             "ПЗ, подп. е; Расчёты В1; Подбор насосов",
-            "verified" if head.h_required_m is not None else "missing",
+            "verified" if head.h_required_m is not None and head_paths_complete else "missing",
         ),
         TraceRow(
             "Внутренний противопожарный водопровод",

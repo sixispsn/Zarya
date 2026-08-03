@@ -181,6 +181,16 @@ class TestNotes:
         ))
         assert not any("обводная" in n.lower() for n in result.notes)
 
+    def test_two_input_count_is_preserved_for_documents(self):
+        result = calculate_meters(MeterInput(
+            hws_type="central",
+            inputs_count=2,
+            q_sec_c=0.5, q_day_c=1.0, q_hr_c=0.5,
+            q_sec_h=0.3, q_day_h=0.5, q_hr_h=0.3,
+        ))
+        assert result.inputs_count == 2
+        assert not any("одном вводе" in n.lower() for n in result.notes)
+
 
 # ============================================================
 # Валидация

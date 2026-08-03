@@ -65,6 +65,24 @@ def test_roundtrip_preserves_explicit_fire_category_and_inputs():
     assert req2.fire_geometry_confirmed is True
 
 
+def test_roundtrip_preserves_topology_hws_and_head_path_inputs():
+    from app.intake.request_dto import SourceDataRequest
+
+    req = load_request(GOOD)
+    req.hws_type = "local"
+    req.fire_topology = "pre_meter_branch"
+    req.fire_topology_basis = "ТУ СКС, п. 7"
+    req.fire_branch_electric_valves = True
+    req.source_data = SourceDataRequest(
+        inputs_count=2,
+        h_tepl_m=3.0,
+        h_apartment_c_meter_m=0.4,
+        h_apartment_h_meter_m=0.5,
+        hws_heater_in_scope=True,
+    )
+    assert load_request(dump_request(req)) == req
+
+
 def test_roundtrip_preserves_sp54_118_253_inputs():
     from app.intake.request_dto import SewageRiserRequest, SewerPipeRequest
 

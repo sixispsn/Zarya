@@ -1,0 +1,13 @@
+{% if inlet_decision %}
+<p class="subitem">В здание предусматривается {{ inlet_decision.adopted_count }}
+{{ 'ввод' if inlet_decision.adopted_count == 1 else 'ввода' }} водопровода.
+{% if inlet_decision.reasons %}Минимум {{ inlet_decision.minimum_count }} ввода требуется:
+{{ inlet_decision.reasons|join('; ') }}.{% endif %}
+{% if inlet_decision.adopted_count > 1 %}При аварийном отключении одного ввода каждый
+из оставшихся вводов проверяется на пропуск 100 % расчётного расхода
+(СП 30.13330.2020, п. 8.23).{% endif %}</p>
+{% if not inlet_decision.assessment_complete %}
+<p class="stage-note">Проверка обязательного числа вводов не завершена: требуется
+подтвердить общее число пожарных кранов.</p>
+{% endif %}
+{% endif %}

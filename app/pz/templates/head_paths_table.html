@@ -1,0 +1,19 @@
+{% if head_paths %}
+<table class="data head-paths">
+  <thead><tr><th>Расчётная трасса</th><th>ΣH водомеров, м</th><th>H нагревателя, м</th><th>Hтр, м</th><th>Статус</th></tr></thead>
+  <tbody>
+  {% for path in head_paths.paths %}
+    <tr>
+      <td>{{ path.label }}{% if path.code == head_paths.governing.code %}<br><b>Диктующая по имеющимся данным</b>{% endif %}</td>
+      <td>{{ path.meter_loss_m|num(3) }}</td>
+      <td>{{ path.heater_loss_m|num(2) }}</td>
+      <td><b>{{ path.head.h_required_m|num(2) }}</b></td>
+      <td>{% if path.complete %}рассчитана{% else %}<b>предварительно</b><br>не заданы: {{ path.missing|join(', ') }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="subitem">Рабочая точка общей повысительной установки принимается по
+наибольшему Hтр из трасс В1 и Т3. Все перечисленные потери входят в агрегированное
+ΣH<sub>l</sub> канонического legacy-расчёта; альтернативная формула не применяется.</p>
+{% endif %}

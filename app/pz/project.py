@@ -81,6 +81,9 @@ class WaterSource:
     h_pr_m: float = 20.0                # Hпр — напор перед прибором, п.8.21 (минимум 20 м)
     h_vod_m: Optional[float] = None     # ∑Hвод — потери в узлах учёта (12.15); обычно из расчёта счётчика
     h_tepl_m: float = 0.0               # Hтепл — потери в теплообменнике/ИТП (3 м если ТО наш; 0 если ГВС готовое)
+    h_apartment_c_meter_m: Optional[float] = None  # потери квартирного ВУ ХВС по принятому счётчику
+    h_apartment_h_meter_m: Optional[float] = None  # потери квартирного ВУ ГВС по принятому счётчику
+    hws_heater_in_scope: bool = False    # ГВС готовится в проектируемом ИТП/водонагревателе
     # Hlввод = i·Lввод·1,1: il_vvod_m — линейные i·l ввода, ×1,1 (стадия П). h_vvod_m — готовой суммой.
     il_vvod_m: Optional[float] = None       # линейные i·l ввода, м
     h_vvod_m: Optional[float] = None        # Hlввод готовой суммой (если задан — используется как есть)
@@ -172,6 +175,11 @@ class FireSystem:
     hose_length_m: int = 20                   # длина рукава ПК, м
     nozzle_dn: int = 50                       # Ду пожарного крана
     pk_total: int = 0                         # всего пожарных шкафов/кранов
+    # Схема В1/В2 задаётся явно проектировщиком или определяется нормами.
+    # auto / combined / separate / pre_meter_branch.
+    network_topology: str = "auto"
+    topology_basis: str = ""                 # ссылка на ТУ/СКС/задание либо принятое решение
+    branch_electric_valves: bool = False      # электроприводы на отводах В2 по ТУ/СКС
     # --- результаты гидравлического расчёта В2 (из fire_hydraulics) ---
     required_head_m: Optional[float] = None   # требуемый напор на вводе В2, м
     available_head_m: Optional[float] = None  # доступный напор источника, м
@@ -300,6 +308,8 @@ class MetersSystem:
     # --- детальный подбор (таблица 5.1.13) ---
     rows: list = field(default_factory=list)   # list[MeterRow]
     single_input_bypass_note: bool = False     # примечание про обводную при 1 вводе
+    inputs_count: int = 1                      # число одинаковых вводных ВУ
+    fire_flow_through_meter: bool = False      # пожарный расход проходит через ВУ В1
 
 
 # ── НАСОС (детальный подбор, таблица 5.1.8 + данные графика Q-H) ──
@@ -639,6 +649,8 @@ class Project:
     v1_network: Optional[V1NetworkSpec] = None
     v1_hydraulic_result: Optional[object] = None
     v1_stage_p_result: Optional[object] = None
+    water_inlet_decision: Optional[object] = None
+    head_paths: Optional[object] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None

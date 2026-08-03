@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from app.pz.project import (
-    FireSystem, FlowsData, NormativeRequirements, PipeMaterials, WaterSource,
+    BuildingFlags, BuildingPurpose, FireSystem, FlowsData, NormativeRequirements,
+    PipeMaterials, WaterSource,
 )
 
 # Порог рабочего давления, выше которого хоз-питьевую и пожарную сети разделяют
@@ -35,6 +36,9 @@ class FireNetworkDecision:
     """Решение по схеме внутреннего противопожарного водопровода (В2)."""
     combined: bool                 # True — объединён с В1, False — раздельная сеть
     reasons: List[str]             # основания для раздельной схемы (пустой при combined)
+    topology: str = "combined"
+    basis: str = ""
+    electric_valves: bool = False
 
     @property
     def summary(self) -> str:
@@ -44,8 +48,18 @@ class FireNetworkDecision:
                 "Система внутреннего противопожарного водопровода (В2) принята "
                 "объединённой с хозяйственно-питьевым водопроводом (В1) — допускается "
                 "при совпадении требований к качеству воды и рабочему давлению "
-                "(СП 30.13330.2020, 6.1.2; СП 10.13130.2020, 4.2). Застойные "
-                "(без циркуляции) участки в системе отсутствуют."
+                "(СП 30.13330.2020, п. 6.1; СП 10.13130.2020, пп. 4.1, 6.1.8)."
+            )
+        if self.topology == "pre_meter_branch":
+            basis = self.basis or "решение проектировщика по техническим условиям"
+            valves = (
+                " На ответвлениях В2 предусматриваются задвижки с электроприводом."
+                if self.electric_valves else ""
+            )
+            return (
+                "Ответвления внутреннего противопожарного водопровода (В2) "
+                "предусматриваются от каждого ввода до узлов учёта В1; пожарный "
+                f"расход через счётчики В1 не проходит. Основание: {basis}.{valves}"
             )
         reasons_txt = "; ".join(self.reasons)
         return (
@@ -94,7 +108,78 @@ def decide_fire_network(
             "автоматического пожаротушения (СП 10.13130.2020, 12.1)"
         )
 
-    return FireNetworkDecision(combined=not reasons, reasons=reasons)
+    requested = fire.network_topology or "auto"
+    basis = fire.topology_basis.strip()
+
+    if requested == "pre_meter_branch":
+        return FireNetworkDecision(
+            combined=False,
+            reasons=[basis or "решение проектировщика по техническим условиям"],
+            topology="pre_meter_branch",
+            basis=basis,
+            electric_valves=fire.branch_electric_valves,
+        )
+
+    if requested == "separate" and not reasons:
+        reasons.append(basis or "раздельная схема задана проектировщиком")
+
+    # Явное объединение не отменяет обязательные основания для разделения.
+    combined = requested in ("auto", "combined") and not reasons
+    topology = "combined" if combined else "separate"
+    return FireNetworkDecision(
+        combined=combined,
+        reasons=reasons,
+        topology=topology,
+        basis=basis,
+        electric_valves=fire.branch_electric_valves,
+    )
+
+
+@dataclass
+class WaterInletDecision:
+    """Минимальное и принятое число вводов по проверяемым условиям п. 8.4."""
+    minimum_count: int
+    adopted_count: int
+    reasons: List[str]
+    compliant: bool
+    assessment_complete: bool
+
+
+def decide_water_inlets(
+    building: BuildingFlags,
+    fire: FireSystem,
+    adopted_count: int,
+) -> WaterInletDecision:
+    """Проверить условия, которые однозначно следуют из данных модели.
+
+    Не подставляет категории общественных зданий и число узлов АУПТ, которых
+    нет во входных данных. Для ВПВ с неизвестным числом ПК проверка помечается
+    незавершённой.
+    """
+    reasons: List[str] = []
+    if fire.required and fire.pk_total >= 12:
+        reasons.append(
+            f"предусмотрено {fire.pk_total} пожарных кранов (12 и более; "
+            "СП 30.13330.2020, п. 8.4)"
+        )
+    if (building.purpose == BuildingPurpose.RESIDENTIAL
+            and building.apartments > 400):
+        reasons.append(
+            f"жилое здание содержит {building.apartments} квартир (более 400; "
+            "СП 30.13330.2020, п. 8.4)"
+        )
+    if fire.required and fire.network_topology == "pre_meter_branch":
+        reasons.append(
+            "проектировщиком задана двухвводная схема с ответвлением В2 до ВУ В1"
+        )
+    minimum = 2 if reasons else 1
+    return WaterInletDecision(
+        minimum_count=minimum,
+        adopted_count=max(int(adopted_count or 1), 1),
+        reasons=reasons,
+        compliant=int(adopted_count or 1) >= minimum,
+        assessment_complete=not (fire.required and fire.pk_total <= 0),
+    )
 
 
 @dataclass
@@ -177,7 +262,12 @@ class HeadCalc:
         return round(max(self.h_required_m - self.h_guaranteed_m, 0.0), 2)
 
 
-def calc_required_head(source: WaterSource, *, h_vod_m: Optional[float] = None) -> HeadCalc:
+def calc_required_head(
+    source: WaterSource,
+    *,
+    h_vod_m: Optional[float] = None,
+    h_tepl_m: Optional[float] = None,
+) -> HeadCalc:
     """
     Hтр = Hgeom + ∑Hil + Hпр + ∑Hвод + Hтепл + Hlввод (формула 14, п.8.27).
 
@@ -206,7 +296,7 @@ def calc_required_head(source: WaterSource, *, h_vod_m: Optional[float] = None) 
 
     h_pr = source.h_pr_m
     h_vod = h_vod_m if h_vod_m is not None else source.h_vod_m
-    h_tepl = source.h_tepl_m  # 0 или 3
+    h_tepl = source.h_tepl_m if h_tepl_m is None else h_tepl_m
 
     # Hlввод = i·Lввод·1,1
     if source.il_vvod_m is not None:
@@ -252,6 +342,116 @@ def calc_required_head(source: WaterSource, *, h_vod_m: Optional[float] = None) 
         h_pr_m=h_pr,
         km=km,
     )
+
+
+@dataclass
+class HeadPathResult:
+    """Одна расчётная трасса; все потери сведены в legacy-вход ΣHl."""
+    code: str
+    label: str
+    meter_loss_m: float
+    heater_loss_m: float
+    head: HeadCalc
+    missing: List[str] = field(default_factory=list)
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing and self.head.h_required_m is not None
+
+
+@dataclass
+class HeadPathSet:
+    cold: HeadPathResult
+    hot: Optional[HeadPathResult] = None
+
+    @property
+    def paths(self) -> List[HeadPathResult]:
+        return [self.cold] + ([self.hot] if self.hot is not None else [])
+
+    @property
+    def complete(self) -> bool:
+        return all(path.complete for path in self.paths)
+
+    @property
+    def governing(self) -> HeadPathResult:
+        available = [p for p in self.paths if p.head.h_required_m is not None]
+        return max(available, key=lambda p: p.head.h_required_m) if available else self.cold
+
+
+def calc_head_paths(
+    source: WaterSource,
+    meters,
+    *,
+    hws_type: str = "central",
+    apartment_meter_required: bool = False,
+) -> HeadPathSet:
+    """Собрать холодную и горячую диктующие трассы без новой гидравлики.
+
+    Потери каждого реально присутствующего водомера суммируются и вместе с
+    Hтепл входят в тот же агрегат ΣHl, который принимает legacy-калькулятор.
+    Неизвестные потери квартирных узлов не заменяются нулём: путь получает
+    явный список недостающих данных.
+    """
+    rows = list(getattr(meters, "rows", []) or [])
+    common = [r for r in rows if "ввод" in r.label.lower()]
+    cold_rows = [
+        r for r in rows
+        if ("хвс" in r.label.lower() or "холодн" in r.label.lower())
+        and r not in common
+    ]
+    hot_rows = [
+        r for r in rows
+        if "гвс" in r.label.lower() or "нагревател" in r.label.lower()
+    ]
+
+    def losses(items) -> float:
+        return round(sum(float(r.h_a or 0.0) for r in items), 3)
+
+    cold_missing: List[str] = []
+    cold_meter = losses(common + cold_rows)
+    if apartment_meter_required:
+        if source.h_apartment_c_meter_m is None:
+            cold_missing.append("потери в квартирном узле учёта ХВС")
+        else:
+            cold_meter = round(cold_meter + source.h_apartment_c_meter_m, 3)
+    cold = HeadPathResult(
+        code="V1",
+        label="В1 — холодный диктующий прибор",
+        meter_loss_m=cold_meter,
+        heater_loss_m=0.0,
+        head=calc_required_head(source, h_vod_m=cold_meter, h_tepl_m=0.0),
+        missing=cold_missing,
+    )
+
+    hot = None
+    if hws_type != "none":
+        hot_missing: List[str] = []
+        hot_meter = losses(common + hot_rows)
+        if apartment_meter_required:
+            if source.h_apartment_h_meter_m is None:
+                hot_missing.append("потери в квартирном узле учёта ГВС")
+            else:
+                hot_meter = round(hot_meter + source.h_apartment_h_meter_m, 3)
+        heater = source.h_tepl_m if source.hws_heater_in_scope else 0.0
+        if source.hws_heater_in_scope and heater <= 0:
+            hot_missing.append("потери в водонагревателе/теплообменнике")
+        hot = HeadPathResult(
+            code="T3",
+            label="Т3 — через водонагреватель к горячему диктующему прибору",
+            meter_loss_m=hot_meter,
+            heater_loss_m=heater,
+            head=calc_required_head(source, h_vod_m=hot_meter, h_tepl_m=heater),
+            missing=hot_missing,
+        )
+    return HeadPathSet(cold=cold, hot=hot)
+
+
+def project_governing_head(project, *, fallback_h_vod_m: Optional[float] = None) -> HeadCalc:
+    """Единый результат Hтр для документов, API и подбора оборудования."""
+    paths = getattr(project, "head_paths", None)
+    if paths is not None:
+        return paths.governing.head
+    return calc_required_head(project.source, h_vod_m=fallback_h_vod_m)
 
 
 @dataclass

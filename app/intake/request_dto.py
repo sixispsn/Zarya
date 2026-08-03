@@ -93,6 +93,9 @@ class SourceDataRequest:
     network_kind: str = "domestic"         # domestic / combined / fire
     h_pr_m: float = 20.0                    # свободный напор перед прибором
     h_tepl_m: float = 0.0                   # потери в теплообменнике/ИТП
+    h_apartment_c_meter_m: Optional[float] = None
+    h_apartment_h_meter_m: Optional[float] = None
+    hws_heater_in_scope: bool = False
     il_vvod_m: Optional[float] = None       # i*L ввода до коэффициента 1,1
     h_vvod_m: Optional[float] = None        # готовые потери на вводе
     water_use_period_h: float = 24.0        # период водопотребления для водомера
@@ -267,6 +270,7 @@ class IOS2Request:
     floors: int
     building_height_m: float
     total_area_m2: float = 0.0
+    hws_type: str = "central"                    # central / local / none
     risers_v1: int = 0
     risers_t3: int = 0
     risers_t4: int = 0
@@ -288,6 +292,9 @@ class IOS2Request:
     cabinet_dn: int = 50
     nozzle_mm: int = 13
     compact_jet_m: int = 12
+    fire_topology: str = "auto"               # auto/combined/separate/pre_meter_branch
+    fire_topology_basis: str = ""
+    fire_branch_electric_valves: bool = False
     rooms: List[RoomRequest] = field(default_factory=list)
     network: Optional[NetworkRequest] = None
     # прочее
@@ -327,6 +334,10 @@ class IOS2Request:
         """Первичная валидация намерения (типы/диапазоны/обязательность).
         Возвращает список проблем; пустой = вход пригоден для Builder."""
         p: List[str] = []
+        if self.fire_topology not in ("auto", "combined", "separate", "pre_meter_branch"):
+            p.append("fire_topology должен быть auto, combined, separate или pre_meter_branch")
+        if self.hws_type not in ("central", "local", "none"):
+            p.append("hws_type должен быть central, local или none")
         if self.building_type not in BUILDING_TYPES:
             p.append(f"building_type '{self.building_type}' не из {BUILDING_TYPES}")
         if self.floors <= 0:
@@ -617,6 +628,8 @@ class IOS2Request:
                 "h_geom_m": sd.h_geom_m, "il_dict_m": sd.il_dict_m,
                 "h_il_m": sd.h_il_m, "h_pr_m": sd.h_pr_m,
                 "h_tepl_m": sd.h_tepl_m, "il_vvod_m": sd.il_vvod_m,
+                "h_apartment_c_meter_m": sd.h_apartment_c_meter_m,
+                "h_apartment_h_meter_m": sd.h_apartment_h_meter_m,
                 "h_vvod_m": sd.h_vvod_m, "npsh_available_m": sd.npsh_available_m,
                 "guaranteed_head_m": sd.guaranteed_head_m,
                 "maximum_head_m": sd.maximum_head_m,

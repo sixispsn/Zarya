@@ -57,6 +57,9 @@
     {% endfor %}
   </tbody>
 </table>
+{% if meters.inputs_count > 1 %}
+<p class="equip-note">Приняты {{ meters.inputs_count }} одинаковых вводных узла учёта — по одному на каждом вводе. Табличные параметры и потери приведены для одного узла.</p>
+{% endif %}
 <p class="equip-verdict">
   Проверки: а) потери при расчётном секундном расходе h&nbsp;=&nbsp;S·q<sub>с</sub>² (предел 5&nbsp;м крыльчатый / 2,5&nbsp;м турбинный);
   б) то же при пропуске пожарного расхода h&nbsp;=&nbsp;S·(q<sub>с</sub>+Q<sub>пож</sub>)² (предел 10&nbsp;/&nbsp;5&nbsp;м);
@@ -64,4 +67,8 @@
 </p>
 {% if meters.single_input_bypass_note %}
 <p class="equip-note">При одном вводе водопровода обводная линия у счётчика ХВС предусматривается обязательно (п. 12.10 СП 30.13330.2020).</p>
+{% elif meters.inputs_count > 1 and not meters.has_bypass and meters.fire_flow_through_meter %}
+<p class="equip-note">Вводные счётчики приняты без обводных линий при выполнении проверки п. 12.16, перечисление б) (п. 12.12 СП 30.13330.2020).</p>
+{% elif meters.inputs_count > 1 and not meters.has_bypass %}
+<p class="equip-note">Пожарный расход по принятой раздельной схеме через вводные узлы учёта В1 не проходит; обводные линии ВУ не предусматриваются.</p>
 {% endif %}

@@ -18,7 +18,7 @@ from app.intake.request_dto import IOS2Request, SourceDataRequest
 from app.pz.commission import CommissionReport
 from app.pz.ios2_orchestrator import design_ios2
 from app.pz.project import Project
-from app.pz.rules import calc_required_head
+from app.pz.rules import project_governing_head
 from app.schemas.impact import ImpactPreviewInput
 
 
@@ -131,9 +131,9 @@ def _cold_meter(project: Project):
 
 def _head(project: Project):
     meter = _cold_meter(project)
-    return calc_required_head(
-        project.source,
-        h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
+    return project_governing_head(
+        project,
+        fallback_h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
     )
 
 

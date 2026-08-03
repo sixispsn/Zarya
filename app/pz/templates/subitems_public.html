@@ -38,6 +38,7 @@
 {% if fire.pk_total %}Предусмотрено {{ fire.pk_total }} пожарных кранов Ду{{ fire.nozzle_dn }}
 с длиной рукава {{ fire.hose_length_m }} м; продолжительность пожаротушения {{ fire.fire_duration_min }} мин.{% endif %}</p>
 {% endif %}
+{% include "inlet_decision.html" %}
 
 <p class="subhead">г) сведения о расчетном расходе воды на хозяйственно-питьевые нужды, в том числе на автоматическое пожаротушение и техническое водоснабжение, включая оборотное.</p>
 <p class="subitem">Расчетные расходы воды определены в соответствии с СП 30.13330.2020 и сведены в таблицу:</p>
@@ -73,6 +74,7 @@
 {% if source.pressure_note %}{{ source.pressure_note }}{% endif %}</p>
 {% if head.h_required_m is not none %}
 <p class="subitem">Требуемый напор Hтр на хозяйственно-питьевые нужды определён по формуле (14) п.8.27 СП 30.13330.2020:</p>
+{% include "head_paths_table.html" %}
 {% if v1_stage_p %}
 {% include "v1_stage_p_table.html" %}
 {% endif %}

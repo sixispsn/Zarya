@@ -77,7 +77,10 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         getattr(project, "v1_hydraulic_result", None), "zone_regulators", []) or [])
     network_inlets = list(getattr(
         getattr(project, "v1_network", None), "inlets", []) or [])
-    inlet_count = len(network_inlets) if network_inlets else P.inlet_count
+    inlet_count = (
+        len(network_inlets)
+        if network_inlets else max(int(project.source.inputs_count or 1), 1)
+    )
     if (b.zones or 1) > 2:
         warns.append("расчётных зон больше двух: на принципиальной схеме показаны две характерные зоны")
     plk_on = bool(project.flows and project.flows.irrigation_m3_day > 0)

@@ -181,7 +181,8 @@ def build_specification(project: Project) -> Specification:
                                manufacturer="Торговая сеть", unit="шт.", qty=valves[side][dn]))
         return out
 
-    def shutoff_rows(n_risers, riser_dn, main_dn, has_pump, meter_dn, bypass):
+    def shutoff_rows(n_risers, riser_dn, main_dn, has_pump, meter_dn, bypass,
+                     meter_units=1):
         """Запорная арматура (гибрид, СП 30): стояки точно + узел учёта + насос +
         секционная на магистралях укрупнённо."""
         out = []
@@ -192,10 +193,10 @@ def build_specification(project: Project) -> Specification:
         if meter_dn:
             out.append(SpecRow(next_pos(), f"Кран шаровой запорный водомерного узла, Ду{meter_dn}",
                        type_mark=f"Ду{meter_dn}", manufacturer="Торговая сеть", unit="шт.",
-                       qty=2, note="до и после счётчика"))
+                       qty=2 * meter_units, note="до и после каждого счётчика"))
             if bypass:
                 out.append(SpecRow(next_pos(), f"Задвижка на обводной линии, Ду{meter_dn}",
-                           type_mark=f"Ду{meter_dn}", manufacturer="Торговая сеть", unit="шт.", qty=1))
+                           type_mark=f"Ду{meter_dn}", manufacturer="Торговая сеть", unit="шт.", qty=meter_units))
         if has_pump:
             out.append(SpecRow(next_pos(), f"Кран шаровой запорный у насоса, Ду{meter_dn or main_dn}",
                        type_mark=f"Ду{meter_dn or main_dn}", manufacturer="Торговая сеть",
@@ -602,12 +603,12 @@ def build_specification(project: Project) -> Specification:
     if cm:
         sec.rows.append(SpecRow(
             next_pos(), f"Счётчик воды крыльчатый, Ду{cm.dn}", type_mark=meter_marka(cm.type_label, cm.dn, False),
-            manufacturer="Торговая сеть", unit="шт.", qty=1,
-            note=("с обводной линией" if cm.need_bypass else
+            manufacturer="Торговая сеть", unit="шт.", qty=max(1, project.source.inputs_count),
+            note=("с обводной линией" if project.meters.has_bypass else
                   ("комбинированный" if cm.need_combo else ""))))
         sec.rows.append(SpecRow(
             next_pos(), f"Фильтр сетчатый муфтовый, Ду{cm.dn}", type_mark=f"Ду{cm.dn}",
-            manufacturer="Торговая сеть", unit="шт.", qty=1, note="на водомерный узел"))
+            manufacturer="Торговая сеть", unit="шт.", qty=max(1, project.source.inputs_count), note="по одному на каждый вводный водомерный узел"))
         sec.rows.append(SpecRow(
             next_pos(), f"Подставка монтажная регулируемая под водомерный узел, Ду{cm.dn}",
             type_mark=f"для водомерного узла Ду{cm.dn}", manufacturer="Торговая сеть",
@@ -635,10 +636,12 @@ def build_specification(project: Project) -> Specification:
     # запорная арматура (гибрид): стояки + узел учёта + насос + магистрали
     sec.rows += shutoff_rows(nv1, PIPE_GROUPS[1][2]["hvs"], PIPE_GROUPS[0][2]["hvs"],
                              pump_obr, (cm.dn if cm else None),
-                             (cm.need_bypass if cm else False))
+                             (project.meters.has_bypass if cm else False),
+                             meter_units=max(1, project.source.inputs_count))
     sec.rows += valve_rows("cold")
     # КИП: манометры узла учёта и насоса
-    sec.rows += kip_rows(1 + (2 if pump_obr else 0), 0, mano_note="узел учёта и насос")
+    sec.rows += kip_rows(max(1, project.source.inputs_count) + (2 if pump_obr else 0), 0,
+                         mano_note="узлы учёта и насос")
     # группа 4: гильзы + противопожарные муфты (проходки)
     sec.rows += crossing_g4_rows(
         nv1, PIPE_GROUPS[1][2]["hvs"], _mat(mats, "cold_distribution", "PE-X"), floors,

@@ -35,6 +35,7 @@ from app.pz.generator import (
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
     generate_wastewater_scheme_pdf, generate_wastewater_spec_pdf,
     generate_commission_control_pdf, append_pdf, merge_pdfs,
+    generate_metering_scheme_pdf, generate_pump_zone_scheme_pdf,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -52,6 +53,8 @@ class IOS2DesignBundle:
     pz_pdf: Optional[str] = None
     spec_pdf: Optional[str] = None
     scheme_pdf: Optional[str] = None
+    metering_scheme_pdf: Optional[str] = None
+    pump_zone_scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
     v1_calculation_pdf: Optional[str] = None
@@ -227,6 +230,56 @@ def design_ios2(
     elif fire.required:
         bundle.warnings.append("documents built from pre-filled project.fire "
                                "(расчётные слои пропущены)")
+
+    # ── Число вводов: единое решение для расчёта, ВУ, ПЗ и схемы ──
+    # Проверяются только однозначные признаки, присутствующие в модели:
+    # число ПК, число квартир и явно выбранная двухвводная схема по ТУ/СКС.
+    from app.pz.rules import decide_water_inlets
+    detailed_inlets = list(getattr(
+        getattr(project, "v1_network", None), "inlets", []) or [])
+    declared_count = (
+        len(detailed_inlets) if detailed_inlets else project.source.inputs_count
+    )
+    inlet_decision = decide_water_inlets(
+        project.building, project.fire, declared_count,
+    )
+    project.water_inlet_decision = inlet_decision
+    if detailed_inlets:
+        project.source.inputs_count = len(detailed_inlets)
+        if not inlet_decision.compliant:
+            bundle.warnings.append(
+                "water_inlets: подробная сеть содержит "
+                f"{len(detailed_inlets)} ввод(а), требуется не менее "
+                f"{inlet_decision.minimum_count}: " + "; ".join(inlet_decision.reasons)
+            )
+    else:
+        adopted = max(project.source.inputs_count, inlet_decision.minimum_count)
+        if adopted != project.source.inputs_count:
+            project.source.inputs_count = adopted
+            inlet_decision.adopted_count = adopted
+            inlet_decision.compliant = True
+            bundle.status.append(
+                f"water_inlets: принято {adopted} ввода по п. 8.4 СП 30: "
+                + "; ".join(inlet_decision.reasons)
+            )
+    if not inlet_decision.assessment_complete:
+        bundle.warnings.append(
+            "water_inlets: число пожарных кранов не задано; проверка условия "
+            "«12 ПК и более» п. 8.4 СП 30 не завершена"
+        )
+
+    from app.pz.rules import decide_fire_network
+    resolved_fire_network = decide_fire_network(
+        project.fire, project.materials, project.normative,
+    )
+    if resolved_fire_network is not None:
+        project.source.network_kind = (
+            "combined" if resolved_fire_network.combined else "domestic"
+        )
+        bundle.status.append(
+            f"fire_topology: {resolved_fire_network.topology}; "
+            f"основание: {project.fire.topology_basis or 'нормативное решение'}"
+        )
 
     # Пожарная насосная В2 — отдельный подбор по рабочей точке основного
     # расчётного сценария. Ремонтный/аварийный режим кольца сюда не подмешивается.
@@ -423,15 +476,26 @@ def design_ios2(
         try:
             from app.calc.water_meters import MeterInput, calculate_meters
             from app.pz.flows_bridge import meters_from_calc
-            from app.pz.rules import calc_required_head
+            from app.pz.rules import calc_head_paths
             from app.pz.pump_bridge import compute_pump_from_head
 
             hws = getattr(project.building.hws_type, "value", project.building.hws_type)
-            hws_type = "local" if hws == "local" else "central"
+            # Legacy-сценарий local означает, что весь расход приходит холодной
+            # водой через общий ввод и затем ответвляется на приготовление ГВС.
+            hws_type = (
+                "local"
+                if hws == "local" or project.source.hws_heater_in_scope
+                else "central"
+            )
+            fire_network_decision = resolved_fire_network
+            meter_fire_flow = (
+                project.fire.q_total
+                if fire_network_decision and fire_network_decision.combined else 0.0
+            )
             meter_res = calculate_meters(MeterInput(
                 hws_type=hws_type,
                 period_hours=project.source.water_use_period_h,
-                q_fire_l_per_s=project.fire.q_total if project.fire.required else 0.0,
+                q_fire_l_per_s=meter_fire_flow,
                 inputs_count=project.source.inputs_count,
                 q_sec_tot=project.flows.q_sec_tot,
                 q_sec_c=project.flows.q_sec_c,
@@ -442,25 +506,56 @@ def design_ios2(
                 q_hr_c=project.flows.q_hr_c,
                 q_hr_h=project.flows.q_hr_h,
             ))
+            # В legacy нет отдельной ветви ``none``: для холодной части она
+            # совпадает с ``central``. Горячий узел с нулевым расходом здесь
+            # исключаем только из состава результата, не меняя расчёт ХВС.
+            if hws == "none":
+                meter_res.meters = [
+                    check for check in meter_res.meters
+                    if "гвс" not in check.label.lower()
+                    and "горяч" not in check.label.lower()
+                ]
+                meter_res.notes.append(
+                    "Система ГВС отсутствует; узлы учёта ГВС не предусматриваются."
+                )
             owner_groups_count = project.meters.owner_groups_count
             has_apartment_meters = project.meters.has_apartment_meters
             has_askue = project.meters.has_askue
             project.meters = meters_from_calc(meter_res)
             project.meters.owner_groups_count = owner_groups_count
-            project.meters.has_apartment_meters = has_apartment_meters
+            residential_apartments = (
+                purpose == "residential" and project.building.apartments > 0
+            )
+            project.meters.has_apartment_meters = (
+                has_apartment_meters or residential_apartments
+            )
             project.meters.has_askue = has_askue
-            # Для local это общий ввод, для central — узел ХВС.
-            head_meter = next((m for m in meter_res.meters
-                               if ("ввод" in m.label.lower() if hws_type == "local"
-                                   else "хвс" in m.label.lower())), None)
-            h_vod = head_meter.h_normal if head_meter is not None else None
-            project.source.h_vod_m = h_vod
+            head_paths = calc_head_paths(
+                project.source,
+                project.meters,
+                hws_type=hws,
+                apartment_meter_required=project.meters.has_apartment_meters,
+            )
+            project.head_paths = head_paths
+            governing_path = head_paths.governing
+            head = governing_path.head
+            h_vod = governing_path.meter_loss_m
+            project.source.h_vod_m = h_vod  # совместимость старых документов/API
             bundle.status.append(
                 f"meters: подобрано узлов {len(project.meters.rows)}; "
-                f"потери диктующего узла {h_vod:.3f} м" if h_vod is not None
-                else f"meters: подобрано узлов {len(project.meters.rows)}")
-
-            head = calc_required_head(project.source, h_vod_m=h_vod)
+                f"сумма потерь ВУ диктующей трассы {h_vod:.3f} м")
+            for path in head_paths.paths:
+                value = path.head.h_required_m
+                bundle.status.append(
+                    f"head_path_{path.code.lower()}: H_тр="
+                    f"{value:.2f} м" if value is not None
+                    else f"head_path_{path.code.lower()}: H_тр не рассчитан"
+                )
+                if path.missing:
+                    bundle.warnings.append(
+                        f"head_path_{path.code.lower()}: предварительный результат; "
+                        "не заданы " + ", ".join(path.missing)
+                    )
             if head.h_required_m is None:
                 bundle.warnings.append(
                     "head: H_тр не рассчитан — задайте Hgeom (отметки), потери "
@@ -475,13 +570,23 @@ def design_ios2(
                 bundle.status.append(
                     f"head: H_тр={head.h_required_m:.2f} м; "
                     f"H_гар={head.h_guaranteed_m:.2f} м")
-                q_sec = (project.flows.q_sec_tot if hws_type == "local"
-                         else project.flows.q_sec_c)
+                q_sec = (
+                    project.flows.q_sec_tot
+                    if hws_type == "local" or project.source.hws_heater_in_scope
+                    else project.flows.q_sec_c
+                )
                 ps = compute_pump_from_head(
                     q_design_m3h=q_sec * 3.6,
                     head=head,
                     npsh_a_m=project.source.npsh_available_m,
                 )
+                if not head_paths.complete:
+                    ps = replace(
+                        ps,
+                        selection_note=(
+                            (ps.selection_note + " ") if ps.selection_note else ""
+                        ) + "Предварительная рабочая точка: заполнить потери всех квартирных ВУ и водонагревателя.",
+                    )
                 project.pumps = ps
                 if ps.required and ps.model:
                     bundle.status.append(
@@ -506,7 +611,7 @@ def design_ios2(
                                 + max(point[1] for point in project.pumps.curve))
                     else:
                         static_source_head = project.source.maximum_head_m
-                common_dynamic_loss = (h_vod or 0.0) + project.source.h_tepl_m
+                common_dynamic_loss = h_vod + governing_path.heater_loss_m
                 pressure_result = audit_v1_pressures(
                     v1_pressure_result,
                     required_source_head_m=head.h_required_m,
@@ -726,6 +831,13 @@ def design_ios2(
     try:
         bundle.scheme_pdf = generate_scheme_pdf(project, os.path.join(output_dir, "Схема.pdf"))
         bundle.status.append("Схема.pdf собрана")
+        bundle.metering_scheme_pdf = generate_metering_scheme_pdf(
+            project, os.path.join(output_dir, "Схема_вводов_и_ВУ.pdf"))
+        bundle.pump_zone_scheme_pdf = generate_pump_zone_scheme_pdf(
+            project, os.path.join(output_dir, "Схема_насосов_зон_и_ГВС.pdf"))
+        bundle.status.append(
+            "Схемы вводов/ВУ и насосов/зон/ГВС собраны отдельными листами"
+        )
     except Exception as e:
         bundle.warnings.append(f"scheme skipped: {e}")
 
@@ -753,6 +865,8 @@ def design_ios2(
         "Подбор насосов": bool(bundle.pump_selection_pdf),
         "Спецификация": bool(bundle.spec_pdf),
         "Принципиальная схема": bool(bundle.scheme_pdf),
+        "Схема вводов и узлов учёта": bool(bundle.metering_scheme_pdf),
+        "Схема насосов, зон и ГВС": bool(bundle.pump_zone_scheme_pdf),
         "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
         "Спецификация К1/К2": bool(bundle.wastewater_spec_pdf),
         "Комплект К1/К2": bool(bundle.wastewater_package_pdf),

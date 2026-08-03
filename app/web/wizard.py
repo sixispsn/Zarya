@@ -51,7 +51,6 @@ from app.pz.defense import (
     generate_expert_response_pdf,
 )
 from app.pz.digital_passport import build_passport_info, new_passport_id
-from app.pz.rules import calc_required_head
 from app.schemas.impact import ImpactPreviewInput
 from app.data.sp30_tables import list_consumer_norms
 from app.data.storm_cities import list_cities
@@ -87,6 +86,8 @@ _DOCUMENTS = (
     ("common", "Баланс водопотребления и водоотведения", "balance_pdf"),
     ("common", "Сводная спецификация", "spec_pdf"),
     ("common", "Сводная принципиальная схема", "scheme_pdf"),
+    ("ios2", "Схема вводов и узлов учёта", "metering_scheme_pdf"),
+    ("ios2", "Схема насосов, зон и ГВС", "pump_zone_scheme_pdf"),
     ("ios2", "Расчётные обоснования В1 и Т3", "v1_calculation_pdf"),
     ("ios2", "Расчёт и подбор насосов", "pump_selection_pdf"),
     ("ios2", "Гидравлический расчёт В2", "hydraulic_pdf"),
@@ -299,6 +300,7 @@ async def wizard_design(request: Request):
         building_type=fv("building_type"),
         floors=fi("floors"), building_height_m=ff("height"),
         total_area_m2=ff("total_area"),
+        hws_type=fv("hws_type", "central"),
         risers_v1=fi("risers_v1"), risers_t3=fi("risers_t3"),
         risers_t4=fi("risers_t4"),
         insulation_location=fv("insulation_location", "room_hot"),
@@ -319,6 +321,9 @@ async def wizard_design(request: Request):
         streams=(fi("streams") if fv("streams") else None),
         nozzle_mm=fi("nozzle_mm", 13),
         compact_jet_m=fi("compact_jet_m", 12),
+        fire_topology=fv("fire_topology", "auto"),
+        fire_topology_basis=fv("fire_topology_basis"),
+        fire_branch_electric_valves=bool(form.get("fire_branch_electric_valves")),
         zones=fi("zones", 1), rooms=rooms, network=network,
         apartments=fi("apartments"),
         owner_groups_count=fi("owner_groups_count", 1),
@@ -375,6 +380,10 @@ async def wizard_design(request: Request):
             h_il_m=(ff("h_il") if fv("h_il") else None),
             network_kind=fv("network_kind", "domestic"),
             h_pr_m=ff("h_pr", 20.0),
+            h_tepl_m=ff("h_tepl", 0.0),
+            h_apartment_c_meter_m=(ff("h_apartment_c_meter") if fv("h_apartment_c_meter") else None),
+            h_apartment_h_meter_m=(ff("h_apartment_h_meter") if fv("h_apartment_h_meter") else None),
+            hws_heater_in_scope=bool(form.get("hws_heater_in_scope")),
             h_vvod_m=(ff("h_vvod") if fv("h_vvod") else None),
             inputs_count=fi("inputs_count", 1),
             npsh_available_m=(ff("npsh_available") if fv("npsh_available") else None),
@@ -463,7 +472,10 @@ def wizard_result(request: Request, run_id: str):
     pdfs, document_groups = _bundle_documents(b)
     f = b.project.fire
     p = b.project
-    head = calc_required_head(p.source, h_vod_m=cold_meter_loss(p.meters))
+    from app.pz.rules import project_governing_head
+    head = project_governing_head(
+        p, fallback_h_vod_m=cold_meter_loss(p.meters),
+    )
     return _TPL.TemplateResponse(request, "wizard_result.html", {
         "run_id": run_id, "pdfs": pdfs, "document_groups": document_groups,
         "project_id": run.get("project_id"),

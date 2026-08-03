@@ -1,9 +1,11 @@
 """Тесты движка нормативных решений (ВК)."""
 from app.pz.project import (
-    FireSystem, NormativeRequirements, PipeMaterials, WaterSource,
+    BuildingFlags, BuildingPurpose, FireSystem, MeterRow, MetersSystem,
+    NormativeRequirements, PipeMaterials, WaterSource,
 )
 from app.pz.rules import (
-    PRESSURE_LIMIT_MPA, calc_required_head, decide_fire_network,
+    PRESSURE_LIMIT_MPA, calc_head_paths, calc_required_head,
+    decide_fire_network, decide_water_inlets,
 )
 
 
@@ -57,6 +59,92 @@ def test_pressure_boundary_exactly_limit_is_combined():
         FireSystem(required=True, pressure_at_lowest_pk_mpa=PRESSURE_LIMIT_MPA),
         PipeMaterials())
     assert d.combined
+
+
+def test_explicit_pre_meter_fire_branch_is_not_silently_combined():
+    d = decide_fire_network(
+        FireSystem(
+            required=True,
+            network_topology="pre_meter_branch",
+            topology_basis="ТУ СКС, п. 7",
+            branch_electric_valves=True,
+        ),
+        PipeMaterials(),
+    )
+    assert not d.combined and d.topology == "pre_meter_branch"
+    assert "до узлов учёта В1" in d.summary
+    assert "электроприводом" in d.summary
+
+
+def test_explicit_combined_does_not_override_mandatory_separation():
+    d = decide_fire_network(
+        FireSystem(required=True, network_topology="combined"),
+        PipeMaterials(),
+        NormativeRequirements(separate_v1_v2_required=True),
+    )
+    assert not d.combined and d.topology == "separate"
+
+
+def test_two_inlets_required_from_pk_or_apartments():
+    fire = FireSystem(required=True, pk_total=12)
+    building = BuildingFlags(
+        purpose=BuildingPurpose.RESIDENTIAL, apartments=401,
+    )
+    d = decide_water_inlets(building, fire, adopted_count=1)
+    assert d.minimum_count == 2 and not d.compliant
+    assert len(d.reasons) == 2
+
+
+def test_head_paths_include_all_meters_and_heater_and_keep_legacy_aggregate():
+    from app.calc.pumps import PumpInput, calculate_pump
+
+    source = WaterSource(
+        guaranteed_head_m=25.0,
+        h_geom_m=30.0,
+        h_il_m=4.0,
+        h_pr_m=20.0,
+        h_vvod_m=2.0,
+        h_tepl_m=3.0,
+        hws_heater_in_scope=True,
+        h_apartment_c_meter_m=0.4,
+        h_apartment_h_meter_m=0.5,
+    )
+    meters = MetersSystem(rows=[
+        MeterRow(label="Счётчик на вводе (общий)", h_a=0.6),
+        MeterRow(label="Счётчик ХВС", h_a=0.2),
+        MeterRow(label="Счётчик перед водонагревателем (ГВС)", h_a=0.3),
+    ])
+    paths = calc_head_paths(
+        source, meters, hws_type="local", apartment_meter_required=True,
+    )
+    assert paths.cold.meter_loss_m == 1.2
+    assert paths.cold.head.h_required_m == 57.2
+    assert paths.hot.meter_loss_m == 1.4
+    assert paths.hot.head.h_required_m == 60.4
+    assert paths.governing.code == "T3" and paths.complete
+
+    legacy = calculate_pump(PumpInput(
+        q_design_m3h=5.0,
+        h_geom_manual=paths.governing.head.h_geom_m,
+        h_losses=paths.governing.head.h_losses_dynamic_m,
+        h_pr=paths.governing.head.h_pr_m,
+        h_gar=paths.governing.head.h_guaranteed_m,
+    ))
+    assert legacy.h_required == paths.governing.head.h_pump_m
+
+
+def test_head_paths_do_not_hide_missing_apartment_and_heater_losses():
+    source = WaterSource(
+        h_geom_m=30.0, h_il_m=4.0, h_vvod_m=2.0,
+        hws_heater_in_scope=True, h_tepl_m=0.0,
+    )
+    meters = MetersSystem(rows=[MeterRow(label="Счётчик ХВС", h_a=0.2)])
+    paths = calc_head_paths(
+        source, meters, hws_type="central", apartment_meter_required=True,
+    )
+    assert not paths.complete
+    assert "потери в квартирном узле учёта ХВС" in paths.cold.missing
+    assert "потери в водонагревателе/теплообменнике" in paths.hot.missing
 
 
 def test_head_formula14():

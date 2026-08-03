@@ -14,7 +14,10 @@ from weasyprint import CSS, HTML
 from dataclasses import replace
 
 from app.pz.project import BuildingPurpose, Project
-from app.pz.rules import calc_required_head, check_tu_limits, decide_fire_network
+from app.pz.rules import (
+    check_tu_limits, decide_fire_network,
+    project_governing_head,
+)
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
 from app.pz.spec import (
     build_specification,
@@ -128,7 +131,9 @@ def generate_pz_html(project: Project) -> str:
     fire_net = decide_fire_network(
         project.fire, project.materials, project.normative,
     )
-    head = calc_required_head(project.source, h_vod_m=cold_meter_loss(project.meters))
+    head = project_governing_head(
+        project, fallback_h_vod_m=cold_meter_loss(project.meters),
+    )
     tu_check = check_tu_limits(project.flows, project.source)
     body_html = subitems_tpl.render(
         doc=project.document,
@@ -152,6 +157,8 @@ def generate_pz_html(project: Project) -> str:
         sewage=project.sewage,
         storm=project.storm,
         grease_trap=project.grease_trap,
+        inlet_decision=project.water_inlet_decision,
+        head_paths=project.head_paths,
     )
 
     doc_tpl = env.get_template("document.html")
@@ -232,9 +239,8 @@ def generate_v1_calculation_html(project: Project) -> str:
         sheet_no="1",
         sheet_total="—",
     )
-    head = calc_required_head(
-        project.source,
-        h_vod_m=cold_meter_loss(project.meters),
+    head = project_governing_head(
+        project, fallback_h_vod_m=cold_meter_loss(project.meters),
     )
     body_html = env.get_template("v1_calculation_body.html").render(
         balance=project.balance,
@@ -244,6 +250,7 @@ def generate_v1_calculation_html(project: Project) -> str:
         head=head,
         v1_stage_p=project.v1_stage_p_result,
         v1_hydraulics=project.v1_hydraulic_result,
+        head_paths=project.head_paths,
     )
     return env.get_template("document.html").render(
         doc=doc,
@@ -423,9 +430,8 @@ def generate_pump_selection_html(project: Project) -> str:
         cipher=_document_cipher(cipher, ".РН"),
         sheet_title="Расчёт и подбор насосных установок",
     )
-    head = calc_required_head(
-        project.source,
-        h_vod_m=cold_meter_loss(project.meters),
+    head = project_governing_head(
+        project, fallback_h_vod_m=cold_meter_loss(project.meters),
     )
     return env.get_template("pump_document.html").render(
         doc=doc,
@@ -434,6 +440,7 @@ def generate_pump_selection_html(project: Project) -> str:
         v2=project.fire_pumps,
         v1_chart=_pump_chart_for(project.pumps),
         v2_chart=_pump_chart_for(project.fire_pumps),
+        head_paths=project.head_paths,
     )
 
 
@@ -639,6 +646,22 @@ def generate_scheme_pdf(project: Project, output_path: str,
     svg = _svg_to_a1_mm(generate_scheme_svg(project, params))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
+
+
+def _generate_aux_scheme_pdf(svg: str, output_path: str) -> str:
+    import cairosvg
+    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
+    return output_path
+
+
+def generate_metering_scheme_pdf(project: Project, output_path: str) -> str:
+    from app.pz.aux_schemes import build_metering_scheme_svg
+    return _generate_aux_scheme_pdf(build_metering_scheme_svg(project), output_path)
+
+
+def generate_pump_zone_scheme_pdf(project: Project, output_path: str) -> str:
+    from app.pz.aux_schemes import build_pump_zone_scheme_svg
+    return _generate_aux_scheme_pdf(build_pump_zone_scheme_svg(project), output_path)
 
 
 # ── ГИДРАВЛИЧЕСКИЙ РАСЧЁТ В2 (лист расчёта, ГОСТ 21.110) ────────────────────

@@ -78,6 +78,8 @@ class MeterResult:
     hws_type: HwsType
     meters: list[MeterCheck] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    inputs_count: int = 1
+    fire_flow_through_meter: bool = False
 
 
 def _check_meter(
@@ -156,7 +158,11 @@ def calculate_meters(data: MeterInput) -> MeterResult:
     if data.q_sec_tot == 0 and data.q_sec_c == 0 and data.q_sec_h == 0:
         raise ValueError("Все секундные расходы равны 0 — нечего считать")
 
-    result = MeterResult(hws_type=data.hws_type)
+    result = MeterResult(
+        hws_type=data.hws_type,
+        inputs_count=data.inputs_count,
+        fire_flow_through_meter=data.q_fire_l_per_s > 0,
+    )
     T = data.period_hours
 
     if data.hws_type == "central":

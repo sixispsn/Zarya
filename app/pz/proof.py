@@ -14,7 +14,7 @@ from app.calc.water_demand import ConsumerGroup, calculate_water_demand
 from app.data.sp30_tables import get_consumer_norm
 from app.pz.commission import CommissionReport
 from app.pz.project import Project
-from app.pz.rules import calc_required_head, decide_fire_network
+from app.pz.rules import decide_fire_network, project_governing_head
 
 
 STATUS_LABELS = {
@@ -361,11 +361,12 @@ def _meter_decision(project: Project) -> ProofDecision:
 
 def _head_decision(project: Project) -> ProofDecision:
     meter = _cold_meter(project)
-    head = calc_required_head(
-        project.source,
-        h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
+    head = project_governing_head(
+        project,
+        fallback_h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
     )
-    complete = head.h_required_m is not None
+    paths = getattr(project, "head_paths", None)
+    complete = head.h_required_m is not None and (paths is None or paths.complete)
     comparable = complete and head.h_guaranteed_m is not None
     status = "verified" if comparable else "missing"
     formula = " + ".join(
@@ -424,9 +425,9 @@ def _head_decision(project: Project) -> ProofDecision:
 def _pump_decision(project: Project) -> ProofDecision:
     pump = project.pumps
     meter = _cold_meter(project)
-    head = calc_required_head(
-        project.source,
-        h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
+    head = project_governing_head(
+        project,
+        fallback_h_vod_m=(meter.h_a if meter is not None else project.source.h_vod_m),
     )
     if head.pump_needed is False:
         return ProofDecision(

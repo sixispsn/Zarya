@@ -60,6 +60,7 @@
 {% else %}
 <p class="subitem">{{ fire.normative_note or "Внутренний противопожарный водопровод по таблице 7.1 СП 10.13130.2020 не требуется." }}</p>
 {% endif %}
+{% include "inlet_decision.html" %}
 
 <p class="subhead">г) сведения о расчетном расходе воды на хозяйственно-питьевые нужды, в том числе на автоматическое пожаротушение и техническое водоснабжение, включая оборотное.</p>
 <p class="subitem">Расчётные расходы определены по СП 30.13330.2020 (суммарно по жилой части
@@ -89,6 +90,7 @@
 {% if source.pressure_note %}{{ source.pressure_note }}{% endif %}</p>
 {% if head.h_required_m is not none %}
 <p class="subitem">Требуемый напор Hтр определён по формуле (14) п.8.27 СП 30.13330.2020:</p>
+{% include "head_paths_table.html" %}
 {% if v1_stage_p %}
 {% include "v1_stage_p_table.html" %}
 {% endif %}
