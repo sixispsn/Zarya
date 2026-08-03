@@ -256,6 +256,14 @@ class SewerPipeRequest:
     outer_diameter_mm: float
     wall_thickness_mm: float
     length_m: float
+    slope_per_mille: Optional[float] = None
+    fill_ratio: Optional[float] = None
+    from_node: str = ""
+    to_node: str = ""
+    room: str = ""
+    elevation_start_m: Optional[float] = None
+    elevation_end_m: Optional[float] = None
+    insulated: bool = False
 
     @property
     def inner_diameter_mm(self) -> float:
@@ -308,6 +316,51 @@ class IOS2Request:
     sewage_risers: List[SewageRiserRequest] = field(default_factory=list)
     sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
     sewage_outlets_count: int = 0
+    wastewater_design_assignment_ref: str = ""
+    wastewater_survey_ref: str = ""
+    wastewater_service_life_years: Optional[int] = None
+    wastewater_overhaul_period_years: Optional[int] = None
+    wastewater_disposal_mode: str = "not_set"
+    wastewater_tu_org: str = ""
+    wastewater_tu_number: str = ""
+    wastewater_tu_date: str = ""
+    wastewater_discharge_standard_ref: str = ""
+    wastewater_water_body_characteristics_note: str = ""
+    wastewater_existing_network_type: str = ""
+    wastewater_existing_network_material: str = ""
+    wastewater_existing_network_standard: str = ""
+    wastewater_existing_network_outer_diameter_mm: Optional[float] = None
+    wastewater_existing_network_wall_thickness_mm: Optional[float] = None
+    wastewater_discharge_point_k1: str = ""
+    wastewater_discharge_point_k2: str = ""
+    wastewater_discharge_point_k3: str = ""
+    wastewater_k1_min_hourly_m3h: Optional[float] = None
+    wastewater_k3_max_hourly_m3h: Optional[float] = None
+    wastewater_k3_min_hourly_m3h: Optional[float] = None
+    wastewater_quality_indicators_note: str = ""
+    wastewater_laying_method: str = ""
+    wastewater_fire_barrier_note: str = ""
+    wastewater_deformation_joint_note: str = ""
+    wastewater_waste_handling_note: str = ""
+    wastewater_external_network_in_scope: bool = False
+    wastewater_external_network_design_note: str = ""
+    wastewater_external_scheme_source: str = ""
+    wastewater_site_plan_source: str = ""
+    wastewater_pump_required: bool = False
+    wastewater_pump_location: str = ""
+    wastewater_pump_model: str = ""
+    wastewater_pump_q_m3h: Optional[float] = None
+    wastewater_pump_head_m: Optional[float] = None
+    wastewater_pump_power_kw: Optional[float] = None
+    wastewater_pump_reserve_note: str = ""
+    wastewater_pump_power_category: str = ""
+    wastewater_pump_automation_note: str = ""
+    wastewater_treatment_required: bool = False
+    wastewater_treatment_location: str = ""
+    wastewater_treatment_type: str = ""
+    wastewater_treatment_capacity_lps: Optional[float] = None
+    wastewater_treatment_capacity_m3_day: Optional[float] = None
+    wastewater_treatment_technology: str = ""
     storm_city: str = ""           # город для расчёта дождевого стока (К2)
     apartments: int = 0
     owner_groups_count: int = 1
@@ -325,6 +378,13 @@ class IOS2Request:
     storm_selected_riser_dn_mm: int = 0
     storm_max_riser_flow_lps: Optional[float] = None
     storm_funnels_on_different_levels: bool = False
+    storm_design_m3_day: Optional[float] = None
+    storm_annual_m3: Optional[float] = None
+    storm_melt_m3h: Optional[float] = None
+    storm_melt_m3_day: Optional[float] = None
+    storm_melt_m3_year: Optional[float] = None
+    storm_treatment_volume_m3: Optional[float] = None
+    storm_storage_volume_m3: Optional[float] = None
     catering_type: str = "none"
     catering_seats: int = 0
     catering_conditional_dishes: int = 0
@@ -456,8 +516,8 @@ class IOS2Request:
                 )
         seen_sewer_sections = set()
         for i, pipe in enumerate(self.sewer_pipes):
-            if pipe.system not in ("K1", "K2"):
-                p.append(f"sewer_pipes[{i}].system должен быть K1 или K2")
+            if pipe.system not in ("K1", "K2", "K3"):
+                p.append(f"sewer_pipes[{i}].system должен быть K1, K2 или K3")
             if not pipe.section_id or pipe.section_id in seen_sewer_sections:
                 p.append(
                     f"sewer_pipes[{i}]: обозначение пустое или повторяется"
@@ -482,6 +542,45 @@ class IOS2Request:
                     f"sewer_pipes[{i}]: материал и стандарт/ТУ обязательны "
                     "для точной спецификации"
                 )
+            if pipe.slope_per_mille is not None and pipe.slope_per_mille < 0:
+                p.append(f"sewer_pipes[{i}].slope_per_mille не может быть отрицательным")
+            if pipe.fill_ratio is not None and not 0 <= pipe.fill_ratio <= 1:
+                p.append(f"sewer_pipes[{i}].fill_ratio должен быть от 0 до 1")
+            if ((pipe.elevation_start_m is None)
+                    != (pipe.elevation_end_m is None)):
+                p.append(
+                    f"sewer_pipes[{i}]: начальная и конечная отметки задаются парой"
+                )
+        if self.wastewater_disposal_mode not in (
+            "not_set", "centralized", "local", "water_body",
+        ):
+            p.append(
+                "wastewater_disposal_mode должен быть not_set, centralized, "
+                "local или water_body"
+            )
+        for name, value in {
+            "wastewater_service_life_years": self.wastewater_service_life_years,
+            "wastewater_overhaul_period_years": self.wastewater_overhaul_period_years,
+            "wastewater_existing_network_outer_diameter_mm": self.wastewater_existing_network_outer_diameter_mm,
+            "wastewater_existing_network_wall_thickness_mm": self.wastewater_existing_network_wall_thickness_mm,
+            "wastewater_k1_min_hourly_m3h": self.wastewater_k1_min_hourly_m3h,
+            "wastewater_k3_max_hourly_m3h": self.wastewater_k3_max_hourly_m3h,
+            "wastewater_k3_min_hourly_m3h": self.wastewater_k3_min_hourly_m3h,
+            "wastewater_pump_q_m3h": self.wastewater_pump_q_m3h,
+            "wastewater_pump_head_m": self.wastewater_pump_head_m,
+            "wastewater_pump_power_kw": self.wastewater_pump_power_kw,
+            "wastewater_treatment_capacity_lps": self.wastewater_treatment_capacity_lps,
+            "wastewater_treatment_capacity_m3_day": self.wastewater_treatment_capacity_m3_day,
+            "storm_design_m3_day": self.storm_design_m3_day,
+            "storm_annual_m3": self.storm_annual_m3,
+            "storm_melt_m3h": self.storm_melt_m3h,
+            "storm_melt_m3_day": self.storm_melt_m3_day,
+            "storm_melt_m3_year": self.storm_melt_m3_year,
+            "storm_treatment_volume_m3": self.storm_treatment_volume_m3,
+            "storm_storage_volume_m3": self.storm_storage_volume_m3,
+        }.items():
+            if value is not None and value < 0:
+                p.append(f"{name} не может быть отрицательным")
         if self.apartments < 0:
             p.append("apartments не может быть отрицательным")
         if self.owner_groups_count < 1:

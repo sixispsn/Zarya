@@ -246,6 +246,61 @@ def build_project(req: IOS2Request) -> Project:
     p.sewage.risers = [SewageRiserSpec(**vars(row)) for row in req.sewage_risers]
     p.sewage.pipes = [SewerPipeSpec(**vars(row)) for row in req.sewer_pipes]
     p.sewage.outlets_count = req.sewage_outlets_count
+    p.sewage.design_assignment_ref = req.wastewater_design_assignment_ref
+    p.sewage.survey_ref = req.wastewater_survey_ref
+    p.sewage.service_life_years = req.wastewater_service_life_years
+    p.sewage.overhaul_period_years = req.wastewater_overhaul_period_years
+    p.sewage.disposal_mode = req.wastewater_disposal_mode
+    p.sewage.connection_tu_org = req.wastewater_tu_org
+    p.sewage.connection_tu_number = req.wastewater_tu_number
+    p.sewage.connection_tu_date = req.wastewater_tu_date
+    p.sewage.discharge_standard_ref = req.wastewater_discharge_standard_ref
+    p.sewage.water_body_characteristics_note = (
+        req.wastewater_water_body_characteristics_note
+    )
+    p.sewage.existing_network_type = req.wastewater_existing_network_type
+    p.sewage.existing_network_material = req.wastewater_existing_network_material
+    p.sewage.existing_network_standard = req.wastewater_existing_network_standard
+    p.sewage.existing_network_outer_diameter_mm = (
+        req.wastewater_existing_network_outer_diameter_mm
+    )
+    p.sewage.existing_network_wall_thickness_mm = (
+        req.wastewater_existing_network_wall_thickness_mm
+    )
+    p.sewage.discharge_point_k1 = req.wastewater_discharge_point_k1
+    p.sewage.discharge_point_k2 = req.wastewater_discharge_point_k2
+    p.sewage.discharge_point_k3 = req.wastewater_discharge_point_k3
+    p.sewage.k1_min_hourly_m3h = req.wastewater_k1_min_hourly_m3h
+    p.sewage.k3_max_hourly_m3h = req.wastewater_k3_max_hourly_m3h
+    p.sewage.k3_min_hourly_m3h = req.wastewater_k3_min_hourly_m3h
+    p.sewage.quality_indicators_note = req.wastewater_quality_indicators_note
+    p.sewage.laying_method = req.wastewater_laying_method
+    p.sewage.fire_barrier_note = req.wastewater_fire_barrier_note
+    p.sewage.deformation_joint_note = req.wastewater_deformation_joint_note
+    p.sewage.waste_handling_note = req.wastewater_waste_handling_note
+    p.sewage.external_network_in_scope = req.wastewater_external_network_in_scope
+    p.sewage.external_network_design_note = (
+        req.wastewater_external_network_design_note
+    )
+    p.sewage.external_scheme_source = req.wastewater_external_scheme_source
+    p.sewage.site_plan_source = req.wastewater_site_plan_source
+    p.sewage.pump_required = req.wastewater_pump_required
+    p.sewage.pump_location = req.wastewater_pump_location
+    p.sewage.pump_model = req.wastewater_pump_model
+    p.sewage.pump_q_m3h = req.wastewater_pump_q_m3h
+    p.sewage.pump_head_m = req.wastewater_pump_head_m
+    p.sewage.pump_power_kw = req.wastewater_pump_power_kw
+    p.sewage.pump_reserve_note = req.wastewater_pump_reserve_note
+    p.sewage.pump_power_category = req.wastewater_pump_power_category
+    p.sewage.pump_automation_note = req.wastewater_pump_automation_note
+    p.sewage.treatment_required = req.wastewater_treatment_required
+    p.sewage.treatment_location = req.wastewater_treatment_location
+    p.sewage.treatment_type = req.wastewater_treatment_type
+    p.sewage.treatment_capacity_lps = req.wastewater_treatment_capacity_lps
+    p.sewage.treatment_capacity_m3_day = (
+        req.wastewater_treatment_capacity_m3_day
+    )
+    p.sewage.treatment_technology = req.wastewater_treatment_technology
     p.storm_city = req.storm_city
     p.storm = decide_storm_system(req.roof_type, req.floors)
     p.storm.city_code = req.storm_city
@@ -268,6 +323,13 @@ def build_project(req: IOS2Request) -> Project:
     p.storm.funnels_on_different_levels = (
         req.storm_funnels_on_different_levels
     )
+    p.storm.design_m3_day = req.storm_design_m3_day
+    p.storm.annual_m3 = req.storm_annual_m3
+    p.storm.melt_m3h = req.storm_melt_m3h
+    p.storm.melt_m3_day = req.storm_melt_m3_day
+    p.storm.melt_m3_year = req.storm_melt_m3_year
+    p.storm.treatment_volume_m3 = req.storm_treatment_volume_m3
+    p.storm.storage_volume_m3 = req.storm_storage_volume_m3
     p.grease_trap = decide_grease_trap(
         req.catering_type,
         req.catering_seats,

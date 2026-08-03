@@ -788,24 +788,17 @@ def build_specification(project: Project) -> Specification:
     # ── Раздел К1/К2: только явно подтверждённые позиции стадии П ──
     k1_pipes = [row for row in project.sewage.pipes if row.system == "K1"]
     k2_pipes = [row for row in project.sewage.pipes if row.system == "K2"]
+    k3_pipes = [row for row in project.sewage.pipes if row.system == "K3"]
     if (
-        project.grease_trap.required
-        or project.sewage.outlets_count
+        project.sewage.outlets_count
         or k1_pipes
         or project.flows.sewage_l_per_s > 0
+        or project.grease_trap.required
     ):
         sec = SpecSection(
-            title="К1 — бытовая и производственная канализация",
+            title="К1 — бытовая канализация",
             division="Водоотведение",
         )
-        if project.grease_trap.required:
-            sec.rows.append(SpecRow(
-                next_pos(),
-                "Жироуловитель для производственных стоков предприятия общественного питания",
-                manufacturer="по проекту", unit="компл.", qty=None,
-                note="на выпусках производственных стоков; число и производительность "
-                     "по заданию ТХ и схеме выпусков стадии Р; СП 118.13330.2022, п. 8.7",
-            ))
         for pipe in k1_pipes:
             sec.rows.append(SpecRow(
                 next_pos(),
@@ -838,6 +831,42 @@ def build_specification(project: Project) -> Specification:
                 qty=None,
                 note="длины и количество по планам и аксонометрии стадии Р; "
                      "условные объёмы не подставлены",
+            ))
+        sections.append(sec)
+
+    if project.grease_trap.preparation_type != "none" or k3_pipes:
+        sec = SpecSection(
+            title="К3 — производственная канализация",
+            division="Водоотведение",
+        )
+        if project.grease_trap.required:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Жироуловитель для производственных стоков предприятия общественного питания",
+                manufacturer="по проекту", unit="компл.", qty=None,
+                note="число и производительность по заданию ТХ и схеме выпусков; "
+                     "СП 118.13330.2022, п. 8.7",
+            ))
+        for pipe in k3_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                f"Труба производственной канализации {pipe.material}",
+                type_mark=(
+                    f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}; "
+                    f"dвн={pipe.inner_diameter_mm:g} мм"
+                ).replace(".", ","),
+                code=pipe.standard,
+                manufacturer="по проекту",
+                unit="м",
+                qty=round(pipe.length_m, 2),
+                note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
+            ))
+        if not k3_pipes:
+            sec.rows.append(SpecRow(
+                next_pos(),
+                "Трубопроводы и фасонные части системы К3",
+                manufacturer="по проекту", unit="компл.", qty=None,
+                note="состав по заданию ТХ и принципиальной схеме",
             ))
         sections.append(sec)
 
@@ -882,7 +911,7 @@ def build_specification(project: Project) -> Specification:
     # ГОСТ 21.601-2011, пп. 9.3–9.4: сначала раздел холодного
     # водоснабжения (В1, В2), затем горячего; позиции выводим последовательно
     # после нормативной сортировки разделов.
-    system_order = {"В1": 0, "В2": 1, "Т3-Т4": 2, "К1": 3, "К2": 4}
+    system_order = {"В1": 0, "В2": 1, "Т3-Т4": 2, "К1": 3, "К2": 4, "К3": 5}
     division_order = {
         "Водоснабжение холодное": 0,
         "Водоснабжение горячее": 1,
@@ -930,7 +959,7 @@ def build_specification(project: Project) -> Specification:
 
 
 def build_wastewater_specification(project: Project) -> Specification:
-    """Выделить самостоятельную спецификацию К1/К2 из общего комплекта.
+    """Выделить самостоятельную спецификацию К1/К2/К3 из общего комплекта.
 
     Источник строк остаётся единым: ``build_specification``. Фильтр ничего не
     досчитывает и не добавляет условных количеств. Позиции перенумеровываются
@@ -953,7 +982,7 @@ def build_wastewater_specification(project: Project) -> Specification:
     return Specification(
         sections=sections,
         note=(
-            "В самостоятельную спецификацию К1/К2 включены только явно "
+            "В самостоятельную спецификацию К1/К2/К3 включены только явно "
             "подтверждённые исходными данными позиции стадии «П». Длины труб "
             "приведены только для участков с заданными наружным диаметром, "
             "толщиной стенки и длиной; условный метраж по площади здания не "

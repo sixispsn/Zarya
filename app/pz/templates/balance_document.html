@@ -54,8 +54,9 @@
 
 <main>
 <header class="balance-title">
-  <div><b>Форма 2</b></div>
+  <div><b>{{ form_label|default("Форма 2", true) }}</b></div>
   <h1>Баланс водопотребления и водоотведения</h1>
+  {% if standard_reference %}<p><b>Форма:</b> {{ standard_reference }}</p>{% endif %}
   <p><b>Наименование объекта:</b> {{ doc.object_name }}</p>
   <p><b>Адрес объекта:</b> {{ doc.object_address or "—" }}</p>
 </header>
@@ -148,7 +149,7 @@
   </tbody>
 </table>
 
-<p class="note">{{ balance.note }}</p>
+<p class="note">{{ balance_note|default(balance.note, true) }}</p>
 </main>
 </body>
 </html>

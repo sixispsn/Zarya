@@ -1,149 +1,170 @@
 <p class="subitem no-indent">
-  Текстовая часть подраздела 5.3 «Система водоотведения» разработана в составе
-  проектной документации стадии «{{ doc.stage_label }}». Состав сведений принят
-  по пункту 18 Положения, утверждённого постановлением Правительства Российской
-  Федерации № 87. Расчётные листы К1/К2 являются приложением к настоящей
-  пояснительной записке.
+  Текстовая часть подраздела 5.3 «Система водоотведения» разработана для стадии
+  «{{ doc.stage_label }}» по пункту 18 Положения, утверждённого постановлением
+  Правительства Российской Федерации № 87, и ГОСТ Р 21.620-2023. Расчётные
+  обоснования и баланс по приложению А ГОСТ Р 21.620-2023 оформлены отдельными
+  приложениями к настоящей записке.
 </p>
 
-<p class="subhead">1. Общие сведения и нормативная база</p>
+<p class="subhead">1. Исходные данные для проектирования (ГОСТ Р 21.620-2023, п. 5.1.2)</p>
 <table class="data calc-table compact-calc">
-  <tr><th>Объект</th><td>{{ doc.object_name or "" }}</td></tr>
-  <tr><th>Адрес</th><td>{{ doc.object_address or "" }}</td></tr>
-  <tr><th>Часть объекта</th><td>{{ doc.object_part or "" }}</td></tr>
-  <tr><th>Назначение</th><td>{% if building.purpose.value == "residential" %}жилое{% elif building.purpose.value == "public" %}общественное{% else %}производственное{% endif %} здание</td></tr>
-  <tr><th>Этажность / высота</th><td>{{ building.floors_above }} эт. / {{ building.height_m|num(1) }} м</td></tr>
-  <tr><th>Кровля</th><td>{{ roof_type_label }}</td></tr>
+  <tr><th>Задание на проектирование</th><td>{{ sewage.design_assignment_ref or "" }}</td></tr>
+  <tr><th>Инженерные изыскания</th><td>{{ sewage.survey_ref or "" }}</td></tr>
+  <tr><th>Объект / адрес</th><td>{{ doc.object_name or "" }}{% if doc.object_address %}; {{ doc.object_address }}{% endif %}</td></tr>
+  <tr><th>Назначение</th><td>{% if building.purpose.value == "residential" %}жилое{% elif building.purpose.value == "public" %}общественное{% else %}производственное{% endif %} здание; {{ building.floors_above }} эт.; {{ building.height_m|num(1) }} м</td></tr>
+  <tr><th>Расчётный срок службы</th><td>{% if sewage.service_life_years is not none %}{{ sewage.service_life_years }} лет{% endif %}</td></tr>
+  <tr><th>Период до капитального ремонта</th><td>{% if sewage.overhaul_period_years is not none %}{{ sewage.overhaul_period_years }} лет{% endif %}</td></tr>
+  <tr><th>Способ водоотведения</th><td>{{ disposal_mode_label }}</td></tr>
+  <tr><th>Технические условия</th><td>{% if sewage.connection_tu_number %}№ {{ sewage.connection_tu_number }} от {{ sewage.connection_tu_date }}; {{ sewage.connection_tu_org }}{% endif %}</td></tr>
+  {% if sewage.disposal_mode == "water_body" %}<tr><th>Норматив допустимого сброса</th><td>{{ sewage.discharge_standard_ref }}</td></tr>{% endif %}
+</table>
+
+<p class="subitem"><b>Основные потребители:</b></p>
+<table class="data calc-table">
+  <thead><tr><th>Функциональная часть / потребитель</th><th>Нормативная группа</th><th>Количество</th></tr></thead>
+  <tbody>
+  {% for name, code, count in consumer_details %}
+    <tr><td>{{ name or code }}</td><td>{{ code }}</td><td>{{ count }}</td></tr>
+  {% else %}
+    <tr><td></td><td></td><td></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="subhead">2. Существующие и проектируемые системы водоотведения (п. 5.1.3)</p>
+{% if sewage.disposal_mode == "centralized" %}
+<table class="data calc-table compact-calc">
+  <tr><th>Тип централизованной системы</th><td>{{ sewage.existing_network_type or "" }}</td></tr>
+  <tr><th>Существующая сеть</th><td>{{ sewage.existing_network_material or "" }}{% if sewage.existing_network_outer_diameter_mm is not none %}; Ø{{ sewage.existing_network_outer_diameter_mm|compact(1) }}×{{ sewage.existing_network_wall_thickness_mm|compact(1) }} мм{% endif %}{% if sewage.existing_network_standard %}; {{ sewage.existing_network_standard }}{% endif %}</td></tr>
+</table>
+{% endif %}
+{% if sewage.disposal_mode == "water_body" %}
+<table class="data calc-table compact-calc">
+  <tr><th>Водный объект</th><td>{{ sewage.water_body_characteristics_note }}</td></tr>
+</table>
+{% endif %}
+<table class="data calc-table systems-table">
+  <thead><tr><th>Источник стоков</th><th>Марка и наименование системы</th><th>Гидравлический режим</th><th>Точка сброса по графической части</th></tr></thead>
+  <tbody>
+    <tr><td>Санитарные приборы и оборудование объекта</td><td>К1 — бытовая канализация</td><td>самотечный{% if sewage.pump_required %}; напорный после КНС{% endif %}</td><td>{{ sewage.discharge_point_k1 or "" }}</td></tr>
+    {% if grease_trap.preparation_type != "none" %}<tr><td>Технологическое оборудование предприятия питания</td><td>К3 — производственная канализация</td><td>раздельный сбор; предварительная очистка при необходимости</td><td>{{ sewage.discharge_point_k3 or "" }}</td></tr>{% endif %}
+    {% if storm.system_kind == "internal" %}<tr><td>Кровля здания</td><td>К2 — внутренние водостоки</td><td>самотечный / напорный режим выпуска по расчёту</td><td>{{ sewage.discharge_point_k2 or "" }}</td></tr>{% endif %}
+  </tbody>
+</table>
+<p class="subitem">Расчётные расходы бытовых и поверхностных сточных вод приведены
+в балансе водопотребления и водоотведения по форме приложения А ГОСТ Р 21.620-2023.</p>
+
+<p class="subhead">3. Обоснование систем сбора, отвода и предварительной очистки (п. 5.1.4)</p>
+<table class="data calc-table systems-table">
+  <thead><tr><th>Система</th><th>Состав стоков</th><th>Режим поступления</th><th>Qmax, м³/ч</th><th>Qmin, м³/ч</th><th>Суточный объём, м³/сут</th></tr></thead>
+  <tbody>
+    <tr><td>К1</td><td>хозяйственно-бытовые; {{ sewage.quality_indicators_note }}</td><td>по режиму работы потребителей</td><td>{% if flows.q_hr_tot %}{{ flows.q_hr_tot|num(3) }}{% endif %}</td><td>{% if sewage.k1_min_hourly_m3h is not none %}{{ sewage.k1_min_hourly_m3h|num(3) }}{% endif %}</td><td>{% if sewage_day_m3 is not none %}{{ sewage_day_m3|num(3) }}{% endif %}</td></tr>
+    {% if grease_trap.preparation_type != "none" %}<tr><td>К3</td><td>производственные стоки предприятия питания; {{ sewage.quality_indicators_note }}</td><td>по режиму работы технологического оборудования</td><td>{% if sewage.k3_max_hourly_m3h is not none %}{{ sewage.k3_max_hourly_m3h|num(3) }}{% endif %}</td><td>{% if sewage.k3_min_hourly_m3h is not none %}{{ sewage.k3_min_hourly_m3h|num(3) }}{% endif %}</td><td></td></tr>{% endif %}
+    {% if storm.system_kind == "internal" %}<tr><td>К2</td><td>поверхностные воды с кровли</td><td>расчётный дождь</td><td>{% if storm.result %}{{ (storm.result.q_total_l_per_s * 3.6)|num(3) }}{% endif %}</td><td>0,000</td><td></td></tr>{% endif %}
+  </tbody>
 </table>
 <p class="subitem">
-  При разработке решений учтены СП 30.13330.2020 с изменениями № 1–5,
-  применимые требования СП 54.13330.2022, СП 118.13330.2022 и
-  СП 253.1325800.2016, ГОСТ 21.110-2013 и ГОСТ 21.601-2011.
-  ГОСТ Р 21.619-2023 учтён в части увязки подразделов и оформления баланса
-  водопотребления и водоотведения по объекту.
-</p>
-
-<p class="subhead">а) Сведения о существующих и проектируемых системах канализации и водоотведения</p>
-<p class="subitem">
-  Внутри здания предусматривается хозяйственно-бытовая канализация К1.
-  {% if grease_trap.preparation_type != "none" %}Производственные стоки
-  предприятия общественного питания рассматриваются отдельно от бытовых.{% endif %}
-  {% if storm.system_kind == "internal" %}Для отвода дождевых вод предусмотрен
-  внутренний водосток К2.{% else %}Решение по отводу дождевых вод:
-  {{ storm.system_note }}{% endif %}
-  Точка присоединения к наружной сети канализации и граница балансовой
-  принадлежности в исходных данных не заданы; они должны быть подтверждены
-  техническими условиями. Параметры наружных сетей программой не подменяются.
-</p>
-
-<p class="subhead">б) Обоснование систем сбора и отвода, объём стоков и предварительная очистка</p>
-<p class="subitem">
-  Система К1 в представленной расчётной модели принята самотечной. Расчётный
-  суточный объём водоотведения по балансу составляет
-  <b>{% if sewage_day_m3 is not none %}{{ sewage_day_m3|num(3) }} м³/сут{% else %}—{% endif %}</b>.
-  {% if sewage.result %}Максимальный секундный расход хозяйственно-бытовых
-  стоков определён по формуле (5) СП 30.13330.2020:
+  {% if sewage.result %}Расход К1 определён по формуле (5) СП 30.13330.2020:
   q<sub>s</sub> = {{ sewage.result.total.q_water_total_lps|num(3) }} +
   {{ sewage.result.total.q_fixture_max_lps|num(3) }} =
   <b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b>.{% else %}
-  Максимальный секундный расход не определён: группы потребителей не заданы.{% endif %}
+  Расход К1 не определён: группы потребителей не заданы.{% endif %}
+  Численные концентрации загрязнений без задания ТХ и условий подключения не
+  подставляются.
 </p>
-<p class="subitem">
-  Численные концентрации загрязнений в исходных данных отсутствуют и в записку
-  условно не подставляются. Для хозяйственно-бытовых стоков применение реагентов
-  и локальной очистки расчётной моделью не назначено; возможность приёма стоков
-  подтверждается техническими условиями эксплуатирующей организации.
-  {% if grease_trap.required %}{{ grease_trap.decision_note }} Число и
-  производительность жироуловителей определяются по заданию ТХ и схеме
-  производственных выпусков.{% elif grease_trap.preparation_type != "none" %}
-  {{ grease_trap.decision_note }}{% endif %}
-</p>
+{% if grease_trap.preparation_type != "none" %}<p class="subitem">{{ grease_trap.decision_note }}</p>{% endif %}
 
-<p class="subhead">в) Сбор, утилизация и захоронение отходов</p>
-<p class="subitem">
-  {% if building.purpose.value == "industrial" %}Данные технологического задания
-  о составе и порядке обращения с производственными отходами не представлены;
-  решения должны быть разработаны технологической частью проекта.{% else %}
-  Объект относится к непроизводственным. Решения по сбору, утилизации и
-  захоронению производственных отходов в составе данного подраздела не
-  разрабатываются.{% endif %}
-</p>
-
-<p class="subhead">г) Схема прокладки трубопроводов, материалы и защита</p>
-<p class="subitem">
-  Стоки от санитарных приборов отводятся по поэтажным отводным трубопроводам в
-  стояки К1, далее по горизонтальной сети — к выпускам и наружной системе.
-  Напорные участки К1 в исходных данных не заданы. Общий расход системы не
-  распределяется между стояками и выпусками без точной аксонометрии.
-  {% if normative.separate_k1_required %}Для функционально различных частей
-  высотного здания предусматриваются самостоятельные системы и выпуски К1;
-  объединение допускается только в наружной сети по проектным условиям
-  (СП 253.1325800.2016, п. 11.2).{% endif %}
-</p>
+<p class="subhead">4. Трубопроводы, прокладка и пересечения конструкций (пп. 5.1.4.1, 5.1.6.1)</p>
 {% if sewage.pipes %}
-<table class="data calc-table pipe-calc">
-  <thead><tr><th>Система / участок</th><th>Назначение</th><th>Материал, стандарт</th><th>Øнар × стенка, мм</th><th>Øвн, мм</th><th>L, м</th></tr></thead>
+<table class="data calc-table pipe-calc gost-pipes">
+  <thead><tr><th>Система / участок</th><th>Помещение; откуда — куда</th><th>Материал, стандарт</th><th>Øнар×s; Øвн, мм</th><th>L, м</th><th>Уклон, ‰</th><th>h/d</th><th>Отметки начала / конца, м</th></tr></thead>
   <tbody>{% for p in sewage.pipes %}
-    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }}</td></tr>
+    <tr>
+      <td>{{ p.system }} / {{ p.section_id }}<br>{{ p.purpose }}</td>
+      <td>{{ p.room or "" }}{% if p.from_node or p.to_node %}<br>{{ p.from_node }} → {{ p.to_node }}{% endif %}</td>
+      <td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}{% if p.insulated %}<br>теплоизолирован{% endif %}</td>
+      <td>{{ p.outer_diameter_mm|compact(1) }}×{{ p.wall_thickness_mm|compact(1) }}; {{ p.inner_diameter_mm|compact(1) }}</td>
+      <td>{{ p.length_m|num(2) }}</td>
+      <td>{% if p.slope_per_mille is not none %}{{ p.slope_per_mille|num(1) }}{% endif %}</td>
+      <td>{% if p.fill_ratio is not none %}{{ p.fill_ratio|num(2) }}{% endif %}</td>
+      <td>{% if p.elevation_start_m is not none %}{{ p.elevation_start_m|num(2) }} / {{ p.elevation_end_m|num(2) }}{% endif %}</td>
+    </tr>
   {% endfor %}</tbody>
 </table>
 {% else %}
-<p class="stage-note">
-  Сортамент и длины труб К1/К2 не заданы. В спецификацию не включается
-  вымышленный метраж; материал, наружный диаметр, толщина стенки и длина
-  назначаются по планам и аксонометрии.
-</p>
+<p class="stage-note">Трубопроводы не заданы. Поля материала, стандарта,
+наружного диаметра, толщины стенки, длины, уклона, наполнения и отметок оставлены
+незаполненными; условные значения не подставляются.</p>
 {% endif %}
-<p class="subitem">
-  Защита подземных трубопроводов от агрессивного воздействия грунтов и
-  грунтовых вод определяется после получения инженерно-геологических данных и
-  выбора материала выпусков. Узлы проходок, крепления, гильзы и заделка
-  межтрубного пространства уточняются по строительным конструкциям стадии «Р».
-</p>
+<table class="data calc-table compact-calc">
+  <tr><th>Способ прокладки</th><td>{{ sewage.laying_method or "" }}</td></tr>
+  <tr><th>Пересечение противопожарных преград</th><td>{{ sewage.fire_barrier_note or "" }}</td></tr>
+  <tr><th>Пересечение деформационных швов</th><td>{{ sewage.deformation_joint_note or "" }}</td></tr>
+</table>
+{% if sewage.external_network_in_scope %}<p class="subitem"><b>Наружные сети:</b> {{ sewage.external_network_design_note }}</p>{% endif %}
 
-<p class="subhead">д) Ливневая канализация и расчёт дождевых стоков</p>
+<p class="subhead">5. Канализационное насосное оборудование (п. 5.1.4.2)</p>
+{% if sewage.pump_required %}
+<table class="data calc-table compact-calc">
+  <tr><th>Размещение / тип</th><td>{{ sewage.pump_location }}; {{ sewage.pump_model }}</td></tr>
+  <tr><th>Рабочая точка</th><td>Q = {{ sewage.pump_q_m3h|num(2) }} м³/ч; H = {{ sewage.pump_head_m|num(2) }} м; P = {{ sewage.pump_power_kw|num(2) }} кВт</td></tr>
+  <tr><th>Резервирование / категория</th><td>{{ sewage.pump_reserve_note }}; {{ sewage.pump_power_category }}</td></tr>
+  <tr><th>Автоматизация</th><td>{{ sewage.pump_automation_note }}</td></tr>
+</table>
+{% else %}
+<p class="subitem">Канализационное насосное оборудование в границах проектирования не предусмотрено.</p>
+{% endif %}
+
+<p class="subhead">6. Локальные очистные сооружения (п. 5.1.4.3)</p>
+{% if sewage.treatment_required %}
+<table class="data calc-table compact-calc">
+  <tr><th>Тип / размещение</th><td>{{ sewage.treatment_type }}; {{ sewage.treatment_location }}</td></tr>
+  <tr><th>Производительность</th><td>{{ sewage.treatment_capacity_lps|num(2) }} л/с; {{ sewage.treatment_capacity_m3_day|num(2) }} м³/сут</td></tr>
+  <tr><th>Технология очистки</th><td>{{ sewage.treatment_technology }}</td></tr>
+</table>
+{% elif sewage.disposal_mode == "local" %}
+<p class="stage-note">Для принятой локальной системы не заполнены тип, размещение, производительность и технология очистных сооружений.</p>
+{% else %}
+<p class="subitem">Локальные очистные сооружения в границах проектирования не предусмотрены.</p>
+{% endif %}
+
+<p class="subhead">7. Сбор, утилизация и захоронение отходов (п. 5.1.5)</p>
+<p class="subitem">{% if sewage.treatment_required or sewage.disposal_mode == "local" or grease_trap.preparation_type != "none" %}{{ sewage.waste_handling_note or "" }}{% else %}В проектируемых внутренних системах образование отходов очистки не предусмотрено; локальные очистные сооружения и реагентное хозяйство отсутствуют.{% endif %}</p>
+
+<p class="subhead">8. Дождевая и дренажная канализация (пп. 5.1.6.2-5.1.6.3)</p>
 <p class="subitem">{{ storm.system_note }}</p>
 {% if storm.result %}
 <table class="data calc-table compact-calc">
-  <tr><th>Район строительства; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
-  <tr><th>Приведённая площадь F</th><td>{{ storm.result.f_calculated_m2|num(1) }} м²</td></tr>
-  <tr><th>Период P; коэффициент γ</th><td>{{ storm.result.period_years }} лет; {{ storm.result.gamma|num(2) }}</td></tr>
-  <tr><th>Расчётный расход дождевых вод</th><td><b>{{ storm.result.q_total_l_per_s|num(3) }} л/с</b></td></tr>
+  <tr><th>Район; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
+  <tr><th>Приведённая площадь</th><td>{{ storm.result.f_calculated_m2|num(1) }} м²</td></tr>
+  <tr><th>Расчётный дождевой расход</th><td>{{ storm.result.q_total_l_per_s|num(3) }} л/с; {{ (storm.result.q_total_l_per_s * 3.6)|num(3) }} м³/ч</td></tr>
+  <tr><th>Расчётный / среднегодовой объём дождевых вод</th><td>{{ storm.design_m3_day|num(3) }} м³/сут; {{ storm.annual_m3|num(3) }} м³/год</td></tr>
+  <tr><th>Сток талых вод</th><td>{{ storm.melt_m3h|num(3) }} м³/ч; {{ storm.melt_m3_day|num(3) }} м³/сут; {{ storm.melt_m3_year|num(3) }} м³/год</td></tr>
+  <tr><th>Объём на очистку / аккумулирование</th><td>{{ storm.treatment_volume_m3|num(3) }} / {{ storm.storage_volume_m3|num(3) }} м³</td></tr>
 </table>
-<p class="subitem">
-  Расчёт выполнен по пп. 21.10–21.12 СП 30.13330.2020. Общий расход не
-  распределяется между воронками и стояками без нагрузок диктующих элементов.
-</p>
-{% else %}
-<p class="stage-note">
-  Расчётный расход дождевых вод не определён. Для расчёта требуются город,
-  площадь кровли и, при наличии, площадь примыкающих стен.
-</p>
 {% endif %}
+<p class="subitem">Система сбора дренажных вод в исходных данных не задана.
+При её включении в границы проекта сведения об уровне и составе подземных вод,
+типе дренажа, обсыпке, водопритоках и прочности труб должны быть заполнены по
+п. 5.1.6.3 ГОСТ Р 21.620-2023.</p>
 
-<p class="subhead">е) Сбор и отвод дренажных вод</p>
-<p class="subitem">
-  Сведения о дренажных водах и проектируемой дренажной системе в исходных
-  данных отсутствуют. При наличии дренажа решения по его сбору и отводу должны
-  быть разработаны после получения разделов КР, ГП и инженерно-геологических
-  изысканий.
-</p>
-
-<p class="subhead">2. Графическая часть и граница стадии</p>
-<p class="subitem">
-  В составе комплекта выпущена отдельная принципиальная схема К1/К2, которая
-  показывает состав систем, раздельность потоков и направления отвода. Схема
-  наружных сетей и план сетей водоотведения не формируются без генплана,
-  архитектурных подоснов и технических условий. Точная аксонометрия, отметки,
-  уклоны, длины, нагрузки отдельных участков, ревизии, прочистки и узлы
-  проходок относятся к разработке стадии «Р».
-</p>
-
-<p class="subhead">3. Состав самостоятельного комплекта К1/К2</p>
+<p class="subhead">9. Графическая часть (п. 5.2)</p>
 <table class="data calc-table">
-  <tr><th>Документ</th><th>Назначение</th></tr>
-  <tr><td>Пояснительная записка К1/К2</td><td>текстовая часть по пункту 18 ПП РФ № 87</td></tr>
-  <tr><td>Расчётные обоснования К1/К2</td><td>расход К1, проверки стояков, расчёт и проверки К2</td></tr>
-  <tr><td>Принципиальная схема К1/К2</td><td>графическое решение стадии «П» без вымышленной трассировки</td></tr>
-  <tr><td>Спецификация К1/К2</td><td>только явно подтверждённые оборудование, изделия и материалы</td></tr>
+  <thead><tr><th>Документ</th><th>Статус / источник</th><th>Нормативное основание</th></tr></thead>
+  <tbody>
+    <tr><td>Принципиальная схема внутренних систем К1/К2/К3</td><td>сформирована в комплекте; незаданные обязательные параметры отмечены на листе</td><td>п. 5.2.2</td></tr>
+    <tr><td>Принципиальная схема наружных сетей</td><td>{% if sewage.external_network_in_scope %}{{ sewage.external_scheme_source or "" }}{% else %}не входит в заданные границы проектирования{% endif %}</td><td>п. 5.2.3</td></tr>
+    <tr><td>План наружных сетей на опорном плане</td><td>{% if sewage.external_network_in_scope %}{{ sewage.site_plan_source or "" }}{% else %}не входит в заданные границы проектирования{% endif %}</td><td>п. 5.2.4</td></tr>
+  </tbody>
 </table>
+
+<p class="subhead">10. Ведомость нормативного контроля ГОСТ Р 21.620-2023</p>
+<table class="data calc-table gost-audit">
+  <thead><tr><th>Код</th><th>Проверяемое требование</th><th>Пункт</th><th>Статус</th><th>Подтверждение / недостающие данные</th></tr></thead>
+  <tbody>{% for row in gost_audit.checks %}
+    <tr><td>{{ row.code }}</td><td>{{ row.requirement }}</td><td>{{ row.reference }}</td><td><b>{% if row.status == "verified" %}соответствует{% elif row.status == "not_applicable" %}не применимо{% else %}не заполнено{% endif %}</b></td><td>{{ row.evidence }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% if not gost_audit.complete %}<p class="stage-note"><b>До выпуска в экспертизу необходимо
+закрыть {{ gost_audit.missing|length }} обязательных позиций.</b> Записка не
+подменяет отсутствующие исходные данные типовыми или условными значениями.</p>{% endif %}

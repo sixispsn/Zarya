@@ -111,7 +111,14 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     wastewater_pz_text = _text(str(wastewater_pz))
     assert "Подраздел 5.3 «Система водоотведения»" in wastewater_pz_text
     assert "пункту 18" in wastewater_pz_text
+    assert "ГОСТ Р 21.620-2023" in wastewater_pz_text
     assert "Расчётные обоснования систем К1 и К2" in wastewater_pz_text
+    wastewater_balance = Path(bundle.wastewater_balance_pdf)
+    assert wastewater_balance.name == "Баланс_ИОС3.pdf"
+    assert wastewater_balance.exists()
+    wastewater_balance_text = _text(str(wastewater_balance))
+    assert "ГОСТ Р 21.620-2023" in wastewater_balance_text
+    assert "Приложение А" in wastewater_balance_text
     wastewater_spec = Path(bundle.wastewater_spec_pdf)
     assert wastewater_spec.name == "Спецификация_К1_К2.pdf"
     assert wastewater_spec.exists()
@@ -121,7 +128,7 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     package_text = _text(str(wastewater_package))
     assert "Подраздел 5.3 «Система водоотведения»" in package_text
     assert "Расчётные обоснования систем К1 и К2" in package_text
-    assert "Принципиальная схема систем К1 и К2" in package_text
+    assert "Принципиальная схема внутренних систем К1, К2 и К3" in package_text
     assert "Спецификация оборудования" in package_text
     assert "материалов К1/К2" in package_text
     assert commission.name == "Паспорт_и_нормативный_контроль.pdf"

@@ -205,12 +205,51 @@ def generate_balance_html(project: Project) -> str:
     return env.get_template("balance_document.html").render(
         doc=doc,
         balance=project.balance,
+        form_label="Форма 2",
+        standard_reference="ГОСТ Р 21.619-2023, приложение А",
+        balance_note=project.balance.note,
     )
 
 
 def generate_balance_pdf(project: Project, output_path: str) -> str:
     """Сформировать нормативный баланс на листе А3 альбомной ориентации."""
     html_str = generate_balance_html(project)
+    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        output_path,
+        stylesheets=[CSS(
+            filename=str(TEMPLATES_DIR / "balance_document.css"),
+            base_url=str(TEMPLATES_DIR),
+        )],
+    )
+    return output_path
+
+
+def generate_wastewater_balance_html(project: Project) -> str:
+    """Баланс ИОС3 по форме приложения А ГОСТ Р 21.620-2023."""
+    env = _build_env()
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".БВ"),
+        sheet_title="Баланс водопотребления и водоотведения",
+        sheet_no="1",
+        sheet_total="1",
+    )
+    return env.get_template("balance_document.html").render(
+        doc=doc,
+        balance=project.balance,
+        form_label="Приложение А",
+        standard_reference="ГОСТ Р 21.620-2023",
+        balance_note=(
+            "Суточный баланс сформирован по форме приложения А "
+            "ГОСТ Р 21.620-2023. Хозяйственно-бытовое водоотведение принято "
+            "равным водопотреблению; расход на полив в канализацию не поступает."
+        ),
+    )
+
+
+def generate_wastewater_balance_pdf(project: Project, output_path: str) -> str:
+    html_str = generate_wastewater_balance_html(project)
     HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
         output_path,
         stylesheets=[CSS(
@@ -341,15 +380,29 @@ def generate_wastewater_pz_html(project: Project) -> str:
         "flat": "плоская",
         "sloped": "скатная",
     }
+    disposal_labels = {
+        "not_set": "",
+        "centralized": "отвод в централизованную систему водоотведения",
+        "local": "локальная система водоотведения",
+        "water_body": "сброс в водный объект",
+    }
+    from app.pz.wastewater_gost import audit_wastewater_gost
+    gost_audit = audit_wastewater_gost(project)
     body_html = env.get_template("wastewater_pz_body.html").render(
         doc=doc,
         building=project.building,
         normative=project.normative,
         balance=project.balance,
+        flows=project.flows,
         sewage=project.sewage,
         sewage_day_m3=sewage_day_m3,
         storm=project.storm,
         grease_trap=project.grease_trap,
+        consumer_details=project.consumer_details,
+        disposal_mode_label=disposal_labels.get(
+            project.sewage.disposal_mode, project.sewage.disposal_mode,
+        ),
+        gost_audit=gost_audit,
         roof_type_label=roof_labels.get(
             project.storm.roof_type, project.storm.roof_type
         ),
@@ -376,24 +429,28 @@ def generate_wastewater_pz_pdf(project: Project, output_path: str) -> str:
 
 
 def generate_wastewater_scheme_html(project: Project) -> str:
-    """Принципиальная схема К1/К2 стадии П без вымышленной трассировки."""
+    """Принципиальная схема К1/К2/К3 стадии П без вымышленной трассировки."""
     env = _build_env()
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
         project.document,
         cipher=_document_cipher(cipher, ".СК"),
-        sheet_title="Принципиальная схема систем К1 и К2",
+        sheet_title="Принципиальная схема внутренних систем К1, К2 и К3",
         sheet_no="1",
-        sheet_total="1",
+        sheet_total="—",
     )
+    from app.pz.wastewater_gost import audit_wastewater_gost
     body_html = env.get_template("wastewater_scheme_body.html").render(
+        building=project.building,
         sewage=project.sewage,
         storm=project.storm,
         grease_trap=project.grease_trap,
+        fixtures=project.fixtures,
+        gost_audit=audit_wastewater_gost(project),
     )
     return env.get_template("document.html").render(
         doc=doc,
-        document_title="Принципиальная схема систем К1 и К2",
+        document_title="Принципиальная схема внутренних систем К1, К2 и К3",
         body_html=body_html,
     )
 
@@ -402,7 +459,7 @@ def generate_wastewater_scheme_pdf(
     project: Project,
     output_path: str,
 ) -> str:
-    """Сформировать лист принципиальной схемы К1/К2 стадии П."""
+    """Сформировать лист принципиальной схемы К1/К2/К3 стадии П."""
     html_str = generate_wastewater_scheme_html(project)
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
@@ -566,7 +623,7 @@ def generate_spec_pdf(project: Project, output_path: str) -> str:
 
 
 def generate_wastewater_spec_html(project: Project) -> str:
-    """HTML самостоятельной спецификации оборудования и материалов К1/К2."""
+    """HTML самостоятельной спецификации оборудования К1/К2/К3."""
     env = _build_env()
     spec = build_wastewater_specification(project)
     body_html = env.get_template("spec_table.html").render(spec=spec)
@@ -574,7 +631,7 @@ def generate_wastewater_spec_html(project: Project) -> str:
     spec_doc = replace(
         project.document,
         cipher=_document_cipher(cipher, ".СО"),
-        sheet_title="Спецификация оборудования, изделий и материалов К1/К2",
+        sheet_title="Спецификация оборудования, изделий и материалов К1/К2/К3",
     )
     return env.get_template("spec_document.html").render(
         doc=spec_doc,
@@ -583,7 +640,7 @@ def generate_wastewater_spec_html(project: Project) -> str:
 
 
 def generate_wastewater_spec_pdf(project: Project, output_path: str) -> str:
-    """PDF самостоятельной спецификации К1/К2 по ГОСТ 21.110."""
+    """PDF самостоятельной спецификации К1/К2/К3 по ГОСТ 21.110."""
     html_str = generate_wastewater_spec_html(project)
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))

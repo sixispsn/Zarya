@@ -235,6 +235,26 @@ def load_request(text: str) -> IOS2Request:
             outer_diameter_mm=float(x.get("outer_diameter_mm", 0)),
             wall_thickness_mm=float(x.get("wall_thickness_mm", 0)),
             length_m=float(x.get("length_m", 0)),
+            slope_per_mille=(
+                float(x["slope_per_mille"])
+                if x.get("slope_per_mille") is not None else None
+            ),
+            fill_ratio=(
+                float(x["fill_ratio"])
+                if x.get("fill_ratio") is not None else None
+            ),
+            from_node=str(x.get("from_node", "")),
+            to_node=str(x.get("to_node", "")),
+            room=str(x.get("room", "")),
+            elevation_start_m=(
+                float(x["elevation_start_m"])
+                if x.get("elevation_start_m") is not None else None
+            ),
+            elevation_end_m=(
+                float(x["elevation_end_m"])
+                if x.get("elevation_end_m") is not None else None
+            ),
+            insulated=bool(x.get("insulated", False)),
         )
         for x in (sewage_s.get("pipes") or [])
         if isinstance(x, dict)
@@ -317,10 +337,163 @@ def load_request(text: str) -> IOS2Request:
         storm_funnels_on_different_levels=bool(
             storm_s.get("funnels_on_different_levels", False)
         ),
+        storm_design_m3_day=(
+            float(storm_s["design_m3_day"])
+            if storm_s.get("design_m3_day") is not None else None
+        ),
+        storm_annual_m3=(
+            float(storm_s["annual_m3"])
+            if storm_s.get("annual_m3") is not None else None
+        ),
+        storm_melt_m3h=(
+            float(storm_s["melt_m3h"])
+            if storm_s.get("melt_m3h") is not None else None
+        ),
+        storm_melt_m3_day=(
+            float(storm_s["melt_m3_day"])
+            if storm_s.get("melt_m3_day") is not None else None
+        ),
+        storm_melt_m3_year=(
+            float(storm_s["melt_m3_year"])
+            if storm_s.get("melt_m3_year") is not None else None
+        ),
+        storm_treatment_volume_m3=(
+            float(storm_s["treatment_volume_m3"])
+            if storm_s.get("treatment_volume_m3") is not None else None
+        ),
+        storm_storage_volume_m3=(
+            float(storm_s["storage_volume_m3"])
+            if storm_s.get("storage_volume_m3") is not None else None
+        ),
         sewage_max_fixture_lps=float(sewage_s.get("max_fixture_lps", 1.6)),
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
         sewage_outlets_count=int(sewage_s.get("outlets_count", 0)),
+        wastewater_design_assignment_ref=str(
+            sewage_s.get("design_assignment_ref", "")
+        ),
+        wastewater_survey_ref=str(sewage_s.get("survey_ref", "")),
+        wastewater_service_life_years=(
+            int(sewage_s["service_life_years"])
+            if sewage_s.get("service_life_years") is not None else None
+        ),
+        wastewater_overhaul_period_years=(
+            int(sewage_s["overhaul_period_years"])
+            if sewage_s.get("overhaul_period_years") is not None else None
+        ),
+        wastewater_disposal_mode=str(sewage_s.get("disposal_mode", "not_set")),
+        wastewater_tu_org=str(sewage_s.get("tu_org", "")),
+        wastewater_tu_number=str(sewage_s.get("tu_number", "")),
+        wastewater_tu_date=str(sewage_s.get("tu_date", "")),
+        wastewater_discharge_standard_ref=str(
+            sewage_s.get("discharge_standard_ref", "")
+        ),
+        wastewater_water_body_characteristics_note=str(
+            sewage_s.get("water_body_characteristics_note", "")
+        ),
+        wastewater_existing_network_type=str(
+            sewage_s.get("existing_network_type", "")
+        ),
+        wastewater_existing_network_material=str(
+            sewage_s.get("existing_network_material", "")
+        ),
+        wastewater_existing_network_standard=str(
+            sewage_s.get("existing_network_standard", "")
+        ),
+        wastewater_existing_network_outer_diameter_mm=(
+            float(sewage_s["existing_network_outer_diameter_mm"])
+            if sewage_s.get("existing_network_outer_diameter_mm") is not None else None
+        ),
+        wastewater_existing_network_wall_thickness_mm=(
+            float(sewage_s["existing_network_wall_thickness_mm"])
+            if sewage_s.get("existing_network_wall_thickness_mm") is not None else None
+        ),
+        wastewater_discharge_point_k1=str(
+            sewage_s.get("discharge_point_k1", "")
+        ),
+        wastewater_discharge_point_k2=str(
+            sewage_s.get("discharge_point_k2", "")
+        ),
+        wastewater_discharge_point_k3=str(
+            sewage_s.get("discharge_point_k3", "")
+        ),
+        wastewater_k1_min_hourly_m3h=(
+            float(sewage_s["k1_min_hourly_m3h"])
+            if sewage_s.get("k1_min_hourly_m3h") is not None else None
+        ),
+        wastewater_k3_max_hourly_m3h=(
+            float(sewage_s["k3_max_hourly_m3h"])
+            if sewage_s.get("k3_max_hourly_m3h") is not None else None
+        ),
+        wastewater_k3_min_hourly_m3h=(
+            float(sewage_s["k3_min_hourly_m3h"])
+            if sewage_s.get("k3_min_hourly_m3h") is not None else None
+        ),
+        wastewater_quality_indicators_note=str(
+            sewage_s.get("quality_indicators_note", "")
+        ),
+        wastewater_laying_method=str(sewage_s.get("laying_method", "")),
+        wastewater_fire_barrier_note=str(
+            sewage_s.get("fire_barrier_note", "")
+        ),
+        wastewater_deformation_joint_note=str(
+            sewage_s.get("deformation_joint_note", "")
+        ),
+        wastewater_waste_handling_note=str(
+            sewage_s.get("waste_handling_note", "")
+        ),
+        wastewater_external_network_in_scope=bool(
+            sewage_s.get("external_network_in_scope", False)
+        ),
+        wastewater_external_network_design_note=str(
+            sewage_s.get("external_network_design_note", "")
+        ),
+        wastewater_external_scheme_source=str(
+            sewage_s.get("external_scheme_source", "")
+        ),
+        wastewater_site_plan_source=str(sewage_s.get("site_plan_source", "")),
+        wastewater_pump_required=bool(sewage_s.get("pump_required", False)),
+        wastewater_pump_location=str(sewage_s.get("pump_location", "")),
+        wastewater_pump_model=str(sewage_s.get("pump_model", "")),
+        wastewater_pump_q_m3h=(
+            float(sewage_s["pump_q_m3h"])
+            if sewage_s.get("pump_q_m3h") is not None else None
+        ),
+        wastewater_pump_head_m=(
+            float(sewage_s["pump_head_m"])
+            if sewage_s.get("pump_head_m") is not None else None
+        ),
+        wastewater_pump_power_kw=(
+            float(sewage_s["pump_power_kw"])
+            if sewage_s.get("pump_power_kw") is not None else None
+        ),
+        wastewater_pump_reserve_note=str(
+            sewage_s.get("pump_reserve_note", "")
+        ),
+        wastewater_pump_power_category=str(
+            sewage_s.get("pump_power_category", "")
+        ),
+        wastewater_pump_automation_note=str(
+            sewage_s.get("pump_automation_note", "")
+        ),
+        wastewater_treatment_required=bool(
+            sewage_s.get("treatment_required", False)
+        ),
+        wastewater_treatment_location=str(
+            sewage_s.get("treatment_location", "")
+        ),
+        wastewater_treatment_type=str(sewage_s.get("treatment_type", "")),
+        wastewater_treatment_capacity_lps=(
+            float(sewage_s["treatment_capacity_lps"])
+            if sewage_s.get("treatment_capacity_lps") is not None else None
+        ),
+        wastewater_treatment_capacity_m3_day=(
+            float(sewage_s["treatment_capacity_m3_day"])
+            if sewage_s.get("treatment_capacity_m3_day") is not None else None
+        ),
+        wastewater_treatment_technology=str(
+            sewage_s.get("treatment_technology", "")
+        ),
         catering_type=str(catering_s.get("type", "none")),
         catering_seats=int(catering_s.get("seats", 0)),
         catering_conditional_dishes=int(catering_s.get("conditional_dishes", 0)),
@@ -412,6 +585,13 @@ def dump_request(req: IOS2Request) -> str:
             "max_riser_flow_lps": req.storm_max_riser_flow_lps,
             "funnels_on_different_levels":
                 req.storm_funnels_on_different_levels,
+            "design_m3_day": req.storm_design_m3_day,
+            "annual_m3": req.storm_annual_m3,
+            "melt_m3h": req.storm_melt_m3h,
+            "melt_m3_day": req.storm_melt_m3_day,
+            "melt_m3_year": req.storm_melt_m3_year,
+            "treatment_volume_m3": req.storm_treatment_volume_m3,
+            "storage_volume_m3": req.storm_storage_volume_m3,
         },
         "sewage": {
             "max_fixture_lps": req.sewage_max_fixture_lps,
@@ -436,7 +616,64 @@ def dump_request(req: IOS2Request) -> str:
                 "outer_diameter_mm": x.outer_diameter_mm,
                 "wall_thickness_mm": x.wall_thickness_mm,
                 "length_m": x.length_m,
+                **({"slope_per_mille": x.slope_per_mille}
+                   if x.slope_per_mille is not None else {}),
+                **({"fill_ratio": x.fill_ratio}
+                   if x.fill_ratio is not None else {}),
+                **({"from_node": x.from_node} if x.from_node else {}),
+                **({"to_node": x.to_node} if x.to_node else {}),
+                **({"room": x.room} if x.room else {}),
+                **({"elevation_start_m": x.elevation_start_m}
+                   if x.elevation_start_m is not None else {}),
+                **({"elevation_end_m": x.elevation_end_m}
+                   if x.elevation_end_m is not None else {}),
+                "insulated": x.insulated,
             } for x in req.sewer_pipes],
+            "design_assignment_ref": req.wastewater_design_assignment_ref,
+            "survey_ref": req.wastewater_survey_ref,
+            "service_life_years": req.wastewater_service_life_years,
+            "overhaul_period_years": req.wastewater_overhaul_period_years,
+            "disposal_mode": req.wastewater_disposal_mode,
+            "tu_org": req.wastewater_tu_org,
+            "tu_number": req.wastewater_tu_number,
+            "tu_date": req.wastewater_tu_date,
+            "discharge_standard_ref": req.wastewater_discharge_standard_ref,
+            "water_body_characteristics_note": req.wastewater_water_body_characteristics_note,
+            "existing_network_type": req.wastewater_existing_network_type,
+            "existing_network_material": req.wastewater_existing_network_material,
+            "existing_network_standard": req.wastewater_existing_network_standard,
+            "existing_network_outer_diameter_mm": req.wastewater_existing_network_outer_diameter_mm,
+            "existing_network_wall_thickness_mm": req.wastewater_existing_network_wall_thickness_mm,
+            "discharge_point_k1": req.wastewater_discharge_point_k1,
+            "discharge_point_k2": req.wastewater_discharge_point_k2,
+            "discharge_point_k3": req.wastewater_discharge_point_k3,
+            "k1_min_hourly_m3h": req.wastewater_k1_min_hourly_m3h,
+            "k3_max_hourly_m3h": req.wastewater_k3_max_hourly_m3h,
+            "k3_min_hourly_m3h": req.wastewater_k3_min_hourly_m3h,
+            "quality_indicators_note": req.wastewater_quality_indicators_note,
+            "laying_method": req.wastewater_laying_method,
+            "fire_barrier_note": req.wastewater_fire_barrier_note,
+            "deformation_joint_note": req.wastewater_deformation_joint_note,
+            "waste_handling_note": req.wastewater_waste_handling_note,
+            "external_network_in_scope": req.wastewater_external_network_in_scope,
+            "external_network_design_note": req.wastewater_external_network_design_note,
+            "external_scheme_source": req.wastewater_external_scheme_source,
+            "site_plan_source": req.wastewater_site_plan_source,
+            "pump_required": req.wastewater_pump_required,
+            "pump_location": req.wastewater_pump_location,
+            "pump_model": req.wastewater_pump_model,
+            "pump_q_m3h": req.wastewater_pump_q_m3h,
+            "pump_head_m": req.wastewater_pump_head_m,
+            "pump_power_kw": req.wastewater_pump_power_kw,
+            "pump_reserve_note": req.wastewater_pump_reserve_note,
+            "pump_power_category": req.wastewater_pump_power_category,
+            "pump_automation_note": req.wastewater_pump_automation_note,
+            "treatment_required": req.wastewater_treatment_required,
+            "treatment_location": req.wastewater_treatment_location,
+            "treatment_type": req.wastewater_treatment_type,
+            "treatment_capacity_lps": req.wastewater_treatment_capacity_lps,
+            "treatment_capacity_m3_day": req.wastewater_treatment_capacity_m3_day,
+            "treatment_technology": req.wastewater_treatment_technology,
         },
         "catering": {
             "type": req.catering_type,

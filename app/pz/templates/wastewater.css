@@ -1,4 +1,5 @@
 .no-indent { text-indent: 0; }
+.subhead { break-after: avoid; page-break-after: avoid; }
 .calc-table {
   width: 100%;
   margin-left: 0 !important;
@@ -20,6 +21,18 @@
 .riser-calc th:nth-child(6) { width: 10%; }
 .riser-calc th:nth-child(7) { width: 32%; }
 .pipe-calc { font-size: 8.5pt !important; }
+.systems-table, .gost-audit, .gost-pipes, .scheme-pipes {
+  font-size: 7.7pt !important;
+}
+.gost-audit th:nth-child(1) { width: 15mm; }
+.gost-audit th:nth-child(3) { width: 34mm; }
+.gost-audit th:nth-child(4) { width: 22mm; }
+.scheme-meta {
+  margin: 3mm 0 5mm;
+  padding: 2.5mm;
+  border: .3mm solid #000;
+  font-size: 8pt;
+}
 .formula {
   margin: 6pt 0;
   padding: 6pt;
@@ -64,7 +77,8 @@
   justify-content: space-between;
 }
 .scheme-node {
-  width: 26mm;
+  width: 22mm;
+  flex: 1 1 19mm;
   min-height: 24mm;
   border: 0.3mm solid #000;
   padding: 3mm 2mm;
@@ -79,6 +93,15 @@
   align-items: center;
   font-size: 18pt;
   padding: 0 1mm;
+}
+.scheme-pipes th,
+.scheme-pipes td { padding: 1.2mm !important; text-align: center !important; }
+.scheme-warning {
+  margin-top: 5mm;
+  padding: 3mm;
+  border: .7mm solid #000;
+  font-size: 9pt;
+  break-inside: avoid;
 }
 .scheme-lane > p {
   margin: 3mm 0 0;

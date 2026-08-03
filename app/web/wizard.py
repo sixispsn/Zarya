@@ -4,7 +4,7 @@ app/web/wizard.py — Wizard: веб-форма ввода объекта ИОС
 
 Форма НЕ знает Project: она собирает IOS2Request (намерение) из полей,
 отдаёт его в ProjectBuilder и показывает результат design_ios2, включая
-самостоятельный комплект К1/К2.
+самостоятельный комплект К1/К2/К3.
 
     браузер → GET /wizard           форма (одна страница, секциями)
             → POST /wizard/design   сборка DTO → Builder → design_ios2
@@ -76,7 +76,7 @@ _DOCUMENT_GROUPS = (
     ("ios2", "ИОС2", "Система водоснабжения",
      "В1, В2, Т3 и Т4: расчёты и обоснования принятых решений"),
     ("ios3", "ИОС3", "Система водоотведения",
-     "К1 и К2: отдельная ПЗ, расчёты, схема и спецификация"),
+     "К1, К2 и К3: отдельная ПЗ, расчёты, схема и спецификация"),
 )
 
 _DOCUMENTS = (
@@ -92,13 +92,14 @@ _DOCUMENTS = (
     ("ios2", "Расчёт и подбор насосов", "pump_selection_pdf"),
     ("ios2", "Гидравлический расчёт В2", "hydraulic_pdf"),
     ("ios2", "Проверка живучести кольца В2", "resilience_pdf"),
-    ("ios3", "Комплект пояснительной записки К1 и К2",
+    ("ios3", "Комплект ИОС3 К1, К2 и К3",
      "wastewater_package_pdf"),
-    ("ios3", "Пояснительная записка К1 и К2", "wastewater_pz_pdf"),
+    ("ios3", "Пояснительная записка ИОС3", "wastewater_pz_pdf"),
+    ("ios3", "Баланс ИОС3 по приложению А ГОСТ Р 21.620", "wastewater_balance_pdf"),
     ("ios3", "Расчётные обоснования К1 и К2",
      "wastewater_calculation_pdf"),
-    ("ios3", "Принципиальная схема К1 и К2", "wastewater_scheme_pdf"),
-    ("ios3", "Спецификация К1 и К2", "wastewater_spec_pdf"),
+    ("ios3", "Принципиальная схема ИОС3", "wastewater_scheme_pdf"),
+    ("ios3", "Спецификация К1, К2 и К3", "wastewater_spec_pdf"),
 )
 
 
@@ -288,6 +289,26 @@ async def wizard_design(request: Request):
                 outer_diameter_mm=ff(f"sewer_pipe{i}_outer"),
                 wall_thickness_mm=ff(f"sewer_pipe{i}_wall"),
                 length_m=ff(f"sewer_pipe{i}_length"),
+                slope_per_mille=(
+                    ff(f"sewer_pipe{i}_slope")
+                    if fv(f"sewer_pipe{i}_slope") else None
+                ),
+                fill_ratio=(
+                    ff(f"sewer_pipe{i}_fill")
+                    if fv(f"sewer_pipe{i}_fill") else None
+                ),
+                from_node=fv(f"sewer_pipe{i}_from"),
+                to_node=fv(f"sewer_pipe{i}_to"),
+                room=fv(f"sewer_pipe{i}_room"),
+                elevation_start_m=(
+                    ff(f"sewer_pipe{i}_elev_start")
+                    if fv(f"sewer_pipe{i}_elev_start") else None
+                ),
+                elevation_end_m=(
+                    ff(f"sewer_pipe{i}_elev_end")
+                    if fv(f"sewer_pipe{i}_elev_end") else None
+                ),
+                insulated=bool(form.get(f"sewer_pipe{i}_insulated")),
             ))
 
     req = IOS2Request(
@@ -332,6 +353,96 @@ async def wizard_design(request: Request):
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
         sewage_outlets_count=fi("sewage_outlets_count"),
+        wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
+        wastewater_survey_ref=fv("wastewater_survey_ref"),
+        wastewater_service_life_years=(
+            fi("wastewater_service_life_years")
+            if fv("wastewater_service_life_years") else None
+        ),
+        wastewater_overhaul_period_years=(
+            fi("wastewater_overhaul_period_years")
+            if fv("wastewater_overhaul_period_years") else None
+        ),
+        wastewater_disposal_mode=fv("wastewater_disposal_mode", "not_set"),
+        wastewater_tu_org=fv("wastewater_tu_org"),
+        wastewater_tu_number=fv("wastewater_tu_number"),
+        wastewater_tu_date=fv("wastewater_tu_date"),
+        wastewater_discharge_standard_ref=fv(
+            "wastewater_discharge_standard_ref"
+        ),
+        wastewater_water_body_characteristics_note=fv(
+            "wastewater_water_body_characteristics_note"
+        ),
+        wastewater_existing_network_type=fv("wastewater_existing_network_type"),
+        wastewater_existing_network_material=fv("wastewater_existing_network_material"),
+        wastewater_existing_network_standard=fv("wastewater_existing_network_standard"),
+        wastewater_existing_network_outer_diameter_mm=(
+            ff("wastewater_existing_network_outer")
+            if fv("wastewater_existing_network_outer") else None
+        ),
+        wastewater_existing_network_wall_thickness_mm=(
+            ff("wastewater_existing_network_wall")
+            if fv("wastewater_existing_network_wall") else None
+        ),
+        wastewater_discharge_point_k1=fv("wastewater_discharge_point_k1"),
+        wastewater_discharge_point_k2=fv("wastewater_discharge_point_k2"),
+        wastewater_discharge_point_k3=fv("wastewater_discharge_point_k3"),
+        wastewater_k1_min_hourly_m3h=(
+            ff("wastewater_k1_min_hourly_m3h")
+            if fv("wastewater_k1_min_hourly_m3h") else None
+        ),
+        wastewater_k3_max_hourly_m3h=(
+            ff("wastewater_k3_max_hourly_m3h")
+            if fv("wastewater_k3_max_hourly_m3h") else None
+        ),
+        wastewater_k3_min_hourly_m3h=(
+            ff("wastewater_k3_min_hourly_m3h")
+            if fv("wastewater_k3_min_hourly_m3h") else None
+        ),
+        wastewater_quality_indicators_note=fv(
+            "wastewater_quality_indicators_note"
+        ),
+        wastewater_laying_method=fv("wastewater_laying_method"),
+        wastewater_fire_barrier_note=fv("wastewater_fire_barrier_note"),
+        wastewater_deformation_joint_note=fv("wastewater_deformation_joint_note"),
+        wastewater_waste_handling_note=fv("wastewater_waste_handling_note"),
+        wastewater_external_network_in_scope=bool(
+            form.get("wastewater_external_network_in_scope")
+        ),
+        wastewater_external_network_design_note=fv(
+            "wastewater_external_network_design_note"
+        ),
+        wastewater_external_scheme_source=fv("wastewater_external_scheme_source"),
+        wastewater_site_plan_source=fv("wastewater_site_plan_source"),
+        wastewater_pump_required=bool(form.get("wastewater_pump_required")),
+        wastewater_pump_location=fv("wastewater_pump_location"),
+        wastewater_pump_model=fv("wastewater_pump_model"),
+        wastewater_pump_q_m3h=(
+            ff("wastewater_pump_q_m3h") if fv("wastewater_pump_q_m3h") else None
+        ),
+        wastewater_pump_head_m=(
+            ff("wastewater_pump_head_m") if fv("wastewater_pump_head_m") else None
+        ),
+        wastewater_pump_power_kw=(
+            ff("wastewater_pump_power_kw") if fv("wastewater_pump_power_kw") else None
+        ),
+        wastewater_pump_reserve_note=fv("wastewater_pump_reserve_note"),
+        wastewater_pump_power_category=fv("wastewater_pump_power_category"),
+        wastewater_pump_automation_note=fv("wastewater_pump_automation_note"),
+        wastewater_treatment_required=bool(
+            form.get("wastewater_treatment_required")
+        ),
+        wastewater_treatment_location=fv("wastewater_treatment_location"),
+        wastewater_treatment_type=fv("wastewater_treatment_type"),
+        wastewater_treatment_capacity_lps=(
+            ff("wastewater_treatment_capacity_lps")
+            if fv("wastewater_treatment_capacity_lps") else None
+        ),
+        wastewater_treatment_capacity_m3_day=(
+            ff("wastewater_treatment_capacity_m3_day")
+            if fv("wastewater_treatment_capacity_m3_day") else None
+        ),
+        wastewater_treatment_technology=fv("wastewater_treatment_technology"),
         storm_city=fv("storm_city"),
         storm_roof_area_m2=ff("storm_roof_area"),
         storm_walls_area_m2=ff("storm_walls_area"),
@@ -361,6 +472,29 @@ async def wizard_design(request: Request):
         ),
         storm_funnels_on_different_levels=bool(
             form.get("storm_funnels_on_different_levels")
+        ),
+        storm_design_m3_day=(
+            ff("storm_design_m3_day") if fv("storm_design_m3_day") else None
+        ),
+        storm_annual_m3=(
+            ff("storm_annual_m3") if fv("storm_annual_m3") else None
+        ),
+        storm_melt_m3h=(
+            ff("storm_melt_m3h") if fv("storm_melt_m3h") else None
+        ),
+        storm_melt_m3_day=(
+            ff("storm_melt_m3_day") if fv("storm_melt_m3_day") else None
+        ),
+        storm_melt_m3_year=(
+            ff("storm_melt_m3_year") if fv("storm_melt_m3_year") else None
+        ),
+        storm_treatment_volume_m3=(
+            ff("storm_treatment_volume_m3")
+            if fv("storm_treatment_volume_m3") else None
+        ),
+        storm_storage_volume_m3=(
+            ff("storm_storage_volume_m3")
+            if fv("storm_storage_volume_m3") else None
         ),
         catering_type=fv("catering_type", "none"),
         catering_seats=fi("catering_seats"),

@@ -573,6 +573,14 @@ class SewerPipeSpec:
     outer_diameter_mm: float = 0.0
     wall_thickness_mm: float = 0.0
     length_m: float = 0.0
+    slope_per_mille: Optional[float] = None
+    fill_ratio: Optional[float] = None
+    from_node: str = ""
+    to_node: str = ""
+    room: str = ""
+    elevation_start_m: Optional[float] = None
+    elevation_end_m: Optional[float] = None
+    insulated: bool = False
 
     @property
     def inner_diameter_mm(self) -> float:
@@ -586,6 +594,54 @@ class SewageDesign:
     pipes: List[SewerPipeSpec] = field(default_factory=list)
     outlets_count: int = 0
     result: Optional[object] = None
+    # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.
+    design_assignment_ref: str = ""
+    survey_ref: str = ""
+    service_life_years: Optional[int] = None
+    overhaul_period_years: Optional[int] = None
+    disposal_mode: str = "not_set"  # not_set / centralized / local / water_body
+    connection_tu_org: str = ""
+    connection_tu_number: str = ""
+    connection_tu_date: str = ""
+    discharge_standard_ref: str = ""
+    water_body_characteristics_note: str = ""
+    existing_network_type: str = ""
+    existing_network_material: str = ""
+    existing_network_standard: str = ""
+    existing_network_outer_diameter_mm: Optional[float] = None
+    existing_network_wall_thickness_mm: Optional[float] = None
+    discharge_point_k1: str = ""
+    discharge_point_k2: str = ""
+    discharge_point_k3: str = ""
+    k1_min_hourly_m3h: Optional[float] = None
+    k3_max_hourly_m3h: Optional[float] = None
+    k3_min_hourly_m3h: Optional[float] = None
+    quality_indicators_note: str = ""
+    laying_method: str = ""
+    fire_barrier_note: str = ""
+    deformation_joint_note: str = ""
+    waste_handling_note: str = ""
+    # Наружные сети входят в подраздел только при явном включении в границы.
+    external_network_in_scope: bool = False
+    external_network_design_note: str = ""
+    external_scheme_source: str = ""
+    site_plan_source: str = ""
+    # Условно применимые требования 5.1.4.2-5.1.4.3.
+    pump_required: bool = False
+    pump_location: str = ""
+    pump_model: str = ""
+    pump_q_m3h: Optional[float] = None
+    pump_head_m: Optional[float] = None
+    pump_power_kw: Optional[float] = None
+    pump_reserve_note: str = ""
+    pump_power_category: str = ""
+    pump_automation_note: str = ""
+    treatment_required: bool = False
+    treatment_location: str = ""
+    treatment_type: str = ""
+    treatment_capacity_lps: Optional[float] = None
+    treatment_capacity_m3_day: Optional[float] = None
+    treatment_technology: str = ""
 
 
 @dataclass
@@ -608,6 +664,13 @@ class StormDesign:
     selected_riser_dn_mm: int = 0
     max_riser_flow_lps: Optional[float] = None
     funnels_on_different_levels: bool = False
+    design_m3_day: Optional[float] = None
+    annual_m3: Optional[float] = None
+    melt_m3h: Optional[float] = None
+    melt_m3_day: Optional[float] = None
+    melt_m3_year: Optional[float] = None
+    treatment_volume_m3: Optional[float] = None
+    storage_volume_m3: Optional[float] = None
     result: Optional[object] = None
     network_assessment: Optional[object] = None
 

@@ -34,6 +34,7 @@ from app.pz.generator import (
     generate_balance_pdf, generate_v1_calculation_pdf,
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
     generate_wastewater_scheme_pdf, generate_wastewater_spec_pdf,
+    generate_wastewater_balance_pdf,
     generate_commission_control_pdf, append_pdf, merge_pdfs,
     generate_metering_scheme_pdf, generate_pump_zone_scheme_pdf,
 )
@@ -63,6 +64,7 @@ class IOS2DesignBundle:
     wastewater_scheme_pdf: Optional[str] = None
     wastewater_spec_pdf: Optional[str] = None
     wastewater_package_pdf: Optional[str] = None
+    wastewater_balance_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     commission_control_pdf: Optional[str] = None
     commission_report: Optional[object] = None
@@ -747,6 +749,22 @@ def design_ios2(
         pump_system.frequency_drive_required = project.normative.frequency_drive_required
         pump_system.dispatch_required = project.normative.pump_dispatch_required
 
+    from app.pz.wastewater_gost import audit_wastewater_gost
+    wastewater_gost = audit_wastewater_gost(project)
+    if wastewater_gost.complete:
+        bundle.status.append(
+            "wastewater_gost: состав ИОС3 соответствует проверяемым "
+            "требованиям ГОСТ Р 21.620-2023"
+        )
+    else:
+        bundle.warnings.append(
+            "wastewater_gost: до выпуска ИОС3 заполнить: "
+            + "; ".join(
+                f"{row.code} {row.requirement}"
+                for row in wastewater_gost.missing
+            )
+        )
+
     if not render_documents:
         bundle.commission_report = build_commission_report(project)
         bundle.status.append(
@@ -780,9 +798,14 @@ def design_ios2(
         bundle.wastewater_pz_pdf,
         bundle.wastewater_calculation_pdf,
     )
+    bundle.wastewater_balance_pdf = generate_wastewater_balance_pdf(
+        project, os.path.join(output_dir, "Баланс_ИОС3.pdf")
+    )
+    append_pdf(bundle.wastewater_pz_pdf, bundle.wastewater_balance_pdf)
     bundle.status.append(
         "ПЗ_К1_К2.pdf собрана как самостоятельная текстовая часть "
-        "подраздела 5.3 по пункту 18 ПП РФ № 87; расчётные листы приложены"
+        "подраздела 5.3 по пункту 18 ПП РФ № 87 и ГОСТ Р 21.620-2023; "
+        "расчётные листы и баланс приложения А приложены"
     )
 
     bundle.wastewater_scheme_pdf = generate_wastewater_scheme_pdf(
@@ -862,6 +885,7 @@ def design_ios2(
         "Расчёты К1/К2": bool(bundle.wastewater_calculation_pdf),
         "Пояснительная записка К1/К2": bool(bundle.wastewater_pz_pdf),
         "Баланс ВиВ": bool(bundle.balance_pdf),
+        "Баланс ИОС3 по ГОСТ Р 21.620": bool(bundle.wastewater_balance_pdf),
         "Подбор насосов": bool(bundle.pump_selection_pdf),
         "Спецификация": bool(bundle.spec_pdf),
         "Принципиальная схема": bool(bundle.scheme_pdf),

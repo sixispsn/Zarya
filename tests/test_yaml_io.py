@@ -102,9 +102,34 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
         "К1-Ст1", 3.5, "pp", "ventilated", 110, 110, 87.5, True,
     )]
     req.sewer_pipes = [SewerPipeRequest(
-        "K1", "К1-М1", "стояк", "ПП", "ТУ изготовителя", 110, 3.4, 48,
+        "K1", "К1-М1", "горизонтальная сеть", "ПП", "ТУ изготовителя", 110, 3.4, 48,
+        slope_per_mille=20.0, fill_ratio=0.55,
+        from_node="К1-Ст1", to_node="К1-Вып1", room="техподполье",
+        elevation_start_m=-0.40, elevation_end_m=-1.36,
     )]
     req.sewage_outlets_count = 2
+    req.wastewater_design_assignment_ref = "Задание, раздел 6"
+    req.wastewater_survey_ref = "ИГИ, том 2"
+    req.wastewater_service_life_years = 50
+    req.wastewater_overhaul_period_years = 25
+    req.wastewater_disposal_mode = "centralized"
+    req.wastewater_tu_org = "Водоканал"
+    req.wastewater_tu_number = "123-К"
+    req.wastewater_tu_date = "01.08.2026"
+    req.wastewater_discharge_standard_ref = "НДС № 7 от 01.08.2026"
+    req.wastewater_water_body_characteristics_note = "категория и режим по ИЭИ"
+    req.wastewater_existing_network_type = "раздельная"
+    req.wastewater_existing_network_material = "ПЭ"
+    req.wastewater_existing_network_standard = "ГОСТ 18599-2001"
+    req.wastewater_existing_network_outer_diameter_mm = 200
+    req.wastewater_existing_network_wall_thickness_mm = 11.9
+    req.wastewater_discharge_point_k1 = "КК-1"
+    req.wastewater_k1_min_hourly_m3h = 0.12
+    req.wastewater_quality_indicators_note = "по условиям подключения"
+    req.wastewater_laying_method = "в шахтах и под потолком"
+    req.wastewater_fire_barrier_note = "противопожарные муфты"
+    req.wastewater_deformation_joint_note = "пересечения отсутствуют"
+    req.wastewater_external_network_design_note = "решения по ИГИ и ГП"
     req.storm_roof_sections = 2
     req.storm_funnels_count = 4
     req.storm_max_funnel_spacing_m = 40

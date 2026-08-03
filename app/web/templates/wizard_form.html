@@ -18,7 +18,7 @@
 <main class="shell">
 <section class="hero">
   <div><p class="eyebrow">ZARYA / IOS2 + IOS3</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Один расчёт — два самостоятельных подраздела стадии П.</p></div>
-  <div class="hero-meta"><span class="chip discipline-chip" data-discipline="ios2">ИОС2 · В1 В2 Т3 Т4</span><span class="chip discipline-chip" data-discipline="ios3">ИОС3 · К1 К2</span><details class="hero-standards"><summary>Нормативная база</summary><div><span>СП 30</span><span>СП 10</span><span>ПП 87</span><span>ГОСТ Р 21.619-2023</span></div></details><div class="example-actions">{% if example_mode %}<a href="/wizard">Очистить пример</a>{% else %}<a href="/wizard?example=1">Загрузить учебный пример</a>{% endif %}</div></div>
+  <div class="hero-meta"><span class="chip discipline-chip" data-discipline="ios2">ИОС2 · В1 В2 Т3 Т4</span><span class="chip discipline-chip" data-discipline="ios3">ИОС3 · К1 К2 К3</span><details class="hero-standards"><summary>Нормативная база</summary><div><span>СП 30</span><span>СП 10</span><span>ПП 87</span><span>ГОСТ Р 21.619-2023</span><span>ГОСТ Р 21.620-2023</span></div></details><div class="example-actions">{% if example_mode %}<a href="/wizard">Очистить пример</a>{% else %}<a href="/wizard?example=1">Загрузить учебный пример</a>{% endif %}</div></div>
 </section>
 <div class="workspace">
 <nav class="stepnav" aria-label="Разделы исходных данных">
@@ -99,10 +99,10 @@
   <div class="row"><label>Зоны охраны<input class="w-l" name="water_protection_note" value="{{ sd.water_protection_note if sd else '' }}" placeholder="По ГПЗУ / ИОС1"></label><label>Резервирование воды<input class="w-l" name="reserve_water_note" value="{{ sd.reserve_water_note if sd else 'Решения по резервированию хозяйственно-питьевого водоснабжения принимаются согласно ТУ' }}"></label></div>
 </div></details></fieldset>
 
-<fieldset id="systems"><legend class="visually-hidden">Инженерные системы ИОС2 и ИОС3</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">05</span><span class="section-copy"><span class="section-title">Инженерные системы ИОС2 / ИОС3</span><span class="section-value">ИОС2 · В1 В2 Т3 Т4 &nbsp;&nbsp; ИОС3 · К1 К2</span></span><span class="section-meta"><span class="source-tag">ИОС2</span><span class="source-tag">ИОС3</span><span class="accepted" data-state="{{ input_state }}">{{ input_state }}</span></span></summary><div class="section-body">
+<fieldset id="systems"><legend class="visually-hidden">Инженерные системы ИОС2 и ИОС3</legend><details class="input-section"{% if errors %} open{% endif %}><summary class="section-head"><span class="step-badge">05</span><span class="section-copy"><span class="section-title">Инженерные системы ИОС2 / ИОС3</span><span class="section-value">ИОС2 · В1 В2 Т3 Т4 &nbsp;&nbsp; ИОС3 · К1 К2 К3</span></span><span class="section-meta"><span class="source-tag">ИОС2</span><span class="source-tag">ИОС3</span><span class="accepted" data-state="{{ input_state }}">{{ input_state }}</span></span></summary><div class="section-body">
   <div class="discipline-overview" aria-label="Состав подразделов">
     <article class="discipline-card" data-discipline="ios2"><span class="discipline-code">ИОС2</span><div><strong>Водоснабжение</strong><b>В1 · В2 · Т3 · Т4</b></div></article>
-    <article class="discipline-card" data-discipline="ios3"><span class="discipline-code">ИОС3</span><div><strong>Водоотведение</strong><b>К1 · К2</b></div></article>
+    <article class="discipline-card" data-discipline="ios3"><span class="discipline-code">ИОС3</span><div><strong>Водоотведение</strong><b>К1 · К2 · К3</b></div></article>
   </div>
   <details class="advanced-section discipline-section" data-discipline="ios2"><summary>ИОС2 · В1 / В2 / Т3 / Т4 · укрупнённые данные стадии П</summary><div class="advanced-body">
     <div class="row">
@@ -123,6 +123,39 @@
       <label>q₀s прибора, л/с<input name="sewage_max_fixture_lps" value="{{ prefill.sewage_max_fixture_lps if prefill else 1.6 }}"></label>
       <label>Выпусков К1, шт.<input name="sewage_outlets_count" value="{{ prefill.sewage_outlets_count if prefill else 0 }}"></label>
     </div>
+    <details class="field-help"><summary>Исходные данные ПЗ по ГОСТ Р 21.620-2023</summary>
+      <div class="row">
+        <label>Ссылка на задание<input class="w-l" name="wastewater_design_assignment_ref" value="{{ prefill.wastewater_design_assignment_ref if prefill else '' }}" placeholder="Раздел / приложение задания"></label>
+        <label>Ссылка на изыскания<input class="w-l" name="wastewater_survey_ref" value="{{ prefill.wastewater_survey_ref if prefill else '' }}" placeholder="Шифр отчёта ИГИ/ИЭИ"></label>
+        <label>Срок службы, лет<input name="wastewater_service_life_years" value="{{ prefill.wastewater_service_life_years if prefill and prefill.wastewater_service_life_years is not none else '' }}"></label>
+        <label>До капремонта, лет<input name="wastewater_overhaul_period_years" value="{{ prefill.wastewater_overhaul_period_years if prefill and prefill.wastewater_overhaul_period_years is not none else '' }}"></label>
+        <label>Способ водоотведения<select name="wastewater_disposal_mode"><option value="not_set"{% if not prefill or prefill.wastewater_disposal_mode == 'not_set' %} selected{% endif %}>не задан</option><option value="centralized"{% if prefill and prefill.wastewater_disposal_mode == 'centralized' %} selected{% endif %}>централизованная сеть</option><option value="local"{% if prefill and prefill.wastewater_disposal_mode == 'local' %} selected{% endif %}>локальная система</option><option value="water_body"{% if prefill and prefill.wastewater_disposal_mode == 'water_body' %} selected{% endif %}>сброс в водный объект</option></select></label>
+        <label>Организация ТУ<input name="wastewater_tu_org" value="{{ prefill.wastewater_tu_org if prefill else '' }}"></label>
+        <label>№ ТУ<input name="wastewater_tu_number" value="{{ prefill.wastewater_tu_number if prefill else '' }}"></label>
+        <label>Дата ТУ<input name="wastewater_tu_date" value="{{ prefill.wastewater_tu_date if prefill else '' }}"></label>
+        <label>Реквизиты норматива допустимого сброса<input class="w-l" name="wastewater_discharge_standard_ref" value="{{ prefill.wastewater_discharge_standard_ref if prefill else '' }}" placeholder="Для сброса в водный объект"></label>
+        <label>Характеристика водного объекта<input class="w-l" name="wastewater_water_body_characteristics_note" value="{{ prefill.wastewater_water_body_characteristics_note if prefill else '' }}" placeholder="Категория, водоохранная зона, ГВВ 3 %, межень, расход, класс качества"></label>
+        <label>Тип существующей сети<input name="wastewater_existing_network_type" value="{{ prefill.wastewater_existing_network_type if prefill else '' }}" placeholder="общесплавная / раздельная"></label>
+        <label>Материал существующей сети<input name="wastewater_existing_network_material" value="{{ prefill.wastewater_existing_network_material if prefill else '' }}"></label>
+        <label>Стандарт трубы<input name="wastewater_existing_network_standard" value="{{ prefill.wastewater_existing_network_standard if prefill else '' }}"></label>
+        <label>Øнар существующей сети, мм<input name="wastewater_existing_network_outer" value="{{ prefill.wastewater_existing_network_outer_diameter_mm if prefill and prefill.wastewater_existing_network_outer_diameter_mm is not none else '' }}"></label>
+        <label>Стенка существующей сети, мм<input name="wastewater_existing_network_wall" value="{{ prefill.wastewater_existing_network_wall_thickness_mm if prefill and prefill.wastewater_existing_network_wall_thickness_mm is not none else '' }}"></label>
+        <label>Точка сброса К1<input name="wastewater_discharge_point_k1" value="{{ prefill.wastewater_discharge_point_k1 if prefill else '' }}" placeholder="КК-1 / выпуск К1-1"></label>
+        <label>Точка сброса К2<input name="wastewater_discharge_point_k2" value="{{ prefill.wastewater_discharge_point_k2 if prefill else '' }}"></label>
+        <label>Точка сброса К3<input name="wastewater_discharge_point_k3" value="{{ prefill.wastewater_discharge_point_k3 if prefill else '' }}"></label>
+        <label>Qmin К1, м³/ч<input name="wastewater_k1_min_hourly_m3h" value="{{ prefill.wastewater_k1_min_hourly_m3h if prefill and prefill.wastewater_k1_min_hourly_m3h is not none else '' }}"></label>
+        <label>Qmax К3, м³/ч<input name="wastewater_k3_max_hourly_m3h" value="{{ prefill.wastewater_k3_max_hourly_m3h if prefill and prefill.wastewater_k3_max_hourly_m3h is not none else '' }}"></label>
+        <label>Qmin К3, м³/ч<input name="wastewater_k3_min_hourly_m3h" value="{{ prefill.wastewater_k3_min_hourly_m3h if prefill and prefill.wastewater_k3_min_hourly_m3h is not none else '' }}"></label>
+        <label>Показатели состава стоков<input class="w-l" name="wastewater_quality_indicators_note" value="{{ prefill.wastewater_quality_indicators_note if prefill else '' }}" placeholder="По ТУ / заданию ТХ, концентрации"></label>
+        <label>Способ прокладки<input class="w-l" name="wastewater_laying_method" value="{{ prefill.wastewater_laying_method if prefill else '' }}"></label>
+        <label>Противопожарные проходки<input class="w-l" name="wastewater_fire_barrier_note" value="{{ prefill.wastewater_fire_barrier_note if prefill else '' }}"></label>
+        <label>Деформационные швы<input class="w-l" name="wastewater_deformation_joint_note" value="{{ prefill.wastewater_deformation_joint_note if prefill else '' }}"></label>
+        <label class="check-label"><input type="checkbox" name="wastewater_external_network_in_scope"{% if prefill and prefill.wastewater_external_network_in_scope %} checked{% endif %}>Наружные сети входят в границы ИОС3</label>
+        <label>Решения по наружным сетям<input class="w-l" name="wastewater_external_network_design_note" value="{{ prefill.wastewater_external_network_design_note if prefill else '' }}" placeholder="Трубы, уклоны, глубина, грунты/УГВ, основания, защита, футляры и колодцы"></label>
+        <label>Источник схемы наружных сетей<input class="w-l" name="wastewater_external_scheme_source" value="{{ prefill.wastewater_external_scheme_source if prefill else '' }}" placeholder="Лист / файл / раздел"></label>
+        <label>Источник опорного плана<input class="w-l" name="wastewater_site_plan_source" value="{{ prefill.wastewater_site_plan_source if prefill else '' }}" placeholder="ГП, М 1:500"></label>
+      </div>
+    </details>
     <p class="technical-label">Характерные стояки К1 · расход каждого стояка задаётся по аксонометрии</p>
     <div class="table-wrap"><table class="grid"><tr><th>Марка</th><th>q, л/с</th><th>Материал</th><th>Схема</th><th>DN стояка</th><th>DN отвода</th><th>Угол, °</th><th>Унитазы</th><th>Hраб, м</th></tr>
     {% for i in range(3) %}{% set r = prefill.sewage_risers[i] if prefill and i < prefill.sewage_risers|length else none %}
@@ -137,19 +170,47 @@
       <td><label class="check-label compact-check"><input type="checkbox" name="sewage_riser{{ i + 1 }}_toilet"{% if not r or r.has_toilet %} checked{% endif %}>есть</label></td>
       <td><input name="sewage_riser{{ i + 1 }}_height" value="{{ r.working_height_m if r and r.working_height_m is not none else '' }}"></td>
     </tr>{% endfor %}</table></div>
-    <p class="technical-label">Трубы К1/К2 · только фактически посчитанные длины</p>
-    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th></tr>
+    <p class="technical-label">Трубы К1/К2/К3 · только фактически посчитанные длины</p>
+    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Изоляция</th></tr>
     {% for i in range(6) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
     <tr>
-      <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option></select></td>
+      <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
       <td><input name="sewer_pipe{{ i + 1 }}_id" value="{{ r.section_id if r else '' }}" placeholder="К1-М1"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_purpose" value="{{ r.purpose if r else '' }}" placeholder="стояки"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_room" value="{{ r.room if r else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_from" value="{{ r.from_node if r else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_to" value="{{ r.to_node if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_material" value="{{ r.material if r else '' }}" placeholder="ПП"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}" placeholder="ГОСТ / ТУ"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_outer" value="{{ r.outer_diameter_mm if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_wall" value="{{ r.wall_thickness_mm if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_length" value="{{ r.length_m if r else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_slope" value="{{ r.slope_per_mille if r and r.slope_per_mille is not none else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_fill" value="{{ r.fill_ratio if r and r.fill_ratio is not none else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_elev_start" value="{{ r.elevation_start_m if r and r.elevation_start_m is not none else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_elev_end" value="{{ r.elevation_end_m if r and r.elevation_end_m is not none else '' }}"></td>
+      <td><label class="check-label compact-check"><input type="checkbox" name="sewer_pipe{{ i + 1 }}_insulated"{% if r and r.insulated %} checked{% endif %}>да</label></td>
     </tr>{% endfor %}</table></div>
+    <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>
+      <div class="row">
+        <label class="check-label"><input type="checkbox" name="wastewater_pump_required"{% if prefill and prefill.wastewater_pump_required %} checked{% endif %}>Предусмотрена КНС</label>
+        <label>Размещение КНС<input name="wastewater_pump_location" value="{{ prefill.wastewater_pump_location if prefill else '' }}"></label>
+        <label>Модель / тип насоса<input name="wastewater_pump_model" value="{{ prefill.wastewater_pump_model if prefill else '' }}"></label>
+        <label>Q насоса, м³/ч<input name="wastewater_pump_q_m3h" value="{{ prefill.wastewater_pump_q_m3h if prefill and prefill.wastewater_pump_q_m3h is not none else '' }}"></label>
+        <label>H насоса, м<input name="wastewater_pump_head_m" value="{{ prefill.wastewater_pump_head_m if prefill and prefill.wastewater_pump_head_m is not none else '' }}"></label>
+        <label>P насоса, кВт<input name="wastewater_pump_power_kw" value="{{ prefill.wastewater_pump_power_kw if prefill and prefill.wastewater_pump_power_kw is not none else '' }}"></label>
+        <label>Резервирование<input name="wastewater_pump_reserve_note" value="{{ prefill.wastewater_pump_reserve_note if prefill else '' }}"></label>
+        <label>Категория электроснабжения<input name="wastewater_pump_power_category" value="{{ prefill.wastewater_pump_power_category if prefill else '' }}"></label>
+        <label>Автоматизация<input class="w-l" name="wastewater_pump_automation_note" value="{{ prefill.wastewater_pump_automation_note if prefill else '' }}"></label>
+        <label class="check-label"><input type="checkbox" name="wastewater_treatment_required"{% if prefill and prefill.wastewater_treatment_required %} checked{% endif %}>Предусмотрена локальная очистка</label>
+        <label>Тип очистки<input name="wastewater_treatment_type" value="{{ prefill.wastewater_treatment_type if prefill else '' }}"></label>
+        <label>Размещение очистки<input name="wastewater_treatment_location" value="{{ prefill.wastewater_treatment_location if prefill else '' }}"></label>
+        <label>Q очистки, л/с<input name="wastewater_treatment_capacity_lps" value="{{ prefill.wastewater_treatment_capacity_lps if prefill and prefill.wastewater_treatment_capacity_lps is not none else '' }}"></label>
+        <label>Q очистки, м³/сут<input name="wastewater_treatment_capacity_m3_day" value="{{ prefill.wastewater_treatment_capacity_m3_day if prefill and prefill.wastewater_treatment_capacity_m3_day is not none else '' }}"></label>
+        <label>Технология очистки<input class="w-l" name="wastewater_treatment_technology" value="{{ prefill.wastewater_treatment_technology if prefill else '' }}"></label>
+        <label>Обращение с отходами<input class="w-l" name="wastewater_waste_handling_note" value="{{ prefill.wastewater_waste_handling_note if prefill else '' }}"></label>
+      </div>
+    </details>
     <details class="field-help"><summary>Граница расчёта К1 на стадии П</summary><p>Общий расход К1: q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub>. Расход между стояками и длины не назначаются автоматически. Точная проверка стояка выполняется для заполненной строки приложения К; горизонтальная гидравлика без аксонометрии остаётся стадией Р.</p></details>
   </div></details>
 
@@ -170,6 +231,13 @@
       <label>q дикт. стояка, л/с<input name="storm_max_riser_flow_lps" value="{{ prefill.storm_max_riser_flow_lps if prefill and prefill.storm_max_riser_flow_lps is not none else '' }}"></label>
       <label class="check-label"><input type="checkbox" name="storm_sectional_residential_single_funnel"{% if prefill and prefill.storm_sectional_residential_single_funnel %} checked{% endif %}>Секционный жилой дом: одна воронка на секцию</label>
       <label class="check-label"><input type="checkbox" name="storm_funnels_on_different_levels"{% if prefill and prefill.storm_funnels_on_different_levels %} checked{% endif %}>К одному стояку подключены разные уровни</label>
+      <label>Дождевые воды, м³/сут<input name="storm_design_m3_day" value="{{ prefill.storm_design_m3_day if prefill and prefill.storm_design_m3_day is not none else '' }}"></label>
+      <label>Дождевые воды, м³/год<input name="storm_annual_m3" value="{{ prefill.storm_annual_m3 if prefill and prefill.storm_annual_m3 is not none else '' }}"></label>
+      <label>Талые воды, м³/ч<input name="storm_melt_m3h" value="{{ prefill.storm_melt_m3h if prefill and prefill.storm_melt_m3h is not none else '' }}"></label>
+      <label>Талые воды, м³/сут<input name="storm_melt_m3_day" value="{{ prefill.storm_melt_m3_day if prefill and prefill.storm_melt_m3_day is not none else '' }}"></label>
+      <label>Талые воды, м³/год<input name="storm_melt_m3_year" value="{{ prefill.storm_melt_m3_year if prefill and prefill.storm_melt_m3_year is not none else '' }}"></label>
+      <label>Объём на очистку, м³<input name="storm_treatment_volume_m3" value="{{ prefill.storm_treatment_volume_m3 if prefill and prefill.storm_treatment_volume_m3 is not none else '' }}"></label>
+      <label>Аккумулирующий резервуар, м³<input name="storm_storage_volume_m3" value="{{ prefill.storm_storage_volume_m3 if prefill and prefill.storm_storage_volume_m3 is not none else '' }}"></label>
       <label>Общепит<select name="catering_type"><option value="none"{% if not prefill or prefill.catering_type == 'none' %} selected{% endif %}>нет / не задан</option><option value="semi_finished"{% if prefill and prefill.catering_type == 'semi_finished' %} selected{% endif %}>на полуфабрикатах</option><option value="raw"{% if prefill and prefill.catering_type == 'raw' %} selected{% endif %}>на сырье</option><option value="school"{% if prefill and prefill.catering_type == 'school' %} selected{% endif %}>пищеблок школы/ДОО</option></select></label>
       <label>Мест в залах<input name="catering_seats" value="{{ prefill.catering_seats if prefill else 0 }}"></label>
       <label>Условных блюд<input name="catering_conditional_dishes" value="{{ prefill.catering_conditional_dishes if prefill else 0 }}"></label>

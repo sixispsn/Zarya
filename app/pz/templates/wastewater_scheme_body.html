@@ -1,45 +1,74 @@
 <p class="subitem no-indent">
-  Схема показывает состав и направление потоков на стадии П. Она не является
-  аксонометрией и не задаёт высоты, уклоны, длины или распределение расходов.
+  Принципиальная схема выполнена по ГОСТ Р 21.620-2023, пп. 5.2.2.1-5.2.2.4.
+  На лист вынесены только подтверждённые моделью элементы и связи. Пустые поля
+  являются перечнем исходных данных, обязательных до выпуска документации.
 </p>
 
-<div class="system-scheme">
-  <section class="scheme-lane">
-    <header><b>К1</b><span>хозяйственно-бытовая и производственная канализация</span></header>
-    <div class="scheme-flow">
-      <div class="scheme-node">Санитарные приборы<br><small>q<sub>0s</sub> по прибору</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node accent">Стояки К1<br><small>{% if sewage.risers %}характерных: {{ sewage.risers|length }}{% else %}число по планам{% endif %}</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node">Горизонтальная сеть<br><small>уклоны и DN — стадия Р</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node accent">Выпуски К1<br><small>{% if sewage.outlets_count %}{{ sewage.outlets_count }} шт.{% else %}число не задано{% endif %}</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node terminal">Наружная сеть канализации<br><small>по ТУ / ИОС3</small></div>
-    </div>
-    {% if grease_trap.required %}<div class="scheme-branch">Производственные стоки общепита → жироуловитель по заданию ТХ → самостоятельный выпуск</div>{% endif %}
-    <p>{% if sewage.result %}Q<sub>К1</sub> = {{ sewage.result.total.q_sewage_lps|num(3) }} л/с{% else %}Q<sub>К1</sub> требует групп потребителей{% endif %}</p>
-  </section>
-
-  <section class="scheme-lane">
-    <header><b>К2</b><span>внутренний водосток</span></header>
-    <div class="scheme-flow">
-      <div class="scheme-node">Кровля / ендовы<br><small>план АР</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node accent">Воронки К2<br><small>{% if storm.funnels_count %}{{ storm.funnels_count }} шт.{% else %}число по плану кровли{% endif %}</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node accent">Стояки К2<br><small>{% if storm.risers_count %}{{ storm.risers_count }} шт.; DN {{ storm.selected_riser_dn_mm or "—" }}{% else %}число и DN по аксонометрии{% endif %}</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node">Выпуски К2<br><small>давление/безнапорность по п. 21.14</small></div>
-      <div class="scheme-arrow">→</div>
-      <div class="scheme-node terminal">Наружная дождевая сеть<br><small>по ТУ / ИОС3</small></div>
-    </div>
-    <p>{% if storm.result %}Q<sub>К2</sub> = {{ storm.result.q_total_l_per_s|num(3) }} л/с{% else %}Q<sub>К2</sub> требует города и площади кровли{% endif %}</p>
-  </section>
+<div class="scheme-meta">
+  <b>Объект:</b> {{ building.floors_above }} эт.; высота {{ building.height_m|num(1) }} м.
+  <b>Помещения:</b> по экспликации АР.
+  <b>Направление потока:</b> от приборов к точкам сброса.
 </div>
 
-<table class="data scheme-legend">
-  <tr><th>Что подтверждает схема стадии П</th><td>состав систем, раздельность потоков, направления отвода, расчётные общие расходы</td></tr>
-  <tr><th>Что требует стадии Р</th><td>аксонометрия, привязки, отметки, уклоны, длины, нагрузки отдельных элементов, узлы проходок и ревизий</td></tr>
+<section class="scheme-lane">
+  <header><b>К1</b><span>бытовая канализация</span></header>
+  <div class="scheme-flow">
+    <div class="scheme-node">Санитарные приборы<br><small>{% if fixtures %}{% for f in fixtures %}{{ f.name }} — {{ f.count }} шт.{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}состав по экспликации АР{% endif %}</small></div>
+    <div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Поэтажные отводы<br><small>DN, уклон, отметка подключения — по таблице участков</small></div>
+    <div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Стояки К1<br><small>{% if sewage.risers %}{% for r in sewage.risers %}{{ r.riser_id }} DN{{ r.riser_dn_mm }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}марки и DN не заданы{% endif %}</small></div>
+    <div class="scheme-arrow">→</div>
+    <div class="scheme-node">Горизонтальная сеть<br><small>ревизии, прочистки, противопожарные муфты — по участкам и планам</small></div>
+    <div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Выпуски К1<br><small>{% if sewage.outlets_count %}{{ sewage.outlets_count }} шт.{% else %}число не задано{% endif %}</small></div>
+    <div class="scheme-arrow">→</div>
+    <div class="scheme-node terminal">{{ sewage.discharge_point_k1 or "Точка сброса К1 не задана" }}</div>
+  </div>
+  <p>{% if sewage.result %}Q<sub>К1</sub> = {{ sewage.result.total.q_sewage_lps|num(3) }} л/с{% endif %}</p>
+</section>
+
+{% if grease_trap.preparation_type != "none" %}
+<section class="scheme-lane">
+  <header><b>К3</b><span>производственная канализация</span></header>
+  <div class="scheme-flow">
+    <div class="scheme-node">Технологическое оборудование<br><small>по заданию ТХ</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Локальная очистка<br><small>{{ sewage.treatment_type or "тип не задан" }}</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node">Самостоятельная сеть К3</div><div class="scheme-arrow">→</div>
+    <div class="scheme-node terminal">{{ sewage.discharge_point_k3 or "Точка сброса К3 не задана" }}</div>
+  </div>
+</section>
+{% endif %}
+
+{% if storm.system_kind == "internal" %}
+<section class="scheme-lane">
+  <header><b>К2</b><span>внутренние водостоки</span></header>
+  <div class="scheme-flow">
+    <div class="scheme-node">Кровля / ендовы<br><small>отметки по АР</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Воронки К2<br><small>{% if storm.funnels_count %}{{ storm.funnels_count }} шт.{% else %}число не задано{% endif %}</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node accent">Стояки К2<br><small>{% if storm.risers_count %}{{ storm.risers_count }} шт.; DN{{ storm.selected_riser_dn_mm or "" }}{% else %}число и DN не заданы{% endif %}</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node">Выпуски К2<br><small>уклон и отметки по таблице участков</small></div><div class="scheme-arrow">→</div>
+    <div class="scheme-node terminal">{{ sewage.discharge_point_k2 or "Точка сброса К2 не задана" }}</div>
+  </div>
+  <p>{% if storm.result %}Q<sub>К2</sub> = {{ storm.result.q_total_l_per_s|num(3) }} л/с{% endif %}</p>
+</section>
+{% endif %}
+
+<p class="subhead">Ведомость трубопроводных связей схемы</p>
+<table class="data calc-table scheme-pipes">
+  <thead><tr><th>Система / участок</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Øнар×s, мм</th><th>Отметки, м</th><th>Уклон, ‰</th><th>h/d</th><th>Направление</th></tr></thead>
+  <tbody>{% for p in sewage.pipes %}
+    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.room or "" }}</td><td>{{ p.from_node or "" }}</td><td>{{ p.to_node or "" }}</td><td>{{ p.outer_diameter_mm|compact(1) }}×{{ p.wall_thickness_mm|compact(1) }}</td><td>{% if p.elevation_start_m is not none %}{{ p.elevation_start_m|num(2) }} → {{ p.elevation_end_m|num(2) }}{% endif %}</td><td>{% if p.slope_per_mille is not none %}{{ p.slope_per_mille|num(1) }}{% endif %}</td><td>{% if p.fill_ratio is not none %}{{ p.fill_ratio|num(2) }}{% endif %}</td><td>{{ p.from_node }} → {{ p.to_node }}</td></tr>
+  {% else %}<tr><td colspan="9">Топологические участки не заданы</td></tr>{% endfor %}</tbody>
 </table>
 
+<table class="data scheme-legend">
+  <tr><th>Условные элементы</th><td>→ направление потока; К1 — бытовая канализация; К2 — внутренние водостоки; К3 — производственная канализация.</td></tr>
+  <tr><th>Проходки</th><td>{{ sewage.fire_barrier_note or "Решения по противопожарным преградам не заданы" }}</td></tr>
+  <tr><th>Деформационные швы</th><td>{{ sewage.deformation_joint_note or "Пересечения деформационных швов не заданы" }}</td></tr>
+</table>
+
+{% if not gost_audit.complete %}
+<div class="scheme-warning"><b>Схема не готова к выпуску:</b>
+{% for row in gost_audit.missing %}{% if row.code in ["K-GOST-05", "K-GOST-07", "K-GOST-08", "K-GOST-09", "K-GOST-13"] %}{{ row.requirement }}{% if not loop.last %}; {% endif %}{% endif %}{% endfor %}.</div>
+{% endif %}

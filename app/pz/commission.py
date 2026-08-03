@@ -20,7 +20,7 @@ from app.pz.rules import decide_fire_network, project_governing_head
 
 APP_VERSION = "0.6.1"
 NORMATIVE_EDITIONS = (
-    "ПП РФ № 87; ГОСТ Р 21.619-2023; ГОСТ 21.110-2013; "
+    "ПП РФ № 87; ГОСТ Р 21.619-2023; ГОСТ Р 21.620-2023; ГОСТ 21.110-2013; "
     "ГОСТ 21.601-2011; СП 30.13330.2020; "
     "СП 10.13130.2020; СП 54.13330.2022; СП 118.13330.2022; "
     "СП 253.1325800.2016"
@@ -171,12 +171,23 @@ def _project_fingerprint(project: Project) -> str:
             "risers_count": project.storm.risers_count,
             "riser_dn_mm": project.storm.selected_riser_dn_mm,
             "max_riser_flow_lps": project.storm.max_riser_flow_lps,
+            "design_m3_day": project.storm.design_m3_day,
+            "annual_m3": project.storm.annual_m3,
+            "melt_m3h": project.storm.melt_m3h,
+            "melt_m3_day": project.storm.melt_m3_day,
+            "melt_m3_year": project.storm.melt_m3_year,
+            "treatment_volume_m3": project.storm.treatment_volume_m3,
+            "storage_volume_m3": project.storm.storage_volume_m3,
         },
         "sewage": {
             "q0s_lps": project.sewage_max_fixture_lps,
             "outlets_count": project.sewage.outlets_count,
             "risers": [vars(row) for row in project.sewage.risers],
             "pipes": [vars(row) for row in project.sewage.pipes],
+            "gost_inputs": {
+                key: value for key, value in vars(project.sewage).items()
+                if key not in {"result", "risers", "pipes"}
+            },
         },
         "catering": {
             "type": project.grease_trap.preparation_type,
@@ -673,6 +684,7 @@ def build_commission_report(
         wastewater_names = (
             "Пояснительная записка К1/К2",
             "Расчёты К1/К2",
+            "Баланс ИОС3 по ГОСТ Р 21.620",
             "Принципиальная схема К1/К2",
             "Спецификация К1/К2",
             "Комплект К1/К2",
@@ -684,8 +696,8 @@ def build_commission_report(
             "DOC-03", "Самостоятельный комплект К1/К2 сформирован",
             "verified" if not missing_wastewater else "missing",
             (
-                "ПЗ К1/К2 с расчётным приложением, схема, спецификация "
-                "и единый PDF сформированы"
+                "ПЗ К1/К2 с расчётным приложением и балансом приложения А, "
+                "схема, спецификация и единый PDF сформированы"
                 if not missing_wastewater else
                 "не сформированы: " + ", ".join(missing_wastewater)
             ),
@@ -693,8 +705,28 @@ def build_commission_report(
                 "Нет действий" if not missing_wastewater
                 else "Устранить ошибку сборки комплекта К1/К2"
             ),
-            "ПП РФ № 87, пункт 18; СП 30.13330.2020",
+            "ПП РФ № 87, пункт 18; ГОСТ Р 21.620-2023; СП 30.13330.2020",
             blocking=bool(missing_wastewater),
+        )
+        from app.pz.wastewater_gost import audit_wastewater_gost
+        wastewater_audit = audit_wastewater_gost(project)
+        add(
+            "DOC-04", "Состав ИОС3 проверен по ГОСТ Р 21.620-2023",
+            "verified" if wastewater_audit.complete else "missing",
+            (
+                "обязательные сведения текстовой и графической частей заполнены"
+                if wastewater_audit.complete else
+                "не закрыты: " + "; ".join(
+                    f"{row.code} {row.requirement}"
+                    for row in wastewater_audit.missing
+                )
+            ),
+            (
+                "Нет действий" if wastewater_audit.complete else
+                "Заполнить обязательные исходные данные ИОС3"
+            ),
+            "ГОСТ Р 21.620-2023, разделы 5-6",
+            blocking=not wastewater_audit.complete,
         )
         hydraulic_exists = bool(artifacts.get("Гидравлический расчёт В2"))
         add(
