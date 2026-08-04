@@ -17,7 +17,7 @@
 {% set input_state = 'пример' if example_mode else ('принято' if prefill else 'не задано') %}
 <main class="shell">
 <section class="hero">
-  <div><p class="eyebrow">ZARYA / IOS2 + IOS3</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Один расчёт — два самостоятельных подраздела стадии П.</p></div>
+  <div><p class="eyebrow">ZARYA / IOS2 + IOS3</p><h1>{% if d and d.object_name %}{{ d.object_name }}{% else %}Комплект водоснабжения и водоотведения{% endif %}</h1><p>Один расчёт — два самостоятельных подраздела стадии П.{% if example_mode %} <strong>Учебный К2: Москва · F<sub>кр</sub> 900 м².</strong>{% endif %}</p></div>
   <div class="hero-meta"><span class="chip discipline-chip" data-discipline="ios2">ИОС2 · В1 В2 Т3 Т4</span><span class="chip discipline-chip" data-discipline="ios3">ИОС3 · К1 К2 К3</span><details class="hero-standards"><summary>Нормативная база</summary><div><span>СП 30</span><span>СП 10</span><span>ПП 87</span><span>ГОСТ Р 21.619-2023</span><span>ГОСТ Р 21.620-2023</span></div></details><div class="example-actions">{% if example_mode %}<a href="/wizard">Очистить пример</a>{% else %}<a href="/wizard?example=1">Загрузить учебный пример</a>{% endif %}</div></div>
 </section>
 <div class="workspace">
@@ -172,7 +172,7 @@
     </tr>{% endfor %}</table></div>
     <p class="technical-label">Трубы К1/К2/К3 · только фактически посчитанные длины</p>
     <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Изоляция</th></tr>
-    {% for i in range(6) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
+    {% for i in range(12) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
     <tr>
       <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
       <td><input name="sewer_pipe{{ i + 1 }}_id" value="{{ r.section_id if r else '' }}" placeholder="К1-М1"></td>
@@ -193,8 +193,8 @@
     </tr>{% endfor %}</table></div>
     <details class="field-help"><summary>Реестр элементов схемы и спецификации К1/К2/К3</summary>
       <p>Одна строка — подтверждённый проектом элемент или группа одинаковых элементов. Привязка к участку связывает запись со схемой; количество без заполненной строки программа не назначает.</p>
-      <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Кол.</th><th>Этаж от</th><th>до</th><th>Помещение</th><th>DN</th><th>Участок</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
-      {% for i in range(16) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
+      <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Кол.</th><th>Этаж от</th><th>до</th><th>Помещение</th><th>DN</th><th>i, ‰</th><th>Участок</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
+      {% for i in range(24) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
       <tr>
         <td><select name="sewer_element{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
         <td><input name="sewer_element{{ i + 1 }}_id" value="{{ r.element_id if r else '' }}" placeholder="К1-Р1"></td>
@@ -207,6 +207,7 @@
         <td><input name="sewer_element{{ i + 1 }}_floor_to" value="{{ r.floor_to if r and r.floor_to is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_room" value="{{ r.room_name if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_dn" value="{{ r.dn_mm if r and r.dn_mm is not none else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_slope" value="{{ r.slope_per_mille if r and r.slope_per_mille is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_section" value="{{ r.section_id if r else '' }}" placeholder="К1-Ст1"></td>
         <td><input name="sewer_element{{ i + 1 }}_type_mark" value="{{ r.type_mark if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}"></td>

@@ -295,6 +295,7 @@ class SewerElementRequest:
     room_name: str = ""
     elevation_m: Optional[float] = None
     dn_mm: Optional[int] = None
+    slope_per_mille: Optional[float] = None
     section_id: str = ""
     connects_to: str = ""
     type_mark: str = ""
@@ -618,6 +619,13 @@ class IOS2Request:
                 )
             if element.dn_mm is not None and element.dn_mm <= 0:
                 p.append(f"sewer_elements[{i}].dn_mm должен быть > 0")
+            if (
+                element.slope_per_mille is not None
+                and element.slope_per_mille < 0
+            ):
+                p.append(
+                    f"sewer_elements[{i}].slope_per_mille не может быть отрицательным"
+                )
             if element.layout_column < 0:
                 p.append(f"sewer_elements[{i}].layout_column не может быть < 0")
             if element.include_in_spec and not element.unit.strip():

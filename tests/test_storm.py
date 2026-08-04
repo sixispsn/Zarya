@@ -8,7 +8,10 @@ import math
 import pytest
 
 from app.calc.storm import StormInput, calculate_storm
+from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
+from app.pz.generator import generate_wastewater_pz_html
+from app.pz.ios2_orchestrator import design_ios2
 
 
 # ============================================================
@@ -47,6 +50,19 @@ class TestGoldenMoscow:
         assert result.q20_base == 80
         assert result.n == 0.71
         assert result.q_total_l_per_s == 19.266
+
+    def test_demo_wastewater_pz_contains_k2_result(self, tmp_path):
+        req = load_request_file("demo/demo_project.yaml")
+        project = design_ios2(
+            build_project(req),
+            output_dir=str(tmp_path),
+            render_documents=False,
+        ).project
+        html = generate_wastewater_pz_html(project)
+        assert "Москва" in html
+        assert "19,266" in html
+        assert "Расчётный дождевой расход" in html
+        assert "Расчётный расход дождевых вод не определён" not in html
 
     def test_with_walls(self):
         """Со стенами: F = 1000 + 0.3×500 = 1150."""

@@ -80,6 +80,22 @@ def test_form_template_has_all_sections():
     assert html.count("<fieldset") == 5
 
 
+def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
+    from pathlib import Path
+
+    from app.intake.yaml_io import load_request_file
+    from app.web.wizard import _TPL, _form_context
+
+    demo = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
+    prefill = load_request_file(str(demo))
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[], prefill=prefill, example_mode=True),
+    )
+    assert "Учебный К2: Москва" in html
+    assert 'value="moscow" selected' in html
+    assert 'name="storm_roof_area" value="900.0"' in html
+
+
 def test_form_template_has_collapsed_wastewater_element_registry():
     from app.web.wizard import _TPL, _form_context
 
@@ -88,7 +104,7 @@ def test_form_template_has_collapsed_wastewater_element_registry():
     )
     assert "Реестр элементов схемы и спецификации К1/К2/К3" in html
     assert 'name="sewer_element1_id"' in html
-    assert 'name="sewer_element16_include_spec"' in html
+    assert 'name="sewer_element24_include_spec"' in html
     assert html.count('<details class="input-section"') == 5
     assert html.count('<details class="input-section" open') == 1
     assert 'data-design-form novalidate' in html

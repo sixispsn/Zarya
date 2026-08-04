@@ -181,6 +181,6 @@ def test_demo_has_exact_k1_k2_pipe_lengths_and_funnels():
     k1 = _section(spec, "К1")
     k2 = _section(spec, "К2")
     assert sum(row.qty or 0 for row in k1.rows if row.unit == "м") == 160.0
-    assert sum(row.qty or 0 for row in k2.rows if row.unit == "м") == 72.0
+    assert sum(row.qty or 0 for row in k2.rows if row.unit == "м") == 128.0
     funnel = next(row for row in k2.rows if "Воронка" in row.name)
     assert funnel.qty == 4

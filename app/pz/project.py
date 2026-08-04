@@ -601,6 +601,7 @@ class SewerElementSpec:
     room_name: str = ""
     elevation_m: Optional[float] = None
     dn_mm: Optional[int] = None
+    slope_per_mille: Optional[float] = None
     section_id: str = ""
     connects_to: str = ""
     type_mark: str = ""

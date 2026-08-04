@@ -278,6 +278,10 @@ def load_request(text: str) -> IOS2Request:
                 if x.get("elevation_m") is not None else None
             ),
             dn_mm=(int(x["dn_mm"]) if x.get("dn_mm") is not None else None),
+            slope_per_mille=(
+                float(x["slope_per_mille"])
+                if x.get("slope_per_mille") is not None else None
+            ),
             section_id=str(x.get("section_id", "")),
             connects_to=str(x.get("connects_to", "")),
             type_mark=str(x.get("type_mark", "")),
@@ -675,6 +679,8 @@ def dump_request(req: IOS2Request) -> str:
                 **({"elevation_m": x.elevation_m}
                    if x.elevation_m is not None else {}),
                 **({"dn_mm": x.dn_mm} if x.dn_mm is not None else {}),
+                **({"slope_per_mille": x.slope_per_mille}
+                   if x.slope_per_mille is not None else {}),
                 **({"section_id": x.section_id} if x.section_id else {}),
                 **({"connects_to": x.connects_to} if x.connects_to else {}),
                 **({"type_mark": x.type_mark} if x.type_mark else {}),

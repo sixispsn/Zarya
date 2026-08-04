@@ -12,8 +12,8 @@ app/web/wizard.py — Wizard: веб-форма ввода объекта ИОС
             → GET /wizard/file/{run_id}/{name}    отдача PDF
 
 MVP-упрощения (осознанные):
-  • до 12 групп потребителей, одно характерное помещение, до 6 участков
-    трубопроводов и 16 подтверждённых элементов К1/К2/К3 в форме
+  • до 12 групп потребителей, одно характерное помещение, до 6 участков В2,
+    12 участков труб К1/К2/К3 и 24 подтверждённых элементов в форме
     (для демо достаточно; полный ввод — следующая итерация);
   • результаты хранятся в памяти процесса (run_id → bundle); без БД.
 """
@@ -202,7 +202,7 @@ async def wizard_design(request: Request):
         except (TypeError, ValueError):
             return default
 
-    # магистраль: до 6 участков (пустые строки пропускаются)
+    # магистраль В2: до 6 участков (пустые строки пропускаются)
     runs = []
     for i in range(1, 7):
         a, b = fv(f"run{i}_from"), fv(f"run{i}_to")
@@ -277,7 +277,7 @@ async def wizard_design(request: Request):
             ))
 
     sewer_pipes = []
-    for i in range(1, 7):
+    for i in range(1, 13):
         section_id = fv(f"sewer_pipe{i}_id")
         if section_id:
             sewer_pipes.append(SewerPipeRequest(
@@ -312,7 +312,7 @@ async def wizard_design(request: Request):
             ))
 
     sewer_elements = []
-    for i in range(1, 17):
+    for i in range(1, 25):
         element_id = fv(f"sewer_element{i}_id")
         if element_id:
             sewer_elements.append(SewerElementRequest(
@@ -330,6 +330,10 @@ async def wizard_design(request: Request):
                 dn_mm=(
                     fi(f"sewer_element{i}_dn")
                     if fv(f"sewer_element{i}_dn") else None
+                ),
+                slope_per_mille=(
+                    ff(f"sewer_element{i}_slope")
+                    if fv(f"sewer_element{i}_slope") else None
                 ),
                 section_id=fv(f"sewer_element{i}_section"),
                 type_mark=fv(f"sewer_element{i}_type_mark"),
