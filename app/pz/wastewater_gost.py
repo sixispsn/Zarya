@@ -229,10 +229,25 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         applicable=s.treatment_required or local or production_required,
     )
 
+    from app.pz.wastewater_registry import audit_wastewater_registry
+
+    registry = audit_wastewater_registry(project)
+    required_systems = {"K1"}
+    if storm_required:
+        required_systems.add("K2")
+    if production_required:
+        required_systems.add("K3")
+    registered_systems = {row.system for row in s.elements}
+    outlets_registered = sum(
+        row.quantity for row in s.elements
+        if row.system == "K1" and row.kind == "outlet"
+    )
     topology_ok = bool(s.risers and s.outlets_count and s.pipes) and all(
         p.from_node and p.to_node and p.room
         and p.elevation_start_m is not None and p.elevation_end_m is not None
         for p in s.pipes
+    ) and registry.ready and required_systems <= registered_systems and (
+        outlets_registered >= s.outlets_count
     )
     add(
         "K-GOST-13", "Принципиальная схема внутренних систем",
@@ -240,7 +255,8 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         topology_ok,
         (
             f"стояков {len(s.risers)}; выпусков {s.outlets_count}; "
-            f"топологических участков {len(s.pipes)}"
+            f"топологических участков {len(s.pipes)}; "
+            f"элементов реестра {len(s.elements)}"
         ),
     )
     add(

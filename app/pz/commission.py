@@ -184,9 +184,10 @@ def _project_fingerprint(project: Project) -> str:
             "outlets_count": project.sewage.outlets_count,
             "risers": [vars(row) for row in project.sewage.risers],
             "pipes": [vars(row) for row in project.sewage.pipes],
+            "elements": [vars(row) for row in project.sewage.elements],
             "gost_inputs": {
                 key: value for key, value in vars(project.sewage).items()
-                if key not in {"result", "risers", "pipes"}
+                if key not in {"result", "risers", "pipes", "elements"}
             },
         },
         "catering": {

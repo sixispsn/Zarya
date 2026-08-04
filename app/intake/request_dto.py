@@ -44,6 +44,12 @@ SPACE_KINDS = ("corridor", "room", "hall", "storage")
 PLACEMENT_MODES = ("one_side", "two_opposite_sides")
 SEWAGE_MATERIALS = ("pvc", "pp", "cast_iron_socket", "sml")
 SEWAGE_VENTILATION = ("ventilated", "vacuum_valve", "unventilated")
+SEWER_ELEMENT_KINDS = (
+    "toilet", "washbasin", "sink", "bath", "shower", "floor_drain",
+    "roof_funnel", "revision", "cleanout", "fire_collar", "trap",
+    "pump", "sump", "ball_valve", "check_valve", "junction", "outlet",
+    "tee", "elbow", "transition", "other",
+)
 
 
 @dataclass
@@ -271,6 +277,36 @@ class SewerPipeRequest:
 
 
 @dataclass
+class SewerElementRequest:
+    """Элемент реестра К1/К2/К3 — источник схемы и спецификации.
+
+    Количество и этажность вводятся проектировщиком либо импортируются из
+    модели. Builder не создаёт приборы, арматуру и фасонные части по
+    косвенным данным, чтобы стадия П не выглядела фиктивно точной.
+    """
+    element_id: str
+    system: str
+    kind: str
+    name: str
+    quantity: int = 1
+    floor_from: int = 1
+    floor_to: Optional[int] = None
+    room_number: str = ""
+    room_name: str = ""
+    elevation_m: Optional[float] = None
+    dn_mm: Optional[int] = None
+    section_id: str = ""
+    connects_to: str = ""
+    type_mark: str = ""
+    standard: str = ""
+    manufacturer: str = "по проекту"
+    unit: str = "шт."
+    include_in_spec: bool = True
+    note: str = ""
+    layout_column: int = 0
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -315,6 +351,7 @@ class IOS2Request:
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
     sewage_risers: List[SewageRiserRequest] = field(default_factory=list)
     sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
+    sewer_elements: List[SewerElementRequest] = field(default_factory=list)
     sewage_outlets_count: int = 0
     wastewater_design_assignment_ref: str = ""
     wastewater_survey_ref: str = ""
@@ -550,6 +587,68 @@ class IOS2Request:
                     != (pipe.elevation_end_m is None)):
                 p.append(
                     f"sewer_pipes[{i}]: начальная и конечная отметки задаются парой"
+                )
+        seen_sewer_elements = set()
+        sewer_nodes = {
+            node
+            for pipe in self.sewer_pipes
+            for node in (pipe.from_node, pipe.to_node)
+            if node
+        }
+        for i, element in enumerate(self.sewer_elements):
+            if not element.element_id or element.element_id in seen_sewer_elements:
+                p.append(
+                    f"sewer_elements[{i}]: обозначение пустое или повторяется"
+                )
+            seen_sewer_elements.add(element.element_id)
+            if element.system not in ("K1", "K2", "K3"):
+                p.append(f"sewer_elements[{i}].system должен быть K1, K2 или K3")
+            if element.kind not in SEWER_ELEMENT_KINDS:
+                p.append(
+                    f"sewer_elements[{i}].kind должен быть одним из "
+                    f"{SEWER_ELEMENT_KINDS}"
+                )
+            if not element.name.strip():
+                p.append(f"sewer_elements[{i}].name не может быть пустым")
+            if element.quantity <= 0:
+                p.append(f"sewer_elements[{i}].quantity должен быть > 0")
+            if element.floor_to is not None and element.floor_to < element.floor_from:
+                p.append(
+                    f"sewer_elements[{i}].floor_to не может быть ниже floor_from"
+                )
+            if element.dn_mm is not None and element.dn_mm <= 0:
+                p.append(f"sewer_elements[{i}].dn_mm должен быть > 0")
+            if element.layout_column < 0:
+                p.append(f"sewer_elements[{i}].layout_column не может быть < 0")
+            if element.include_in_spec and not element.unit.strip():
+                p.append(
+                    f"sewer_elements[{i}].unit обязателен для спецификации"
+                )
+            if element.section_id and element.section_id not in seen_sewer_sections:
+                p.append(
+                    f"sewer_elements[{i}].section_id ссылается на неизвестный "
+                    f"участок '{element.section_id}'"
+                )
+        sewer_section_systems = {
+            pipe.section_id: pipe.system
+            for pipe in self.sewer_pipes
+            if pipe.section_id
+        }
+        valid_connections = seen_sewer_elements | sewer_nodes | seen_sewer_sections
+        for i, element in enumerate(self.sewer_elements):
+            if (
+                element.section_id
+                and element.section_id in sewer_section_systems
+                and sewer_section_systems[element.section_id] != element.system
+            ):
+                p.append(
+                    f"sewer_elements[{i}]: система {element.system} не совпадает "
+                    f"с системой участка {element.section_id}"
+                )
+            if element.connects_to and element.connects_to not in valid_connections:
+                p.append(
+                    f"sewer_elements[{i}].connects_to ссылается на неизвестный "
+                    f"элемент или узел '{element.connects_to}'"
                 )
         if self.wastewater_disposal_mode not in (
             "not_set", "centralized", "local", "water_body",

@@ -78,6 +78,17 @@ def test_form_template_has_all_sections():
     html = _TPL.env.get_template("wizard_form.html").render(
         **_form_context(errors=[]))
     assert html.count("<fieldset") == 5
+
+
+def test_form_template_has_collapsed_wastewater_element_registry():
+    from app.web.wizard import _TPL, _form_context
+
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[]),
+    )
+    assert "Реестр элементов схемы и спецификации К1/К2/К3" in html
+    assert 'name="sewer_element1_id"' in html
+    assert 'name="sewer_element16_include_spec"' in html
     assert html.count('<details class="input-section"') == 5
     assert html.count('<details class="input-section" open') == 1
     assert 'data-design-form novalidate' in html

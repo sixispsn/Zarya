@@ -1,6 +1,8 @@
 """Состав подраздела ИОС3 по ГОСТ Р 21.620-2023."""
 from app.intake.project_builder import build_project
-from app.intake.request_dto import SewageRiserRequest, SewerPipeRequest
+from app.intake.request_dto import (
+    SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
+)
 from app.pz.generator import (
     generate_wastewater_balance_html,
     generate_wastewater_pz_html,
@@ -16,17 +18,42 @@ def _gost_request():
     req.sewage_risers = [SewageRiserRequest(
         "К1-Ст1", 2.5, "pp", "ventilated", 110, 110, 87.5, True,
     )]
-    req.sewer_pipes = [SewerPipeRequest(
-        "K1", "К1-М1", "горизонтальная сеть", "ПП",
-        "ТУ изготовителя", 110, 3.4, 24.0,
-        slope_per_mille=20.0,
-        fill_ratio=0.55,
-        from_node="К1-Ст1",
-        to_node="К1-Вып1",
-        room="техническое подполье",
-        elevation_start_m=-0.40,
-        elevation_end_m=-0.88,
-    )]
+    req.sewer_pipes = [
+        SewerPipeRequest(
+            "K1", "К1-Ст1", "стояк К1", "ПП",
+            "ТУ изготовителя", 110, 3.4, 30.0,
+            from_node="К1-Этажи",
+            to_node="К1-М1",
+            room="сантехническая шахта",
+            elevation_start_m=29.60,
+            elevation_end_m=-0.40,
+        ),
+        SewerPipeRequest(
+            "K1", "К1-М1", "горизонтальная сеть", "ПП",
+            "ТУ изготовителя", 110, 3.4, 24.0,
+            slope_per_mille=20.0,
+            fill_ratio=0.55,
+            from_node="К1-Ст1",
+            to_node="К1-Вып1",
+            room="техническое подполье",
+            elevation_start_m=-0.40,
+            elevation_end_m=-0.88,
+        ),
+    ]
+    req.sewer_elements = [
+        SewerElementRequest(
+            "К1-Ун1", "K1", "toilet", "Унитаз", quantity=1,
+            floor_from=1, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-Р1", "K1", "revision", "Ревизия", quantity=1,
+            floor_from=1, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-ВыпЭ1", "K1", "outlet", "Узел выпуска К1", quantity=1,
+            floor_from=0, dn_mm=110, section_id="К1-М1",
+        ),
+    ]
     req.sewage_outlets_count = 1
     req.wastewater_design_assignment_ref = "Задание на проектирование, раздел 6"
     req.wastewater_survey_ref = "ИГИ-2026, том 2"

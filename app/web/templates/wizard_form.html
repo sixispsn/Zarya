@@ -191,6 +191,29 @@
       <td><input name="sewer_pipe{{ i + 1 }}_elev_end" value="{{ r.elevation_end_m if r and r.elevation_end_m is not none else '' }}"></td>
       <td><label class="check-label compact-check"><input type="checkbox" name="sewer_pipe{{ i + 1 }}_insulated"{% if r and r.insulated %} checked{% endif %}>да</label></td>
     </tr>{% endfor %}</table></div>
+    <details class="field-help"><summary>Реестр элементов схемы и спецификации К1/К2/К3</summary>
+      <p>Одна строка — подтверждённый проектом элемент или группа одинаковых элементов. Привязка к участку связывает запись со схемой; количество без заполненной строки программа не назначает.</p>
+      <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Кол.</th><th>Этаж от</th><th>до</th><th>Помещение</th><th>DN</th><th>Участок</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
+      {% for i in range(16) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
+      <tr>
+        <td><select name="sewer_element{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
+        <td><input name="sewer_element{{ i + 1 }}_id" value="{{ r.element_id if r else '' }}" placeholder="К1-Р1"></td>
+        <td><select name="sewer_element{{ i + 1 }}_kind">
+          {% for value, label in [('toilet','унитаз'),('washbasin','умывальник'),('sink','мойка'),('bath','ванна'),('shower','душ'),('floor_drain','трап'),('roof_funnel','воронка К2'),('revision','ревизия'),('cleanout','прочистка'),('fire_collar','противопожарная муфта'),('trap','гидрозатвор'),('pump','насос'),('sump','резервуар'),('ball_valve','запорный кран'),('check_valve','обратный клапан'),('junction','узел'),('outlet','выпуск'),('tee','тройник'),('elbow','отвод'),('transition','переход'),('other','прочее')] %}<option value="{{ value }}"{% if (r.kind if r else 'other') == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></td>
+        <td><input name="sewer_element{{ i + 1 }}_name" value="{{ r.name if r else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_quantity" value="{{ r.quantity if r else 1 }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_floor_from" value="{{ r.floor_from if r else 1 }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_floor_to" value="{{ r.floor_to if r and r.floor_to is not none else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_room" value="{{ r.room_name if r else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_dn" value="{{ r.dn_mm if r and r.dn_mm is not none else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_section" value="{{ r.section_id if r else '' }}" placeholder="К1-Ст1"></td>
+        <td><input name="sewer_element{{ i + 1 }}_type_mark" value="{{ r.type_mark if r else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_column" value="{{ r.layout_column if r else 0 }}"></td>
+        <td><label class="check-label compact-check"><input type="checkbox" name="sewer_element{{ i + 1 }}_include_spec"{% if not r or r.include_in_spec %} checked{% endif %}>да</label></td>
+      </tr>{% endfor %}</table></div>
+    </details>
     <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>
       <div class="row">
         <label class="check-label"><input type="checkbox" name="wastewater_pump_required"{% if prefill and prefill.wastewater_pump_required %} checked{% endif %}>Предусмотрена КНС</label>

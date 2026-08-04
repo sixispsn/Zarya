@@ -459,17 +459,32 @@ def generate_wastewater_scheme_pdf(
     project: Project,
     output_path: str,
 ) -> str:
-    """Сформировать лист принципиальной схемы К1/К2/К3 стадии П."""
-    html_str = generate_wastewater_scheme_html(project)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in (*_CSS_FILES, "wastewater.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=stylesheets,
-    )
+    """Сформировать векторный лист А1 схемы К1/К2/К3 стадии П."""
+    import cairosvg
+
+    svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(project))
+    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
+
+
+def generate_wastewater_scheme_result(project: Project):
+    """Собрать схему и вернуть SVG вместе с предупреждениями реестра."""
+    from app.pz.wastewater_scheme import build_wastewater_scheme
+
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    scheme_doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".СК"),
+        sheet_title="Принципиальная схема внутренних систем К1, К2 и К3",
+        sheet_no="1",
+        sheet_total="1",
+    )
+    return build_wastewater_scheme(replace(project, document=scheme_doc))
+
+
+def generate_wastewater_scheme_svg(project: Project) -> str:
+    """SVG листа А1, построенный по реестру элементов и участков."""
+    return generate_wastewater_scheme_result(project).svg
 
 
 # ── РАСЧЁТ И ПОДБОР НАСОСНЫХ УСТАНОВОК (отдельное приложение) ────────────

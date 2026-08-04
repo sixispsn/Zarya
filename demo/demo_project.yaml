@@ -119,6 +119,26 @@ sewage:
     - {system: K1, id: К1-Вып1, purpose: выпуск К1, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 160.0, wall_thickness_mm: 4.9, length_m: 12.0, slope_per_mille: 8.0, fill_ratio: 0.60, from_node: К1-М1, to_node: КК-1, room: техническое подполье / участок выпуска, elevation_start_m: -0.62, elevation_end_m: -0.72}
     - {system: K2, id: К2-Ст1, purpose: водосточный стояк К2, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 110.0, wall_thickness_mm: 3.4, length_m: 48.0, from_node: Вр-1/Вр-2, to_node: К2-М1, room: сантехническая шахта К2, elevation_start_m: 48.0, elevation_end_m: -0.2}
     - {system: K2, id: К2-М1, purpose: горизонтальная сеть К2, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 160.0, wall_thickness_mm: 4.9, length_m: 24.0, slope_per_mille: 8.0, fill_ratio: 0.50, from_node: К2-Ст1, to_node: КК-2, room: техническое подполье, elevation_start_m: -0.2, elevation_end_m: -0.39}
+  # Реестр — подтверждённые учебным заданием элементы. Он одновременно питает
+  # принципиальную схему и спецификацию; программа не восстанавливает количества
+  # приборов/ревизий по длине труб.
+  elements:
+    - {id: К1-Ун1, system: K1, kind: toilet, name: Унитаз с косым выпуском и бачком, quantity: 64, floor_from: 1, floor_to: 16, room_name: санузлы квартир, dn_mm: 110, section_id: К1-Ст1, type_mark: по АР, standard: ГОСТ 30493-2017, layout_column: 1}
+    - {id: К1-Ум1, system: K1, kind: washbasin, name: Умывальник, quantity: 64, floor_from: 1, floor_to: 16, room_name: санузлы квартир, dn_mm: 50, section_id: К1-Ст1, type_mark: по АР, standard: ГОСТ 30493-2017, layout_column: 1}
+    - {id: К1-Ван1, system: K1, kind: bath, name: Ванна, quantity: 32, floor_from: 1, floor_to: 16, room_name: ванные комнат квартир, dn_mm: 50, section_id: К1-Ст2, type_mark: по АР, standard: ГОСТ 23695-2016, layout_column: 2}
+    - {id: К1-Мой1, system: K1, kind: sink, name: Мойка кухонная, quantity: 32, floor_from: 1, floor_to: 16, room_name: кухни квартир, dn_mm: 50, section_id: К1-Ст2, type_mark: по АР, standard: ГОСТ 30493-2017, layout_column: 2}
+    - {id: К1-Р1-1, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 1, room_name: сантехническая шахта 1, dn_mm: 110, section_id: К1-Ст1, standard: ГОСТ 32414-2013, layout_column: 1}
+    - {id: К1-Р1-8, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 8, room_name: сантехническая шахта 1, dn_mm: 110, section_id: К1-Ст1, standard: ГОСТ 32414-2013, layout_column: 1}
+    - {id: К1-Р1-16, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 16, room_name: сантехническая шахта 1, dn_mm: 110, section_id: К1-Ст1, standard: ГОСТ 32414-2013, layout_column: 1}
+    - {id: К1-Р2-1, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 1, room_name: сантехническая шахта 2, dn_mm: 110, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
+    - {id: К1-Р2-8, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 8, room_name: сантехническая шахта 2, dn_mm: 110, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
+    - {id: К1-Р2-16, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 16, room_name: сантехническая шахта 2, dn_mm: 110, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
+    - {id: К1-Пр1, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 160, section_id: К1-М1, standard: ГОСТ 32414-2013, layout_column: 1}
+    - {id: К1-ПМ1, system: K1, kind: fire_collar, name: Муфта противопожарная, quantity: 16, floor_from: 1, floor_to: 16, room_name: перекрытия шахты 1, dn_mm: 110, section_id: К1-Ст1, type_mark: ППМ-110, standard: ТУ изготовителя, layout_column: 1}
+    - {id: К1-ПМ2, system: K1, kind: fire_collar, name: Муфта противопожарная, quantity: 16, floor_from: 1, floor_to: 16, room_name: перекрытия шахты 2, dn_mm: 110, section_id: К1-Ст2, type_mark: ППМ-110, standard: ТУ изготовителя, layout_column: 2}
+    - {id: К1-ВыпЭ1, system: K1, kind: outlet, name: Узел выпуска хозяйственно-бытовой канализации К1, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 160, section_id: К1-Вып1, connects_to: КК-1, standard: по узлу ИОС3, layout_column: 3}
+    - {id: К2-Вр1, system: K2, kind: roof_funnel, name: Воронка водосточная с электрообогревом, quantity: 4, floor_from: 17, room_name: кровля, dn_mm: 100, section_id: К2-Ст1, type_mark: по плану кровли, standard: ТУ изготовителя, layout_column: 4}
+    - {id: К2-Пр1, system: K2, kind: cleanout, name: Прочистка внутреннего водостока, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 160, section_id: К2-М1, standard: ГОСТ 32414-2013, layout_column: 4}
 rooms:
   - name: Коридор типового этажа
     length_m: 42.0

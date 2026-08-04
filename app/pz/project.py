@@ -588,10 +588,36 @@ class SewerPipeSpec:
 
 
 @dataclass
+class SewerElementSpec:
+    """Подтверждённый элемент систем К1/К2/К3 для схемы и спецификации."""
+    element_id: str = ""
+    system: str = "K1"
+    kind: str = "other"
+    name: str = ""
+    quantity: int = 1
+    floor_from: int = 1
+    floor_to: Optional[int] = None
+    room_number: str = ""
+    room_name: str = ""
+    elevation_m: Optional[float] = None
+    dn_mm: Optional[int] = None
+    section_id: str = ""
+    connects_to: str = ""
+    type_mark: str = ""
+    standard: str = ""
+    manufacturer: str = "по проекту"
+    unit: str = "шт."
+    include_in_spec: bool = True
+    note: str = ""
+    layout_column: int = 0
+
+
+@dataclass
 class SewageDesign:
     """К1: расчёт системы и явно подтверждённые данные стадии П."""
     risers: List[SewageRiserSpec] = field(default_factory=list)
     pipes: List[SewerPipeSpec] = field(default_factory=list)
+    elements: List[SewerElementSpec] = field(default_factory=list)
     outlets_count: int = 0
     result: Optional[object] = None
     # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.

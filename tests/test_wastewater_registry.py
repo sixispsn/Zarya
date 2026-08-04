@@ -1,0 +1,87 @@
+from pathlib import Path
+
+import pytest
+from pypdf import PdfReader
+
+from app.intake.project_builder import build_project
+from app.intake.request_dto import SewerElementRequest
+from app.intake.yaml_io import dump_request, load_request, load_request_file
+from app.pz.generator import (
+    generate_wastewater_scheme_pdf,
+    generate_wastewater_scheme_result,
+)
+from app.pz.spec import build_wastewater_specification
+from app.pz.wastewater_registry import audit_wastewater_registry
+
+
+DEMO = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
+
+
+def _request():
+    return load_request_file(str(DEMO))
+
+
+def test_demo_element_registry_is_valid_and_roundtrips():
+    request = _request()
+    assert request.validate() == []
+    assert len(request.sewer_elements) == 16
+
+    loaded = load_request(dump_request(request))
+    assert loaded.sewer_elements == request.sewer_elements
+
+    audit = audit_wastewater_registry(build_project(request))
+    assert audit.ready
+    assert audit.errors == []
+    assert audit.element_count == 16
+    assert audit.spec_position_count == 16
+
+
+def test_registry_validation_rejects_duplicate_and_unknown_section():
+    request = _request()
+    row = request.sewer_elements[0]
+    request.sewer_elements.append(SewerElementRequest(
+        element_id=row.element_id,
+        system="K1",
+        kind="revision",
+        name="Ревизия",
+        section_id="К1-НЕИЗВЕСТНЫЙ",
+    ))
+    problems = request.validate()
+    assert any("повторяется" in problem for problem in problems)
+    assert any("неизвестный участок" in problem for problem in problems)
+
+
+def test_registry_drives_spec_without_duplicate_funnel_or_outlet():
+    spec = build_wastewater_specification(build_project(_request()))
+    rows = [row for section in spec.sections for row in section.rows]
+    funnels = [row for row in rows if "Воронка водосточная" in row.name]
+    outlets = [row for row in rows if "Узел выпуска" in row.name]
+    revisions = [row for row in rows if row.name == "Ревизия канализационная"]
+
+    assert len(funnels) == 1
+    assert funnels[0].qty == 4
+    assert len(outlets) == 1
+    assert outlets[0].qty == 1
+    assert len(revisions) == 1
+    assert revisions[0].qty == 6
+    assert "К1-Р1-8" in revisions[0].note
+
+
+def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
+    project = build_project(_request())
+    result = generate_wastewater_scheme_result(project)
+    assert result.warnings == []
+    assert "Принципиальная схема внутренних систем К1, К2 и К3" in result.svg
+    assert "К1-Р1-8" in result.svg
+    assert "К2-Вр1" in result.svg
+    assert "К1-М1" in result.svg
+    assert "Техподполье" in result.svg
+    assert "ГОСТ Р 21.620-2023" in result.svg
+
+    output = tmp_path / "scheme.pdf"
+    generate_wastewater_scheme_pdf(project, str(output))
+    page = PdfReader(str(output)).pages[0]
+    width_mm = float(page.mediabox.width) * 25.4 / 72
+    height_mm = float(page.mediabox.height) * 25.4 / 72
+    assert width_mm == pytest.approx(841.0, abs=0.02)
+    assert height_mm == pytest.approx(594.0, abs=0.02)

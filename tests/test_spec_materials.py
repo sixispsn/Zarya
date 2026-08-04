@@ -163,6 +163,7 @@ def test_normative_items_and_minimum_insulation_are_in_specification():
 def test_k1_grease_trap_and_k2_sections_do_not_invent_quantity():
     project = _demo_project()
     project.sewage.pipes = []
+    project.sewage.elements = []
     project.sewage.outlets_count = 0
     project.grease_trap.required = True
     project.storm.system_kind = "internal"

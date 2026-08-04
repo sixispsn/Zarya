@@ -45,7 +45,7 @@ import yaml
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
-    SewageRiserRequest, SewerPipeRequest,
+    SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
 )
 
 
@@ -259,6 +259,38 @@ def load_request(text: str) -> IOS2Request:
         for x in (sewage_s.get("pipes") or [])
         if isinstance(x, dict)
     ]
+    sewer_elements = [
+        SewerElementRequest(
+            element_id=str(x.get("id", x.get("element_id", ""))),
+            system=str(x.get("system", "K1")),
+            kind=str(x.get("kind", "other")),
+            name=str(x.get("name", "")),
+            quantity=int(x.get("quantity", 1)),
+            floor_from=int(x.get("floor_from", 1)),
+            floor_to=(
+                int(x["floor_to"])
+                if x.get("floor_to") is not None else None
+            ),
+            room_number=str(x.get("room_number", "")),
+            room_name=str(x.get("room_name", "")),
+            elevation_m=(
+                float(x["elevation_m"])
+                if x.get("elevation_m") is not None else None
+            ),
+            dn_mm=(int(x["dn_mm"]) if x.get("dn_mm") is not None else None),
+            section_id=str(x.get("section_id", "")),
+            connects_to=str(x.get("connects_to", "")),
+            type_mark=str(x.get("type_mark", "")),
+            standard=str(x.get("standard", "")),
+            manufacturer=str(x.get("manufacturer", "по проекту")),
+            unit=str(x.get("unit", "шт.")),
+            include_in_spec=bool(x.get("include_in_spec", True)),
+            note=str(x.get("note", "")),
+            layout_column=int(x.get("layout_column", 0)),
+        )
+        for x in (sewage_s.get("elements") or [])
+        if isinstance(x, dict)
+    ]
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
@@ -368,6 +400,7 @@ def load_request(text: str) -> IOS2Request:
         sewage_max_fixture_lps=float(sewage_s.get("max_fixture_lps", 1.6)),
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
+        sewer_elements=sewer_elements,
         sewage_outlets_count=int(sewage_s.get("outlets_count", 0)),
         wastewater_design_assignment_ref=str(
             sewage_s.get("design_assignment_ref", "")
@@ -629,6 +662,30 @@ def dump_request(req: IOS2Request) -> str:
                    if x.elevation_end_m is not None else {}),
                 "insulated": x.insulated,
             } for x in req.sewer_pipes],
+            "elements": [{
+                "id": x.element_id,
+                "system": x.system,
+                "kind": x.kind,
+                "name": x.name,
+                "quantity": x.quantity,
+                "floor_from": x.floor_from,
+                **({"floor_to": x.floor_to} if x.floor_to is not None else {}),
+                **({"room_number": x.room_number} if x.room_number else {}),
+                **({"room_name": x.room_name} if x.room_name else {}),
+                **({"elevation_m": x.elevation_m}
+                   if x.elevation_m is not None else {}),
+                **({"dn_mm": x.dn_mm} if x.dn_mm is not None else {}),
+                **({"section_id": x.section_id} if x.section_id else {}),
+                **({"connects_to": x.connects_to} if x.connects_to else {}),
+                **({"type_mark": x.type_mark} if x.type_mark else {}),
+                **({"standard": x.standard} if x.standard else {}),
+                "manufacturer": x.manufacturer,
+                "unit": x.unit,
+                "include_in_spec": x.include_in_spec,
+                **({"note": x.note} if x.note else {}),
+                **({"layout_column": x.layout_column}
+                   if x.layout_column else {}),
+            } for x in req.sewer_elements],
             "design_assignment_ref": req.wastewater_design_assignment_ref,
             "survey_ref": req.wastewater_survey_ref,
             "service_life_years": req.wastewater_service_life_years,

@@ -12,8 +12,8 @@ app/web/wizard.py — Wizard: веб-форма ввода объекта ИОС
             → GET /wizard/file/{run_id}/{name}    отдача PDF
 
 MVP-упрощения (осознанные):
-  • до 12 групп потребителей, одно характерное помещение и до 6 участков
-    магистрали / 4 стояков в форме
+  • до 12 групп потребителей, одно характерное помещение, до 6 участков
+    трубопроводов и 16 подтверждённых элементов К1/К2/К3 в форме
     (для демо достаточно; полный ввод — следующая итерация);
   • результаты хранятся в памяти процесса (run_id → bundle); без БД.
 """
@@ -31,7 +31,7 @@ from fastapi.templating import Jinja2Templates
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
-    SewageRiserRequest, SewerPipeRequest,
+    SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
@@ -311,6 +311,33 @@ async def wizard_design(request: Request):
                 insulated=bool(form.get(f"sewer_pipe{i}_insulated")),
             ))
 
+    sewer_elements = []
+    for i in range(1, 17):
+        element_id = fv(f"sewer_element{i}_id")
+        if element_id:
+            sewer_elements.append(SewerElementRequest(
+                element_id=element_id,
+                system=fv(f"sewer_element{i}_system", "K1"),
+                kind=fv(f"sewer_element{i}_kind", "other"),
+                name=fv(f"sewer_element{i}_name"),
+                quantity=fi(f"sewer_element{i}_quantity", 1),
+                floor_from=fi(f"sewer_element{i}_floor_from", 1),
+                floor_to=(
+                    fi(f"sewer_element{i}_floor_to")
+                    if fv(f"sewer_element{i}_floor_to") else None
+                ),
+                room_name=fv(f"sewer_element{i}_room"),
+                dn_mm=(
+                    fi(f"sewer_element{i}_dn")
+                    if fv(f"sewer_element{i}_dn") else None
+                ),
+                section_id=fv(f"sewer_element{i}_section"),
+                type_mark=fv(f"sewer_element{i}_type_mark"),
+                standard=fv(f"sewer_element{i}_standard"),
+                include_in_spec=bool(form.get(f"sewer_element{i}_include_spec")),
+                layout_column=fi(f"sewer_element{i}_column"),
+            ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -352,6 +379,7 @@ async def wizard_design(request: Request):
         sewage_max_fixture_lps=ff("sewage_max_fixture_lps", 1.6),
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
+        sewer_elements=sewer_elements,
         sewage_outlets_count=fi("sewage_outlets_count"),
         wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
         wastewater_survey_ref=fv("wastewater_survey_ref"),

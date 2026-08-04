@@ -789,9 +789,64 @@ def build_specification(project: Project) -> Specification:
     k1_pipes = [row for row in project.sewage.pipes if row.system == "K1"]
     k2_pipes = [row for row in project.sewage.pipes if row.system == "K2"]
     k3_pipes = [row for row in project.sewage.pipes if row.system == "K3"]
+    k1_elements = [row for row in project.sewage.elements if row.system == "K1"]
+    k2_elements = [row for row in project.sewage.elements if row.system == "K2"]
+    k3_elements = [row for row in project.sewage.elements if row.system == "K3"]
+
+    def add_sewer_elements(section, elements):
+        """Переносит реестр в СО, складывая идентичные штучные позиции."""
+        groups = {}
+        for element in (row for row in elements if row.include_in_spec):
+            type_mark = element.type_mark
+            if not type_mark and element.dn_mm is not None:
+                type_mark = f"DN{element.dn_mm}"
+            key = (
+                element.name, type_mark, element.standard,
+                element.manufacturer, element.unit,
+            )
+            groups.setdefault(key, []).append(element)
+        for key, items in groups.items():
+            element = items[0]
+            floor_note = (
+                f"эт. {element.floor_from}–{element.floor_to}"
+                if element.floor_to is not None
+                and element.floor_to != element.floor_from
+                else f"эт. {element.floor_from}"
+            )
+            location = ", ".join(filter(None, (
+                element.room_number, element.room_name, floor_note,
+            )))
+            if len(items) == 1:
+                note = "; ".join(filter(None, (
+                    element.element_id,
+                    location,
+                    element.note,
+                )))
+            else:
+                ids = ", ".join(row.element_id for row in items)
+                item_notes = "; ".join(dict.fromkeys(
+                    row.note for row in items if row.note
+                ))
+                note = "; ".join(filter(None, (
+                    f"реестр: {ids}",
+                    "места установки по принципиальной схеме",
+                    item_notes,
+                )))
+            section.rows.append(SpecRow(
+                next_pos(),
+                key[0],
+                type_mark=key[1],
+                code=key[2],
+                manufacturer=key[3],
+                unit=key[4],
+                qty=sum(row.quantity for row in items),
+                note=note,
+            ))
+
     if (
         project.sewage.outlets_count
         or k1_pipes
+        or k1_elements
         or project.flows.sewage_l_per_s > 0
         or project.grease_trap.required
     ):
@@ -813,7 +868,11 @@ def build_specification(project: Project) -> Specification:
                 qty=round(pipe.length_m, 2),
                 note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
             ))
-        if project.sewage.outlets_count:
+        add_sewer_elements(sec, k1_elements)
+        if (
+            project.sewage.outlets_count
+            and not any(row.kind == "outlet" for row in k1_elements)
+        ):
             sec.rows.append(SpecRow(
                 next_pos(),
                 "Выпуск хозяйственно-бытовой канализации К1",
@@ -822,7 +881,7 @@ def build_specification(project: Project) -> Specification:
                 qty=project.sewage.outlets_count,
                 note="диаметр и узел присоединения по плану/профилю",
             ))
-        if not k1_pipes:
+        if not k1_pipes and not k1_elements:
             sec.rows.append(SpecRow(
                 next_pos(),
                 "Трубопроводы, фасонные части, ревизии и прочистки системы К1",
@@ -834,7 +893,7 @@ def build_specification(project: Project) -> Specification:
             ))
         sections.append(sec)
 
-    if project.grease_trap.preparation_type != "none" or k3_pipes:
+    if project.grease_trap.preparation_type != "none" or k3_pipes or k3_elements:
         sec = SpecSection(
             title="К3 — производственная канализация",
             division="Водоотведение",
@@ -861,7 +920,8 @@ def build_specification(project: Project) -> Specification:
                 qty=round(pipe.length_m, 2),
                 note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
             ))
-        if not k3_pipes:
+        add_sewer_elements(sec, k3_elements)
+        if not k3_pipes and not k3_elements:
             sec.rows.append(SpecRow(
                 next_pos(),
                 "Трубопроводы и фасонные части системы К3",
@@ -870,18 +930,19 @@ def build_specification(project: Project) -> Specification:
             ))
         sections.append(sec)
 
-    if project.storm.system_kind == "internal":
+    if project.storm.system_kind == "internal" or k2_pipes or k2_elements:
         sec = SpecSection(
             title="К2 — внутренний водосток",
             division="Водоотведение",
         )
-        sec.rows.append(SpecRow(
-            next_pos(), "Воронка водосточная для внутреннего водостока",
-            manufacturer="по проекту", unit="шт.",
-            qty=(project.storm.funnels_count or None),
-            note="тип и паспортная пропускная способность по плану кровли; "
-                 "СП 30.13330.2020, пп. 21.5, 21.12",
-        ))
+        if not any(row.kind == "roof_funnel" for row in k2_elements):
+            sec.rows.append(SpecRow(
+                next_pos(), "Воронка водосточная для внутреннего водостока",
+                manufacturer="по проекту", unit="шт.",
+                qty=(project.storm.funnels_count or None),
+                note="тип и паспортная пропускная способность по плану кровли; "
+                     "СП 30.13330.2020, пп. 21.5, 21.12",
+            ))
         for pipe in k2_pipes:
             sec.rows.append(SpecRow(
                 next_pos(),
@@ -896,7 +957,8 @@ def build_specification(project: Project) -> Specification:
                 qty=round(pipe.length_m, 2),
                 note=f"{pipe.section_id}; {pipe.purpose}".rstrip("; "),
             ))
-        if not k2_pipes:
+        add_sewer_elements(sec, k2_elements)
+        if not k2_pipes and not k2_elements:
             sec.rows.append(SpecRow(
                 next_pos(),
                 "Трубопроводы, фасонные части и ревизии системы К2",

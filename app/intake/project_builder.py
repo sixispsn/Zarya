@@ -21,7 +21,7 @@ from app.pz.project import (
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
     MainNodeSpec, MainSegmentSpec, RiserSpec, V1SectionSpec,
     V1NodeSpec, V1NetworkSectionSpec, V1NetworkSpec, V1InletSpec,
-    InsulationDesign, SewageRiserSpec, SewerPipeSpec,
+    InsulationDesign, SewageRiserSpec, SewerPipeSpec, SewerElementSpec,
     HwsType,
 )
 from app.pz.normative import derive_requirements, decide_grease_trap, decide_storm_system
@@ -245,6 +245,7 @@ def build_project(req: IOS2Request) -> Project:
     p.sewage_max_fixture_lps = req.sewage_max_fixture_lps
     p.sewage.risers = [SewageRiserSpec(**vars(row)) for row in req.sewage_risers]
     p.sewage.pipes = [SewerPipeSpec(**vars(row)) for row in req.sewer_pipes]
+    p.sewage.elements = [SewerElementSpec(**vars(row)) for row in req.sewer_elements]
     p.sewage.outlets_count = req.sewage_outlets_count
     p.sewage.design_assignment_ref = req.wastewater_design_assignment_ref
     p.sewage.survey_ref = req.wastewater_survey_ref

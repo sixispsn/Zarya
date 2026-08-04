@@ -812,14 +812,16 @@ def design_ios2(
         project, os.path.join(output_dir, "Схема_К1_К2.pdf")
     )
     bundle.status.append(
-        "Схема_К1_К2.pdf собрана как принципиальная схема стадии П"
+        "Схема_К1_К2.pdf собрана как векторная принципиальная схема А1 "
+        "по реестру элементов и топологических участков"
     )
 
     bundle.wastewater_spec_pdf = generate_wastewater_spec_pdf(
         project, os.path.join(output_dir, "Спецификация_К1_К2.pdf")
     )
     bundle.status.append(
-        "Спецификация_К1_К2.pdf собрана только из подтверждённых позиций К1/К2"
+        "Спецификация_К1_К2.pdf собрана только из подтверждённых позиций "
+        "К1/К2/К3; идентичные штучные элементы реестра суммированы"
     )
 
     bundle.wastewater_package_pdf = merge_pdfs(
