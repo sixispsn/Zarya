@@ -33,7 +33,8 @@ from app.pz.generator import (
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
-    generate_wastewater_scheme_pdf, generate_wastewater_spec_pdf,
+    generate_wastewater_scheme_pdf, generate_wastewater_ugo_pdf,
+    generate_wastewater_spec_pdf,
     generate_wastewater_balance_pdf,
     generate_commission_control_pdf, append_pdf, merge_pdfs,
     generate_metering_scheme_pdf, generate_pump_zone_scheme_pdf,
@@ -62,6 +63,7 @@ class IOS2DesignBundle:
     wastewater_pz_pdf: Optional[str] = None
     wastewater_calculation_pdf: Optional[str] = None
     wastewater_scheme_pdf: Optional[str] = None
+    wastewater_ugo_pdf: Optional[str] = None
     wastewater_spec_pdf: Optional[str] = None
     wastewater_package_pdf: Optional[str] = None
     wastewater_balance_pdf: Optional[str] = None
@@ -816,6 +818,14 @@ def design_ios2(
         "по реестру элементов и топологических участков"
     )
 
+    bundle.wastewater_ugo_pdf = generate_wastewater_ugo_pdf(
+        project, os.path.join(output_dir, "УГО_К1_К2.pdf")
+    )
+    bundle.status.append(
+        "УГО_К1_К2.pdf собран как лист 2 графической части: нормативные "
+        "и проектные обозначения разделены, источники указаны"
+    )
+
     bundle.wastewater_spec_pdf = generate_wastewater_spec_pdf(
         project, os.path.join(output_dir, "Спецификация_К1_К2.pdf")
     )
@@ -828,13 +838,14 @@ def design_ios2(
         [
             bundle.wastewater_pz_pdf,
             bundle.wastewater_scheme_pdf,
+            bundle.wastewater_ugo_pdf,
             bundle.wastewater_spec_pdf,
         ],
         os.path.join(output_dir, "Комплект_К1_К2.pdf"),
     )
     bundle.status.append(
         "Комплект_К1_К2.pdf собран единым файлом: ПЗ с расчётами, "
-        "принципиальная схема и спецификация"
+        "принципиальная схема, ведомость УГО и спецификация"
     )
 
     bundle.balance_pdf = generate_balance_pdf(
@@ -894,6 +905,7 @@ def design_ios2(
         "Схема вводов и узлов учёта": bool(bundle.metering_scheme_pdf),
         "Схема насосов, зон и ГВС": bool(bundle.pump_zone_scheme_pdf),
         "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
+        "Ведомость УГО К1/К2": bool(bundle.wastewater_ugo_pdf),
         "Спецификация К1/К2": bool(bundle.wastewater_spec_pdf),
         "Комплект К1/К2": bool(bundle.wastewater_package_pdf),
         "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),

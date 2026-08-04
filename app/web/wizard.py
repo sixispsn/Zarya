@@ -99,6 +99,7 @@ _DOCUMENTS = (
     ("ios3", "Расчётные обоснования К1 и К2",
      "wastewater_calculation_pdf"),
     ("ios3", "Принципиальная схема ИОС3", "wastewater_scheme_pdf"),
+    ("ios3", "Ведомость УГО К1, К2 и К3", "wastewater_ugo_pdf"),
     ("ios3", "Спецификация К1, К2 и К3", "wastewater_spec_pdf"),
 )
 

@@ -12,6 +12,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.wastewater_registry import audit_wastewater_registry
+from app.pz.wastewater_ugo import legend_definitions, render_ugo
 
 
 W, H = 2803, 1980  # А1, альбомная ориентация: 841×594
@@ -85,82 +86,6 @@ def _floor_mark(project: Project, floor: int) -> float:
         ]
         return max(lows) if lows else -0.2
     return (floor - 1) * step
-
-
-def _symbol(kind: str, x: float, y: float) -> str:
-    """Компактные условные знаки; буквенные знаки даны также в легенде."""
-    s = BLACK
-    if kind == "toilet":
-        return (
-            f'<path d="M{x-18},{y-12} h25 v10 q0,17 -13,17 '
-            f'q-13,0 -13,-17 z" fill="none" stroke="{s}" stroke-width="2"/>'
-            f'<rect x="{x+8}" y="{y-10}" width="10" height="19" '
-            f'fill="none" stroke="{s}" stroke-width="2"/>'
-        )
-    if kind in ("washbasin", "sink"):
-        return (
-            f'<path d="M{x-18},{y-10} h36 q0,20 -18,20 q-18,0 -18,-20" '
-            f'fill="none" stroke="{s}" stroke-width="2"/>'
-            f'<circle cx="{x}" cy="{y}" r="2.5" fill="{s}"/>'
-        )
-    if kind == "bath":
-        return (
-            f'<rect x="{x-22}" y="{y-10}" width="44" height="20" rx="5" '
-            f'fill="none" stroke="{s}" stroke-width="2"/>'
-        )
-    if kind in ("shower", "floor_drain", "trap"):
-        return (
-            f'<rect x="{x-10}" y="{y-10}" width="20" height="20" '
-            f'fill="none" stroke="{s}" stroke-width="2"/>'
-            f'<path d="M{x-8},{y-8} L{x+8},{y+8} M{x+8},{y-8} L{x-8},{y+8}" '
-            f'stroke="{s}" stroke-width="1.5"/>'
-        )
-    if kind == "roof_funnel":
-        return (
-            f'<circle cx="{x}" cy="{y}" r="14" fill="none" stroke="{s}" '
-            f'stroke-width="2"/><path d="M{x-12},{y} h24 M{x},{y-12} v24" '
-            f'stroke="{s}" stroke-width="2"/>'
-        )
-    if kind == "revision":
-        return (
-            f'<rect x="{x-12}" y="{y-12}" width="24" height="24" '
-            f'fill="white" stroke="{s}" stroke-width="2"/>'
-            f'<text x="{x}" y="{y+6}" text-anchor="middle" font-family="{FONT}" '
-            f'font-size="17" fill="{s}">Р</text>'
-        )
-    if kind == "cleanout":
-        return (
-            f'<circle cx="{x}" cy="{y}" r="13" fill="white" stroke="{s}" '
-            f'stroke-width="2"/><text x="{x}" y="{y+5}" text-anchor="middle" '
-            f'font-family="{FONT}" font-size="12" fill="{s}">Пр</text>'
-        )
-    if kind == "fire_collar":
-        return (
-            f'<rect x="{x-15}" y="{y-7}" width="30" height="14" '
-            f'fill="white" stroke="{s}" stroke-width="2"/>'
-            f'<path d="M{x-10},{y-7} v14 M{x+10},{y-7} v14" stroke="{s}"/>'
-        )
-    if kind == "pump":
-        return (
-            f'<circle cx="{x}" cy="{y}" r="17" fill="white" stroke="{s}" '
-            f'stroke-width="2"/><path d="M{x-7},{y+8} L{x+10},{y} L{x-7},{y-8} Z" '
-            f'fill="none" stroke="{s}" stroke-width="2"/>'
-        )
-    if kind in ("ball_valve", "check_valve"):
-        return (
-            f'<path d="M{x-14},{y-10} L{x},{y} L{x-14},{y+10} Z '
-            f'M{x+14},{y-10} L{x},{y} L{x+14},{y+10} Z" '
-            f'fill="white" stroke="{s}" stroke-width="2"/>'
-        )
-    if kind == "outlet":
-        return f'<path d="M{x-18},{y} h36 l-11,-8 m11,8 l-11,8" fill="none" stroke="{s}" stroke-width="2.5"/>'
-    if kind in ("tee", "elbow", "transition", "junction"):
-        return f'<circle cx="{x}" cy="{y}" r="5" fill="{s}"/>'
-    return (
-        f'<circle cx="{x}" cy="{y}" r="11" fill="white" stroke="{s}" '
-        f'stroke-width="2"/><text x="{x}" y="{y+5}" text-anchor="middle" '
-        f'font-family="{FONT}" font-size="13" fill="{s}">Э</text>'
-    )
 
 
 def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
@@ -313,7 +238,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
                 for slot, row in enumerate(active[:slots]):
                     sx = x + direction * (72 + slot * 68)
                     sy = y - 28 + direction * (slot * 1.2)
-                    G.append(_symbol(row.kind, sx, sy))
+                    G.append(render_ugo(row.kind, sx, sy, scale=0.78))
                     short_kind = {
                         "toilet": "Ун", "washbasin": "Ум", "sink": "Мой",
                         "bath": "Ван", "shower": "Душ", "floor_drain": "Тр",
@@ -332,12 +257,12 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
             for row in revisions:
                 if row.floor_from == floor:
                     sy = y - 58
-                    G.append(_symbol("revision", x, sy))
+                    G.append(render_ugo("revision", x, sy, scale=0.72, rotation=90))
                     text(x + 18, sy - 9, f"{row.element_id}; DN{row.dn_mm or '—'}", 8)
                     placed_ids.add(row.element_id)
             for row in collars:
                 if applies(row, floor):
-                    G.append(_symbol("fire_collar", x, y + 2))
+                    G.append(render_ugo("fire_collar", x, y + 2, scale=0.72, rotation=90))
                     if floor == floors[0]:
                         text(x + 20, y + 8, f"{row.element_id}; {row.quantity} шт.", 8)
                     placed_ids.add(row.element_id)
@@ -351,7 +276,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
             positions = [x] if count_drawn == 1 else [x - 55, x + 55]
             for sx in positions:
                 sy = roof_y - 6
-                G.append(_symbol("roof_funnel", sx, sy))
+                G.append(render_ugo("roof_funnel", sx, sy, scale=0.88))
                 line(sx, sy + 14, x, roof_y + 22, 2.2)
                 line(sx - 48, roof_y - 25, sx, sy - 14, 1.4)
                 line(sx + 48, roof_y - 25, sx, sy - 14, 1.4)
@@ -361,7 +286,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
         cleanouts = section_elements(pipe.section_id, {"cleanout"})
         for offset, row in enumerate(cleanouts):
             sy = basement_y - 26 - offset * 34
-            G.append(_symbol("cleanout", x, sy))
+            G.append(render_ugo("cleanout", x, sy, scale=0.72))
             text(x + 20, sy + 4, f"{row.element_id}; DN{row.dn_mm or '—'}", 8)
             placed_ids.add(row.element_id)
 
@@ -416,7 +341,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
         slot = slot_by_section.get(row.section_id, 0)
         slot_by_section[row.section_id] = slot + 1
         sx = tx0 + (slot - 0.5) * 90
-        G.append(_symbol(row.kind, sx, ty0))
+        G.append(render_ugo(row.kind, sx, ty0, scale=0.82))
         text(sx, ty0 + 38, f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}", 8, "middle")
         if row.connects_to:
             text(sx, ty0 + 52, f"к {row.connects_to}", 8, "middle", color=GRAY)
@@ -430,21 +355,23 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     lx, ly, lw = 2190.0, 145.0, 545.0
     rect(lx, ly, lw, 316, sw=1.4)
     text(lx + 16, ly + 28, "УСЛОВНЫЕ ОБОЗНАЧЕНИЯ", 13, weight="bold")
-    legend = [
-        ("toilet", "унитаз"), ("washbasin", "умывальник / мойка"),
-        ("bath", "ванна"), ("roof_funnel", "водосточная воронка"),
-        ("revision", "ревизия"), ("cleanout", "прочистка"),
-        ("fire_collar", "противопожарная муфта"), ("outlet", "выпуск"),
-    ]
-    for index, (kind, label) in enumerate(legend):
-        col_index, row_index = index % 2, index // 2
-        sx = lx + 36 + col_index * 270
-        sy = ly + 68 + row_index * 54
-        G.append(_symbol(kind, sx, sy))
-        text(sx + 28, sy + 4, label, 9)
-    line(lx + 18, ly + 284, lx + 62, ly + 284, 3.0)
-    arrow(lx + 62, ly + 284)
-    text(lx + 76, ly + 288, "трубопровод и направление стока", 9)
+    legend = legend_definitions((row.kind for row in elements))
+    legend_rows = max(1, (len(legend) + 1) // 2)
+    legend_step = min(45.0, 222.0 / legend_rows)
+    for index, definition in enumerate(legend):
+        col_index = index // legend_rows
+        row_index = index % legend_rows
+        sx = lx + 34 + col_index * 270
+        sy = ly + 61 + row_index * legend_step
+        G.append(render_ugo(definition.key, sx, sy, scale=0.62))
+        text(sx + 24, sy + 3, _short(definition.label, 31), 7.8)
+    text(
+        lx + 16,
+        ly + 298,
+        "Полная трассировка УГО приведена на листе 2.",
+        8,
+        color=GRAY,
+    )
 
     storm_result = project.storm.result
     sewage_result = project.sewage.result
@@ -582,8 +509,8 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     text(mmx(157.5), mmy(30) - 4, "Лист", 7.5, "middle")
     text(mmx(175), mmy(30) - 4, "Листов", 7.5, "middle")
     text(mmx(142.5), mmy(37), doc.stage_label or "П", 11, "middle")
-    text(mmx(157.5), mmy(37), "1", 11, "middle")
-    text(mmx(175), mmy(37), "1", 11, "middle")
+    text(mmx(157.5), mmy(37), doc.sheet_no or "1", 11, "middle")
+    text(mmx(175), mmy(37), doc.sheet_total or "2", 11, "middle")
     text(mmx(100), mmy(47), "Принципиальная схема внутренних систем", 10, "middle")
     text(mmx(100), mmy(53), "К1, К2 и К3", 12, "middle", "bold")
     text(mmx(160), mmy(49), _short(doc.organization or "", 30), 9, "middle")

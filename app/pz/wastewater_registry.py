@@ -7,34 +7,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import List
 
 from app.pz.project import Project, SewerElementSpec
-
-
-KIND_LABELS: Dict[str, str] = {
-    "toilet": "унитаз",
-    "washbasin": "умывальник",
-    "sink": "мойка",
-    "bath": "ванна",
-    "shower": "душ",
-    "floor_drain": "трап",
-    "roof_funnel": "водосточная воронка",
-    "revision": "ревизия",
-    "cleanout": "прочистка",
-    "fire_collar": "противопожарная муфта",
-    "trap": "гидрозатвор",
-    "pump": "насос",
-    "sump": "приёмный резервуар",
-    "ball_valve": "запорный кран",
-    "check_valve": "обратный клапан",
-    "junction": "узел соединения",
-    "outlet": "выпуск",
-    "tee": "тройник",
-    "elbow": "отвод",
-    "transition": "переход",
-    "other": "элемент",
-}
+from app.pz.wastewater_ugo import KIND_LABELS
 
 
 @dataclass
@@ -77,6 +53,11 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     element_ids = set()
     covered = set()
     for row in elements:
+        if row.kind not in KIND_LABELS:
+            result.warnings.append(
+                f"{row.element_id}: вид элемента {row.kind!r} отсутствует "
+                "в каталоге УГО и будет показан знаком «иной элемент»"
+            )
         if not row.element_id:
             result.errors.append("обнаружен элемент без обозначения")
         elif row.element_id in element_ids:

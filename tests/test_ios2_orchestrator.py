@@ -61,6 +61,7 @@ def test_mode2_builds_documents_only(tmp_path):
     )
     assert b.wastewater_pz_pdf and os.path.exists(b.wastewater_pz_pdf)
     assert b.wastewater_scheme_pdf and os.path.exists(b.wastewater_scheme_pdf)
+    assert b.wastewater_ugo_pdf and os.path.exists(b.wastewater_ugo_pdf)
     assert b.wastewater_spec_pdf and os.path.exists(b.wastewater_spec_pdf)
     assert b.wastewater_package_pdf and os.path.exists(b.wastewater_package_pdf)
     assert b.commission_control_pdf and os.path.exists(b.commission_control_pdf)

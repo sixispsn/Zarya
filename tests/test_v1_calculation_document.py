@@ -105,6 +105,9 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     wastewater_scheme = Path(bundle.wastewater_scheme_pdf)
     assert wastewater_scheme.name == "Схема_К1_К2.pdf"
     assert wastewater_scheme.exists()
+    wastewater_ugo = Path(bundle.wastewater_ugo_pdf)
+    assert wastewater_ugo.name == "УГО_К1_К2.pdf"
+    assert wastewater_ugo.exists()
     wastewater_pz = Path(bundle.wastewater_pz_pdf)
     assert wastewater_pz.name == "ПЗ_К1_К2.pdf"
     assert wastewater_pz.exists()
@@ -130,6 +133,7 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert "Расчётные обоснования систем К1 и К2" in package_text
     normalized_package_text = package_text.replace(" ", "")
     assert "ПринципиальнаясхемавнутреннихсистемК1,К2иК3" in normalized_package_text
+    assert "ВедомостьусловныхграфическихобозначенийсистемК1,К2иК3" in normalized_package_text
     assert "Спецификация оборудования" in package_text
     assert "материалов К1/К2" in package_text
     assert commission.name == "Паспорт_и_нормативный_контроль.pdf"

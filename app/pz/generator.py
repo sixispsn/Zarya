@@ -467,6 +467,28 @@ def generate_wastewater_scheme_pdf(
     return output_path
 
 
+def generate_wastewater_ugo_pdf(
+    project: Project,
+    output_path: str,
+) -> str:
+    """Лист 2 — ведомость УГО К1/К2/К3 с нормативной трассировкой."""
+    import cairosvg
+
+    from app.pz.wastewater_ugo import build_wastewater_ugo_sheet
+
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    ugo_doc = replace(
+        project.document,
+        cipher=_document_cipher(cipher, ".СК"),
+        sheet_title="Ведомость условных графических обозначений К1, К2 и К3",
+        sheet_no="2",
+        sheet_total="2",
+    )
+    svg = build_wastewater_ugo_sheet(replace(project, document=ugo_doc))
+    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
+    return output_path
+
+
 def generate_wastewater_scheme_result(project: Project):
     """Собрать схему и вернуть SVG вместе с предупреждениями реестра."""
     from app.pz.wastewater_scheme import build_wastewater_scheme
@@ -477,7 +499,7 @@ def generate_wastewater_scheme_result(project: Project):
         cipher=_document_cipher(cipher, ".СК"),
         sheet_title="Принципиальная схема внутренних систем К1, К2 и К3",
         sheet_no="1",
-        sheet_total="1",
+        sheet_total="2",
     )
     return build_wastewater_scheme(replace(project, document=scheme_doc))
 
