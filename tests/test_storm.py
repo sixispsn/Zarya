@@ -8,6 +8,7 @@ import math
 import pytest
 
 from app.calc.storm import StormInput, calculate_storm
+from app.intake.yaml_io import load_request_file
 
 
 # ============================================================
@@ -33,6 +34,19 @@ class TestGoldenMoscow:
         # Q = 1000 × q5 / 10000
         expected_Q = round(1000 * expected_q5 / 10000, 3)
         assert result.q_total_l_per_s == expected_Q
+
+    def test_demo_project_uses_moscow_and_calculates_k2(self):
+        req = load_request_file("demo/demo_project.yaml")
+        result = calculate_storm(StormInput(
+            city_code=req.storm_city,
+            roof_area_m2=req.storm_roof_area_m2,
+            walls_area_m2=req.storm_walls_area_m2,
+            period_years=req.storm_period_years,
+        ))
+        assert result.city.name == "Москва"
+        assert result.q20_base == 80
+        assert result.n == 0.71
+        assert result.q_total_l_per_s == 19.266
 
     def test_with_walls(self):
         """Со стенами: F = 1000 + 0.3×500 = 1150."""

@@ -225,5 +225,9 @@ def test_demo_yaml_is_valid_complete_and_roundtrips():
     assert req.total_area_m2 == 14400.0
     assert (req.risers_v1, req.risers_t3, req.risers_t4) == (8, 8, 8)
     assert req.insulation_humidity == 60
+    assert req.storm_city == "moscow"
+    assert req.storm_roof_area_m2 == 900.0
+    assert req.storm_funnels_count == 4
+    assert len(req.sewer_pipes) == 6
     assert all(x.repair_section_id for x in req.network.runs)
     assert load_request(dump_request(req)) == req

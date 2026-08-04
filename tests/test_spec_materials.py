@@ -6,7 +6,11 @@ import pytest
 
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request
-from app.pz.spec import build_specification, format_spec_qty
+from app.pz.spec import (
+    build_specification,
+    build_wastewater_specification,
+    format_spec_qty,
+)
 
 
 def _demo_project():
@@ -105,6 +109,8 @@ def test_spec_sections_follow_gost_21_601_order():
         ("Водоснабжение холодное", "В1"),
         ("Водоснабжение холодное", "В2"),
         ("Водоснабжение горячее", "Т3-Т4"),
+        ("Водоотведение", "К1"),
+        ("Водоотведение", "К2"),
     ]
     positions = [row.pos for section in spec.sections for row in section.rows if row.pos is not None]
     assert positions == list(range(1, len(positions) + 1))
@@ -156,11 +162,24 @@ def test_normative_items_and_minimum_insulation_are_in_specification():
 
 def test_k1_grease_trap_and_k2_sections_do_not_invent_quantity():
     project = _demo_project()
+    project.sewage.pipes = []
+    project.sewage.outlets_count = 0
     project.grease_trap.required = True
     project.storm.system_kind = "internal"
+    project.storm.funnels_count = 0
     spec = build_specification(project)
     k1 = _section(spec, "К1")
     k2 = _section(spec, "К2")
     assert k1.rows[0].qty is None
     assert "стадии Р" in k1.rows[0].note
     assert k2.rows[0].qty is None
+
+
+def test_demo_has_exact_k1_k2_pipe_lengths_and_funnels():
+    spec = build_wastewater_specification(_demo_project())
+    k1 = _section(spec, "К1")
+    k2 = _section(spec, "К2")
+    assert sum(row.qty or 0 for row in k1.rows if row.unit == "м") == 160.0
+    assert sum(row.qty or 0 for row in k2.rows if row.unit == "м") == 72.0
+    funnel = next(row for row in k2.rows if "Воронка" in row.name)
+    assert funnel.qty == 4

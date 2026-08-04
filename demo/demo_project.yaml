@@ -2,7 +2,7 @@ document:
   cipher: ZARYA-DEMO-001-ИОС2
   object_name: Демонстрационный многоквартирный жилой дом, 16 этажей
   organization: ООО «Заря»
-  object_address: Московская область, демонстрационный объект
+  object_address: г. Москва, демонстрационный объект
   object_part: Секция 1
   stage: П
   developer: ''
@@ -59,6 +59,66 @@ insulation:
   humidity: 60
   hvs_water_temp: 10.0
   gvs_water_temp: 60.0
+storm:
+  # Параметры города и формула расхода К2 перенесены из legacy SP calculator.
+  city: moscow
+  roof_type: flat
+  roof_area_m2: 900.0
+  walls_area_m2: 0.0
+  period_years: 1
+  # Нагрузки ниже заданы по условному учебному плану кровли, а не получены
+  # автоматическим делением общего расхода между воронками и стояками.
+  roof_sections: 2
+  funnels_count: 4
+  max_funnel_spacing_m: 24.0
+  selected_funnel_capacity_lps: 10.0
+  max_funnel_flow_lps: 5.0
+  risers_count: 2
+  selected_riser_dn_mm: 100
+  max_riser_flow_lps: 10.0
+  funnels_on_different_levels: false
+  # Объёмы — явные учебные исходные данные по условному заданию/ИЭИ;
+  # legacy-калькулятор их не выводит из секундного расхода.
+  design_m3_day: 69.358
+  annual_m3: 720.0
+  melt_m3h: 2.5
+  melt_m3_day: 40.0
+  melt_m3_year: 1800.0
+  treatment_volume_m3: 69.358
+  storage_volume_m3: 25.0
+sewage:
+  max_fixture_lps: 1.6
+  outlets_count: 1
+  design_assignment_ref: Учебное задание на проектирование, раздел 6
+  survey_ref: Учебный отчёт инженерных изысканий ИГИ-2026, том 2
+  service_life_years: 50
+  overhaul_period_years: 25
+  disposal_mode: centralized
+  tu_org: Демонстрационный водоканал
+  tu_number: DEMO-К-ТУ-01
+  tu_date: 01.07.2026
+  existing_network_type: раздельная
+  existing_network_material: ПЭ 100 SDR 17
+  existing_network_standard: ГОСТ 18599-2001
+  existing_network_outer_diameter_mm: 200.0
+  existing_network_wall_thickness_mm: 11.9
+  discharge_point_k1: КК-1
+  discharge_point_k2: КК-2
+  k1_min_hourly_m3h: 0.36
+  quality_indicators_note: хозяйственно-бытовые стоки; показатели в пределах учебных условий подключения
+  laying_method: открыто в техническом подполье и скрыто в сантехнических шахтах
+  fire_barrier_note: противопожарные муфты в местах пересечения нормируемых преград по узлам КР
+  deformation_joint_note: пересечения деформационных швов учебным заданием не предусмотрены
+  risers:
+    - {id: К1-Ст1, design_flow_lps: 2.758, material: pp, ventilation: ventilated, riser_dn_mm: 110, branch_dn_mm: 110, branch_angle_deg: 87.5, has_toilet: true, working_height_m: 48.0}
+    - {id: К1-Ст2, design_flow_lps: 2.758, material: pp, ventilation: ventilated, riser_dn_mm: 110, branch_dn_mm: 110, branch_angle_deg: 87.5, has_toilet: true, working_height_m: 48.0}
+  pipes:
+    - {system: K1, id: К1-Ст1, purpose: стояк К1, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 110.0, wall_thickness_mm: 3.4, length_m: 48.0, from_node: К1-Этажи-1, to_node: К1-М1, room: сантехническая шахта 1, elevation_start_m: 47.8, elevation_end_m: -0.2}
+    - {system: K1, id: К1-Ст2, purpose: стояк К1, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 110.0, wall_thickness_mm: 3.4, length_m: 48.0, from_node: К1-Этажи-2, to_node: К1-М1, room: сантехническая шахта 2, elevation_start_m: 47.8, elevation_end_m: -0.2}
+    - {system: K1, id: К1-М1, purpose: горизонтальная сеть К1, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 160.0, wall_thickness_mm: 4.9, length_m: 52.0, slope_per_mille: 8.0, fill_ratio: 0.55, from_node: К1-Ст1/К1-Ст2, to_node: К1-Вып1, room: техническое подполье, elevation_start_m: -0.2, elevation_end_m: -0.62}
+    - {system: K1, id: К1-Вып1, purpose: выпуск К1, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 160.0, wall_thickness_mm: 4.9, length_m: 12.0, slope_per_mille: 8.0, fill_ratio: 0.60, from_node: К1-М1, to_node: КК-1, room: техническое подполье / участок выпуска, elevation_start_m: -0.62, elevation_end_m: -0.72}
+    - {system: K2, id: К2-Ст1, purpose: водосточный стояк К2, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 110.0, wall_thickness_mm: 3.4, length_m: 48.0, from_node: Вр-1/Вр-2, to_node: К2-М1, room: сантехническая шахта К2, elevation_start_m: 48.0, elevation_end_m: -0.2}
+    - {system: K2, id: К2-М1, purpose: горизонтальная сеть К2, material: ПП, standard: ГОСТ 32414-2013, outer_diameter_mm: 160.0, wall_thickness_mm: 4.9, length_m: 24.0, slope_per_mille: 8.0, fill_ratio: 0.50, from_node: К2-Ст1, to_node: КК-2, room: техническое подполье, elevation_start_m: -0.2, elevation_end_m: -0.39}
 rooms:
   - name: Коридор типового этажа
     length_m: 42.0
