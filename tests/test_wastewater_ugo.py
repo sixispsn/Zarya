@@ -81,7 +81,7 @@ def test_scheme_legend_is_driven_by_demo_registry():
     assert 'data-ugo="system_k2"' in svg
     assert 'data-ugo="roof_funnel_heated"' in svg
     assert 'data-ugo="pump"' not in svg
-    assert "Трассировка обозначений: лист 2" in svg
+    assert "нормативная трассировка - лист 2" in svg
 
 
 def test_ugo_sheet_is_a3_and_contains_only_used_source_classes(tmp_path):
