@@ -309,6 +309,14 @@ async def wizard_design(request: Request):
                     ff(f"sewer_pipe{i}_elev_end")
                     if fv(f"sewer_pipe{i}_elev_end") else None
                 ),
+                absolute_elevation_start_m=(
+                    ff(f"sewer_pipe{i}_abs_elev_start")
+                    if fv(f"sewer_pipe{i}_abs_elev_start") else None
+                ),
+                absolute_elevation_end_m=(
+                    ff(f"sewer_pipe{i}_abs_elev_end")
+                    if fv(f"sewer_pipe{i}_abs_elev_end") else None
+                ),
                 insulated=bool(form.get(f"sewer_pipe{i}_insulated")),
             ))
 
@@ -322,12 +330,21 @@ async def wizard_design(request: Request):
                 kind=fv(f"sewer_element{i}_kind", "other"),
                 name=fv(f"sewer_element{i}_name"),
                 quantity=fi(f"sewer_element{i}_quantity", 1),
+                typical_quantity=(
+                    fi(f"sewer_element{i}_typical_quantity")
+                    if fv(f"sewer_element{i}_typical_quantity") else None
+                ),
                 floor_from=fi(f"sewer_element{i}_floor_from", 1),
                 floor_to=(
                     fi(f"sewer_element{i}_floor_to")
                     if fv(f"sewer_element{i}_floor_to") else None
                 ),
+                room_number=fv(f"sewer_element{i}_room_number"),
                 room_name=fv(f"sewer_element{i}_room"),
+                elevation_m=(
+                    ff(f"sewer_element{i}_elevation")
+                    if fv(f"sewer_element{i}_elevation") else None
+                ),
                 dn_mm=(
                     fi(f"sewer_element{i}_dn")
                     if fv(f"sewer_element{i}_dn") else None
@@ -337,6 +354,7 @@ async def wizard_design(request: Request):
                     if fv(f"sewer_element{i}_slope") else None
                 ),
                 section_id=fv(f"sewer_element{i}_section"),
+                connects_to=fv(f"sewer_element{i}_connects_to"),
                 type_mark=fv(f"sewer_element{i}_type_mark"),
                 standard=fv(f"sewer_element{i}_standard"),
                 include_in_spec=bool(form.get(f"sewer_element{i}_include_spec")),

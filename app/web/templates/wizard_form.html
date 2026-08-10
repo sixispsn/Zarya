@@ -171,7 +171,7 @@
       <td><input name="sewage_riser{{ i + 1 }}_height" value="{{ r.working_height_m if r and r.working_height_m is not none else '' }}"></td>
     </tr>{% endfor %}</table></div>
     <p class="technical-label">Трубы К1/К2/К3 · только фактически посчитанные длины</p>
-    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Изоляция</th></tr>
+    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Абс. нач., м</th><th>Абс. кон., м</th><th>Изоляция</th></tr>
     {% for i in range(12) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
     <tr>
       <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
@@ -189,11 +189,13 @@
       <td><input name="sewer_pipe{{ i + 1 }}_fill" value="{{ r.fill_ratio if r and r.fill_ratio is not none else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_elev_start" value="{{ r.elevation_start_m if r and r.elevation_start_m is not none else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_elev_end" value="{{ r.elevation_end_m if r and r.elevation_end_m is not none else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_abs_elev_start" value="{{ r.absolute_elevation_start_m if r and r.absolute_elevation_start_m is not none else '' }}"></td>
+      <td><input name="sewer_pipe{{ i + 1 }}_abs_elev_end" value="{{ r.absolute_elevation_end_m if r and r.absolute_elevation_end_m is not none else '' }}"></td>
       <td><label class="check-label compact-check"><input type="checkbox" name="sewer_pipe{{ i + 1 }}_insulated"{% if r and r.insulated %} checked{% endif %}>да</label></td>
     </tr>{% endfor %}</table></div>
     <details class="field-help"><summary>Реестр элементов схемы и спецификации К1/К2/К3</summary>
       <p>Одна строка — подтверждённый проектом элемент или группа одинаковых элементов. Привязка к участку связывает запись со схемой; количество без заполненной строки программа не назначает.</p>
-      <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Кол.</th><th>Этаж от</th><th>до</th><th>Помещение</th><th>DN</th><th>i, ‰</th><th>Участок</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
+      <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Всего</th><th>В тип. помещении</th><th>Этаж от</th><th>до</th><th>№ помещения</th><th>Помещение</th><th>Отм. прибора, м</th><th>DN</th><th>i, ‰</th><th>Участок</th><th>Связь с узлом</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
       {% for i in range(24) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
       <tr>
         <td><select name="sewer_element{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
@@ -203,12 +205,16 @@
         </select></td>
         <td><input name="sewer_element{{ i + 1 }}_name" value="{{ r.name if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_quantity" value="{{ r.quantity if r else 1 }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_typical_quantity" value="{{ r.typical_quantity if r and r.typical_quantity is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_floor_from" value="{{ r.floor_from if r else 1 }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_floor_to" value="{{ r.floor_to if r and r.floor_to is not none else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_room_number" value="{{ r.room_number if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_room" value="{{ r.room_name if r else '' }}"></td>
+        <td><input name="sewer_element{{ i + 1 }}_elevation" value="{{ r.elevation_m if r and r.elevation_m is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_dn" value="{{ r.dn_mm if r and r.dn_mm is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_slope" value="{{ r.slope_per_mille if r and r.slope_per_mille is not none else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_section" value="{{ r.section_id if r else '' }}" placeholder="К1-Ст1"></td>
+        <td><input name="sewer_element{{ i + 1 }}_connects_to" value="{{ r.connects_to if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_type_mark" value="{{ r.type_mark if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_column" value="{{ r.layout_column if r else 0 }}"></td>

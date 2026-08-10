@@ -269,6 +269,8 @@ class SewerPipeRequest:
     room: str = ""
     elevation_start_m: Optional[float] = None
     elevation_end_m: Optional[float] = None
+    absolute_elevation_start_m: Optional[float] = None
+    absolute_elevation_end_m: Optional[float] = None
     insulated: bool = False
 
     @property
@@ -289,6 +291,7 @@ class SewerElementRequest:
     kind: str
     name: str
     quantity: int = 1
+    typical_quantity: Optional[int] = None
     floor_from: int = 1
     floor_to: Optional[int] = None
     room_number: str = ""
@@ -589,6 +592,12 @@ class IOS2Request:
                 p.append(
                     f"sewer_pipes[{i}]: начальная и конечная отметки задаются парой"
                 )
+            if ((pipe.absolute_elevation_start_m is None)
+                    != (pipe.absolute_elevation_end_m is None)):
+                p.append(
+                    f"sewer_pipes[{i}]: абсолютные начальная и конечная "
+                    "отметки задаются парой"
+                )
         seen_sewer_elements = set()
         sewer_nodes = {
             node
@@ -613,6 +622,13 @@ class IOS2Request:
                 p.append(f"sewer_elements[{i}].name не может быть пустым")
             if element.quantity <= 0:
                 p.append(f"sewer_elements[{i}].quantity должен быть > 0")
+            if (
+                element.typical_quantity is not None
+                and element.typical_quantity <= 0
+            ):
+                p.append(
+                    f"sewer_elements[{i}].typical_quantity должен быть > 0"
+                )
             if element.floor_to is not None and element.floor_to < element.floor_from:
                 p.append(
                     f"sewer_elements[{i}].floor_to не может быть ниже floor_from"

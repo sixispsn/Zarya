@@ -22,11 +22,22 @@ def _gost_request():
         SewerPipeRequest(
             "K1", "К1-Ст1", "стояк К1", "ПП",
             "ТУ изготовителя", 110, 3.4, 30.0,
-            from_node="К1-Этажи",
-            to_node="К1-М1",
+            from_node="К1-Кровля",
+            to_node="К1-Ст1",
             room="сантехническая шахта",
             elevation_start_m=29.60,
             elevation_end_m=-0.40,
+        ),
+        SewerPipeRequest(
+            "K1", "К1-Ветв-СУ1", "этажное ответвление", "ПП",
+            "ТУ изготовителя", 110, 3.4, 3.0,
+            slope_per_mille=20.0,
+            fill_ratio=0.45,
+            from_node="СУ-101",
+            to_node="К1-Ст1",
+            room="санузел №101",
+            elevation_start_m=0.15,
+            elevation_end_m=0.09,
         ),
         SewerPipeRequest(
             "K1", "К1-М1", "горизонтальная сеть", "ПП",
@@ -34,16 +45,31 @@ def _gost_request():
             slope_per_mille=20.0,
             fill_ratio=0.55,
             from_node="К1-Ст1",
-            to_node="К1-Вып1",
+            to_node="К1-Узел-Вып1",
             room="техническое подполье",
             elevation_start_m=-0.40,
             elevation_end_m=-0.88,
+        ),
+        SewerPipeRequest(
+            "K1", "К1-Вып1", "выпуск К1", "ПП",
+            "ТУ изготовителя", 110, 3.4, 5.0,
+            slope_per_mille=20.0,
+            fill_ratio=0.55,
+            from_node="К1-Узел-Вып1",
+            to_node="КК-1",
+            room="техническое подполье / вне здания",
+            elevation_start_m=-0.88,
+            elevation_end_m=-0.98,
+            absolute_elevation_start_m=146.12,
+            absolute_elevation_end_m=146.02,
         ),
     ]
     req.sewer_elements = [
         SewerElementRequest(
             "К1-Ун1", "K1", "toilet", "Унитаз", quantity=1,
-            floor_from=1, dn_mm=110, section_id="К1-Ст1",
+            typical_quantity=1, floor_from=1, room_number="101",
+            room_name="Санузел", elevation_m=0.15, dn_mm=110,
+            section_id="К1-Ветв-СУ1", connects_to="К1-Ст1",
         ),
         SewerElementRequest(
             "К1-Р1", "K1", "revision", "Ревизия", quantity=1,
@@ -51,7 +77,7 @@ def _gost_request():
         ),
         SewerElementRequest(
             "К1-ВыпЭ1", "K1", "outlet", "Узел выпуска К1", quantity=1,
-            floor_from=0, dn_mm=110, section_id="К1-М1",
+            floor_from=0, dn_mm=110, section_id="К1-Вып1",
         ),
     ]
     req.sewage_outlets_count = 1

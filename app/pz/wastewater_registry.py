@@ -98,11 +98,17 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
 
     result.covered_sections = sorted(covered)
     result.uncovered_sections = sorted(pipe_ids - covered)
-    if result.uncovered_sections:
-        result.warnings.append(
-            "в реестре нет привязанных элементов для участков: "
-            + ", ".join(result.uncovered_sections)
-        )
+    # Магистральный участок может не нести самостоятельного штучного элемента;
+    # его наличие уже подтверждено реестром труб и топологическим графом.
+    from app.pz.wastewater_topology import build_wastewater_topology
+
+    topology = build_wastewater_topology(project)
+    result.errors.extend(
+        problem for problem in topology.errors if problem not in result.errors
+    )
+    result.warnings.extend(
+        problem for problem in topology.warnings if problem not in result.warnings
+    )
     return result
 
 

@@ -77,17 +77,22 @@ def test_scheme_legend_is_driven_by_demo_registry():
     svg = generate_wastewater_scheme_result(_project()).svg
     assert 'data-ugo="sink"' in svg
     assert 'data-ugo="flow_direction"' in svg
+    assert 'data-ugo="system_k1"' in svg
+    assert 'data-ugo="system_k2"' in svg
+    assert 'data-ugo="roof_funnel_heated"' in svg
     assert 'data-ugo="pump"' not in svg
-    assert "Полная трассировка УГО приведена на листе 2" in svg
+    assert "Трассировка обозначений: лист 2" in svg
 
 
-def test_ugo_sheet_is_a3_and_contains_both_source_classes(tmp_path):
+def test_ugo_sheet_is_a3_and_contains_only_used_source_classes(tmp_path):
     project = _project()
     svg = build_wastewater_ugo_sheet(project)
     assert 'width="420mm"' in svg
     assert "нормативное УГО" in svg
     assert "рекомендуемый пример" in svg
-    assert "проектное обозначение" in svg
+    assert "проектное обозначение" not in svg
+    assert "систем К1, К2" in svg
+    assert "систем К1, К2 и К3" not in svg
     assert "ГОСТ 21.205-2016, табл. 3, поз. 11" in svg
 
     output = tmp_path / "ugo.pdf"

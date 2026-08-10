@@ -228,6 +228,8 @@ def test_demo_yaml_is_valid_complete_and_roundtrips():
     assert req.storm_city == "moscow"
     assert req.storm_roof_area_m2 == 900.0
     assert req.storm_funnels_count == 4
-    assert len(req.sewer_pipes) == 7
+    assert len(req.sewer_pipes) == 12
+    assert req.sewer_pipes[7].absolute_elevation_start_m == 146.55
+    assert req.sewer_elements[0].typical_quantity == 2
     assert all(x.repair_section_id for x in req.network.runs)
     assert load_request(dump_request(req)) == req

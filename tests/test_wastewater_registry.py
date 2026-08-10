@@ -73,12 +73,15 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     project = build_project(_request())
     result = generate_wastewater_scheme_result(project)
     assert result.warnings == []
-    assert "Принципиальная схема внутренних систем К1, К2 и К3" in result.svg
+    assert "Принципиальная схема внутренних систем канализации и водоотведения" in result.svg
     assert "К1-Р1-8" in result.svg
     assert "К2-Вр1" in result.svg
     assert "К2-Вр2" in result.svg
     assert "К2-Ст2" in result.svg
     assert "К1-М1" in result.svg
+    assert "К1-Вып1" in result.svg
+    assert "абс. 146,55 → 146,45" in result.svg
+    assert "№ К-01 · К1-Ветв-Кух1" in result.svg
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg
 

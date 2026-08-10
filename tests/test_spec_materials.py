@@ -180,7 +180,9 @@ def test_demo_has_exact_k1_k2_pipe_lengths_and_funnels():
     spec = build_wastewater_specification(_demo_project())
     k1 = _section(spec, "К1")
     k2 = _section(spec, "К2")
-    assert sum(row.qty or 0 for row in k1.rows if row.unit == "м") == 160.0
+    # Стояки, этажные ветви, магистраль и выпуск заданы
+    # отдельными подтверждёнными участками учебного примера.
+    assert sum(row.qty or 0 for row in k1.rows if row.unit == "м") == 384.0
     assert sum(row.qty or 0 for row in k2.rows if row.unit == "м") == 128.0
     funnel = next(row for row in k2.rows if "Воронка" in row.name)
     assert funnel.qty == 4

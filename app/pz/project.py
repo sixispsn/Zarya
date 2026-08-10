@@ -580,6 +580,8 @@ class SewerPipeSpec:
     room: str = ""
     elevation_start_m: Optional[float] = None
     elevation_end_m: Optional[float] = None
+    absolute_elevation_start_m: Optional[float] = None
+    absolute_elevation_end_m: Optional[float] = None
     insulated: bool = False
 
     @property
@@ -595,6 +597,7 @@ class SewerElementSpec:
     kind: str = "other"
     name: str = ""
     quantity: int = 1
+    typical_quantity: Optional[int] = None
     floor_from: int = 1
     floor_to: Optional[int] = None
     room_number: str = ""

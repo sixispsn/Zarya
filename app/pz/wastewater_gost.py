@@ -242,11 +242,14 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         row.quantity for row in s.elements
         if row.system == "K1" and row.kind == "outlet"
     )
+    from app.pz.wastewater_topology import build_wastewater_topology
+
+    topology = build_wastewater_topology(project)
     topology_ok = bool(s.risers and s.outlets_count and s.pipes) and all(
         p.from_node and p.to_node and p.room
         and p.elevation_start_m is not None and p.elevation_end_m is not None
         for p in s.pipes
-    ) and registry.ready and required_systems <= registered_systems and (
+    ) and topology.ready and registry.ready and required_systems <= registered_systems and (
         outlets_registered >= s.outlets_count
     )
     add(
@@ -256,7 +259,11 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         (
             f"стояков {len(s.risers)}; выпусков {s.outlets_count}; "
             f"топологических участков {len(s.pipes)}; "
-            f"элементов реестра {len(s.elements)}"
+            f"элементов реестра {len(s.elements)}; "
+            + (
+                "граф связен"
+                if topology.ready else "ошибки графа: " + "; ".join(topology.errors)
+            )
         ),
     )
     add(

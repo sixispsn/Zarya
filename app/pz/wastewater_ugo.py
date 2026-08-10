@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
-from math import ceil
 from typing import Dict, Iterable, List, Tuple
 
 from app.pz.project import Project
@@ -47,6 +46,9 @@ class UGOSymbolDefinition:
 
 
 _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
+    UGOSymbolDefinition("system_k1", "К1 - хозяйственно-бытовая канализация", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 1),
+    UGOSymbolDefinition("system_k2", "К2 - внутренний водосток", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 2),
+    UGOSymbolDefinition("system_k3", "К3 - производственная канализация", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 3),
     UGOSymbolDefinition("sink", "мойка", "ГОСТ 21.205-2016, табл. 3, поз. 2", "normative", 10),
     UGOSymbolDefinition("washbasin", "умывальник", "ГОСТ 21.205-2016, табл. 3, поз. 3", "normative", 20),
     UGOSymbolDefinition("bath", "ванна", "ГОСТ 21.205-2016, табл. 3, поз. 7", "normative", 30),
@@ -54,6 +56,7 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("toilet", "унитаз", "ГОСТ 21.205-2016, табл. 3, поз. 11", "normative", 50),
     UGOSymbolDefinition("floor_drain", "трап", "ГОСТ 21.205-2016, табл. 3, поз. 16", "normative", 60),
     UGOSymbolDefinition("roof_funnel", "воронка внутреннего водостока", "ГОСТ 21.205-2016, табл. 3, поз. 18", "normative", 70),
+    UGOSymbolDefinition("roof_funnel_heated", "кровельная воронка с электрообогревом", "ГОСТ Р 21.620-2023, прил. В (рекомендуемый пример)", "recommended", 71),
     UGOSymbolDefinition("trap", "сифон (гидрозатвор)", "ГОСТ 21.205-2016, табл. 4, поз. 4", "normative", 80),
     UGOSymbolDefinition("revision", "ревизия", "ГОСТ 21.205-2016, табл. 4, поз. 11", "normative", 90),
     UGOSymbolDefinition("pump", "насос (общее обозначение)", "ГОСТ 21.205-2016, табл. 2, поз. 3а", "normative", 100),
@@ -77,7 +80,10 @@ UGO_CATALOG: Dict[str, UGOSymbolDefinition] = {
 KIND_LABELS: Dict[str, str] = {
     definition.key: definition.label
     for definition in _DEFINITIONS
-    if definition.key != "flow_direction"
+    if definition.key not in {
+        "flow_direction", "system_k1", "system_k2", "system_k3",
+        "roof_funnel_heated",
+    }
 }
 
 
@@ -99,10 +105,46 @@ def legend_definitions(
     return sorted((UGO_CATALOG[key] for key in keys), key=lambda row: row.order)
 
 
+def project_legend_definitions(project: Project) -> List[UGOSymbolDefinition]:
+    """Обозначения, реально применённые в проекте, включая марки систем."""
+    elements = list(project.sewage.elements or [])
+    keys = {
+        row.kind if row.kind in UGO_CATALOG else "other"
+        for row in elements
+    }
+    # Геометрические узлы и выпуск раскрываются надписями непосредственно на
+    # схеме и не публикуются как будто это нормативные УГО.
+    keys -= {"outlet", "junction", "tee", "elbow", "transition", "other"}
+    heated = any(
+        row.kind == "roof_funnel"
+        and "электрообогрев" in (row.name or "").lower()
+        for row in elements
+    )
+    if heated:
+        keys.discard("roof_funnel")
+        keys.add("roof_funnel_heated")
+    systems = {
+        row.system.lower()
+        for row in list(project.sewage.pipes or []) + elements
+        if row.system in {"K1", "K2", "K3"}
+    }
+    keys.update(f"system_{system}" for system in systems)
+    keys.add("flow_direction")
+    return sorted((UGO_CATALOG[key] for key in keys), key=lambda row: row.order)
+
+
 def _shape(kind: str) -> str:
     """Контур УГО в локальных координатах около (0, 0)."""
     s = BLACK
     sw = 2.2
+    if kind in {"system_k1", "system_k2", "system_k3"}:
+        mark = kind.split("_")[1].upper()
+        return (
+            f'<path d="M-28,0 H28" stroke="{s}" stroke-width="{sw}"/>'
+            f'<rect x="-12" y="-8" width="24" height="16" fill="white"/>'
+            f'<text x="0" y="5" text-anchor="middle" font-family="{FONT}" '
+            f'font-size="12" font-weight="bold" fill="{s}">{mark}</text>'
+        )
     if kind == "sink":
         return (
             f'<path d="M-22,-12 H22 M-17,-12 V10 H14 V17" fill="none" '
@@ -142,7 +184,18 @@ def _shape(kind: str) -> str:
         return (
             f'<path d="M-24,0 H-13 M13,0 H24" stroke="{s}" stroke-width="{sw}"/>'
             f'<circle cx="0" cy="0" r="13" fill="white" stroke="{s}" '
+            f'stroke-width="{sw}"/><path d="M0,13 V22" stroke="{s}" '
             f'stroke-width="{sw}"/>'
+        )
+    if kind == "roof_funnel_heated":
+        return (
+            f'<path d="M-31,-18 L-13,-8 M31,-18 L13,-8 M-24,0 H-13 '
+            f'M13,0 H24 M0,13 V22" fill="none" stroke="{s}" '
+            f'stroke-width="{sw}"/>'
+            f'<circle cx="0" cy="0" r="13" fill="white" stroke="{s}" '
+            f'stroke-width="{sw}"/>'
+            f'<path d="M-25,-23 l7,5 -7,5 7,5" fill="none" stroke="{s}" '
+            f'stroke-width="1.7"/>'
         )
     if kind == "trap":
         return (
@@ -154,8 +207,8 @@ def _shape(kind: str) -> str:
         return (
             f'<path d="M-25,0 H25 M-22,-11 Q-8,0 -22,11" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<rect x="2" y="-4" width="8" height="8" fill="white" '
-            f'stroke="{s}" stroke-width="{sw}"/>'
+            f'<circle cx="6" cy="0" r="4" fill="white" stroke="{s}" '
+            f'stroke-width="{sw}"/>'
         )
     if kind == "cleanout":
         return (
@@ -175,7 +228,7 @@ def _shape(kind: str) -> str:
             f'<path d="M0,-25 V-14 M0,14 V25" stroke="{s}" stroke-width="{sw}"/>'
             f'<circle cx="0" cy="0" r="14" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
-            f'<path d="M-7,-10 L7,-10 L0,0 Z" fill="{s}"/>'
+            f'<path d="M-4,-11 H4 L0,-5 Z" fill="{s}"/>'
         )
     if kind == "ball_valve":
         return (
@@ -188,8 +241,8 @@ def _shape(kind: str) -> str:
     if kind == "check_valve":
         return (
             f'<path d="M-25,0 H-15 M15,0 H25 M-15,-11 L0,0 L-15,11 Z" '
-            f'fill="white" stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M15,-11 L0,0 L15,11 Z" fill="{s}" stroke="{s}" '
+            f'fill="{s}" stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M15,-11 L0,0 L15,11 Z" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "flow_direction":
@@ -284,7 +337,25 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
 
     left, right, top, bottom = 20 * pxmm, width - 5 * pxmm, 5 * pxmm, height - 5 * pxmm
     rect(left, top, right - left, bottom - top, 2.0)
-    text(left + 22, top + 38, "Ведомость условных графических обозначений систем К1, К2 и К3", 20, weight="bold")
+    definitions = project_legend_definitions(project)
+    system_label_by_key = {
+        "system_k1": "К1",
+        "system_k2": "К2",
+        "system_k3": "К3",
+    }
+    system_labels = [
+        system_label_by_key[key]
+        for key in ("system_k1", "system_k2", "system_k3")
+        if any(row.key == key for row in definitions)
+    ]
+    systems_title = ", ".join(system_labels) or "К1, К2, К3"
+    text(
+        left + 22,
+        top + 38,
+        f"Ведомость условных графических обозначений систем {systems_title}",
+        20,
+        weight="bold",
+    )
     text(
         left + 22,
         top + 64,
@@ -293,37 +364,32 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
         color=GRAY,
     )
 
-    definitions = sorted(_DEFINITIONS, key=lambda row: row.order)
-    split = ceil(len(definitions) / 2)
-    columns = (definitions[:split], definitions[split:])
-    col_gap = 20
-    col_w = (right - left - col_gap - 44) / 2
+    table_x = left + 22
+    table_w = right - left - 44
     table_top = top + 92
     row_h = 55
-    for col_index, rows in enumerate(columns):
-        x = left + 22 + col_index * (col_w + col_gap)
-        table_h = 34 + len(rows) * row_h
-        rect(x, table_top, col_w, table_h, 1.4)
-        symbol_edge = x + 92
-        name_edge = x + 310
-        line(symbol_edge, table_top, symbol_edge, table_top + table_h)
-        line(name_edge, table_top, name_edge, table_top + table_h)
-        text(x + 46, table_top + 22, "УГО", 9, "middle", "bold")
-        text((symbol_edge + name_edge) / 2, table_top + 22, "Наименование", 9, "middle", "bold")
-        text(name_edge + (x + col_w - name_edge) / 2, table_top + 22, "Основание", 9, "middle", "bold")
-        line(x, table_top + 34, x + col_w, table_top + 34)
-        for index, definition in enumerate(rows):
-            y0 = table_top + 34 + index * row_h
-            if index:
-                line(x, y0, x + col_w, y0, 0.9, "#777")
-            body.append(render_ugo(definition.key, x + 46, y0 + row_h / 2, scale=0.78))
-            name_lines = _wrap(definition.label, 29)[:2]
-            for line_index, value in enumerate(name_lines):
-                text(symbol_edge + 10, y0 + 23 + line_index * 14, value, 9, weight="bold")
-            basis_lines = _wrap(definition.basis, 46)[:2]
-            for line_index, value in enumerate(basis_lines):
-                text(name_edge + 10, y0 + 20 + line_index * 13, value, 7.5)
-            text(name_edge + 10, y0 + 47, definition.status_label, 7, color=GRAY)
+    table_h = 34 + len(definitions) * row_h
+    rect(table_x, table_top, table_w, table_h, 1.4)
+    symbol_edge = table_x + 120
+    name_edge = table_x + 455
+    line(symbol_edge, table_top, symbol_edge, table_top + table_h)
+    line(name_edge, table_top, name_edge, table_top + table_h)
+    text(table_x + 60, table_top + 22, "УГО", 9.5, "middle", "bold")
+    text((symbol_edge + name_edge) / 2, table_top + 22, "Наименование", 9.5, "middle", "bold")
+    text(name_edge + (table_x + table_w - name_edge) / 2, table_top + 22, "Основание и статус", 9.5, "middle", "bold")
+    line(table_x, table_top + 34, table_x + table_w, table_top + 34)
+    for index, definition in enumerate(definitions):
+        y0 = table_top + 34 + index * row_h
+        if index:
+            line(table_x, y0, table_x + table_w, y0, 0.9, "#777")
+        body.append(render_ugo(definition.key, table_x + 60, y0 + row_h / 2, scale=0.82))
+        name_lines = _wrap(definition.label, 42)[:2]
+        for line_index, value in enumerate(name_lines):
+            text(symbol_edge + 12, y0 + 23 + line_index * 14, value, 10, weight="bold")
+        basis_lines = _wrap(definition.basis, 82)[:2]
+        for line_index, value in enumerate(basis_lines):
+            text(name_edge + 12, y0 + 19 + line_index * 13, value, 8.5)
+        text(name_edge + 12, y0 + 48, definition.status_label, 7.5, color=GRAY)
 
     # Основная надпись: компактная форма 3 для самостоятельного листа А3.
     stamp_w, stamp_h = 185 * pxmm, 55 * pxmm
@@ -343,7 +409,7 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
     text(sx + 8, sy + 48, _wrap(doc.developer_name or "", 22)[0], 8)
     text(info_x + (stage_x - info_x) / 2, sy + 24, _wrap(doc.cipher or "", 42)[0], 12, "middle", "bold")
     text(info_x + (stage_x - info_x) / 2, sy + 55, _wrap(doc.object_name or "", 48)[0], 8.5, "middle")
-    text(info_x + (stage_x - info_x) / 2, sy + 91, "Ведомость УГО систем К1, К2 и К3", 9.5, "middle", "bold")
+    text(info_x + (stage_x - info_x) / 2, sy + 91, f"Ведомость УГО систем {systems_title}", 9.5, "middle", "bold")
     for x0, x1, label in (
         (stage_x, sheet_x, "Стадия"),
         (sheet_x, total_x, "Лист"),

@@ -254,6 +254,14 @@ def load_request(text: str) -> IOS2Request:
                 float(x["elevation_end_m"])
                 if x.get("elevation_end_m") is not None else None
             ),
+            absolute_elevation_start_m=(
+                float(x["absolute_elevation_start_m"])
+                if x.get("absolute_elevation_start_m") is not None else None
+            ),
+            absolute_elevation_end_m=(
+                float(x["absolute_elevation_end_m"])
+                if x.get("absolute_elevation_end_m") is not None else None
+            ),
             insulated=bool(x.get("insulated", False)),
         )
         for x in (sewage_s.get("pipes") or [])
@@ -266,6 +274,10 @@ def load_request(text: str) -> IOS2Request:
             kind=str(x.get("kind", "other")),
             name=str(x.get("name", "")),
             quantity=int(x.get("quantity", 1)),
+            typical_quantity=(
+                int(x["typical_quantity"])
+                if x.get("typical_quantity") is not None else None
+            ),
             floor_from=int(x.get("floor_from", 1)),
             floor_to=(
                 int(x["floor_to"])
@@ -664,6 +676,10 @@ def dump_request(req: IOS2Request) -> str:
                    if x.elevation_start_m is not None else {}),
                 **({"elevation_end_m": x.elevation_end_m}
                    if x.elevation_end_m is not None else {}),
+                **({"absolute_elevation_start_m": x.absolute_elevation_start_m}
+                   if x.absolute_elevation_start_m is not None else {}),
+                **({"absolute_elevation_end_m": x.absolute_elevation_end_m}
+                   if x.absolute_elevation_end_m is not None else {}),
                 "insulated": x.insulated,
             } for x in req.sewer_pipes],
             "elements": [{
@@ -672,6 +688,8 @@ def dump_request(req: IOS2Request) -> str:
                 "kind": x.kind,
                 "name": x.name,
                 "quantity": x.quantity,
+                **({"typical_quantity": x.typical_quantity}
+                   if x.typical_quantity is not None else {}),
                 "floor_from": x.floor_from,
                 **({"floor_to": x.floor_to} if x.floor_to is not None else {}),
                 **({"room_number": x.room_number} if x.room_number else {}),

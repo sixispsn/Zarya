@@ -1,8 +1,8 @@
-"""Векторная принципиальная схема К1/К2/К3 по реестру элементов.
+"""Принципиальная схема К1/К2/К3 по явному топологическому графу.
 
-Компоновка следует рекомендуемому примеру приложения В ГОСТ Р 21.620-2023,
-а состав данных — обязательному п. 5.2.2.4. Схема не достраивает приборы,
-фасонные части или связи, которых нет в реестре/топологии проекта.
+Геометрия листа строится только из подтверждённых рёбер ``from_node`` /
+``to_node`` и привязок элементов к этажным ответвлениям. Генератор не соединяет
+стояки и магистрали по близости координат и не восстанавливает помещения.
 """
 from __future__ import annotations
 
@@ -12,14 +12,16 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.wastewater_registry import audit_wastewater_registry
-from app.pz.wastewater_ugo import legend_definitions, render_ugo
+from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
+from app.pz.wastewater_ugo import project_legend_definitions, render_ugo
 
 
-W, H = 2803, 1980  # А1, альбомная ориентация: 841×594
+W, H = 2803, 1980  # А1, 841×594 мм
 PXMM = W / 841
 FONT = "Arial, DejaVu Sans, sans-serif"
 BLACK = "#111"
-GRAY = "#777"
+GRAY = "#666"
+LIGHT = "#aaa"
 
 
 @dataclass
@@ -41,28 +43,6 @@ def _short(value: str, limit: int) -> str:
     return value if len(value) <= limit else value[: max(1, limit - 1)] + "…"
 
 
-def _levels(project: Project) -> List[int]:
-    n = max(1, int(project.building.floors_above or 1))
-    if n <= 6:
-        return list(range(n + 1, -1, -1))
-    required = {n + 1, n, max(2, n // 2), 2, 1, 0}
-    for row in project.sewage.elements:
-        if 0 <= row.floor_from <= n + 1:
-            required.add(row.floor_from)
-        if row.floor_to is not None and 0 <= row.floor_to <= n + 1:
-            required.add(row.floor_to)
-    ordered = sorted(required, reverse=True)
-    if len(ordered) <= 10:
-        return ordered
-    priority = [n + 1, n, max(2, n // 2), 2, 1, 0]
-    selected = set(priority)
-    for value in ordered:
-        if len(selected) >= 10:
-            break
-        selected.add(value)
-    return sorted(selected, reverse=True)
-
-
 def _floor_title(floor: int, top: int) -> str:
     if floor == top + 1:
         return "Кровля"
@@ -74,26 +54,39 @@ def _floor_title(floor: int, top: int) -> str:
 def _floor_mark(project: Project, floor: int) -> float:
     n = max(1, int(project.building.floors_above or 1))
     height = float(project.building.height_m or n * 3.0)
-    step = height / n
     if floor == n + 1:
         return height
     if floor == 0:
         lows = [
-            value
+            mark
             for pipe in project.sewage.pipes
-            for value in (pipe.elevation_start_m, pipe.elevation_end_m)
-            if value is not None and value <= 0
+            for mark in (pipe.elevation_start_m, pipe.elevation_end_m)
+            if mark is not None and mark <= 0
         ]
-        return max(lows) if lows else -0.2
-    return (floor - 1) * step
+        return max(lows) if lows else 0.0
+    return (floor - 1) * height / n
+
+
+def _representative_floors(top: int) -> List[int]:
+    values = [top, max(2, top // 2), 2, 1]
+    result: List[int] = []
+    for value in values:
+        if 1 <= value <= top and value not in result:
+            result.append(value)
+    return result
+
+
+def _applies(element: SewerElementSpec, floor: int) -> bool:
+    end = element.floor_to if element.floor_to is not None else element.floor_from
+    return element.floor_from <= floor <= end
 
 
 def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     doc = project.document
-    pipes = list(project.sewage.pipes or [])
     elements = list(project.sewage.elements or [])
+    topology = build_wastewater_topology(project)
     audit = audit_wastewater_registry(project)
-    warnings = list(audit.errors) + list(audit.warnings)
+    warnings = list(dict.fromkeys(audit.errors + audit.warnings))
     G: List[str] = []
 
     def line(x1, y1, x2, y2, width=2.0, color=BLACK, dash=""):
@@ -122,346 +115,410 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
             f'fill="{color}"{transform}>{escape(str(value))}</text>'
         )
 
-    def arrow(x, y, direction="right"):
-        if direction == "down":
-            G.append(f'<path d="M{x-7},{y-10} L{x},{y} L{x+7},{y-10} Z" fill="{BLACK}"/>')
+    def arrow(x, y, direction="right", scale=1.0):
+        if direction == "left":
+            G.append(
+                f'<path d="M{x+11*scale},{y-7*scale} L{x},{y} '
+                f'L{x+11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
+            )
+        elif direction == "down":
+            G.append(
+                f'<path d="M{x-7*scale},{y-11*scale} L{x},{y} '
+                f'L{x+7*scale},{y-11*scale} Z" fill="{BLACK}"/>'
+            )
         else:
-            G.append(f'<path d="M{x-12},{y-7} L{x},{y} L{x-12},{y+7} Z" fill="{BLACK}"/>')
+            G.append(
+                f'<path d="M{x-11*scale},{y-7*scale} L{x},{y} '
+                f'L{x-11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
+            )
 
-    # Заголовок и нормативная граница листа.
-    text(108, 78, "Принципиальная схема внутренних систем К1, К2 и К3", 24, weight="bold")
+    def pipe_mark(pipe: SewerPipeSpec) -> str:
+        value = (
+            f"{pipe.section_id} Ø{pipe.outer_diameter_mm:g}×"
+            f"{pipe.wall_thickness_mm:g}"
+        )
+        if pipe.slope_per_mille is not None:
+            value += f" i={pipe.slope_per_mille:g}‰"
+        return value.replace(".", ",")
+
+    def branch_mark(pipe: SewerPipeSpec) -> str:
+        """Compact mark for a branch already identified in the room heading."""
+        value = f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+        if pipe.slope_per_mille is not None:
+            value += f"; i={pipe.slope_per_mille:g}‰"
+        return value.replace(".", ",")
+
+    def wrap_lines(value: str, width: int, limit: int = 2) -> List[str]:
+        words = (value or "").split()
+        lines: List[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and len(candidate) > width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        if len(lines) > limit:
+            lines = lines[:limit]
+            lines[-1] = _short(lines[-1], max(4, width - 1))
+        return lines or [""]
+
+    # Заголовок.
+    text(108, 74, "Принципиальная схема внутренних систем канализации и водоотведения", 22, weight="bold")
     text(
-        108, 108,
-        "ГОСТ Р 21.620-2023: состав по п. 5.2.2.4; компоновка по рекомендуемому приложению В",
-        13, color=GRAY,
+        108, 101,
+        "ГОСТ Р 21.620-2023, п. 5.2.2.4; компоновка по рекомендуемому приложению В",
+        12, color=GRAY,
     )
 
     top_floor = max(1, int(project.building.floors_above or 1))
-    representative = [top_floor, max(2, top_floor // 2), 2, 1]
-    floors: List[int] = []
-    for floor in representative:
-        if 1 <= floor <= top_floor and floor not in floors:
-            floors.append(floor)
+    floors = _representative_floors(top_floor)
     levels = [top_floor + 1] + floors + [0]
-    y_positions = [172.0, 318.0, 535.0, 752.0, 969.0, 1210.0]
-    if len(levels) != len(y_positions):
-        y_positions = [172.0 + i * (1038.0 / max(1, len(levels) - 1)) for i in range(len(levels))]
-    floor_y = dict(zip(levels, y_positions))
+    y_values = [160.0 + i * (1050.0 / max(1, len(levels) - 1)) for i in range(len(levels))]
+    floor_y = dict(zip(levels, y_values))
+    roof_y = floor_y[top_floor + 1]
+    basement_y = floor_y[0]
 
-    text(375, 142, "К1 · ХОЗЯЙСТВЕННО-БЫТОВАЯ КАНАЛИЗАЦИЯ", 14, weight="bold")
-    text(1730, 142, "К2 · ВНУТРЕННИЙ ВОДОСТОК", 14, weight="bold")
-
-    # Этажные уровни и пропуски этажей. На листе показаны характерные этажи,
-    # а не произвольно восстановленная рабочая аксонометрия.
+    building_x1, building_x2 = 345.0, 2160.0
+    line(building_x1, roof_y - 32, building_x1, basement_y + 18, 2.0)
+    line(building_x2, roof_y - 32, building_x2, basement_y + 18, 2.0)
     for index, floor in enumerate(levels):
         y = floor_y[floor]
-        line(350, y, 2160, y, 1.0, "#999")
-        text(330, y - 8, _floor_title(floor, top_floor), 14, "end", "bold")
-        text(330, y + 14, f"отм. {_fmt(_floor_mark(project, floor), 3)}", 10, "end", color=GRAY)
+        line(building_x1, y, building_x2, y, 1.3, "#777")
+        text(322, y - 12, _floor_title(floor, top_floor), 14, "end", "bold")
+        text(322, y + 10, f"отм. {_fmt(_floor_mark(project, floor), 3)}", 9.5, "end", color=GRAY)
         if index and levels[index - 1] - floor > 1:
+            omitted = levels[index - 1] - floor - 1
             mid = (floor_y[levels[index - 1]] + y) / 2
-            line(352, mid - 13, 372, mid - 5, 1.3)
-            line(352, mid + 5, 372, mid + 13, 1.3)
-            text(382, mid + 5, f"этажи {floor + 1}–{levels[index - 1] - 1} повторяются", 10, color=GRAY)
+            # Разрыв повторяющихся этажей, как в приложении В.
+            line(910, mid - 8, 930, mid + 8, 1.8)
+            line(930, mid - 8, 950, mid + 8, 1.8)
+            text(967, mid + 5, f"пропущено {omitted} однотипных этажей", 9, color=GRAY)
 
-    riser_pipes = sorted(
-        (row for row in pipes if "стояк" in (row.purpose or "").lower()),
-        key=lambda row: (row.system, row.section_id),
-    )
-    if not riser_pipes:
-        warnings.append("не заданы трубопроводные участки с назначением «стояк»")
-    k1_risers = [row for row in riser_pipes if row.system == "K1"]
-    k2_risers = [row for row in riser_pipes if row.system == "K2"]
-    k3_risers = [row for row in riser_pipes if row.system == "K3"]
+    # Противопожарное перекрытие показывается только при подтверждённых муфтах.
+    if any(row.kind == "fire_collar" for row in elements):
+        line(building_x1, basement_y - 1, building_x2, basement_y - 1, 4.0, "#444")
+        text(building_x1 + 8, basement_y - 10, "противопожарное перекрытие; проходки по узлам КР", 8.5, color=GRAY)
 
-    def distributed_x(rows: List[SewerPipeSpec], x1: float, x2: float) -> Dict[str, float]:
+    risers_by_system: Dict[str, List[SewerPipeSpec]] = {"K1": [], "K2": [], "K3": []}
+    for pipe in topology.risers.values():
+        risers_by_system.setdefault(pipe.system, []).append(pipe)
+    for rows in risers_by_system.values():
+        rows.sort(key=lambda row: row.section_id)
+
+    def distribute(rows: List[SewerPipeSpec], start: float, end: float) -> Dict[str, float]:
         if not rows:
             return {}
         if len(rows) == 1:
-            return {rows[0].section_id: (x1 + x2) / 2}
-        dx = (x2 - x1) / (len(rows) - 1)
-        return {row.section_id: x1 + i * dx for i, row in enumerate(rows)}
+            return {rows[0].section_id: (start + end) / 2}
+        step = (end - start) / (len(rows) - 1)
+        return {row.section_id: start + index * step for index, row in enumerate(rows)}
 
     riser_x: Dict[str, float] = {}
-    riser_x.update(distributed_x(k1_risers, 720.0, 1370.0))
-    riser_x.update(distributed_x(k2_risers, 1840.0, 2070.0))
-    riser_x.update(distributed_x(k3_risers, 1620.0, 1740.0))
-    roof_y = floor_y[top_floor + 1]
-    basement_y = floor_y[0]
-    for pipe in riser_pipes:
-        x = riser_x[pipe.section_id]
-        line(x, roof_y - 22, x, basement_y + 20, 3.0)
-        for floor in floors:
-            arrow(x, floor_y[floor] + 44, "down")
-        mark = (
-            f"{pipe.section_id}; Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+    riser_x.update(distribute(risers_by_system.get("K1", []), 700, 1240))
+    riser_x.update(distribute(risers_by_system.get("K3", []), 1370, 1510))
+    riser_x.update(distribute(risers_by_system.get("K2", []), 1770, 2040))
+
+    present = [system for system in ("K1", "K3", "K2") if risers_by_system.get(system)]
+    system_titles = {
+        "K1": (420, "К1 · ХОЗЯЙСТВЕННО-БЫТОВАЯ КАНАЛИЗАЦИЯ"),
+        "K3": (1360, "К3 · ПРОИЗВОДСТВЕННАЯ КАНАЛИЗАЦИЯ"),
+        "K2": (1690, "К2 · ВНУТРЕННИЙ ВОДОСТОК"),
+    }
+    for system in present:
+        x, label = system_titles[system]
+        text(x, 132, label, 12, weight="bold")
+
+    # Стояки, вентиляционные части и направление стока.
+    for riser_id, pipe in topology.risers.items():
+        x = riser_x.get(riser_id)
+        if x is None:
+            continue
+        line(x, roof_y - 44, x, basement_y + 25, 3.0)
+        arrow(x, (roof_y + basement_y) / 2, "down", 0.78)
+        label = (
+            f"{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
         ).replace(".", ",")
-        text(x - 12, (roof_y + basement_y) / 2, mark, 12, "middle", "bold", rotate=-90)
-        text(x, roof_y - 35, _short(pipe.room or pipe.purpose, 30), 9, "middle", color=GRAY)
-        if pipe.system == "K1":
-            # Фановая часть стояка выше кровли.
-            line(x, roof_y - 52, x, roof_y - 22, 3.0)
-            line(x - 10, roof_y - 52, x + 10, roof_y - 52, 2.0)
-            text(x + 16, roof_y - 47, "вент. часть", 9, color=GRAY)
+        text(x - 10, (roof_y + basement_y) / 2 - 35, label, 10, "middle", "bold", rotate=-90)
+        text(x + 12, roof_y - 24, _short(pipe.room, 31), 8, color=GRAY)
+        if pipe.system in {"K1", "K3"}:
+            line(x, roof_y - 74, x, roof_y - 44, 3.0)
+            line(x - 10, roof_y - 74, x + 10, roof_y - 74, 2.0)
+            text(x + 15, roof_y - 61, "+0,200 над кровлей", 8, color=GRAY)
 
-    fixture_kinds = {"toilet", "washbasin", "sink", "bath", "shower", "floor_drain", "trap"}
-    placed_ids = set()
-
-    def section_elements(section_id: str, kinds: Optional[set] = None) -> List[SewerElementSpec]:
-        found = [row for row in elements if row.section_id == section_id]
-        if kinds is not None:
-            found = [row for row in found if row.kind in kinds]
-        return sorted(found, key=lambda row: (row.kind, row.element_id))
-
-    def applies(row: SewerElementSpec, floor: int) -> bool:
-        end = row.floor_to if row.floor_to is not None else row.floor_from
-        return row.floor_from <= floor <= end
-
-    # Типовые группы приборов показываются у каждого подтверждённого стояка К1.
-    # Количество и диапазон этажей подписываются из реестра; скрытые приборы не создаются.
-    for riser_index, pipe in enumerate(k1_risers):
-        x = riser_x[pipe.section_id]
-        direction = -1 if riser_index % 2 == 0 else 1
-        fixtures = section_elements(pipe.section_id, fixture_kinds)
-        revisions = section_elements(pipe.section_id, {"revision"})
-        collars = section_elements(pipe.section_id, {"fire_collar"})
+    # Этажные ответвления и помещения — строго по ветвям топологического графа.
+    branches_by_riser: Dict[str, List[SewerBranch]] = {}
+    for branch in topology.branches:
+        branches_by_riser.setdefault(branch.riser_id, []).append(branch)
+    for riser_id, branches in branches_by_riser.items():
+        x = riser_x.get(riser_id)
+        if x is None:
+            continue
+        k1_rows = risers_by_system.get("K1", [])
+        riser_index = next((i for i, row in enumerate(k1_rows) if row.section_id == riser_id), 0)
+        side = -1 if riser_index % 2 == 0 else 1
+        span = 390.0
+        cell_w = span / max(1, len(branches))
+        ordered = sorted(branches, key=lambda row: (row.room_number, row.pipe.section_id))
         for floor in floors:
+            active = [row for row in ordered if row.floor_from <= floor <= row.floor_to]
+            if not active:
+                continue
             y = floor_y[floor]
-            active = [row for row in fixtures if applies(row, floor)]
-            if active:
-                cell_x = x - 360 if direction < 0 else x + 30
-                rect(cell_x, y - 104, 330, 94, stroke="#777", fill="white", sw=1.0)
-                text(cell_x + 10, y - 86, "типовая санитарная группа", 9, weight="bold")
-                branch_end = x + direction * 300
-                line(x, y - 27, branch_end, y - 27 + direction * 4, 2.0)
-                slots = min(4, len(active))
-                for slot, row in enumerate(active[:slots]):
-                    sx = x + direction * (72 + slot * 68)
-                    sy = y - 28 + direction * (slot * 1.2)
-                    G.append(render_ugo(row.kind, sx, sy, scale=0.78))
-                    short_kind = {
-                        "toilet": "Ун", "washbasin": "Ум", "sink": "Мой",
-                        "bath": "Ван", "shower": "Душ", "floor_drain": "Тр",
-                        "trap": "Гз",
-                    }.get(row.kind, "Э")
-                    text(sx, y - 49, f"{short_kind} DN{row.dn_mm or '—'}", 7.5, "middle")
-                    placed_ids.add(row.element_id)
-                slopes = sorted({row.slope_per_mille for row in active if row.slope_per_mille is not None})
-                slope_note = "/".join(_fmt(value, 0) for value in slopes) if slopes else "—"
-                text(cell_x + 10, y - 66, f"ответвления i={slope_note}‰; к {pipe.section_id}", 8, color=GRAY)
-                if floor == floors[0]:
-                    ids = ", ".join(row.element_id for row in active)
-                    total = ", ".join(f"{row.element_id} — {row.quantity} шт." for row in active)
-                    text(cell_x + 10, y - 15, _short(ids, 55), 7.5, color=GRAY)
-                    text(cell_x + 10, y + 9, _short(total, 62), 7.5, color=GRAY)
-            for row in revisions:
-                if row.floor_from == floor:
-                    sy = y - 58
-                    G.append(render_ugo("revision", x, sy, scale=0.72, rotation=90))
-                    text(x + 18, sy - 9, f"{row.element_id}; DN{row.dn_mm or '—'}", 8)
-                    placed_ids.add(row.element_id)
-            for row in collars:
-                if applies(row, floor):
-                    G.append(render_ugo("fire_collar", x, y + 2, scale=0.72, rotation=90))
-                    if floor == floors[0]:
-                        text(x + 20, y + 8, f"{row.element_id}; {row.quantity} шт.", 8)
-                    placed_ids.add(row.element_id)
+            for branch_index, branch in enumerate(active):
+                if side < 0:
+                    cell_x = x - span + branch_index * cell_w
+                else:
+                    cell_x = x + branch_index * cell_w
+                cell_right = cell_x + cell_w
+                rect(cell_x, y - 118, cell_w, 118, stroke="#777", fill="white", sw=1.0)
+                text(
+                    cell_x + 8,
+                    y - 101,
+                    _short(f"№ {branch.room_number} · {branch.pipe.section_id}", 31),
+                    8.5,
+                    weight="bold",
+                )
+                text(cell_x + 8, y - 86, _short(branch.room_name, 30), 7.5, color=GRAY)
+                branch_y = y - 14
+                start_x = cell_x + 16 if side < 0 else cell_right - 16
+                end_x = x
+                line(start_x, branch_y, end_x, branch_y + (2 if side < 0 else -2), 2.2)
+                arrow(
+                    x - 12 if side < 0 else x + 12,
+                    branch_y + (2 if side < 0 else -2),
+                    "right" if side < 0 else "left",
+                    0.55,
+                )
+                text(
+                    (start_x + end_x) / 2,
+                    branch_y - 9,
+                    branch_mark(branch.pipe),
+                    7.4,
+                    "middle",
+                    weight="bold",
+                    color=GRAY,
+                )
+                fixtures = [row for row in branch.elements if _applies(row, floor)]
+                if not fixtures:
+                    continue
+                usable_left = cell_x + 25
+                usable_right = cell_right - 25
+                step = (usable_right - usable_left) / max(1, len(fixtures))
+                for element_index, row in enumerate(fixtures):
+                    sx = usable_left + (element_index + 0.5) * step
+                    sy = y - 59
+                    G.append(render_ugo(row.kind, sx, sy, scale=0.62))
+                    line(sx, sy + 18, sx, branch_y, 1.25)
+                    qty = f"{row.typical_quantity} шт." if row.typical_quantity else "—"
+                    text(sx, y - 37, f"{qty}; DN{row.dn_mm or '—'}", 7.2, "middle")
+                lowest = min(
+                    (row.elevation_m for row in fixtures if row.elevation_m is not None),
+                    default=None,
+                )
+                if lowest is not None:
+                    text(
+                        cell_right - 8,
+                        y - 71,
+                        f"низ {_fmt(lowest, 3)}",
+                        7.0,
+                        "end",
+                        color=GRAY,
+                    )
 
-    # Водосточные воронки и кровельные уклоны — по реестру К2.
-    for pipe in k2_risers:
-        x = riser_x[pipe.section_id]
-        funnels = section_elements(pipe.section_id, {"roof_funnel"})
-        for row in funnels:
-            count_drawn = min(2, max(1, row.quantity))
-            positions = [x] if count_drawn == 1 else [x - 55, x + 55]
-            for sx in positions:
-                sy = roof_y - 6
-                G.append(render_ugo("roof_funnel", sx, sy, scale=0.88))
-                line(sx, sy + 14, x, roof_y + 22, 2.2)
-                line(sx - 48, roof_y - 25, sx, sy - 14, 1.4)
-                line(sx + 48, roof_y - 25, sx, sy - 14, 1.4)
-            slope = f"; i={_fmt(row.slope_per_mille, 0)}‰" if row.slope_per_mille is not None else ""
-            text(x, roof_y + 48, f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}{slope}", 8, "middle", "bold")
-            placed_ids.add(row.element_id)
-        cleanouts = section_elements(pipe.section_id, {"cleanout"})
-        for offset, row in enumerate(cleanouts):
-            sy = basement_y - 26 - offset * 34
-            G.append(render_ugo("cleanout", x, sy, scale=0.72))
-            text(x + 20, sy + 4, f"{row.element_id}; DN{row.dn_mm or '—'}", 8)
-            placed_ids.add(row.element_id)
+    # Ревизии и противопожарные муфты — на фактических стояках и этажах.
+    for row in elements:
+        x = riser_x.get(row.section_id)
+        if x is None:
+            continue
+        if row.kind == "revision" and row.floor_from in floor_y:
+            sy = floor_y[row.floor_from] - 45
+            G.append(render_ugo("revision", x, sy, scale=0.65, rotation=90))
+            text(x + 15, sy + 4, f"R · {row.element_id}", 7.5)
+        elif row.kind == "fire_collar":
+            for floor in floors:
+                if _applies(row, floor):
+                    G.append(render_ugo("fire_collar", x, floor_y[floor], scale=0.58, rotation=90))
 
-    # Магистрали, выпуски, отметки и уклоны. Геометрия берётся только из
-    # подтверждённых участков, без расчёта промежуточных фасонных частей.
-    horizontal = [row for row in pipes if row.section_id not in riser_x]
-    grouped: Dict[str, List[SewerPipeSpec]] = {"K1": [], "K2": [], "K3": []}
-    for pipe in horizontal:
-        grouped.setdefault(pipe.system, []).append(pipe)
-    main_y = {"K1": 1328.0, "K2": 1415.0, "K3": 1492.0}
-    horizontal_xy: Dict[str, Tuple[float, float]] = {}
-    for system in ("K1", "K2", "K3"):
-        rows = grouped.get(system) or []
+    # Кровельные воронки. Электрообогрев отражается составным знаком приложения В.
+    for row in elements:
+        if row.kind != "roof_funnel":
+            continue
+        x = riser_x.get(row.section_id)
+        if x is None:
+            warnings.append(f"{row.element_id}: воронка не связана с известным стояком")
+            continue
+        count = min(3, max(1, row.quantity))
+        offsets = [0] if count == 1 else [(-42 + i * 84 / (count - 1)) for i in range(count)]
+        symbol_kind = (
+            "roof_funnel_heated"
+            if "электрообогрев" in (row.name or "").lower()
+            else "roof_funnel"
+        )
+        for offset in offsets:
+            sx, sy = x + offset, roof_y - 10
+            G.append(render_ugo(symbol_kind, sx, sy, scale=0.68))
+            line(sx, sy + 15, x, roof_y + 28, 1.8)
+        text(
+            x,
+            roof_y + 51,
+            f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}",
+            7.5,
+            "middle",
+            "bold",
+        )
+
+    # Магистрали и выпуски строятся как рёбра графа между узлами.
+    main_y = {"K1": 1360.0, "K3": 1430.0, "K2": 1495.0}
+    external_defaults = {"K1": 1570.0, "K3": 1660.0, "K2": 2160.0}
+    node_x: Dict[str, float] = dict(riser_x)
+    for system in ("K1", "K3", "K2"):
+        rows = [row for row in topology.mains if row.system == system]
         if not rows:
             continue
+        for _ in range(len(rows) + 2):
+            changed = False
+            for pipe in rows:
+                a, b = pipe.from_node, pipe.to_node
+                if a in node_x and b not in node_x:
+                    node_x[b] = max(node_x[a] + 250, external_defaults[system])
+                    changed = True
+                elif b in node_x and a not in node_x:
+                    node_x[a] = min(node_x[b] - 250, external_defaults[system] - 250)
+                    changed = True
+            if not changed:
+                break
+        unknown = sorted({n for row in rows for n in (row.from_node, row.to_node) if n not in node_x})
+        for index, node in enumerate(unknown):
+            node_x[node] = external_defaults[system] + index * 120
+
         y = main_y[system]
-        start_x = 390.0 if system != "K2" else 1695.0
-        end_x = 2140.0
-        text(start_x - 22, y + 5, system, 15, "end", "bold")
-        segment = (end_x - start_x) / len(rows)
-        for index, pipe in enumerate(rows):
-            x1, x2 = start_x + index * segment, start_x + (index + 1) * segment
+        text(min(node_x.get(row.from_node, 1000) for row in rows) - 28, y + 5, system, 14, "end", "bold")
+        for pipe in rows:
+            x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
             line(x1, y, x2, y, 3.0)
-            arrow(x2 - 6, y)
-            horizontal_xy[pipe.section_id] = ((x1 + x2) / 2, y)
-            slope = f"; i={_fmt(pipe.slope_per_mille, 1)}‰" if pipe.slope_per_mille is not None else ""
-            label = (
-                f"{pipe.section_id}; Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}{slope}"
-            ).replace(".", ",")
-            text((x1 + x2) / 2, y - 13, label, 10, "middle", "bold")
-            marks = (
-                f"отм. {_fmt(pipe.elevation_start_m)} → {_fmt(pipe.elevation_end_m)} м"
-                if pipe.elevation_start_m is not None else _short(pipe.room, 35)
-            )
-            text((x1 + x2) / 2, y + 21, marks, 9, "middle", color=GRAY)
-        for pipe in riser_pipes:
-            if pipe.system == system:
-                x = riser_x[pipe.section_id]
-                line(x, basement_y, x, y, 2.4)
-                G.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{BLACK}"/>')
+            direction = "right" if x2 >= x1 else "left"
+            arrow((x1 + x2) / 2, y, direction, 0.72)
+            text((x1 + x2) / 2, y - 15, pipe_mark(pipe), 10, "middle", "bold")
+            relative = f"отн. {_fmt(pipe.elevation_start_m, 2)} → {_fmt(pipe.elevation_end_m, 2)}"
+            absolute = ""
+            if pipe.absolute_elevation_start_m is not None:
+                absolute = (
+                    f"; абс. {_fmt(pipe.absolute_elevation_start_m, 2)} → "
+                    f"{_fmt(pipe.absolute_elevation_end_m, 2)}"
+                )
+            text((x1 + x2) / 2, y + 21, relative + absolute, 8.4, "middle", color=GRAY)
+        for riser in risers_by_system.get(system, []):
+            x = riser_x[riser.section_id]
+            line(x, basement_y, x, y, 2.5)
+            G.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{BLACK}"/>')
+        terminal_nodes = {
+            row.to_node for row in rows
+            if not any(other.from_node == row.to_node for other in rows)
+        }
+        for node in terminal_nodes:
+            text(node_x[node], y + 43, node, 8.5, "middle", "bold")
 
-    # Элементы на горизонтальных участках, включая оба выпуска.
-    slot_by_section: Dict[str, int] = {}
-    line_kinds = {"cleanout", "outlet", "pump", "ball_valve", "check_valve", "junction", "sump"}
+    # Прочистки на техподполье — только на подтверждённых участках.
     for row in elements:
-        if row.element_id in placed_ids or row.kind not in line_kinds:
+        if row.kind != "cleanout":
             continue
-        target = horizontal_xy.get(row.section_id)
-        if target is None:
-            continue
-        tx0, ty0 = target
-        slot = slot_by_section.get(row.section_id, 0)
-        slot_by_section[row.section_id] = slot + 1
-        sx = tx0 + (slot - 0.5) * 90
-        G.append(render_ugo(row.kind, sx, ty0, scale=0.82))
-        text(sx, ty0 + 38, f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}", 8, "middle")
-        if row.connects_to:
-            text(sx, ty0 + 52, f"к {row.connects_to}", 8, "middle", color=GRAY)
-        placed_ids.add(row.element_id)
+        pipe = next((p for p in topology.mains if p.section_id == row.section_id), None)
+        if pipe is not None and pipe.from_node in node_x and pipe.to_node in node_x:
+            sx = (node_x[pipe.from_node] + node_x[pipe.to_node]) / 2
+            sy = main_y[pipe.system]
+        else:
+            sx = riser_x.get(row.section_id)
+            sy = basement_y - 24
+        if sx is not None:
+            G.append(render_ugo("cleanout", sx, sy, scale=0.62))
+            text(sx, sy + 30, row.element_id, 7, "middle")
 
-    for row in elements:
-        if row.element_id not in placed_ids:
-            warnings.append(f"{row.element_id}: элемент не размещён — нет поддержанной привязки на схеме")
-
-    # Компактная легенда и расчётный паспорт освобождают лист от пустого поля.
-    lx, ly, lw = 2190.0, 145.0, 545.0
-    rect(lx, ly, lw, 316, sw=1.4)
-    text(lx + 16, ly + 28, "УСЛОВНЫЕ ОБОЗНАЧЕНИЯ", 13, weight="bold")
-    legend = legend_definitions((row.kind for row in elements))
-    legend_rows = max(1, (len(legend) + 1) // 2)
-    legend_step = min(45.0, 222.0 / legend_rows)
+    # Легенда — только реально использованные знаки, включая марки систем.
+    lx, ly, lw = 2190.0, 130.0, 545.0
+    legend = project_legend_definitions(project)
+    legend_h = max(275.0, 58.0 + len(legend) * 37.0)
+    rect(lx, ly, lw, legend_h, sw=1.4)
+    text(lx + 16, ly + 27, "УСЛОВНЫЕ ОБОЗНАЧЕНИЯ", 12.5, weight="bold")
     for index, definition in enumerate(legend):
-        col_index = index // legend_rows
-        row_index = index % legend_rows
-        sx = lx + 34 + col_index * 270
-        sy = ly + 61 + row_index * legend_step
+        sx = lx + 45
+        sy = ly + 59 + index * 37
         G.append(render_ugo(definition.key, sx, sy, scale=0.62))
-        text(sx + 24, sy + 3, _short(definition.label, 31), 7.8)
-    text(
-        lx + 16,
-        ly + 298,
-        "Полная трассировка УГО приведена на листе 2.",
-        8,
-        color=GRAY,
-    )
+        label_lines = wrap_lines(definition.label, 55, 2)
+        baseline = sy - 3 if len(label_lines) > 1 else sy + 3
+        for line_index, value in enumerate(label_lines):
+            text(sx + 31, baseline + line_index * 11, value, 7.8)
+    text(lx + 16, ly + legend_h - 12, "Трассировка обозначений: лист 2.", 7.5, color=GRAY)
 
-    storm_result = project.storm.result
-    sewage_result = project.sewage.result
-    rect(lx, 478, lw, 334, sw=1.4)
-    text(lx + 16, 506, "РАСЧЁТНЫЕ ДАННЫЕ СХЕМЫ", 13, weight="bold")
-    q_k1 = (
-        f"{_fmt(sewage_result.total.q_sewage_lps, 3)} л/с"
-        if sewage_result is not None else "см. лист расчёта"
-    )
-    q_k2 = (
-        f"{_fmt(storm_result.q_total_l_per_s, 3)} л/с"
-        if storm_result is not None else "см. лист расчёта"
-    )
-    city = (
-        storm_result.city.name if storm_result is not None
-        else "Москва" if project.storm.city_code.lower() == "moscow"
-        else project.storm.city_code or "не задан"
-    )
-    data_rows = [
+    # Паспорт графа и обязательные сведения схемы.
+    info_y = ly + legend_h + 18
+    rect(lx, info_y, lw, 322, sw=1.4)
+    text(lx + 16, info_y + 27, "ПАСПОРТ ТОПОЛОГИИ", 12.5, weight="bold")
+    storm = project.storm.result
+    sewage = project.sewage.result
+    q_k1 = _fmt(sewage.total.q_sewage_lps, 3) + " л/с" if sewage else "см. расчёт"
+    q_k2 = _fmt(storm.q_total_l_per_s, 3) + " л/с" if storm else "см. расчёт"
+    info_rows = [
+        ("Статус графа", "ПРОВЕРЕН" if topology.ready else "ТРЕБУЕТ ДАННЫХ"),
+        ("Стояки / ветви / магистрали", f"{len(topology.risers)} / {len(topology.branches)} / {len(topology.mains)}"),
         ("К1 · расчётный расход", q_k1),
-        ("К1 · точка выпуска", project.sewage.discharge_point_k1 or "не задана"),
-        ("К2 · район строительства", city),
-        ("К2 · площадь кровли", f"{_fmt(project.storm.roof_area_m2, 1)} м²"),
+        ("К1 · точка сброса", project.sewage.discharge_point_k1 or "не задана"),
         ("К2 · расчётный расход", q_k2),
-        ("К2 · воронки / стояки", f"{project.storm.funnels_count} / {project.storm.risers_count} шт."),
-        ("К2 · нагрузка на воронку", f"{_fmt(project.storm.max_funnel_flow_lps, 2)} л/с"),
-        ("К2 · точка выпуска", project.sewage.discharge_point_k2 or "не задана"),
+        ("К2 · точка сброса", project.sewage.discharge_point_k2 or "не задана"),
+        ("Помещения", f"{len({(b.room_number, b.room_name) for b in topology.branches})} типовых"),
     ]
-    for index, (label, value) in enumerate(data_rows):
-        yy = 538 + index * 32
-        text(lx + 16, yy, label, 9, color=GRAY)
-        text(lx + lw - 16, yy, value, 10, "end", "bold")
-        line(lx + 16, yy + 8, lx + lw - 16, yy + 8, 0.6, "#bbb")
+    for index, (label, value) in enumerate(info_rows):
+        yy = info_y + 59 + index * 33
+        text(lx + 16, yy, label, 8, color=GRAY)
+        text(lx + lw - 16, yy, value, 8.8, "end", "bold")
+        line(lx + 16, yy + 9, lx + lw - 16, yy + 9, 0.6, "#bbb")
 
-    rect(lx, 829, lw, 374, sw=1.4)
-    text(lx + 16, 857, "ПРОЕКТНЫЕ УКАЗАНИЯ", 13, weight="bold")
+    notes_y = info_y + 340
+    rect(lx, notes_y, lw, 345, sw=1.4)
+    text(lx + 16, notes_y + 27, "ПРОЕКТНЫЕ УКАЗАНИЯ", 12.5, weight="bold")
     notes = [
-        "1. Схема принципиальная; трассы и фасонные части уточняются по планам",
-        "   и аксонометрическим схемам стадии Р.",
-        "2. Приборы, ревизии, муфты, прочистки и выпуски показаны только",
-        "   по подтверждённому реестру элементов проекта.",
-        "3. Вентиляционные части стояков К1 вывести выше кровли.",
-        "4. К2 проложить с электрообогревом воронок по заданию ЭОМ.",
-        "5. Отметки низа труб и уклоны горизонтальных участков — по таблице.",
-        "6. Противопожарная заделка пересечений — по узлам КР.",
+        "1. Связи показаны только по полям from_node/to_node.",
+        "2. Приборы привязаны к подтверждённым этажным ответвлениям.",
+        "3. Повторяющиеся этажи показаны с числом пропусков.",
+        "4. Вентиляционные части стояков вывести выше кровли.",
+        "5. Электрообогрев воронок — по заданию ЭОМ.",
+        "6. Проходки через преграды выполнить по узлам КР.",
+        "7. Фасонные части и монтажные размеры уточняются на стадии Р.",
     ]
     for index, note in enumerate(notes):
-        text(lx + 16, 889 + index * 25, note, 8.5)
-    text(lx + 16, 1100, "Реестр элементов", 9, color=GRAY)
-    text(lx + lw - 16, 1100, f"{audit.element_count} элементов / {audit.spec_position_count} позиций", 10, "end", "bold")
-    text(lx + 16, 1128, "Противопожарные преграды", 9, color=GRAY)
-    text(lx + 16, 1147, _short(project.sewage.fire_barrier_note or "не заданы", 78), 8.5)
-    status = (
-        "РЕЕСТР ПРОШЁЛ ПРОВЕРКУ" if audit.ready and not audit.warnings
-        else "РЕЕСТР ПРОШЁЛ С ПРЕДУПРЕЖДЕНИЯМИ" if audit.ready
-        else "РЕЕСТР ТРЕБУЕТ ДАННЫХ"
+        text(lx + 16, notes_y + 58 + index * 27, note, 7.7)
+    status_color = BLACK if topology.ready else "#a00"
+    text(
+        lx + 16,
+        notes_y + 278,
+        "ТОПОЛОГИЯ ПРОШЛА ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
+        9.5,
+        weight="bold",
+        color=status_color,
     )
-    text(lx + 16, 1182, status, 10, weight="bold", color=BLACK if audit.ready else "#a00")
+    if warnings:
+        text(lx + 16, notes_y + 303, _short(warnings[0], 76), 7.2, color=status_color)
 
-    # Таблица участков на самом листе несёт DN, отметки, уклоны и наполнение.
-    tx, ty, tw = 350.0, 1515.0, 1795.0
-    col = [0, 105, 300, 540, 810, 1015, 1220, 1390, 1795]
-    row_h = 26.0
-    rows = pipes[:8]
-    th = row_h * (len(rows) + 1)
-    rect(tx, ty, tw, th, sw=1.4)
-    for c in col[1:-1]:
-        line(tx + c, ty, tx + c, ty + th, 1.0)
-    for index in range(1, len(rows) + 1):
-        line(tx, ty + index * row_h, tx + tw, ty + index * row_h, 1.0)
-    headers = ["Сист.", "Участок", "Помещение", "От → к", "Øнар×s", "Отметки", "i, ‰", "h/d / L, м"]
-    for index, label in enumerate(headers):
-        text(tx + (col[index] + col[index + 1]) / 2, ty + 18, label, 8, "middle", "bold")
-    for row_index, pipe in enumerate(rows, 1):
-        yy = ty + row_index * row_h + 18
-        values = [
-            pipe.system,
-            pipe.section_id,
-            _short(pipe.room, 30),
-            _short(f"{pipe.from_node} → {pipe.to_node}", 31),
-            f"{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}".replace(".", ","),
-            (f"{_fmt(pipe.elevation_start_m)} → {_fmt(pipe.elevation_end_m)}"
-             if pipe.elevation_start_m is not None else "—"),
-            _fmt(pipe.slope_per_mille, 1),
-            f"{_fmt(pipe.fill_ratio, 2)} / {_fmt(pipe.length_m, 1)}",
-        ]
-        for index, value in enumerate(values):
-            text(tx + (col[index] + col[index + 1]) / 2, yy, value, 7.5, "middle")
+    # Экспликация помещений вместо обрезанной таблицы первых восьми труб.
+    rooms = sorted({(b.room_number, b.room_name) for b in topology.branches})
+    tx, ty, tw = 360.0, 1560.0, 1030.0
+    row_h = 27.0
+    table_h = row_h * (len(rooms) + 1)
+    rect(tx, ty, tw, table_h, sw=1.4, fill="white")
+    line(tx + 190, ty, tx + 190, ty + table_h, 1.0)
+    text(tx + 95, ty + 18, "№ помещения", 8, "middle", "bold")
+    text(tx + 610, ty + 18, "Наименование", 8, "middle", "bold")
+    for index, (number, name) in enumerate(rooms, 1):
+        yy = ty + index * row_h
+        line(tx, yy, tx + tw, yy, 0.9, "#777")
+        text(tx + 95, yy + 18, number, 8, "middle")
+        text(tx + 205, yy + 18, name, 8)
+    text(tx, ty - 12, "ЭКСПЛИКАЦИЯ ТИПОВЫХ ПОМЕЩЕНИЙ", 10, weight="bold")
 
-    # Рамка и основной штамп формы 3.
+    # Рамка и основная надпись формы 3.
     fx0, fy0, fx1, fy1 = 20 * PXMM, 5 * PXMM, W - 5 * PXMM, H - 5 * PXMM
     rect(fx0, fy0, fx1 - fx0, fy1 - fy0, sw=2.0)
 
@@ -512,7 +569,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     text(mmx(157.5), mmy(37), doc.sheet_no or "1", 11, "middle")
     text(mmx(175), mmy(37), doc.sheet_total or "2", 11, "middle")
     text(mmx(100), mmy(47), "Принципиальная схема внутренних систем", 10, "middle")
-    text(mmx(100), mmy(53), "К1, К2 и К3", 12, "middle", "bold")
+    text(mmx(100), mmy(53), ", ".join(present) or "К1, К2, К3", 12, "middle", "bold")
     text(mmx(160), mmy(49), _short(doc.organization or "", 30), 9, "middle")
 
     svg = (
