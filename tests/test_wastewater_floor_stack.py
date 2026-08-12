@@ -6,7 +6,10 @@ from pypdf import PdfReader
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
 from app.pz.wastewater_layout import audit_wastewater_layout
-from app.pz.wastewater_layout_builder import build_wastewater_floor_stack
+from app.pz.wastewater_layout_builder import (
+    add_basement_k1_main,
+    build_wastewater_floor_stack,
+)
 from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
@@ -71,6 +74,31 @@ def test_stepwise_default_renders_only_the_foundation_stage():
     assert "Техническое подполье" in svg
     assert ">16 этаж</text>" not in svg
     assert "Контроль этажности" not in svg
+
+
+def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
+    project = _project()
+    layout = add_basement_k1_main(
+        project, build_wastewater_floor_stack(project).layout,
+    )
+    assert audit_wastewater_layout(project, layout).ready
+    assert len(layout.routes) == 1
+    route = layout.routes[0]
+    assert route.section_id == "К1-М1"
+    nodes = {row.placement_id: row for row in layout.nodes}
+    assert nodes[route.from_placement_id].node_id == "К1-Ст1"
+    assert nodes[route.to_placement_id].node_id == "К1-Ст2"
+    assert route.points[-1].y - route.points[0].y == pytest.approx(
+        (route.points[-1].x - route.points[0].x) * 0.008,
+    )
+
+    svg = build_wastewater_structure_svg(
+        project, layout, scope=WastewaterStructureScope.BASEMENT_K1_MAIN,
+    )
+    assert "К1-М1 Ø160×4,9; i=8‰" in svg
+    assert "К1-Вып1" not in svg
+    assert "К2-М1" not in svg
+    assert ">16 этаж</text>" not in svg
 
 
 def test_floor_stack_pdf_is_a1(tmp_path):

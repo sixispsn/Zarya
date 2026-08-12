@@ -19,6 +19,7 @@ class WastewaterStructureScope(str, Enum):
     """Объём промежуточной отрисовки при поступенчатой сборке схемы."""
 
     FOUNDATION = "foundation"
+    BASEMENT_K1_MAIN = "basement_k1_main"
     FULL_FLOOR_STACK = "full_floor_stack"
 
 
@@ -27,7 +28,7 @@ def build_wastewater_structure_svg(
     layout: WastewaterSchemeLayout,
     scope: WastewaterStructureScope = WastewaterStructureScope.FOUNDATION,
 ) -> str:
-    """Отрисовать проверочный лист каркаса без инженерных трасс."""
+    """Отрисовать один из проверочных этапов принципиальной схемы."""
     audit = audit_wastewater_layout(project, layout)
     if not audit.ready:
         raise ValueError("каркас схемы не прошёл проверку: " + "; ".join(
@@ -54,6 +55,13 @@ def build_wastewater_structure_svg(
         G.append(
             f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
             f'stroke="{BLACK}" stroke-width="{sw:.2f}" fill="{fill}"/>'
+        )
+
+    def polyline(points, sw=0.35):
+        value = " ".join(f"{point.x:.2f},{point.y:.2f}" for point in points)
+        G.append(
+            f'<polyline points="{value}" fill="none" stroke="{BLACK}" '
+            f'stroke-width="{sw:.2f}" stroke-linejoin="miter"/>'
         )
 
     def text(x, y, value, size=3.5, anchor="start", weight="normal"):
@@ -88,7 +96,10 @@ def build_wastewater_structure_svg(
         structure_top_y = lower_y - 78.0
     line(x1, structure_top_y, x1, lower_y, 0.5)
     line(x2, structure_top_y, x2, lower_y, 0.5)
-    if scope == WastewaterStructureScope.FOUNDATION:
+    if scope in {
+        WastewaterStructureScope.FOUNDATION,
+        WastewaterStructureScope.BASEMENT_K1_MAIN,
+    }:
         line(x1, structure_top_y, x2, structure_top_y, 0.35)
 
     for group in shown_groups:
@@ -116,7 +127,10 @@ def build_wastewater_structure_svg(
     for slab in layout.slabs:
         fill = "url(#diagonal-hatch)" if slab.hatch == "diagonal" else "white"
         rect(slab.frame.x, slab.frame.y, slab.frame.width, slab.frame.height, 0.55, fill)
-        if slab.kind == "basement_foundation_slab":
+        if (
+            slab.kind == "basement_foundation_slab"
+            and scope != WastewaterStructureScope.BASEMENT_K1_MAIN
+        ):
             text(
                 slab.frame.x + slab.frame.width / 2,
                 slab.frame.y + slab.frame.height / 2 + 1.2,
@@ -124,6 +138,35 @@ def build_wastewater_structure_svg(
                 2.5,
                 "middle",
             )
+
+    if scope == WastewaterStructureScope.BASEMENT_K1_MAIN:
+        pipes = {row.section_id: row for row in project.sewage.pipes}
+        routes = [
+            row for row in layout.routes
+            if row.system == "K1" and row.group_id in {
+                group.group_id for group in shown_groups
+            }
+        ]
+        if not routes:
+            raise ValueError("для этапа подвальной магистрали К1 не размещён ни один участок")
+        for route in routes:
+            pipe = pipes[route.section_id]
+            polyline(route.points, 0.7)
+            start, end = route.points[0], route.points[-1]
+            mid_x = (start.x + end.x) / 2
+            mid_y = (start.y + end.y) / 2
+            # Направление движения стоков вдоль реестрового from_node -> to_node.
+            line(mid_x - 1.8, mid_y - 1.2, mid_x + 2.0, mid_y, 0.35)
+            line(mid_x - 1.8, mid_y + 1.2, mid_x + 2.0, mid_y, 0.35)
+            diameter = (
+                f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+                .replace(".", ",")
+            )
+            slope = (
+                f"; i={pipe.slope_per_mille:g}‰"
+                if pipe.slope_per_mille is not None else ""
+            ).replace(".", ",")
+            text(mid_x, mid_y - 5.0, f"{pipe.section_id} {diameter}{slope}", 2.5, "middle")
 
     # Упрощённая основная надпись для контрольного листа этапа компоновки.
     stamp_x, stamp_y, stamp_w, stamp_h = 651.0, 534.0, 185.0, 55.0
@@ -143,7 +186,12 @@ def build_wastewater_structure_svg(
     text(stamp_x + 143.5, stamp_y + 37.5, project.document.stage_label or "П", 2.5, "middle")
     text(stamp_x + 160.5, stamp_y + 37.5, "1", 2.5, "middle")
     text(stamp_x + 177, stamp_y + 37.5, "1", 2.5, "middle")
-    text(stamp_x + 92.5, stamp_y + 49, "Начало схемы: плита подвала", 2.5, "middle")
+    stage_name = (
+        "Подвальная магистраль К1"
+        if scope == WastewaterStructureScope.BASEMENT_K1_MAIN
+        else "Начало схемы: плита подвала"
+    )
+    text(stamp_x + 92.5, stamp_y + 49, stage_name, 2.5, "middle")
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:g}mm" '
