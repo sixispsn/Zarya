@@ -4,12 +4,14 @@ from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
 from app.pz.wastewater_layout import (
     PointMm,
+    RectMm,
     WastewaterElementPlacement,
     WastewaterFloorGroup,
     WastewaterLayoutMode,
     WastewaterNodePlacement,
     WastewaterRoutePlacement,
     WastewaterSchemeLayout,
+    WastewaterSlab,
     audit_wastewater_layout,
 )
 
@@ -22,14 +24,18 @@ def _project():
 
 
 def _valid_layout() -> WastewaterSchemeLayout:
-    group = WastewaterFloorGroup(
-        group_id="typical",
-        label="Типовой этаж",
-        floors=tuple(range(1, 17)),
-        elevation_m=0.0,
-        y_mm=180.0,
-        source_ref="АР: типовой этаж",
-    )
+    groups = [
+        WastewaterFloorGroup(
+            group_id=f"floor-{floor}",
+            label=f"{floor} этаж",
+            floors=(floor,),
+            elevation_m=(floor - 1) * 3.0,
+            y_mm=500.0 - floor * 20.0,
+            source_ref="АР: этажность; building.height_m / floors",
+        )
+        for floor in range(1, 17)
+    ]
+    group = groups[0]
     start = WastewaterNodePlacement(
         placement_id="node-kitchen-1",
         node_id="К1-Кух1",
@@ -66,7 +72,7 @@ def _valid_layout() -> WastewaterSchemeLayout:
     )
     return WastewaterSchemeLayout(
         mode=WastewaterLayoutMode.STANDALONE,
-        floor_groups=[group],
+        floor_groups=groups,
         nodes=[start, end],
         routes=[route],
         elements=[element],
@@ -136,3 +142,63 @@ def test_architecture_underlay_mode_requires_a_confirmed_underlay():
 
     audit = audit_wastewater_layout(_project(), layout)
     assert any(row.code == "underlay.missing" for row in audit.errors)
+
+
+def test_every_floor_must_have_its_own_band_without_omissions():
+    layout = _valid_layout()
+    layout.floor_groups = [
+        WastewaterFloorGroup(
+            group_id="typical",
+            label="Этажи 1-16",
+            floors=tuple(range(1, 17)),
+            elevation_m=0.0,
+            y_mm=180.0,
+            source_ref="АР: типовые этажи",
+        )
+    ]
+
+    audit = audit_wastewater_layout(_project(), layout)
+    assert any(row.code == "floor_group.individual" for row in audit.errors)
+
+    layout = _valid_layout()
+    layout.floor_groups.pop(7)
+    audit = audit_wastewater_layout(_project(), layout)
+    assert any(
+        row.code == "floor.coverage" and "8" in row.message
+        for row in audit.errors
+    )
+
+
+def test_basement_requires_one_diagonally_hatched_foundation_slab():
+    layout = _valid_layout()
+    layout.floor_groups.append(WastewaterFloorGroup(
+        group_id="basement",
+        label="Подвал",
+        floors=(0,),
+        elevation_m=-3.0,
+        y_mm=520.0,
+        kind="basement",
+        source_ref="АР: разрез",
+    ))
+
+    audit = audit_wastewater_layout(_project(), layout)
+    assert any(row.code == "slab.foundation_missing" for row in audit.errors)
+
+    layout.slabs.append(WastewaterSlab(
+        slab_id="foundation",
+        frame=RectMm(80.0, 520.0, 680.0, 14.0),
+        kind="basement_foundation_slab",
+        hatch="none",
+        source_ref="АР: плита подвала",
+    ))
+    audit = audit_wastewater_layout(_project(), layout)
+    assert any(row.code == "slab.foundation_hatch" for row in audit.errors)
+
+    layout.slabs[0] = WastewaterSlab(
+        slab_id="foundation",
+        frame=RectMm(80.0, 520.0, 680.0, 14.0),
+        kind="basement_foundation_slab",
+        hatch="diagonal",
+        source_ref="АР: плита подвала",
+    )
+    assert audit_wastewater_layout(_project(), layout).ready

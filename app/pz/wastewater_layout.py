@@ -80,7 +80,7 @@ class WastewaterFloorGroup:
     group_id: str
     label: str
     floors: Tuple[int, ...]
-    elevation_m: float
+    elevation_m: Optional[float]
     y_mm: float
     kind: str = "floor"  # roof / floor / basement / technical
     source: WastewaterLayoutSource = WastewaterLayoutSource.MANUAL_CONFIRMED
@@ -155,6 +155,18 @@ class WastewaterAnnotation:
     source_ref: str = ""
 
 
+@dataclass(frozen=True)
+class WastewaterSlab:
+    """Конструктивная плита, необходимая для чтения разреза."""
+
+    slab_id: str
+    frame: RectMm
+    kind: str = "floor_slab"  # floor_slab / basement_foundation_slab
+    hatch: str = "none"  # none / diagonal
+    source: WastewaterLayoutSource = WastewaterLayoutSource.ARCHITECTURE
+    source_ref: str = ""
+
+
 @dataclass
 class WastewaterSchemeLayout:
     """Полная графическая модель одного листа."""
@@ -170,6 +182,8 @@ class WastewaterSchemeLayout:
     routes: List[WastewaterRoutePlacement] = field(default_factory=list)
     elements: List[WastewaterElementPlacement] = field(default_factory=list)
     annotations: List[WastewaterAnnotation] = field(default_factory=list)
+    slabs: List[WastewaterSlab] = field(default_factory=list)
+    individual_floors_required: bool = True
 
 
 @dataclass(frozen=True)
@@ -262,6 +276,7 @@ def audit_wastewater_layout(
         "route": [row.route_id for row in layout.routes],
         "element": [row.placement_id for row in layout.elements],
         "annotation": [row.annotation_id for row in layout.annotations],
+        "slab": [row.slab_id for row in layout.slabs],
     }
     for kind, identifiers in collections.items():
         if any(not value for value in identifiers):
@@ -298,8 +313,31 @@ def audit_wastewater_layout(
             error("floor_group.floors", f"{group.group_id}: не заданы этажи")
         if len(set(group.floors)) != len(group.floors):
             error("floor_group.floors", f"{group.group_id}: этажи повторяются")
+        if layout.individual_floors_required and group.kind == "floor" and len(group.floors) != 1:
+            error(
+                "floor_group.individual",
+                f"{group.group_id}: каждый надземный этаж должен иметь отдельную полосу",
+            )
         if require_source_refs and not group.source_ref:
             error("floor_group.source", f"{group.group_id}: не указано основание положения")
+
+    if layout.individual_floors_required:
+        shown_floors = [
+            floor
+            for group in layout.floor_groups
+            if group.kind == "floor"
+            for floor in group.floors
+        ]
+        expected_floors = list(range(1, max(1, int(project.building.floors_above or 1)) + 1))
+        missing = sorted(set(expected_floors) - set(shown_floors))
+        extra = sorted(set(shown_floors) - set(expected_floors))
+        repeated = _duplicates([str(value) for value in shown_floors])
+        if missing:
+            error("floor.coverage", "на схеме отсутствуют этажи: " + ", ".join(map(str, missing)))
+        if extra:
+            error("floor.coverage", "на схеме есть этажи вне здания: " + ", ".join(map(str, extra)))
+        if repeated:
+            error("floor.coverage", "этажи показаны повторно: " + ", ".join(repeated))
 
     for space in layout.spaces:
         check_group("space.group", space.space_id, space.group_id)
@@ -396,5 +434,37 @@ def audit_wastewater_layout(
             error("annotation.text", f"{annotation.annotation_id}: пустая надпись")
         if require_source_refs and not annotation.source_ref:
             error("annotation.source", f"{annotation.annotation_id}: не указано основание надписи")
+
+    foundation_slabs = []
+    for slab in layout.slabs:
+        if slab.frame.width <= 0 or slab.frame.height <= 0:
+            error("slab.frame", f"{slab.slab_id}: размеры плиты должны быть положительными")
+        for point in (
+            PointMm(slab.frame.x, slab.frame.y),
+            PointMm(slab.frame.x2, slab.frame.y2),
+        ):
+            check_point("slab.frame", slab.slab_id, point)
+        if slab.kind not in {"floor_slab", "basement_foundation_slab"}:
+            error("slab.kind", f"{slab.slab_id}: неизвестный вид плиты {slab.kind!r}")
+        if slab.hatch not in {"none", "diagonal"}:
+            error("slab.hatch", f"{slab.slab_id}: неизвестная штриховка {slab.hatch!r}")
+        if slab.kind == "basement_foundation_slab":
+            foundation_slabs.append(slab)
+            if slab.hatch != "diagonal":
+                error(
+                    "slab.foundation_hatch",
+                    f"{slab.slab_id}: фундаментная плита подвала должна иметь диагональную штриховку",
+                )
+        if require_source_refs and not slab.source_ref:
+            error("slab.source", f"{slab.slab_id}: не указано основание конструкции")
+
+    has_basement = any(group.kind in {"basement", "technical"} for group in layout.floor_groups)
+    if has_basement and not foundation_slabs:
+        error(
+            "slab.foundation_missing",
+            "под подвальным/техническим уровнем не задана фундаментная плита",
+        )
+    if len(foundation_slabs) > 1:
+        error("slab.foundation_duplicate", "на одном листе задано несколько фундаментных плит")
 
     return result
