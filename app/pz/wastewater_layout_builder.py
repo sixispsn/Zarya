@@ -18,12 +18,14 @@ from app.pz.wastewater_layout import (
 class WastewaterFloorStackConfig:
     """Границы вертикальной компоновки одного листа А1."""
 
-    building_left_mm: float = 85.0
-    building_right_mm: float = 735.0
-    roof_level_y_mm: float = 70.0
-    first_floor_level_y_mm: float = 410.0
-    basement_level_y_mm: float = 490.0
-    foundation_slab_thickness_mm: float = 18.0
+    # В приложении В разрез занимает около 59,5 % ширины страницы. Каркас
+    # центрирован и повторяет эту пропорцию вместо растяжения на весь А1.
+    building_left_mm: float = 170.0
+    building_right_mm: float = 671.0
+    roof_level_y_mm: float = 60.0
+    first_floor_level_y_mm: float = 360.0
+    basement_level_y_mm: float = 465.0
+    foundation_slab_thickness_mm: float = 20.0
     minimum_floor_band_mm: float = 12.0
     lower_level_elevation_m: float | None = None
 
