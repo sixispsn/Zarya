@@ -19,9 +19,9 @@ from typing import Dict, Iterable, List, Tuple
 from app.pz.project import Project
 
 
-BLACK = "#111"
-GRAY = "#666"
-FONT = "Arial, DejaVu Sans, sans-serif"
+BLACK = "#000"
+GRAY = "#555"
+FONT = "osifont"
 
 
 @dataclass(frozen=True)

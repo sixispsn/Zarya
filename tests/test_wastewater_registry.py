@@ -82,8 +82,11 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "К1-Вып1" in result.svg
     assert "абс. 146,55 → 146,45" in result.svg
     assert "№ К-01 · К1-Ветв-Кух1" in result.svg
-    assert "15 этаж" in result.svg
-    assert "планировочная часть по АР" in result.svg
+    assert "16 этаж" in result.svg
+    assert "3 этаж" in result.svg
+    assert "этажи 4–15 повторяются" in result.svg
+    assert "планировочная" in result.svg
+    assert "часть по АР" in result.svg
     assert "ДАННЫЕ И УКАЗАНИЯ К СХЕМЕ" in result.svg
     assert "Выпуск К1-Вып1 Ø160" in result.svg
     assert "Техподполье" in result.svg

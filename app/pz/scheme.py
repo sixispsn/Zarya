@@ -27,6 +27,7 @@ from typing import List, Optional
 from app.pz import ugo
 from app.pz.annotate import Occ, place, text_w
 from app.pz.project import Project
+from app.pz.section_scaffold import build_section_scaffold
 
 BLK = "#000"; FONT = "osifont"; DIA = "\u2205"
 PIPE = 2.4; BLD = 1.2; LDR = 1.2; UGW = 2.0
@@ -85,7 +86,8 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         warns.append("расчётных зон больше двух: на принципиальной схеме показаны две характерные зоны")
     plk_on = bool(project.flows and project.flows.irrigation_m3_day > 0)
     n = max(1, b.floors_above or 1)
-    fh = (b.height_m / n) if (b.height_m or 0) > 0 else 3.0
+    scaffold = build_section_scaffold(project)
+    fh = scaffold.floor_height_m
 
     # ── данные ВПВ из модели (FireSystem), а не из SchemeParams ──
     fire = project.fire
@@ -225,28 +227,27 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     FIX = _fixture_set()
 
     # ================= ОБЩИЕ ОСИ ШАХТ =================
-    SH1c, SH2c = 940, 1520
+    SH1c, SH2c = scaffold.shaft_left_x, scaffold.shaft_right_x
     LO1, HI1, V21 = SH1c - 24, SH1c, SH1c + 24
     V22, HI2, LO2 = SH2c - 24, SH2c, SH2c + 24
-    XL, XR = 200, 2260; x_otm = 170
+    XL, XR = scaffold.x_left, scaffold.x_right
+    x_otm = scaffold.x_mark
 
     # ================= КАРКАС (слоты полос) =================
-    FLB = 260; RHf = 200; CHf = 56
-    yF2, yF3, yFtop = 980, 720, 390        # эталонные слоты полос (низ полосы)
-    with_rupture = n > 3
-    # список видимых жилых этажей (номер, y-низ полосы), снизу вверх
-    bands: List[tuple] = []
-    if n >= 2: bands.append((2, yF2))
-    if n >= 3: bands.append((3, yF3 if n > 3 else yF3))
-    if n > 3: bands.append((n, yFtop))
-    elif n == 3: bands[-1] = (3, yF3)
-    # кровля: над верхней полосой (или над цоколем при n==1)
-    y_tech = 1000; RHg = 250; y_0 = y_tech + RHg; CHg = 130; y_gb = y_0 + CHg
-    y_m1 = 1730
-    if bands:
-        y_roof = (bands[-1][1] - FLB - 40) if not with_rupture else 90
-    else:
-        y_roof = y_tech - 40
+    FLB = scaffold.floor_band_h
+    RHf = scaffold.room_h
+    CHf = scaffold.corridor_h
+    with_rupture = scaffold.has_rupture
+    bands: List[tuple] = [
+        (band.floor, band.bottom_y) for band in scaffold.bands
+    ]
+    y_tech = scaffold.tech_y
+    RHg = scaffold.zero_y - scaffold.tech_y
+    y_0 = scaffold.zero_y
+    CHg = scaffold.ground_bottom_y - scaffold.zero_y
+    y_gb = scaffold.ground_bottom_y
+    y_m1 = scaffold.basement_y
+    y_roof = scaffold.roof_y
     roof_mark = b.height_m if (b.height_m or 0) > 0 else P.ground_h_m + (n - 1) * fh + fh
 
     ph(XL, XR, y_m1, BLD, "bld"); ph(XL, XR, y_0, BLD, "bld"); ph(XL, XR, y_tech, BLD, "bld")
@@ -266,10 +267,18 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     # ================= ЭТАЖНАЯ ПОЛОСА =================
     def floor_band(y_fl, pk_nums=(0, 0), last=False):
         y_rt = y_fl - FLB + 4; y_rb = y_rt + RHf; y_tr = y_rb + CHf // 2
-        bx = [(200, 462, "Пом. 01; 02"), (472, 734, "Пом. 03; 04"), (744, 1054, None),
-              (1064, 1242, "Мусорокамера" if b.purpose.value == "residential" else "Пом. С"),
-              (1252, 1396, "Лифтовой холл"),
-              (1406, 1716, None), (1726, 1988, "Пом. 05; 06"), (1998, 2260, "Пом. 07; 08")]
+        bx = [
+            (
+                slot.x0,
+                slot.x1,
+                (
+                    "Пом. С"
+                    if slot.role == "service" and b.purpose.value != "residential"
+                    else slot.default_label
+                ),
+            )
+            for slot in scaffold.room_slots
+        ]
         for a, bb, nm in bx:
             G.append(f'<rect x="{a}" y="{y_rt}" width="{bb-a}" height="{RHf}" fill="none" stroke="{BLK}" stroke-width="{BLD}"/>')
             if nm: txt((a + bb) / 2, y_rt + 20, nm, 12)
