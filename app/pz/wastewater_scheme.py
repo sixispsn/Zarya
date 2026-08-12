@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from html import escape
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -33,6 +34,13 @@ class WastewaterSchemeResult:
     warnings: List[str] = field(default_factory=list)
 
 
+class WastewaterSchemeScope(str, Enum):
+    """Слой штатного генератора, используемый при поступенчатой сборке."""
+
+    FULL = "full"
+    BASEMENT_K1_MAIN = "basement_k1_main"
+
+
 def _fmt(value: Optional[float], digits: int = 2) -> str:
     if value is None:
         return "—"
@@ -49,12 +57,18 @@ def _applies(element: SewerElementSpec, floor: int) -> bool:
     return element.floor_from <= floor <= end
 
 
-def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
+def build_wastewater_scheme(
+    project: Project,
+    scope: WastewaterSchemeScope = WastewaterSchemeScope.FULL,
+    *,
+    focus_section_id: Optional[str] = None,
+) -> WastewaterSchemeResult:
     doc = project.document
     elements = list(project.sewage.elements or [])
     topology = build_wastewater_topology(project)
     audit = audit_wastewater_registry(project)
     warnings = list(dict.fromkeys(audit.errors + audit.warnings))
+    full_scope = scope == WastewaterSchemeScope.FULL
     G: List[str] = []
 
     def line(x1, y1, x2, y2, width=2.0, color=BLACK, dash=""):
@@ -135,13 +149,17 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
         10, color=GRAY,
     )
 
-    def level_mark(y: float, title: str, mark: float):
+    def level_mark(y: float, title: str, mark: Optional[float]):
         line(scaffold.x_mark - 6, y, building_x1, y, 0.9)
         line(scaffold.x_mark - 7, y - 9, scaffold.x_mark, y, 1.1)
         line(scaffold.x_mark + 7, y - 9, scaffold.x_mark, y, 1.1)
         line(scaffold.x_mark, y, scaffold.x_mark, y - 26, 1.1)
         line(scaffold.x_mark - 102, y - 26, scaffold.x_mark, y - 26, 1.1)
-        text(scaffold.x_mark - 4, y - 31, f"{mark:+.3f}".replace(".", ","), 11, "end")
+        mark_text = (
+            f"{mark:+.3f}".replace(".", ",")
+            if mark is not None else "отм. по АР"
+        )
+        text(scaffold.x_mark - 4, y - 31, mark_text, 11, "end")
         text(scaffold.x_mark - 4, y - 11, title, 10, "end")
 
     # Тот же архитектурный каркас, масштаб и ритм этажей, что на листе В1/В2.
@@ -159,13 +177,9 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     for band in bands:
         level_mark(band.bottom_y, f"{band.floor} этаж", (band.floor - 1) * floor_height)
     level_mark(y_zero, "1 этаж", 0.0)
-    low_marks = [
-        value
-        for pipe in project.sewage.pipes
-        for value in (pipe.elevation_start_m, pipe.elevation_end_m)
-        if value is not None and value <= 0
-    ]
-    level_mark(basement_y, "Техподполье", max(low_marks) if low_marks else 0.0)
+    # Отметка лотка трубы не является отметкой пола/уровня. Пока отметка
+    # техподполья не пришла из АР, на разрезе оставляем явное поле уточнения.
+    level_mark(basement_y, "Техподполье", None)
 
     risers_by_system: Dict[str, List[SewerPipeSpec]] = {"K1": [], "K2": [], "K3": []}
     for pipe in topology.risers.values():
@@ -293,15 +307,18 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
                 x0, x1 = slots[index]
                 draw_branch(branch, floor, x0, x1, y_top, y_bottom, axis, index)
 
-    for band in bands:
-        draw_floor_branches(band.floor, band.room_top_y, band.room_bottom_y)
-    draw_floor_branches(1, y_tech, y_zero)
+    if full_scope:
+        for band in bands:
+            draw_floor_branches(band.floor, band.room_top_y, band.room_bottom_y)
+        draw_floor_branches(1, y_tech, y_zero)
 
     main_y = {"K1": 1490.0, "K3": 1560.0, "K2": 1640.0}
     # Стояки проходят по общим шахтам; нижний поворот привязан к своей магистрали.
     for riser_id, pipe in topology.risers.items():
         x = riser_x.get(riser_id)
         if x is None:
+            continue
+        if not full_scope:
             continue
         target_y = main_y.get(pipe.system, 1490.0)
         start_y = roof_y if pipe.system == "K2" else roof_y - 30
@@ -323,7 +340,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
             text(x + 13, roof_y - 35, "+0,200", 7.2, color=GRAY)
 
     # Кровельные воронки и сборные участки показываются составным знаком УГО.
-    for row in elements:
+    for row in elements if full_scope else []:
         if row.kind != "roof_funnel":
             continue
         x = riser_x.get(row.section_id)
@@ -351,7 +368,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     rupture_y = None
     if scaffold.has_rupture and len(bands) >= 2:
         rupture_y = (bands[-1].bottom_y + bands[-2].room_top_y) / 2
-    for row in elements:
+    for row in elements if full_scope else []:
         x = riser_x.get(row.section_id)
         if x is None:
             continue
@@ -374,7 +391,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
                 sy = y_zero if floor == 1 else band_by_floor[floor].bottom_y
                 G.append(render_ugo("fire_collar", x, sy, scale=0.54, rotation=90))
 
-    if any(row.kind == "fire_collar" for row in elements):
+    if full_scope and any(row.kind == "fire_collar" for row in elements):
         line(building_x1, y_ground_bottom - 1, building_x2, y_ground_bottom - 1, 3.2)
         text(building_x1 + 8, y_ground_bottom - 9,
              "противопожарное перекрытие; муфты в проходках по узлам КР", 7.8, color=GRAY)
@@ -382,8 +399,19 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     # Магистрали и выпуски — рёбра явного графа from_node/to_node.
     external_defaults = {"K1": 2160.0, "K3": 2220.0, "K2": 2160.0}
     node_x: Dict[str, float] = dict(riser_x)
+    stage_focus = focus_section_id
+    if not full_scope and not stage_focus:
+        stage_focus = next(
+            (row.section_id for row in topology.mains if row.system == "K1"),
+            None,
+        )
+    if not full_scope and not stage_focus:
+        raise ValueError("для поступенчатого листа отсутствует подвальная магистраль К1")
+
     for system in ("K1", "K3", "K2"):
         rows = [row for row in topology.mains if row.system == system]
+        if not full_scope:
+            rows = [row for row in rows if row.section_id == stage_focus]
         if not rows:
             continue
         for _ in range(len(rows) + 2):
@@ -402,6 +430,20 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
         for index, node in enumerate(unknown):
             node_x[node] = external_defaults[system] + index * 90
         y = main_y[system]
+        if not full_scope:
+            # На первом инженерном слое показываем только реальные нижние
+            # окончания стояков, к которым присоединён выбранный участок.
+            endpoint_nodes = {node for row in rows for node in (row.from_node, row.to_node)}
+            for node in sorted(endpoint_nodes):
+                x = node_x.get(node)
+                if x is None:
+                    continue
+                line(x, y_ground_bottom, x, y - 14, 2.6)
+                G.append(
+                    f'<path d="M{x:.1f},{y-14:.1f} Q{x:.1f},{y:.1f} '
+                    f'{x+14:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
+                    'stroke-width="2.6"/>'
+                )
         text(min(node_x.get(row.from_node, 1000) for row in rows) - 30,
              y + 5, system, 13, "end", "bold")
         for pipe in rows:
@@ -429,15 +471,16 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
                 outlet = next((row for row in elements if row.kind == "outlet" and row.section_id == pipe.section_id), None)
                 if outlet is not None:
                     G.append(render_ugo("outlet", x2, y, scale=0.55))
-        terminal_nodes = {
-            row.to_node for row in rows
-            if not any(other.from_node == row.to_node for other in rows)
-        }
-        for node in terminal_nodes:
-            text(node_x[node], y + 38, f"к {node}", 7.2, "middle", "bold")
+        if full_scope:
+            terminal_nodes = {
+                row.to_node for row in rows
+                if not any(other.from_node == row.to_node for other in rows)
+            }
+            for node in terminal_nodes:
+                text(node_x[node], y + 38, f"к {node}", 7.2, "middle", "bold")
 
     # Прочистки — на подтверждённых участках/стояках.
-    for row in elements:
+    for row in elements if full_scope else []:
         if row.kind != "cleanout":
             continue
         pipe = next((p for p in topology.mains if p.section_id == row.section_id), None)
@@ -471,7 +514,7 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
                  f"этажи {omitted_start}–{omitted_end} повторяются", 7.8, color=GRAY)
         # Ревизии на конкретном пропущенном этаже не теряются в графическом
         # разрыве: знак и марка остаются на оси соответствующего стояка.
-        for row in elements:
+        for row in elements if full_scope else []:
             if row.kind != "revision" or not (omitted_start <= row.floor_from <= omitted_end):
                 continue
             x = riser_x.get(row.section_id)
@@ -480,54 +523,67 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
             G.append(render_ugo("revision", x, rupture_y, scale=0.64, rotation=90))
             text(x + 15, rupture_y + 3, f"R · {row.element_id}", 7.1)
 
-    # Компактная легенда и исходные данные размещаются ниже разреза, как в приложении В.
-    lx, ly, lw = 200.0, 1742.0, 1240.0
-    legend = project_legend_definitions(project)
-    legend_rows = max(1, (len(legend) + 1) // 2)
-    legend_row_h = 22.0
-    legend_h = 29.0 + legend_rows * legend_row_h
-    rect(lx, ly, lw, legend_h, sw=1.2, fill="white")
-    text(lx + 8, ly + 19, "УСЛОВНЫЕ ОБОЗНАЧЕНИЯ", 8.8, weight="bold")
-    text(lx + lw - 8, ly + 19, "нормативная трассировка - лист 2", 6.5, "end", color=GRAY)
-    line(lx, ly + 27, lx + lw, ly + 27, 0.9)
-    col_w = lw / 2
-    line(lx + col_w, ly + 27, lx + col_w, ly + legend_h, 0.8)
-    for index, definition in enumerate(legend):
-        col_index = index // legend_rows
-        row_index = index % legend_rows
-        x0 = lx + col_index * col_w
-        y0 = ly + 27 + row_index * legend_row_h
-        if row_index:
-            line(x0, y0, x0 + col_w, y0, 0.55, LIGHT)
-        sx, sy = x0 + 31, y0 + legend_row_h / 2
-        G.append(render_ugo(definition.key, sx, sy, scale=0.46))
-        text(sx + 25, sy + 3, _short(definition.label, 62), 6.7)
+    if full_scope:
+        # Компактная легенда и исходные данные размещаются ниже разреза, как в приложении В.
+        lx, ly, lw = 200.0, 1742.0, 1240.0
+        legend = project_legend_definitions(project)
+        legend_rows = max(1, (len(legend) + 1) // 2)
+        legend_row_h = 22.0
+        legend_h = 29.0 + legend_rows * legend_row_h
+        rect(lx, ly, lw, legend_h, sw=1.2, fill="white")
+        text(lx + 8, ly + 19, "УСЛОВНЫЕ ОБОЗНАЧЕНИЯ", 8.8, weight="bold")
+        text(lx + lw - 8, ly + 19, "нормативная трассировка - лист 2", 6.5, "end", color=GRAY)
+        line(lx, ly + 27, lx + lw, ly + 27, 0.9)
+        col_w = lw / 2
+        line(lx + col_w, ly + 27, lx + col_w, ly + legend_h, 0.8)
+        for index, definition in enumerate(legend):
+            col_index = index // legend_rows
+            row_index = index % legend_rows
+            x0 = lx + col_index * col_w
+            y0 = ly + 27 + row_index * legend_row_h
+            if row_index:
+                line(x0, y0, x0 + col_w, y0, 0.55, LIGHT)
+            sx, sy = x0 + 31, y0 + legend_row_h / 2
+            G.append(render_ugo(definition.key, sx, sy, scale=0.46))
+            text(sx + 25, sy + 3, _short(definition.label, 62), 6.7)
 
-    info_x, info_y, info_w, info_h = 1460.0, ly, 680.0, legend_h
-    rect(info_x, info_y, info_w, info_h, sw=1.2, fill="white")
-    text(info_x + 10, info_y + 19, "ДАННЫЕ И УКАЗАНИЯ К СХЕМЕ", 8.8, weight="bold")
-    line(info_x, info_y + 27, info_x + info_w, info_y + 27, 0.9)
-    storm = project.storm.result
-    sewage = project.sewage.result
-    q_k1 = _fmt(sewage.total.q_sewage_lps, 3) + " л/с" if sewage else "см. расчёт"
-    q_k2 = _fmt(storm.q_total_l_per_s, 3) + " л/с" if storm else "см. расчёт"
-    info_rows = [
-        f"Граф: {'проверен' if topology.ready else 'требует данных'}; "
-        f"стояки / ветви / магистрали: {len(topology.risers)} / {len(topology.branches)} / {len(topology.mains)}",
-        f"К1: Q={q_k1}; сброс в {project.sewage.discharge_point_k1 or 'не задан'}",
-        f"К2: Q={q_k2}; сброс в {project.sewage.discharge_point_k2 or 'не задан'}",
-        "Трассы — только по from_node/to_node; планировка — по АР.",
-        "Проходки — по узлам КР; электрообогрев воронок — по заданию ЭОМ.",
-        "Фасонные части и монтажные размеры уточняются на стадии Р.",
-    ]
-    for index, value in enumerate(info_rows):
-        text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)
-    status_color = BLACK if topology.ready else "#a00"
-    text(info_x + info_w - 10, info_y + info_h - 9,
-         "ТОПОЛОГИЯ ПРОШЛА ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
-         7.5, "end", "bold", status_color)
-    if warnings:
-        text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)
+        info_x, info_y, info_w, info_h = 1460.0, ly, 680.0, legend_h
+        rect(info_x, info_y, info_w, info_h, sw=1.2, fill="white")
+        text(info_x + 10, info_y + 19, "ДАННЫЕ И УКАЗАНИЯ К СХЕМЕ", 8.8, weight="bold")
+        line(info_x, info_y + 27, info_x + info_w, info_y + 27, 0.9)
+        storm = project.storm.result
+        sewage = project.sewage.result
+        q_k1 = _fmt(sewage.total.q_sewage_lps, 3) + " л/с" if sewage else "см. расчёт"
+        q_k2 = _fmt(storm.q_total_l_per_s, 3) + " л/с" if storm else "см. расчёт"
+        info_rows = [
+            f"Граф: {'проверен' if topology.ready else 'требует данных'}; "
+            f"стояки / ветви / магистрали: {len(topology.risers)} / {len(topology.branches)} / {len(topology.mains)}",
+            f"К1: Q={q_k1}; сброс в {project.sewage.discharge_point_k1 or 'не задан'}",
+            f"К2: Q={q_k2}; сброс в {project.sewage.discharge_point_k2 or 'не задан'}",
+            "Трассы — только по from_node/to_node; планировка — по АР.",
+            "Проходки — по узлам КР; электрообогрев воронок — по заданию ЭОМ.",
+            "Фасонные части и монтажные размеры уточняются на стадии Р.",
+        ]
+        for index, value in enumerate(info_rows):
+            text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)
+        status_color = BLACK if topology.ready else "#a00"
+        text(info_x + info_w - 10, info_y + info_h - 9,
+             "ТОПОЛОГИЯ ПРОШЛА ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
+             7.5, "end", "bold", status_color)
+        if warnings:
+            text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)
+
+    if not full_scope:
+        # Плита из приложения В: конструктивная штриховка показана только на
+        # промежуточном листе, пока нижняя зона не занята легендой.
+        slab_y, slab_h = basement_y, 74.0
+        rect(building_x1, slab_y, building_x2 - building_x1, slab_h, sw=1.5, fill="white")
+        step = 26.0
+        x = building_x1 - slab_h
+        while x < building_x2:
+            line(max(building_x1, x), slab_y + slab_h,
+                 min(building_x2, x + slab_h), slab_y, 0.85, color=GRAY)
+            x += step
 
     # Рамка и основная надпись формы 3.
     fx0, fy0, fx1, fy1 = 20 * PXMM, 5 * PXMM, W - 5 * PXMM, H - 5 * PXMM
@@ -579,8 +635,9 @@ def build_wastewater_scheme(project: Project) -> WastewaterSchemeResult:
     text(mmx(142.5), mmy(37), doc.stage_label or "П", 11, "middle")
     text(mmx(157.5), mmy(37), doc.sheet_no or "1", 11, "middle")
     text(mmx(175), mmy(37), doc.sheet_total or "2", 11, "middle")
+    shown_present = present if full_scope else ["К1"]
     text(mmx(100), mmy(47), "Принципиальная схема внутренних систем", 10, "middle")
-    text(mmx(100), mmy(53), ", ".join(present) or "К1, К2, К3", 12, "middle", "bold")
+    text(mmx(100), mmy(53), ", ".join(shown_present) or "К1", 12, "middle", "bold")
     text(mmx(160), mmy(49), _short(doc.organization or "", 30), 9, "middle")
 
     svg = (

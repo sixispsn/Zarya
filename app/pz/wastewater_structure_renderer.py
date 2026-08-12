@@ -1,6 +1,7 @@
 """SVG/PDF-контроль архитектурного каркаса схемы К1/К2/К3."""
 from __future__ import annotations
 
+from dataclasses import replace
 from enum import Enum
 from html import escape
 
@@ -34,6 +35,34 @@ def build_wastewater_structure_svg(
         raise ValueError("каркас схемы не прошёл проверку: " + "; ".join(
             row.message for row in audit.errors
         ))
+
+    if scope == WastewaterStructureScope.BASEMENT_K1_MAIN:
+        from app.pz.generator import _document_cipher, _wastewater_document_cipher
+        from app.pz.wastewater_scheme import (
+            WastewaterSchemeScope,
+            build_wastewater_scheme,
+        )
+
+        focus = next(
+            (row.section_id for row in layout.routes if row.system == "K1"),
+            None,
+        )
+        wastewater_project = replace(
+            project,
+            document=replace(
+                project.document,
+                cipher=_document_cipher(
+                    _wastewater_document_cipher(project.document.cipher or ""),
+                    ".СК",
+                ),
+                sheet_title="Принципиальная схема внутренних систем К1",
+            ),
+        )
+        return build_wastewater_scheme(
+            wastewater_project,
+            WastewaterSchemeScope.BASEMENT_K1_MAIN,
+            focus_section_id=focus,
+        ).svg
 
     width, height = layout.sheet_width_mm, layout.sheet_height_mm
     G = [
@@ -210,5 +239,11 @@ def generate_wastewater_structure_pdf(
     import cairosvg
 
     svg = build_wastewater_structure_svg(project, layout, scope=scope)
+    if scope == WastewaterStructureScope.BASEMENT_K1_MAIN:
+        svg = svg.replace(
+            'width="2803" height="1980"',
+            'width="841mm" height="594mm"',
+            1,
+        )
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path

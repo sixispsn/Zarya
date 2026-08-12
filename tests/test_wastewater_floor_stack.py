@@ -95,10 +95,15 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     svg = build_wastewater_structure_svg(
         project, layout, scope=WastewaterStructureScope.BASEMENT_K1_MAIN,
     )
-    assert "К1-М1 Ø160×4,9; i=8‰" in svg
+    assert "К1-М1 Ø160×4,9 i=8‰" in svg
     assert "К1-Вып1" not in svg
     assert "К2-М1" not in svg
-    assert ">16 этаж</text>" not in svg
+    assert ">16 этаж</text>" in svg
+    assert 'viewBox="0 0 2803 1980"' in svg
+    assert "сантехническая шахта 1" in svg
+    assert "отм. по АР" in svg
+    assert "ZARYA-DEMO-001-ИОС3.СК" in svg
+    assert "к К1-Ст2" not in svg
 
 
 def test_floor_stack_pdf_is_a1(tmp_path):
