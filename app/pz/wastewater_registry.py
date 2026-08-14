@@ -109,6 +109,15 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     result.warnings.extend(
         problem for problem in topology.warnings if problem not in result.warnings
     )
+    from app.pz.wastewater_sp30 import audit_wastewater_sp30
+
+    sp30 = audit_wastewater_sp30(project)
+    result.errors.extend(
+        problem for problem in sp30.errors if problem not in result.errors
+    )
+    result.warnings.extend(
+        problem for problem in sp30.warnings if problem not in result.warnings
+    )
     return result
 
 

@@ -14,6 +14,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.section_scaffold import build_section_scaffold
 from app.pz.wastewater_registry import audit_wastewater_registry
+from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
 from app.pz.wastewater_ugo import project_legend_definitions, render_ugo
 
@@ -67,6 +68,7 @@ def build_wastewater_scheme(
     elements = list(project.sewage.elements or [])
     topology = build_wastewater_topology(project)
     audit = audit_wastewater_registry(project)
+    sp30_audit = audit_wastewater_sp30(project)
     warnings = list(dict.fromkeys(audit.errors + audit.warnings))
     full_scope = scope == WastewaterSchemeScope.FULL
     G: List[str] = []
@@ -313,6 +315,13 @@ def build_wastewater_scheme(
         draw_floor_branches(1, y_tech, y_zero)
 
     main_y = {"K1": 1490.0, "K3": 1560.0, "K2": 1640.0}
+    # Узел присоединения магистрали расположен после составного нижнего
+    # поворота. Смещение образует две смены направления по 45°, а не один
+    # графический отвод 87,5° (СП 30.13330.2020, п. 18.4).
+    lower_bend_dx = 20.0
+    main_connection_x = {
+        riser_id: x + lower_bend_dx for riser_id, x in riser_x.items()
+    }
     # Стояки проходят по общим шахтам; нижний поворот привязан к своей магистрали.
     for riser_id, pipe in topology.risers.items():
         x = riser_x.get(riser_id)
@@ -322,10 +331,11 @@ def build_wastewater_scheme(
             continue
         target_y = main_y.get(pipe.system, 1490.0)
         start_y = roof_y if pipe.system == "K2" else roof_y - 30
-        line(x, start_y, x, target_y - 14, 2.6)
+        line(x, start_y, x, target_y - lower_bend_dx, 2.6)
         G.append(
-            f'<path d="M{x:.1f},{target_y-14:.1f} Q{x:.1f},{target_y:.1f} '
-            f'{x+14:.1f},{target_y:.1f}" fill="none" stroke="{BLACK}" stroke-width="2.6"/>'
+            f'<path d="M{x:.1f},{target_y-lower_bend_dx:.1f} '
+            f'L{x+lower_bend_dx:.1f},{target_y:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="2.6"/>'
         )
         label = f"Ст.{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}".replace(".", ",")
         label_y = 610.0 if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2 else 650.0
@@ -377,11 +387,12 @@ def build_wastewater_scheme(
                 sy = y_zero - 45
             elif row.floor_from in band_by_floor:
                 sy = band_by_floor[row.floor_from].bottom_y - 45
-            elif rupture_y is not None and 3 < row.floor_from < top_floor:
-                sy = rupture_y - 2
             else:
                 continue
-            G.append(render_ugo("revision", x, sy, scale=0.64, rotation=90))
+            G.append(
+                f'<g data-element-id="{escape(row.element_id)}">'
+                f'{render_ugo("revision", x, sy, scale=0.64, rotation=90)}</g>'
+            )
             text(x + 15, sy + 3, f"R · {row.element_id}", 7.1)
         elif row.kind == "fire_collar":
             shown = [1] + visible_floors
@@ -398,7 +409,7 @@ def build_wastewater_scheme(
 
     # Магистрали и выпуски — рёбра явного графа from_node/to_node.
     external_defaults = {"K1": 2160.0, "K3": 2220.0, "K2": 2160.0}
-    node_x: Dict[str, float] = dict(riser_x)
+    node_x: Dict[str, float] = dict(main_connection_x)
     stage_focus = focus_section_id
     if not full_scope and not stage_focus:
         stage_focus = next(
@@ -438,10 +449,12 @@ def build_wastewater_scheme(
                 x = node_x.get(node)
                 if x is None:
                     continue
-                line(x, y_ground_bottom, x, y - 14, 2.6)
+                riser_axis = riser_x.get(node, x - lower_bend_dx)
+                line(riser_axis, y_ground_bottom, riser_axis,
+                     y - lower_bend_dx, 2.6)
                 G.append(
-                    f'<path d="M{x:.1f},{y-14:.1f} Q{x:.1f},{y:.1f} '
-                    f'{x+14:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
+                    f'<path d="M{riser_axis:.1f},{y-lower_bend_dx:.1f} '
+                    f'L{x:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
                     'stroke-width="2.6"/>'
                 )
         text(min(node_x.get(row.from_node, 1000) for row in rows) - 30,
@@ -483,16 +496,34 @@ def build_wastewater_scheme(
     for row in elements if full_scope else []:
         if row.kind != "cleanout":
             continue
-        pipe = next((p for p in topology.mains if p.section_id == row.section_id), None)
-        if pipe is not None and pipe.from_node in node_x and pipe.to_node in node_x:
+        sx = sy = None
+        pipe = None
+        if row.connects_to and row.connects_to in node_x:
+            sx = node_x[row.connects_to]
+            pipe = next(
+                (p for p in topology.mains if p.section_id == row.section_id),
+                None,
+            )
+            sy = main_y[pipe.system] if pipe is not None else None
+        else:
+            pipe = next((p for p in topology.mains if p.section_id == row.section_id), None)
+        if (
+            not row.connects_to
+            and pipe is not None
+            and pipe.from_node in node_x
+            and pipe.to_node in node_x
+        ):
             sx = (node_x[pipe.from_node] + node_x[pipe.to_node]) / 2
             sy = main_y[pipe.system]
-        else:
+        elif not row.connects_to:
             riser = topology.risers.get(row.section_id)
             sx = riser_x.get(row.section_id)
             sy = main_y.get(riser.system, 1490.0) - 34 if riser else None
         if sx is not None and sy is not None:
-            G.append(render_ugo("cleanout", sx, sy, scale=0.60))
+            G.append(
+                f'<g data-element-id="{escape(row.element_id)}">'
+                f'{render_ugo("cleanout", sx, sy, scale=0.60)}</g>'
+            )
             text(sx, sy + 27, row.element_id, 6.8, "middle")
 
     # Графический разрыв повторяющихся этажей выполняется после трубопроводов.
@@ -514,14 +545,22 @@ def build_wastewater_scheme(
                  f"этажи {omitted_start}–{omitted_end} повторяются", 7.8, color=GRAY)
         # Ревизии на конкретном пропущенном этаже не теряются в графическом
         # разрыве: знак и марка остаются на оси соответствующего стояка.
+        omitted_revisions: Dict[str, List[SewerElementSpec]] = {}
         for row in elements if full_scope else []:
-            if row.kind != "revision" or not (omitted_start <= row.floor_from <= omitted_end):
-                continue
-            x = riser_x.get(row.section_id)
+            if row.kind == "revision" and omitted_start <= row.floor_from <= omitted_end:
+                omitted_revisions.setdefault(row.section_id, []).append(row)
+        for section_id, rows in sorted(omitted_revisions.items()):
+            x = riser_x.get(section_id)
             if x is None:
                 continue
-            G.append(render_ugo("revision", x, rupture_y, scale=0.64, rotation=90))
-            text(x + 15, rupture_y + 3, f"R · {row.element_id}", 7.1)
+            rows.sort(key=lambda row: (row.floor_from, row.element_id))
+            ids = " ".join(escape(row.element_id) for row in rows)
+            floors = ", ".join(str(row.floor_from) for row in rows)
+            G.append(
+                f'<g data-element-ids="{ids}">'
+                f'{render_ugo("revision", x, rupture_y, scale=0.64, rotation=90)}</g>'
+            )
+            text(x + 15, rupture_y + 3, f"R · эт. {floors}", 7.1)
 
     if full_scope:
         # Компактная легенда и исходные данные размещаются ниже разреза, как в приложении В.
@@ -562,7 +601,12 @@ def build_wastewater_scheme(
             f"К2: Q={q_k2}; сброс в {project.sewage.discharge_point_k2 or 'не задан'}",
             "Трассы — только по from_node/to_node; планировка — по АР.",
             "Проходки — по узлам КР; электрообогрев воронок — по заданию ЭОМ.",
-            "Фасонные части и монтажные размеры уточняются на стадии Р.",
+            (
+                "СП 30: ревизии и повороты проверены; п. 18.30 — после "
+                "линейной привязки точек обслуживания."
+                if sp30_audit.ready
+                else "СП 30: монтажная топология требует исправления."
+            ),
         ]
         for index, value in enumerate(info_rows):
             text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)

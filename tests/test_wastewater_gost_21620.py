@@ -76,6 +76,32 @@ def _gost_request():
             floor_from=1, dn_mm=110, section_id="К1-Ст1",
         ),
         SewerElementRequest(
+            "К1-Р4", "K1", "revision", "Ревизия", quantity=1,
+            floor_from=4, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-Р7", "K1", "revision", "Ревизия", quantity=1,
+            floor_from=7, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-Р10", "K1", "revision", "Ревизия", quantity=1,
+            floor_from=10, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-Р12", "K1", "revision", "Ревизия", quantity=1,
+            floor_from=12, dn_mm=110, section_id="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-Пр1", "K1", "cleanout", "Прочистка", quantity=1,
+            floor_from=0, dn_mm=110, section_id="К1-М1",
+            connects_to="К1-Ст1",
+        ),
+        SewerElementRequest(
+            "К1-ОтвСт1", "K1", "elbow", "Отвод 45°", quantity=2,
+            floor_from=0, dn_mm=110, section_id="К1-Ст1",
+            connects_to="К1-М1", type_mark="45°",
+        ),
+        SewerElementRequest(
             "К1-ВыпЭ1", "K1", "outlet", "Узел выпуска К1", quantity=1,
             floor_from=0, dn_mm=110, section_id="К1-Вып1",
         ),

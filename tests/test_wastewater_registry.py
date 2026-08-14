@@ -24,7 +24,7 @@ def _request():
 def test_demo_element_registry_is_valid_and_roundtrips():
     request = _request()
     assert request.validate() == []
-    assert len(request.sewer_elements) == 23
+    assert len(request.sewer_elements) == 32
 
     loaded = load_request(dump_request(request))
     assert loaded.sewer_elements == request.sewer_elements
@@ -32,8 +32,8 @@ def test_demo_element_registry_is_valid_and_roundtrips():
     audit = audit_wastewater_registry(build_project(request))
     assert audit.ready
     assert audit.errors == []
-    assert audit.element_count == 23
-    assert audit.spec_position_count == 23
+    assert audit.element_count == 32
+    assert audit.spec_position_count == 32
 
 
 def test_registry_validation_rejects_duplicate_and_unknown_section():
@@ -65,8 +65,8 @@ def test_registry_drives_spec_without_duplicate_funnel_or_outlet():
     assert any("К1" in row.name for row in outlets)
     assert any("К2" in row.name for row in outlets)
     assert len(revisions) == 1
-    assert revisions[0].qty == 6
-    assert "К1-Р1-8" in revisions[0].note
+    assert revisions[0].qty == 12
+    assert "К1-Р1-7" in revisions[0].note
 
 
 def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
@@ -74,7 +74,11 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     result = generate_wastewater_scheme_result(project)
     assert result.warnings == []
     assert "Принципиальная схема внутренних систем канализации и водоотведения" in result.svg
-    assert "К1-Р1-8" in result.svg
+    assert "К1-Р1-7" in result.svg
+    assert "R · эт. 4, 7, 10, 13" in result.svg
+    assert 'data-element-id="К1-Пр1"' in result.svg
+    assert 'data-element-id="К1-Пр2"' in result.svg
+    assert "СП 30: ревизии и повороты проверены" in result.svg
     assert "К2-Вр1" in result.svg
     assert "К2-Вр2" in result.svg
     assert "К2-Ст2" in result.svg

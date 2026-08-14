@@ -196,7 +196,7 @@
     <details class="field-help"><summary>Реестр элементов схемы и спецификации К1/К2/К3</summary>
       <p>Одна строка — подтверждённый проектом элемент или группа одинаковых элементов. Привязка к участку связывает запись со схемой; количество без заполненной строки программа не назначает.</p>
       <div class="table-wrap"><table class="grid"><tr><th>Сист.</th><th>ID</th><th>Тип</th><th>Наименование</th><th>Всего</th><th>В тип. помещении</th><th>Этаж от</th><th>до</th><th>№ помещения</th><th>Помещение</th><th>Отм. прибора, м</th><th>DN</th><th>i, ‰</th><th>Участок</th><th>Связь с узлом</th><th>Марка</th><th>ГОСТ / ТУ</th><th>Колонка</th><th>В СО</th></tr>
-      {% for i in range(24) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
+      {% for i in range(48) %}{% set r = prefill.sewer_elements[i] if prefill and i < prefill.sewer_elements|length else none %}
       <tr>
         <td><select name="sewer_element{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
         <td><input name="sewer_element{{ i + 1 }}_id" value="{{ r.element_id if r else '' }}" placeholder="К1-Р1"></td>

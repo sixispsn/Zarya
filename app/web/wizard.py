@@ -321,7 +321,7 @@ async def wizard_design(request: Request):
             ))
 
     sewer_elements = []
-    for i in range(1, 25):
+    for i in range(1, 49):
         element_id = fv(f"sewer_element{i}_id")
         if element_id:
             sewer_elements.append(SewerElementRequest(
