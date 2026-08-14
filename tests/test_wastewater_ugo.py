@@ -73,6 +73,18 @@ def test_svg_renderer_marks_symbol_key_and_unknown_as_other():
         get_ugo_definition("not_registered")
 
 
+def test_sink_and_washbasin_use_gost_scheme_view_geometry():
+    sink = render_ugo("sink", 0, 0)
+    assert "M-26,-15 H26" in sink
+    assert "M-18,-13 V11 H14 V21" in sink
+    assert "M18,-13 V11 H14" in sink
+
+    washbasin = render_ugo("washbasin", 0, 0)
+    assert "M-27,-15 H27 M-23,-11 H23" in washbasin
+    assert "M-21,-9 C-18,5 -10,13 0,15" in washbasin
+    assert "C10,13 18,5 21,-9 M0,15 V23" in washbasin
+
+
 def test_scheme_legend_is_driven_by_demo_registry():
     svg = generate_wastewater_scheme_result(_project()).svg
     assert 'data-ugo="sink"' in svg

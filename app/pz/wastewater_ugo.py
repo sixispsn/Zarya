@@ -49,8 +49,8 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("system_k1", "К1 - хозяйственно-бытовая канализация", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 1),
     UGOSymbolDefinition("system_k2", "К2 - внутренний водосток", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 2),
     UGOSymbolDefinition("system_k3", "К3 - производственная канализация", "ГОСТ Р 21.620-2023, прил. В; марка системы по ГОСТ 21.205-2016", "recommended", 3),
-    UGOSymbolDefinition("sink", "мойка", "ГОСТ 21.205-2016, табл. 3, поз. 2", "normative", 10),
-    UGOSymbolDefinition("washbasin", "умывальник", "ГОСТ 21.205-2016, табл. 3, поз. 3", "normative", 20),
+    UGOSymbolDefinition("sink", "мойка", "ГОСТ 21.205-2016, табл. 3, поз. 2 (вид для схем)", "normative", 10),
+    UGOSymbolDefinition("washbasin", "умывальник", "ГОСТ 21.205-2016, табл. 3, поз. 3 (вид для схем)", "normative", 20),
     UGOSymbolDefinition("bath", "ванна", "ГОСТ 21.205-2016, табл. 3, поз. 7", "normative", 30),
     UGOSymbolDefinition("shower", "поддон душевой", "ГОСТ 21.205-2016, табл. 3, поз. 9", "normative", 40),
     UGOSymbolDefinition("toilet", "унитаз", "ГОСТ 21.205-2016, табл. 3, поз. 11", "normative", 50),
@@ -146,14 +146,25 @@ def _shape(kind: str) -> str:
             f'font-size="12" font-weight="bold" fill="{s}">{mark}</text>'
         )
     if kind == "sink":
+        # ГОСТ 21.205-2016, табл. 3, поз. 2: вариант для видов
+        # спереди/сбоку, разрезов и схем. Верхняя кромка выступает за чашу;
+        # выпуск смещён от правой стенки к центру.
         return (
-            f'<path d="M-22,-12 H22 M-17,-12 V10 H14 V17" fill="none" '
-            f'stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M-26,-15 H26 M-18,-13 V11 H14 V21 '
+            f'M18,-13 V11 H14" fill="none" stroke="{s}" '
+            f'stroke-width="{sw}" stroke-linecap="square" '
+            f'stroke-linejoin="miter"/>'
         )
     if kind == "washbasin":
+        # ГОСТ 21.205-2016, табл. 3, поз. 3: вариант для схем. Две
+        # горизонтальные линии образуют борт, ниже расположен симметричный
+        # профиль чаши и выпуск по центральной оси.
         return (
-            f'<path d="M-23,-11 H23 M-19,-7 Q-16,12 0,14 Q16,12 19,-7 Z '
-            f'M0,14 V22" fill="none" stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M-27,-15 H27 M-23,-11 H23 '
+            f'M-21,-9 C-18,5 -10,13 0,15 '
+            f'C10,13 18,5 21,-9 M0,15 V23" fill="none" '
+            f'stroke="{s}" stroke-width="{sw}" stroke-linecap="square" '
+            f'stroke-linejoin="miter"/>'
         )
     if kind == "bath":
         return (
