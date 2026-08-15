@@ -73,16 +73,19 @@ def test_svg_renderer_marks_symbol_key_and_unknown_as_other():
         get_ugo_definition("not_registered")
 
 
-def test_sink_and_washbasin_use_gost_scheme_view_geometry():
+def test_sink_and_washbasin_use_extracted_pdf_vector_geometry():
     sink = render_ugo("sink", 0, 0)
-    assert "M-26,-15 H26" in sink
-    assert "M-18,-13 V11 H14 V21" in sink
-    assert "M18,-13 V11 H14" in sink
+    assert "matrix(0.313253012048 0 0 -0.313253012048" in sink
+    assert "M4382,6099 L4548,6099" in sink
+    assert "M4536,6099 L4536,6004 L4394,6004 L4394,6099" in sink
+    assert "M4465,6004 L4465,5959" in sink
 
     washbasin = render_ugo("washbasin", 0, 0)
-    assert "M-27,-15 H27 M-23,-11 H23" in washbasin
-    assert "M-21,-9 C-18,5 -10,13 0,15" in washbasin
-    assert "C10,13 18,5 21,-9 M0,15 V23" in washbasin
+    assert "matrix(0.057264050901 0 0 -0.057264050901" in washbasin
+    assert "M14314,15017 L15257,15017" in washbasin
+    assert "C14428,14820.0586 14588.0586,14660 14785.5,14660" in washbasin
+    assert "C14982.9414,14660 15143,14820.0586 15143,15017.5" in washbasin
+    assert "M14797,14660 L14773,14660 L14797,14390 Z" in washbasin
 
 
 def test_scheme_legend_is_driven_by_demo_registry():
