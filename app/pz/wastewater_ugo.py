@@ -190,10 +190,15 @@ def _shape(kind: str) -> str:
             f'<path d="M18,13 V20" stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "toilet":
+        # Пропорции фронтального УГО сверены с легендой рекомендуемого
+        # примера приложения В ГОСТ Р 21.620-2023: верхняя часть почти
+        # квадратная, нижняя воронкообразная часть заметно короче.  Ранее
+        # высота нижнего треугольника была почти равна высоте корпуса, из-за
+        # чего обозначение не соответствовало референсу.
         return (
-            f'<rect x="-12" y="-20" width="24" height="21" fill="white" '
+            f'<rect x="-12" y="-18" width="24" height="22" fill="white" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M-12,1 L0,20 L12,1 Z" fill="white" stroke="{s}" '
+            f'<path d="M-12,4 L0,17 L12,4 Z" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "floor_drain":
@@ -209,14 +214,18 @@ def _shape(kind: str) -> str:
             f'stroke-width="{sw}"/>'
         )
     if kind == "roof_funnel_heated":
+        # Геометрия повторяет УГО из легенды приложения В ГОСТ Р
+        # 21.620-2023: круглая воронка с короткими боковыми выводами и двумя
+        # симметричными молниеобразными линиями электрообогрева.  Нижнего
+        # отвода в референсном обозначении нет.
         return (
-            f'<path d="M-31,-18 L-13,-8 M31,-18 L13,-8 M-24,0 H-13 '
-            f'M13,0 H24 M0,13 V22" fill="none" stroke="{s}" '
+            f'<path d="M-20,0 H-12 M12,0 H20 '
+            f'M-7,-10 L-17,-17 L-14,-21 L-24,-24 L-21,-29 L-32,-35 '
+            f'M7,-10 L17,-17 L14,-21 L24,-24 L21,-29 L32,-35" '
+            f'fill="none" stroke="{s}" stroke-width="{sw}" '
+            f'stroke-linecap="butt" stroke-linejoin="miter"/>'
+            f'<circle cx="0" cy="0" r="12" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
-            f'<circle cx="0" cy="0" r="13" fill="white" stroke="{s}" '
-            f'stroke-width="{sw}"/>'
-            f'<path d="M-25,-23 l7,5 -7,5 7,5" fill="none" stroke="{s}" '
-            f'stroke-width="1.7"/>'
         )
     if kind == "trap":
         return (

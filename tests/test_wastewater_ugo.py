@@ -88,6 +88,19 @@ def test_sink_and_washbasin_use_extracted_pdf_vector_geometry():
     assert "M14797,14660 L14773,14660 L14797,14390 Z" in washbasin
 
 
+def test_toilet_and_heated_roof_funnel_match_reference_geometry():
+    toilet = render_ugo("toilet", 0, 0)
+    assert 'x="-12" y="-18" width="24" height="22"' in toilet
+    assert 'd="M-12,4 L0,17 L12,4 Z"' in toilet
+
+    funnel = render_ugo("roof_funnel_heated", 0, 0)
+    assert 'M-20,0 H-12 M12,0 H20' in funnel
+    assert 'M-7,-10 L-17,-17 L-14,-21 L-24,-24 L-21,-29 L-32,-35' in funnel
+    assert 'M7,-10 L17,-17 L14,-21 L24,-24 L21,-29 L32,-35' in funnel
+    assert 'cx="0" cy="0" r="12"' in funnel
+    assert "M0,13 V22" not in funnel
+
+
 def test_scheme_legend_is_driven_by_demo_registry():
     svg = generate_wastewater_scheme_result(_project()).svg
     assert 'data-ugo="sink"' in svg
