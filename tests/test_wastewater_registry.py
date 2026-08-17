@@ -103,6 +103,11 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "абс. 146,55 → 146,45" in result.svg
     assert "№ К-01 · К1-Ветв-Кух1" in result.svg
     assert result.svg.count('data-fixture-connection=') == 32
+    assert result.svg.count('data-fixture-trap=') == 24
+    assert result.svg.count('data-trap-mode="external"') == 24
+    assert result.svg.count('data-trap-mode="integral"') == 8
+    assert 'data-fixture-trap="К1-Ун1"' not in result.svg
+    assert 'data-fixture-trap="К1-Ун2"' not in result.svg
     assert result.svg.count('data-fixture-fitting-boundaries="double-45"') == 32
     assert 'data-fixture-placement="К1-Ван1"' in result.svg
     assert 'data-elevation-m="0,150"' in result.svg

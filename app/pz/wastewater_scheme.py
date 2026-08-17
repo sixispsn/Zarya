@@ -17,6 +17,7 @@ from app.pz.wastewater_registry import audit_wastewater_registry
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
 from app.pz.wastewater_ugo import (
+    fixture_trap_mode,
     get_ugo_connection_anchor,
     project_legend_definitions,
     render_ugo,
@@ -350,6 +351,7 @@ def build_wastewater_scheme(
         usable_left, usable_right = x0 + 28, x1 - 28
         step = (usable_right - usable_left) / max(1, len(fixtures))
         symbol_scale = 0.72
+        trap_scale = 0.42
         vertical_units_per_m = (y_bottom - y_top) / max(floor_height, 0.1)
         for element_index, row in enumerate(fixtures):
             sx = usable_left + (element_index + 0.5) * step
@@ -366,32 +368,63 @@ def build_wastewater_scheme(
                 if row.elevation_m is not None and lowest is not None
                 else 0.0
             )
+            trap_mode = fixture_trap_mode(row.kind)
+            # Отдельному сифону нужен вертикальный габарит между выпуском
+            # прибора и двумя отводами по 45°. Приборы со встроенным затвором
+            # сохраняют прежнюю посадку и второй сифон не получают.
+            outlet_clearance = 52.0 if trap_mode == "external" else 28.0
             outlet_target_y = (
-                branch_y - 28.0 - relative_elevation_m * vertical_units_per_m
+                branch_y - outlet_clearance
+                - relative_elevation_m * vertical_units_per_m
             )
             symbol_y = outlet_target_y - local_outlet_y * symbol_scale
             outlet_x = sx + local_outlet_x * symbol_scale
             outlet_y = symbol_y + local_outlet_y * symbol_scale
+            connection_x = outlet_x
+            connection_y = outlet_y
+            trap_svg = ""
+            if trap_mode == "external":
+                # Локальные концы нормативного знака сифона: вход (-14,-20),
+                # выход (23,20). Зеркалирование ориентирует выход к стояку,
+                # не меняя форму и пропорции УГО.
+                trap_center_x = outlet_x + side * 14.0 * trap_scale
+                trap_center_y = outlet_y + 20.0 * trap_scale
+                connection_x = outlet_x + side * 37.0 * trap_scale
+                connection_y = outlet_y + 40.0 * trap_scale
+                trap_symbol = render_ugo(
+                    "trap",
+                    trap_center_x,
+                    trap_center_y,
+                    scale=trap_scale,
+                    mirror_x=side < 0,
+                )
+                trap_svg = (
+                    f'<g data-fixture-trap="{escape(row.element_id)}">'
+                    f'{trap_symbol}'
+                    f'</g>'
+                )
             bend_dx = 12.0 * side
             bend_start_y = branch_y - 12.0
-            bend_end_x = outlet_x + bend_dx
+            bend_end_x = connection_x + bend_dx
             G.append(
                 f'<g data-fixture-placement="{escape(row.element_id)}" '
                 f'data-floor="{floor}" '
-                f'data-elevation-m="{_fmt(row.elevation_m, 3)}">'
+                f'data-elevation-m="{_fmt(row.elevation_m, 3)}" '
+                f'data-trap-mode="{trap_mode}">'
                 f'{render_ugo(row.kind, sx, symbol_y, scale=symbol_scale)}'
+                f'{trap_svg}'
                 f'<g data-fixture-connection="{escape(row.element_id)}">'
             )
-            line(outlet_x, outlet_y, outlet_x, bend_start_y, 2.2)
-            line(outlet_x, bend_start_y, bend_end_x, branch_y, 2.2)
+            line(connection_x, connection_y, connection_x, bend_start_y, 2.2)
+            line(connection_x, bend_start_y, bend_end_x, branch_y, 2.2)
             boundary_half = 4.5
-            bend_mid_x = (outlet_x + bend_end_x) / 2
+            bend_mid_x = (connection_x + bend_end_x) / 2
             bend_mid_y = (bend_start_y + branch_y) / 2
             diagonal_sign = 1 if bend_dx > 0 else -1
             G.append(
                 f'<path data-fixture-fitting-boundaries="double-45" '
-                f'd="M{outlet_x-boundary_half:.1f},{bend_start_y:.1f} '
-                f'L{outlet_x+boundary_half:.1f},{bend_start_y:.1f} '
+                f'd="M{connection_x-boundary_half:.1f},{bend_start_y:.1f} '
+                f'L{connection_x+boundary_half:.1f},{bend_start_y:.1f} '
                 f'M{bend_mid_x-boundary_half:.1f},'
                 f'{bend_mid_y+diagonal_sign*boundary_half:.1f} '
                 f'L{bend_mid_x+boundary_half:.1f},'
@@ -404,7 +437,7 @@ def build_wastewater_scheme(
             qty = f"{row.typical_quantity} шт." if row.typical_quantity else "1 шт."
             text(
                 outlet_x - side * 5,
-                min(outlet_y + 15, branch_y - 15),
+                min(connection_y + 10, branch_y - 15),
                 f"{qty}; DN{row.dn_mm or '—'}",
                 6.8,
                 "end" if side > 0 else "start",

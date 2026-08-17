@@ -94,6 +94,19 @@ UGO_CONNECTION_ANCHORS: Dict[str, Tuple[float, float]] = {
     "toilet": (0.0, 20.0),
     "floor_drain": (0.0, 10.0),
 }
+# Способ образования гидравлического затвора у санитарного прибора. Для
+# приборов с отдельным сифоном генератор обязан поставить нормативное УГО
+# по ГОСТ 21.205-2016, табл. 4, поз. 4 непосредственно в присоединение.
+# У унитаза и трапа затвор является частью самого изделия, поэтому второй
+# последовательный сифон на схеме был бы технически неверным.
+FIXTURE_TRAP_MODES: Dict[str, str] = {
+    "sink": "external",
+    "washbasin": "external",
+    "bath": "external",
+    "shower": "external",
+    "toilet": "integral",
+    "floor_drain": "integral",
+}
 KIND_LABELS: Dict[str, str] = {
     definition.key: definition.label
     for definition in _DEFINITIONS
@@ -118,6 +131,11 @@ def get_ugo_connection_anchor(kind: str) -> Tuple[float, float]:
         return UGO_CONNECTION_ANCHORS[kind]
     except KeyError as exc:
         raise KeyError(f"для УГО {kind!r} не задана точка выпуска") from exc
+
+
+def fixture_trap_mode(kind: str) -> str:
+    """Вернуть ``external``, ``integral`` или ``none`` для вида элемента."""
+    return FIXTURE_TRAP_MODES.get(kind, "none")
 
 
 def legend_definitions(
@@ -148,6 +166,11 @@ def project_legend_definitions(project: Project) -> List[UGOSymbolDefinition]:
     if heated:
         keys.discard("roof_funnel")
         keys.add("roof_funnel_heated")
+    # Сифоны являются частью графического узла подключения, поэтому у них
+    # нет искусственных строк количества в реестре и спецификации. При этом
+    # применённое УГО обязательно раскрывается в легенде листа.
+    if any(fixture_trap_mode(row.kind) == "external" for row in elements):
+        keys.add("trap")
     systems = {
         row.system.lower()
         for row in list(project.sewage.pipes or []) + elements
@@ -369,10 +392,15 @@ def render_ugo(
     *,
     scale: float = 1.0,
     rotation: float = 0.0,
+    mirror_x: bool = False,
 ) -> str:
     """Нарисовать УГО; неизвестный вид явно показывается знаком «иной элемент»."""
     resolved = kind if kind in UGO_CATALOG else "other"
-    transform = f"translate({x:.2f} {y:.2f}) rotate({rotation:.2f}) scale({scale:.3f})"
+    scale_x = -scale if mirror_x else scale
+    transform = (
+        f"translate({x:.2f} {y:.2f}) rotate({rotation:.2f}) "
+        f"scale({scale_x:.3f} {scale:.3f})"
+    )
     return f'<g data-ugo="{escape(resolved)}" transform="{transform}">{_shape(resolved)}</g>'
 
 

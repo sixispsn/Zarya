@@ -13,6 +13,7 @@ from app.pz.wastewater_registry import KIND_LABELS
 from app.pz.wastewater_ugo import (
     UGO_CATALOG,
     build_wastewater_ugo_sheet,
+    fixture_trap_mode,
     get_ugo_definition,
     get_ugo_connection_anchor,
     legend_definitions,
@@ -106,6 +107,14 @@ def test_fixture_connection_anchors_match_the_drawn_outlets():
         get_ugo_connection_anchor("revision")
 
 
+def test_fixture_trap_policy_does_not_duplicate_integral_water_seals():
+    for kind in ("sink", "washbasin", "bath", "shower"):
+        assert fixture_trap_mode(kind) == "external"
+    for kind in ("toilet", "floor_drain"):
+        assert fixture_trap_mode(kind) == "integral"
+    assert fixture_trap_mode("roof_funnel") == "none"
+
+
 def test_normative_fixture_shapes_match_gost_21205_geometry():
     bath = render_ugo("bath", 0, 0)
     assert 'x="-27" y="-12.5" width="54" height="25"' in bath
@@ -142,6 +151,12 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     assert 'd="M-25,0 H-8 M8,0 H25"' in flow
     assert 'd="M-8,-9 L8,0 L-8,9 Z"' in flow
 
+    trap = render_ugo("trap", 0, 0)
+    assert 'd="M-14,-20 V9 Q-14,20 -4,20 Q5,20 5,9 V-8' in trap
+    assert 'Q5,-19 14,-19 Q23,-19 23,-8 V20"' in trap
+    mirrored_trap = render_ugo("trap", 0, 0, scale=0.42, mirror_x=True)
+    assert "scale(-0.420 0.420)" in mirrored_trap
+
 
 def test_cleanout_uses_capped_access_end_from_vector_reference():
     cleanout = render_ugo("cleanout", 0, 0)
@@ -159,6 +174,7 @@ def test_scheme_legend_is_driven_by_demo_registry():
     assert 'data-ugo="system_k1"' in svg
     assert 'data-ugo="system_k2"' in svg
     assert 'data-ugo="roof_funnel_heated"' in svg
+    assert 'data-ugo="trap"' in svg
     assert 'data-ugo="pump"' not in svg
     assert "нормативная трассировка - лист 2" in svg
 
@@ -174,6 +190,7 @@ def test_ugo_sheet_is_a3_and_contains_only_used_source_classes(tmp_path):
     assert "систем К1, К2" in svg
     assert "систем К1, К2 и К3" not in svg
     assert "ГОСТ 21.205-2016, табл. 3, поз. 11" in svg
+    assert "ГОСТ 21.205-2016, табл. 4, поз. 4" in svg
 
     output = tmp_path / "ugo.pdf"
     generate_wastewater_ugo_pdf(project, str(output))
