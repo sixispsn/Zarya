@@ -33,7 +33,7 @@ def _gost_request():
             "ТУ изготовителя", 110, 3.4, 3.0,
             slope_per_mille=20.0,
             fill_ratio=0.45,
-            from_node="СУ-101",
+            from_node="К1-Ун1",
             to_node="К1-Ст1",
             room="санузел №101",
             elevation_start_m=0.15,

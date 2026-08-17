@@ -46,6 +46,7 @@ SEWAGE_MATERIALS = ("pvc", "pp", "cast_iron_socket", "sml")
 SEWAGE_VENTILATION = ("ventilated", "vacuum_valve", "unventilated")
 SEWER_ELEMENT_KINDS = (
     "toilet", "washbasin", "sink", "bath", "shower", "floor_drain",
+    "washing_machine", "dishwasher", "grease_trap",
     "roof_funnel", "revision", "cleanout", "fire_collar", "trap",
     "pump", "sump", "ball_valve", "check_valve", "junction", "outlet",
     "tee", "elbow", "transition", "other",

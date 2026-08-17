@@ -38,7 +38,7 @@ def _valid_layout() -> WastewaterSchemeLayout:
     group = groups[0]
     start = WastewaterNodePlacement(
         placement_id="node-kitchen-1",
-        node_id="К1-Кух1",
+        node_id="К1-Мой1",
         system="K1",
         point=PointMm(100.0, 180.0),
         group_id=group.group_id,

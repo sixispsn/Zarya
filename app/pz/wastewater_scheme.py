@@ -40,6 +40,20 @@ class WastewaterSchemeResult:
     warnings: List[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class _FixturePlacement:
+    element: SewerElementSpec
+    sx: float
+    symbol_y: float
+    outlet_x: float
+    outlet_y: float
+    connection_x: float
+    connection_y: float
+    join_x: float
+    trap_mode: str
+    trap_svg: str
+
+
 class WastewaterSchemeScope(str, Enum):
     """Слой штатного генератора, используемый при поступенчатой сборке."""
 
@@ -263,17 +277,27 @@ def build_wastewater_scheme(
             result[row.section_id] = candidates[index]
         return result
 
-    # Оси сгруппированы в тех же двух сантехнических шахтах, что В1/В2.
+    # Оси остаются в общих сантехнических шахтах, но К1 ставится у грани,
+    # смежной с квартирным санузлом. Это удерживает унитаз непосредственно у
+    # стояка, а К2 размещает глубже в шахте.
+    shaft_left = next(row for row in scaffold.room_slots if row.role == "shaft_left")
+    shaft_right = next(row for row in scaffold.room_slots if row.role == "shaft_right")
+    k1_axis_candidates = [
+        shaft_left.x0 + 24,
+        shaft_right.x1 - 24,
+        shaft_left.x0 + 52,
+        shaft_right.x1 - 52,
+    ]
+    k2_axis_candidates = [shaft_left.x1 - 36, shaft_right.x0 + 36]
     riser_x: Dict[str, float] = {}
     riser_x.update(assign_axes(
         risers_by_system.get("K1", []),
-        [scaffold.shaft_left_x, scaffold.shaft_right_x,
-         scaffold.shaft_left_x - 24, scaffold.shaft_right_x + 24],
+        k1_axis_candidates,
         "К1",
     ))
     riser_x.update(assign_axes(
         risers_by_system.get("K2", []),
-        [scaffold.shaft_left_x + 24, scaffold.shaft_right_x - 24],
+        k2_axis_candidates,
         "К2",
     ))
     riser_x.update(assign_axes(
@@ -287,10 +311,12 @@ def build_wastewater_scheme(
     for branch in topology.branches:
         branches_by_riser.setdefault(branch.riser_id, []).append(branch)
     for rows in branches_by_riser.values():
-        rows.sort(key=lambda row: (row.room_number, row.pipe.section_id))
+        # Ветвь с унитазом занимает ближайшее к шахте помещение; кухонная или
+        # иная «серая» ветвь располагается дальше от стояка.
+        rows.sort(key=lambda row: (row.has_toilet, row.room_number, row.pipe.section_id))
 
     left_slots = [scaffold.room_slots[0], scaffold.room_slots[1]]
-    right_slots = [scaffold.room_slots[-2], scaffold.room_slots[-1]]
+    right_slots = [scaffold.room_slots[-1], scaffold.room_slots[-2]]
     branch_slots: Dict[str, List[Tuple[float, float]]] = {}
     for index, riser in enumerate(risers_by_system.get("K1", [])):
         slots = left_slots if index % 2 == 0 else right_slots
@@ -331,30 +357,31 @@ def build_wastewater_scheme(
              _short(f"№ {branch.room_number} · {branch.pipe.section_id}", 32),
              8.2, weight="bold")
         text(x0 + 8, y_top + 32, _short(branch.room_name, 38), 7.2, color=GRAY)
-        side = 1 if riser_axis > (x0 + x1) / 2 else -1
-        branch_y = y_bottom - 22 - branch_index * 24
-        start_x = x0 + 18 if side > 0 else x1 - 18
-        elbow_x = x1 - 16 if side > 0 else x0 + 16
-        line(start_x, branch_y, elbow_x, branch_y, 2.2)
-        line(elbow_x, branch_y, riser_axis, branch_y + 5, 2.2)
-        arrow(riser_axis - 10 if side > 0 else riser_axis + 10,
-              branch_y + 5, "right" if side > 0 else "left", 0.5)
-        text((elbow_x + riser_axis) / 2, branch_y - 9,
-             branch_mark(branch.pipe), 7.4, "middle", color=GRAY)
         fixtures = [row for row in branch.elements if _applies(row, floor)]
         if not fixtures:
             return
+        side = 1 if riser_axis > (x0 + x1) / 2 else -1
+        branch_y = y_bottom - 22 - branch_index * 24
         lowest = min(
             (row.elevation_m for row in fixtures if row.elevation_m is not None),
             default=None,
         )
-        usable_left, usable_right = x0 + 28, x1 - 28
-        step = (usable_right - usable_left) / max(1, len(fixtures))
         symbol_scale = 0.72
         trap_scale = 0.42
         vertical_units_per_m = (y_bottom - y_top) / max(floor_height, 0.1)
+        if len(fixtures) == 1:
+            fixture_axes = [(x0 + x1) / 2]
+        else:
+            source_axis = x0 + 45 if side > 0 else x1 - 45
+            downstream_axis = x1 - 35 if side > 0 else x0 + 35
+            fixture_axes = [
+                source_axis
+                + (downstream_axis - source_axis) * index / (len(fixtures) - 1)
+                for index in range(len(fixtures))
+            ]
+        placements: List[_FixturePlacement] = []
         for element_index, row in enumerate(fixtures):
-            sx = usable_left + (element_index + 0.5) * step
+            sx = fixture_axes[element_index]
             try:
                 local_outlet_x, local_outlet_y = get_ugo_connection_anchor(row.kind)
             except KeyError:
@@ -404,40 +431,118 @@ def build_wastewater_scheme(
                     f'</g>'
                 )
             bend_dx = 12.0 * side
-            bend_start_y = branch_y - 12.0
-            bend_end_x = connection_x + bend_dx
+            placements.append(_FixturePlacement(
+                element=row,
+                sx=sx,
+                symbol_y=symbol_y,
+                outlet_x=outlet_x,
+                outlet_y=outlet_y,
+                connection_x=connection_x,
+                connection_y=connection_y,
+                join_x=connection_x + bend_dx,
+                trap_mode=trap_mode,
+                trap_svg=trap_svg,
+            ))
+
+        if len(placements) != len(fixtures):
+            warnings.append(
+                f"{branch.pipe.section_id}: ветвь не отрисована, пока для всех "
+                "приёмников стоков не заданы точки выпуска УГО"
+            )
+            return
+
+        # Общая труба начинается точно в месте присоединения первого прибора и
+        # непрерывно понижается к стояку. Свободного хвоста до первого прибора
+        # нет: SVG хранит адрес источника и конечного стояка для автопроверки.
+        trunk_start_x = placements[0].join_x
+        trunk_end_y = branch_y + 5.0
+
+        def trunk_y_at(x: float) -> float:
+            run = riser_axis - trunk_start_x
+            if abs(run) < 1e-9:
+                return trunk_end_y
+            progress = (x - trunk_start_x) / run
+            return branch_y + (trunk_end_y - branch_y) * progress
+
+        G.append(
+            f'<g data-gravity-branch="{escape(branch.pipe.section_id)}" '
+            f'data-starts-at="{escape(branch.source_element_id)}" '
+            f'data-discharges-to="{escape(branch.riser_id)}">'
+            f'<path data-gravity-trunk="true" '
+            f'd="M{trunk_start_x:.1f},{branch_y:.1f} '
+            f'L{riser_axis:.1f},{trunk_end_y:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="2.2"/>'
+        )
+        arrow_x = (placements[-1].join_x + riser_axis) / 2
+        arrow(
+            arrow_x,
+            trunk_y_at(arrow_x),
+            "right" if side > 0 else "left",
+            0.5,
+        )
+        text(
+            (placements[-1].join_x + riser_axis) / 2,
+            trunk_y_at((placements[-1].join_x + riser_axis) / 2) - 9,
+            branch_mark(branch.pipe),
+            7.4,
+            "middle",
+            color=GRAY,
+        )
+        G.append('</g>')
+
+        for flow_index, placement in enumerate(placements):
+            row = placement.element
+            join_y = trunk_y_at(placement.join_x)
+            bend_start_y = join_y - 12.0
+            bend_end_x = placement.join_x
+            riser_adjacent = row.kind == "toilet" and row.connects_to == branch.riser_id
             G.append(
                 f'<g data-fixture-placement="{escape(row.element_id)}" '
                 f'data-floor="{floor}" '
                 f'data-elevation-m="{_fmt(row.elevation_m, 3)}" '
-                f'data-trap-mode="{trap_mode}">'
-                f'{render_ugo(row.kind, sx, symbol_y, scale=symbol_scale)}'
-                f'{trap_svg}'
+                f'data-flow-index="{flow_index}" '
+                f'data-flow-to="{escape(row.connects_to)}" '
+                f'data-riser-adjacent="{str(riser_adjacent).lower()}" '
+                f'data-trap-mode="{placement.trap_mode}">'
+                f'{render_ugo(row.kind, placement.sx, placement.symbol_y, scale=symbol_scale)}'
+                f'{placement.trap_svg}'
                 f'<g data-fixture-connection="{escape(row.element_id)}">'
             )
-            line(connection_x, connection_y, connection_x, bend_start_y, 2.2)
-            line(connection_x, bend_start_y, bend_end_x, branch_y, 2.2)
+            line(
+                placement.connection_x,
+                placement.connection_y,
+                placement.connection_x,
+                bend_start_y,
+                2.2,
+            )
+            line(
+                placement.connection_x,
+                bend_start_y,
+                bend_end_x,
+                join_y,
+                2.2,
+            )
             boundary_half = 4.5
-            bend_mid_x = (connection_x + bend_end_x) / 2
-            bend_mid_y = (bend_start_y + branch_y) / 2
-            diagonal_sign = 1 if bend_dx > 0 else -1
+            bend_mid_x = (placement.connection_x + bend_end_x) / 2
+            bend_mid_y = (bend_start_y + join_y) / 2
+            diagonal_sign = 1 if side > 0 else -1
             G.append(
                 f'<path data-fixture-fitting-boundaries="double-45" '
-                f'd="M{connection_x-boundary_half:.1f},{bend_start_y:.1f} '
-                f'L{connection_x+boundary_half:.1f},{bend_start_y:.1f} '
+                f'd="M{placement.connection_x-boundary_half:.1f},{bend_start_y:.1f} '
+                f'L{placement.connection_x+boundary_half:.1f},{bend_start_y:.1f} '
                 f'M{bend_mid_x-boundary_half:.1f},'
                 f'{bend_mid_y+diagonal_sign*boundary_half:.1f} '
                 f'L{bend_mid_x+boundary_half:.1f},'
                 f'{bend_mid_y-diagonal_sign*boundary_half:.1f} '
-                f'M{bend_end_x:.1f},{branch_y-boundary_half:.1f} '
-                f'L{bend_end_x:.1f},{branch_y+boundary_half:.1f}" '
+                f'M{bend_end_x:.1f},{join_y-boundary_half:.1f} '
+                f'L{bend_end_x:.1f},{join_y+boundary_half:.1f}" '
                 f'fill="none" stroke="{BLACK}" stroke-width="2.2"/>'
             )
             G.append('</g></g>')
             qty = f"{row.typical_quantity} шт." if row.typical_quantity else "1 шт."
             text(
-                outlet_x - side * 5,
-                min(connection_y + 10, branch_y - 15),
+                placement.outlet_x - side * 5,
+                min(placement.connection_y + 10, join_y - 15),
                 f"{qty}; DN{row.dn_mm or '—'}",
                 6.8,
                 "end" if side > 0 else "start",
@@ -824,12 +929,12 @@ def build_wastewater_scheme(
         q_k1 = _fmt(sewage.total.q_sewage_lps, 3) + " л/с" if sewage else "см. расчёт"
         q_k2 = _fmt(storm.q_total_l_per_s, 3) + " л/с" if storm else "см. расчёт"
         info_rows = [
-            f"Граф: {'проверен' if topology.ready else 'требует данных'}; "
+            f"Граф самотёка: {'проверен' if topology.ready else 'требует данных'}; "
             f"стояки / ветви / магистрали: {len(topology.risers)} / {len(topology.branches)} / {len(topology.mains)}",
             f"К1: Q={q_k1}; сброс в {project.sewage.discharge_point_k1 or 'не задан'}",
             f"К2: Q={q_k2}; сброс в {project.sewage.discharge_point_k2 or 'не задан'}",
-            "Трассы — только по from_node/to_node; планировка — по АР.",
-            "Проходки — по узлам КР; электрообогрев воронок — по заданию ЭОМ.",
+            "Путь: прибор - ветвь - стояк - магистраль - выпуск; без тупиков и подъёмов.",
+            "Унитаз - последний прибор у стояка; проходки - по узлам КР.",
             (
                 "СП 30: ревизии и повороты проверены; п. 18.30 — после "
                 "линейной привязки точек обслуживания."
@@ -841,7 +946,7 @@ def build_wastewater_scheme(
             text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)
         status_color = BLACK if topology.ready else "#a00"
         text(info_x + info_w - 10, info_y + info_h - 9,
-             "ТОПОЛОГИЯ ПРОШЛА ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
+             "САМОТЕЧНЫЙ ГРАФ ПРОШЁЛ ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
              7.5, "end", "bold", status_color)
         if warnings:
             text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)
