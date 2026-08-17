@@ -14,6 +14,7 @@ from app.pz.wastewater_ugo import (
     UGO_CATALOG,
     build_wastewater_ugo_sheet,
     get_ugo_definition,
+    get_ugo_connection_anchor,
     legend_definitions,
     render_ugo,
 )
@@ -94,6 +95,15 @@ def test_sink_and_washbasin_use_extracted_pdf_vector_geometry():
     assert "C14428,14820.0586 14588.0586,14660 14785.5,14660" in washbasin
     assert "C14982.9414,14660 15143,14820.0586 15143,15017.5" in washbasin
     assert "M14797,14660 L14773,14660 L14797,14390 Z" in washbasin
+
+
+def test_fixture_connection_anchors_match_the_drawn_outlets():
+    assert get_ugo_connection_anchor("sink") == pytest.approx((0.0, 21.927710844522))
+    assert get_ugo_connection_anchor("washbasin") == pytest.approx((0.0, 17.966595975755))
+    assert get_ugo_connection_anchor("bath") == (25.0, 19.0)
+    assert get_ugo_connection_anchor("toilet") == (0.0, 20.0)
+    with pytest.raises(KeyError, match="не задана точка выпуска"):
+        get_ugo_connection_anchor("revision")
 
 
 def test_normative_fixture_shapes_match_gost_21205_geometry():

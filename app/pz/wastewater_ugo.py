@@ -83,6 +83,17 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
 UGO_CATALOG: Dict[str, UGOSymbolDefinition] = {
     definition.key: definition for definition in _DEFINITIONS
 }
+# Local connection points are part of the symbol geometry, not a shared visual
+# baseline.  Vector values below are the actual outlet endpoints after the
+# nested source-PDF transforms used by ``_shape``.
+UGO_CONNECTION_ANCHORS: Dict[str, Tuple[float, float]] = {
+    "sink": (0.0, 21.927710844522),
+    "washbasin": (0.0, 17.966595975755),
+    "bath": (25.0, 19.0),
+    "shower": (22.0, 16.0),
+    "toilet": (0.0, 20.0),
+    "floor_drain": (0.0, 10.0),
+}
 KIND_LABELS: Dict[str, str] = {
     definition.key: definition.label
     for definition in _DEFINITIONS
@@ -99,6 +110,14 @@ def get_ugo_definition(kind: str) -> UGOSymbolDefinition:
         return UGO_CATALOG[kind]
     except KeyError as exc:
         raise KeyError(f"неизвестный вид УГО: {kind}") from exc
+
+
+def get_ugo_connection_anchor(kind: str) -> Tuple[float, float]:
+    """Return the outlet point in the local coordinate system of an UGO."""
+    try:
+        return UGO_CONNECTION_ANCHORS[kind]
+    except KeyError as exc:
+        raise KeyError(f"для УГО {kind!r} не задана точка выпуска") from exc
 
 
 def legend_definitions(
