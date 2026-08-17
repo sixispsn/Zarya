@@ -359,14 +359,12 @@ def build_wastewater_scheme(
             continue
         count = min(3, max(1, row.quantity))
         offsets = [0.0] if count == 1 else [(-42 + i * 84 / (count - 1)) for i in range(count)]
-        symbol_kind = (
-            "roof_funnel_heated"
-            if "электрообогрев" in (row.name or "").lower()
-            else "roof_funnel"
-        )
         for offset in offsets:
             sx, sy = x + offset, roof_y - 12
-            G.append(render_ugo(symbol_kind, sx, sy, scale=0.72))
+            # ГОСТ 21.205-2016 не вводит отдельного УГО для электрообогрева:
+            # на схеме применяется нормативная воронка внутреннего водостока,
+            # а наличие обогрева остаётся характеристикой элемента и заданием ЭОМ.
+            G.append(render_ugo("roof_funnel", sx, sy, scale=0.72))
             line(sx, sy + 17, sx, roof_y + 25, 1.8)
             line(sx, roof_y + 25, x, roof_y + 36, 1.8)
         text(x, roof_y + 55,

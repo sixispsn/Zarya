@@ -56,7 +56,6 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("toilet", "унитаз", "ГОСТ 21.205-2016, табл. 3, поз. 11", "normative", 50),
     UGOSymbolDefinition("floor_drain", "трап", "ГОСТ 21.205-2016, табл. 3, поз. 16", "normative", 60),
     UGOSymbolDefinition("roof_funnel", "воронка внутреннего водостока", "ГОСТ 21.205-2016, табл. 3, поз. 18", "normative", 70),
-    UGOSymbolDefinition("roof_funnel_heated", "кровельная воронка с электрообогревом", "ГОСТ Р 21.620-2023, прил. В (рекомендуемый пример)", "recommended", 71),
     UGOSymbolDefinition("trap", "сифон (гидрозатвор)", "ГОСТ 21.205-2016, табл. 4, поз. 4", "normative", 80),
     UGOSymbolDefinition("revision", "ревизия", "ГОСТ 21.205-2016, табл. 4, поз. 11", "normative", 90),
     UGOSymbolDefinition("pump", "насос (общее обозначение)", "ГОСТ 21.205-2016, табл. 2, поз. 3а", "normative", 100),
@@ -82,7 +81,6 @@ KIND_LABELS: Dict[str, str] = {
     for definition in _DEFINITIONS
     if definition.key not in {
         "flow_direction", "system_k1", "system_k2", "system_k3",
-        "roof_funnel_heated",
     }
 }
 
@@ -115,14 +113,6 @@ def project_legend_definitions(project: Project) -> List[UGOSymbolDefinition]:
     # Геометрические узлы и выпуск раскрываются надписями непосредственно на
     # схеме и не публикуются как будто это нормативные УГО.
     keys -= {"outlet", "junction", "tee", "elbow", "transition", "other"}
-    heated = any(
-        row.kind == "roof_funnel"
-        and "электрообогрев" in (row.name or "").lower()
-        for row in elements
-    )
-    if heated:
-        keys.discard("roof_funnel")
-        keys.add("roof_funnel_heated")
     systems = {
         row.system.lower()
         for row in list(project.sewage.pipes or []) + elements
@@ -180,7 +170,7 @@ def _shape(kind: str) -> str:
         return (
             f'<rect x="-27" y="-12.5" width="54" height="25" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M-25,-11 L-12,11 M25,12.5 V19" fill="none" '
+            f'<path d="M-27,-12.5 L-12,12.5 M25,12.5 V19" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "shower":
@@ -212,20 +202,6 @@ def _shape(kind: str) -> str:
             f'stroke-width="{sw}"/>'
             f'<circle cx="0" cy="0" r="12" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/><path d="M0,12 V22" stroke="{s}" '
-            f'stroke-width="{sw}"/>'
-        )
-    if kind == "roof_funnel_heated":
-        # Геометрия повторяет УГО из легенды приложения В ГОСТ Р
-        # 21.620-2023: круглая воронка с короткими боковыми выводами и двумя
-        # симметричными молниеобразными линиями электрообогрева.  Нижнего
-        # отвода в референсном обозначении нет.
-        return (
-            f'<path d="M-20,0 H-12 M12,0 H20 '
-            f'M-7,-10 L-17,-17 L-14,-21 L-24,-24 L-21,-29 L-32,-35 '
-            f'M7,-10 L17,-17 L14,-21 L24,-24 L21,-29 L32,-35" '
-            f'fill="none" stroke="{s}" stroke-width="{sw}" '
-            f'stroke-linecap="butt" stroke-linejoin="miter"/>'
-            f'<circle cx="0" cy="0" r="12" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "trap":
@@ -278,8 +254,8 @@ def _shape(kind: str) -> str:
         )
     if kind == "flow_direction":
         return (
-            f'<path d="M-25,0 H23" stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M22,0 L7,-9 V9 Z" fill="{s}"/>'
+            f'<path d="M-25,0 H-8 M8,0 H25" stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M-8,-9 L8,0 L-8,9 Z" fill="{s}"/>'
         )
     if kind == "sump":
         return (

@@ -59,6 +59,8 @@ def test_recommended_and_project_symbols_are_not_presented_as_normative():
     assert get_ugo_definition("fire_collar").status == "recommended"
     assert get_ugo_definition("outlet").status == "project"
     assert not get_ugo_definition("junction").is_normative
+    with pytest.raises(KeyError, match="неизвестный вид УГО"):
+        get_ugo_definition("roof_funnel_heated")
 
 
 def test_legend_contains_only_used_kinds_plus_flow_direction():
@@ -95,6 +97,7 @@ def test_sink_and_washbasin_use_extracted_pdf_vector_geometry():
 def test_normative_fixture_shapes_match_gost_21205_geometry():
     bath = render_ugo("bath", 0, 0)
     assert 'x="-27" y="-12.5" width="54" height="25"' in bath
+    assert 'd="M-27,-12.5 L-12,12.5 M25,12.5 V19"' in bath
 
     shower = render_ugo("shower", 0, 0)
     assert 'x="-25" y="-9" width="50" height="18"' in shower
@@ -115,15 +118,9 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     pump = render_ugo("pump", 0, 0)
     assert 'd="M0,-12 L-5,-5 H5 Z"' in pump
 
-
-def test_heated_roof_funnel_matches_recommended_appendix_geometry():
-
-    funnel = render_ugo("roof_funnel_heated", 0, 0)
-    assert 'M-20,0 H-12 M12,0 H20' in funnel
-    assert 'M-7,-10 L-17,-17 L-14,-21 L-24,-24 L-21,-29 L-32,-35' in funnel
-    assert 'M7,-10 L17,-17 L14,-21 L24,-24 L21,-29 L32,-35' in funnel
-    assert 'cx="0" cy="0" r="12"' in funnel
-    assert "M0,13 V22" not in funnel
+    flow = render_ugo("flow_direction", 0, 0)
+    assert 'd="M-25,0 H-8 M8,0 H25"' in flow
+    assert 'd="M-8,-9 L8,0 L-8,9 Z"' in flow
 
 
 def test_scheme_legend_is_driven_by_demo_registry():
@@ -132,7 +129,8 @@ def test_scheme_legend_is_driven_by_demo_registry():
     assert 'data-ugo="flow_direction"' in svg
     assert 'data-ugo="system_k1"' in svg
     assert 'data-ugo="system_k2"' in svg
-    assert 'data-ugo="roof_funnel_heated"' in svg
+    assert 'data-ugo="roof_funnel"' in svg
+    assert 'data-ugo="roof_funnel_heated"' not in svg
     assert 'data-ugo="pump"' not in svg
     assert "нормативная трассировка - лист 2" in svg
 
