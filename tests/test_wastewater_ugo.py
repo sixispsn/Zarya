@@ -55,10 +55,10 @@ def test_normative_sewer_symbols_keep_table_and_position_traceability():
 
 
 def test_recommended_and_project_symbols_are_not_presented_as_normative():
-    assert get_ugo_definition("cleanout").status == "recommended"
+    assert get_ugo_definition("cleanout").status == "project"
     assert get_ugo_definition("fire_collar").status == "recommended"
     assert get_ugo_definition("roof_funnel_heated").status == "recommended"
-    assert "не УГО ГОСТ 21.205-2016" in get_ugo_definition("cleanout").basis
+    assert "заглушённый доступный конец" in get_ugo_definition("cleanout").basis
     assert "не УГО ГОСТ 21.205-2016" in get_ugo_definition("fire_collar").basis
     assert "не отдельное УГО ГОСТ 21.205-2016" in get_ugo_definition("roof_funnel_heated").basis
     assert get_ugo_definition("outlet").status == "project"
@@ -133,6 +133,15 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     assert 'd="M-8,-9 L8,0 L-8,9 Z"' in flow
 
 
+def test_cleanout_uses_capped_access_end_from_vector_reference():
+    cleanout = render_ugo("cleanout", 0, 0)
+    assert "matrix(0.007919485233 0 0 -0.007919485233" in cleanout
+    assert "M8019,7656 L2419,7656" in cleanout
+    assert "M2419,8594 L2419,6850" in cleanout
+    assert "M1958,8594 L1958,6850" in cleanout
+    assert ">Пр</text>" not in cleanout
+
+
 def test_scheme_legend_is_driven_by_demo_registry():
     svg = generate_wastewater_scheme_result(_project()).svg
     assert 'data-ugo="sink"' in svg
@@ -150,7 +159,8 @@ def test_ugo_sheet_is_a3_and_contains_only_used_source_classes(tmp_path):
     assert 'width="420mm"' in svg
     assert "нормативное УГО" in svg
     assert "рекомендуемый пример" in svg
-    assert "проектное обозначение" not in svg
+    assert "проектное обозначение" in svg
+    assert "заглушённый доступный конец" in svg
     assert "систем К1, К2" in svg
     assert "систем К1, К2 и К3" not in svg
     assert "ГОСТ 21.205-2016, табл. 3, поз. 11" in svg

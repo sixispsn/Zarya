@@ -63,7 +63,13 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("check_valve", "клапан обратный", "ГОСТ 21.205-2016, табл. 6, поз. 5а", "normative", 110),
     UGOSymbolDefinition("ball_valve", "кран шаровой", "ГОСТ 21.205-2016, табл. 6, поз. 16", "normative", 120),
     UGOSymbolDefinition("flow_direction", "направление потока жидкости", "ГОСТ 21.205-2016, табл. 5, поз. 1", "normative", 130),
-    UGOSymbolDefinition("cleanout", "прочистка", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не УГО ГОСТ 21.205-2016)", "recommended", 200),
+    UGOSymbolDefinition(
+        "cleanout",
+        "прочистка — заглушённый доступный конец",
+        "Проектное обозначение по фактической конфигурации узла; признак — заглушённый доступный конец трубы или фасонной части",
+        "project",
+        200,
+    ),
     UGOSymbolDefinition("fire_collar", "противопожарная муфта", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не УГО ГОСТ 21.205-2016)", "recommended", 210),
     UGOSymbolDefinition("sump", "приямок / приёмный резервуар", "ГОСТ Р 21.620-2023, п. 5.2.2.4; раскрывается в легенде", "project", 300),
     UGOSymbolDefinition("junction", "узел соединения", "Проектное обозначение; раскрывается в легенде", "project", 310),
@@ -262,11 +268,18 @@ def _shape(kind: str) -> str:
             f'stroke-width="{sw}"/>'
         )
     if kind == "cleanout":
+        # The source cleanout detail varies with the node topology.  Only its
+        # invariant feature is kept here: the pipe/fitting access end closed
+        # by two parallel cap lines.  The path coordinates are taken from the
+        # user-supplied vector reference ``прочистка.pdf``.
         return (
-            f'<path d="M-20,10 H18 M8,10 V-2 L17,-11" fill="none" '
-            f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<text x="-18" y="-4" font-family="{FONT}" font-size="13" '
-            f'font-weight="bold" fill="{s}">Пр</text>'
+            '<g transform="matrix(0.007919485233 0 0 -0.007919485233 '
+            '-39.506352087114 61.154264972777)">'
+            f'<path d="M8019,7656 L2419,7656 M2419,8594 L2419,6850 '
+            f'M1958,8594 L1958,6850" fill="none" stroke="{s}" '
+            'stroke-width="277.795833333333" stroke-linecap="butt" '
+            'stroke-linejoin="miter"/>'
+            '</g>'
         )
     if kind == "fire_collar":
         return (
