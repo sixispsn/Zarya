@@ -79,9 +79,15 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К1-Пр1"' in result.svg
     assert 'data-element-id="К1-Пр2"' in result.svg
     assert 'data-cleanout-callout="К1-Пр1"' in result.svg
+    assert result.svg.count('data-cleanout-pipe-width="2.8"') == 2
+    assert result.svg.count('data-cleanout-pipe-width="2.6"') == 2
     assert result.svg.count(">Прочистка</text>") == 4
     assert result.svg.count(">DN160</text>") == 2
-    assert result.svg.count(">DN110</text>") == 2
+    assert result.svg.count(">DN110</text>") == 4
+    assert 'data-element-id="К1-ОтвСт1"' in result.svg
+    assert 'data-element-id="К1-ОтвСт2"' in result.svg
+    assert result.svg.count('data-fitting-callout="elbow"') == 2
+    assert result.svg.count(">2 отвода 45°</text>") == 2
     assert "СП 30: ревизии и повороты проверены" in result.svg
     assert "К2-Вр1" in result.svg
     assert "К2-Вр2" in result.svg

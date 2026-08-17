@@ -116,20 +116,62 @@ def build_wastewater_scheme(
                 f'L{x-11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
             )
 
-    def cleanout_callout(x: float, y: float, dn_mm: Optional[int]):
-        """Leader with the cleanout name above and its DN below the shelf."""
-        side = -1 if x <= (building_x1 + building_x2) / 2 else 1
-        anchor_x = x + side * 13
-        knee_x = x + side * 34
-        shelf_y = y - 34
-        shelf_outer_x = knee_x + side * 78
+    def two_line_callout(
+        anchor_x: float,
+        anchor_y: float,
+        top_label: str,
+        bottom_label: str,
+        *,
+        side: int,
+        shelf_y: float,
+        shelf_width: float = 78.0,
+    ):
+        """Leader whose name is above and size is below the shelf."""
+        knee_x = anchor_x + side * 28
+        shelf_outer_x = knee_x + side * shelf_width
         shelf_x1, shelf_x2 = sorted((knee_x, shelf_outer_x))
         label_x = (shelf_x1 + shelf_x2) / 2
-        line(anchor_x, y, knee_x, shelf_y, 1.0)
+        line(anchor_x, anchor_y, knee_x, shelf_y, 1.0)
         line(shelf_x1, shelf_y, shelf_x2, shelf_y, 1.0)
-        text(label_x, shelf_y - 5, "Прочистка", 7.4, "middle", "bold")
-        text(label_x, shelf_y + 12, f"DN{dn_mm if dn_mm is not None else '—'}",
-             7.2, "middle")
+        text(label_x, shelf_y - 5, top_label, 7.4, "middle", "bold")
+        text(label_x, shelf_y + 12, bottom_label, 7.2, "middle")
+
+    def place_cleanout(
+        row: SewerElementSpec,
+        attachment_x: float,
+        attachment_y: float,
+        *,
+        direction: str,
+        pipe_width: float,
+    ):
+        """Attach the cap-ended branch to a pipe without coordinate drift."""
+        scale = pipe_width / 2.2
+        reach = 24.0 * scale
+        side = -1 if attachment_x <= (building_x1 + building_x2) / 2 else 1
+        if direction == "up":
+            center_x, center_y, rotation = attachment_x, attachment_y - reach, 90.0
+            cap_x, cap_y = attachment_x, attachment_y - 2 * reach
+        elif direction == "left":
+            center_x, center_y, rotation = attachment_x - reach, attachment_y, 0.0
+            cap_x, cap_y = attachment_x - 2 * reach, attachment_y
+        else:
+            center_x, center_y, rotation = attachment_x + reach, attachment_y, 180.0
+            cap_x, cap_y = attachment_x + 2 * reach, attachment_y
+        G.append(
+            f'<g data-element-id="{escape(row.element_id)}" '
+            f'data-cleanout-pipe-width="{pipe_width:g}">'
+            f'{render_ugo("cleanout", center_x, center_y, scale=scale, rotation=rotation)}'
+            f'<g data-cleanout-callout="{escape(row.element_id)}">'
+        )
+        two_line_callout(
+            cap_x,
+            cap_y,
+            "Прочистка",
+            f"DN{row.dn_mm if row.dn_mm is not None else '—'}",
+            side=side,
+            shelf_y=cap_y - 28,
+        )
+        G.append('</g></g>')
 
     def pipe_mark(pipe: SewerPipeSpec) -> str:
         value = (
@@ -507,43 +549,88 @@ def build_wastewater_scheme(
             for node in terminal_nodes:
                 text(node_x[node], y + 38, f"к {node}", 7.2, "middle", "bold")
 
-    # Прочистки — на подтверждённых участках/стояках.
+    # Прочистки — на подтверждённых участках/стояках. Знак строится от точки
+    # присоединения, поэтому его трубная часть действительно доходит до узла.
     for row in elements if full_scope else []:
         if row.kind != "cleanout":
             continue
-        sx = sy = None
-        pipe = None
+        main_pipe = None
         if row.connects_to and row.connects_to in node_x:
-            sx = node_x[row.connects_to]
-            pipe = next(
+            main_pipe = next(
                 (p for p in topology.mains if p.section_id == row.section_id),
                 None,
             )
-            sy = main_y[pipe.system] if pipe is not None else None
-        else:
-            pipe = next((p for p in topology.mains if p.section_id == row.section_id), None)
+            if main_pipe is not None:
+                place_cleanout(
+                    row,
+                    node_x[row.connects_to],
+                    main_y[main_pipe.system],
+                    direction="up",
+                    pipe_width=2.8,
+                )
+                continue
+        main_pipe = next(
+            (p for p in topology.mains if p.section_id == row.section_id),
+            None,
+        )
         if (
-            not row.connects_to
-            and pipe is not None
-            and pipe.from_node in node_x
-            and pipe.to_node in node_x
+            main_pipe is not None
+            and main_pipe.from_node in node_x
+            and main_pipe.to_node in node_x
         ):
-            sx = (node_x[pipe.from_node] + node_x[pipe.to_node]) / 2
-            sy = main_y[pipe.system]
-        elif not row.connects_to:
-            riser = topology.risers.get(row.section_id)
-            sx = riser_x.get(row.section_id)
-            sy = main_y.get(riser.system, 1490.0) - 34 if riser else None
-        if sx is not None and sy is not None:
-            G.append(
-                f'<g data-element-id="{escape(row.element_id)}">'
-                f'{render_ugo("cleanout", sx, sy, scale=0.60)}'
-                f'<g data-cleanout-callout="{escape(row.element_id)}">'
+            place_cleanout(
+                row,
+                (node_x[main_pipe.from_node] + node_x[main_pipe.to_node]) / 2,
+                main_y[main_pipe.system],
+                direction="up",
+                pipe_width=2.8,
             )
-            cleanout_callout(sx, sy, row.dn_mm)
-            G.append(
-                '</g></g>'
+            continue
+        riser = topology.risers.get(row.section_id)
+        sx = riser_x.get(row.section_id)
+        if riser is not None and sx is not None:
+            place_cleanout(
+                row,
+                sx,
+                main_y.get(riser.system, 1490.0) - 42,
+                direction=(
+                    "left"
+                    if sx <= (building_x1 + building_x2) / 2
+                    else "right"
+                ),
+                pipe_width=2.6,
             )
+
+    # Два отвода по 45° у нижнего поворота уже образуют геометрию трубопровода;
+    # адресная выноска связывает её с подтверждённой строкой реестра.
+    for row in elements if full_scope else []:
+        if row.kind != "elbow":
+            continue
+        sx = riser_x.get(row.section_id)
+        sy = main_y.get(row.system)
+        if sx is None or sy is None:
+            continue
+        side = -1 if sx <= (building_x1 + building_x2) / 2 else 1
+        angle = row.type_mark.strip() or "45°"
+        count_label = (
+            f"{row.quantity} отвода {angle}"
+            if row.quantity == 2
+            else f"Отвод {angle}"
+        )
+        G.append(
+            f'<g data-element-id="{escape(row.element_id)}" '
+            f'data-fitting-callout="elbow">'
+        )
+        two_line_callout(
+            sx + lower_bend_dx / 2,
+            sy - lower_bend_dx / 2,
+            count_label,
+            f"DN{row.dn_mm if row.dn_mm is not None else '—'}",
+            side=side,
+            shelf_y=sy + 32,
+            shelf_width=92,
+        )
+        G.append('</g>')
 
     # Графический разрыв повторяющихся этажей выполняется после трубопроводов.
     if rupture_y is not None:
