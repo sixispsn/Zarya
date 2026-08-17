@@ -57,10 +57,12 @@ def test_normative_sewer_symbols_keep_table_and_position_traceability():
 def test_recommended_and_project_symbols_are_not_presented_as_normative():
     assert get_ugo_definition("cleanout").status == "recommended"
     assert get_ugo_definition("fire_collar").status == "recommended"
+    assert get_ugo_definition("roof_funnel_heated").status == "recommended"
+    assert "не УГО ГОСТ 21.205-2016" in get_ugo_definition("cleanout").basis
+    assert "не УГО ГОСТ 21.205-2016" in get_ugo_definition("fire_collar").basis
+    assert "не отдельное УГО ГОСТ 21.205-2016" in get_ugo_definition("roof_funnel_heated").basis
     assert get_ugo_definition("outlet").status == "project"
     assert not get_ugo_definition("junction").is_normative
-    with pytest.raises(KeyError, match="неизвестный вид УГО"):
-        get_ugo_definition("roof_funnel_heated")
 
 
 def test_legend_contains_only_used_kinds_plus_flow_direction():
@@ -110,10 +112,18 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     assert 'd="M-21,-10 H21 L16,10 H-16 Z"' in floor_drain
 
     roof_funnel = render_ugo("roof_funnel", 0, 0)
-    assert 'M-24,-3 H-11.5 M-24,3 H-11.5' in roof_funnel
-    assert 'M11.5,-3 H24 M11.5,3 H24' in roof_funnel
-    assert 'cx="0" cy="0" r="12"' in roof_funnel
-    assert 'd="M0,12 V22"' in roof_funnel
+    assert "matrix(0.008192524322 0 0 -0.008192524322" in roof_funnel
+    assert "M6400.38672,6147.68994" in roof_funnel
+    assert "C6245.09668,6985.32129 5514.4043,7593 4662.5,7593" in roof_funnel
+    assert "M1733,6147 L2924,6147 M6400,6147 L7592,6147" in roof_funnel
+    assert "M4662,4057 L4662,3045" in roof_funnel
+
+    heated = render_ugo("roof_funnel_heated", 0, 0)
+    assert "matrix(0.015187470337 0 0 -0.015187470337" in heated
+    assert "M5833.61035,5902.11816" in heated
+    assert "M7213,8174 L6334,7607" in heated
+    assert "M2999,8174 L3878,7607" in heated
+    assert "M5106,5028 L5106,4605" in heated
 
     pump = render_ugo("pump", 0, 0)
     assert 'd="M0,-12 L-5,-5 H5 Z"' in pump
@@ -129,8 +139,7 @@ def test_scheme_legend_is_driven_by_demo_registry():
     assert 'data-ugo="flow_direction"' in svg
     assert 'data-ugo="system_k1"' in svg
     assert 'data-ugo="system_k2"' in svg
-    assert 'data-ugo="roof_funnel"' in svg
-    assert 'data-ugo="roof_funnel_heated"' not in svg
+    assert 'data-ugo="roof_funnel_heated"' in svg
     assert 'data-ugo="pump"' not in svg
     assert "нормативная трассировка - лист 2" in svg
 

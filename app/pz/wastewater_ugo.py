@@ -56,14 +56,15 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("toilet", "унитаз", "ГОСТ 21.205-2016, табл. 3, поз. 11", "normative", 50),
     UGOSymbolDefinition("floor_drain", "трап", "ГОСТ 21.205-2016, табл. 3, поз. 16", "normative", 60),
     UGOSymbolDefinition("roof_funnel", "воронка внутреннего водостока", "ГОСТ 21.205-2016, табл. 3, поз. 18", "normative", 70),
+    UGOSymbolDefinition("roof_funnel_heated", "воронка внутреннего водостока с электрообогревом", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не отдельное УГО ГОСТ 21.205-2016)", "recommended", 71),
     UGOSymbolDefinition("trap", "сифон (гидрозатвор)", "ГОСТ 21.205-2016, табл. 4, поз. 4", "normative", 80),
     UGOSymbolDefinition("revision", "ревизия", "ГОСТ 21.205-2016, табл. 4, поз. 11", "normative", 90),
     UGOSymbolDefinition("pump", "насос (общее обозначение)", "ГОСТ 21.205-2016, табл. 2, поз. 3а", "normative", 100),
     UGOSymbolDefinition("check_valve", "клапан обратный", "ГОСТ 21.205-2016, табл. 6, поз. 5а", "normative", 110),
     UGOSymbolDefinition("ball_valve", "кран шаровой", "ГОСТ 21.205-2016, табл. 6, поз. 16", "normative", 120),
     UGOSymbolDefinition("flow_direction", "направление потока жидкости", "ГОСТ 21.205-2016, табл. 5, поз. 1", "normative", 130),
-    UGOSymbolDefinition("cleanout", "прочистка", "ГОСТ Р 21.620-2023, прил. В (рекомендуемый пример)", "recommended", 200),
-    UGOSymbolDefinition("fire_collar", "противопожарная муфта", "ГОСТ Р 21.620-2023, прил. В (рекомендуемый пример)", "recommended", 210),
+    UGOSymbolDefinition("cleanout", "прочистка", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не УГО ГОСТ 21.205-2016)", "recommended", 200),
+    UGOSymbolDefinition("fire_collar", "противопожарная муфта", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не УГО ГОСТ 21.205-2016)", "recommended", 210),
     UGOSymbolDefinition("sump", "приямок / приёмный резервуар", "ГОСТ Р 21.620-2023, п. 5.2.2.4; раскрывается в легенде", "project", 300),
     UGOSymbolDefinition("junction", "узел соединения", "Проектное обозначение; раскрывается в легенде", "project", 310),
     UGOSymbolDefinition("outlet", "выпуск", "ГОСТ Р 21.620-2023, п. 5.2.2.4; раскрывается в легенде", "project", 320),
@@ -81,6 +82,7 @@ KIND_LABELS: Dict[str, str] = {
     for definition in _DEFINITIONS
     if definition.key not in {
         "flow_direction", "system_k1", "system_k2", "system_k3",
+        "roof_funnel_heated",
     }
 }
 
@@ -113,6 +115,14 @@ def project_legend_definitions(project: Project) -> List[UGOSymbolDefinition]:
     # Геометрические узлы и выпуск раскрываются надписями непосредственно на
     # схеме и не публикуются как будто это нормативные УГО.
     keys -= {"outlet", "junction", "tee", "elbow", "transition", "other"}
+    heated = any(
+        row.kind == "roof_funnel"
+        and "электрообогрев" in (row.name or "").lower()
+        for row in elements
+    )
+    if heated:
+        keys.discard("roof_funnel")
+        keys.add("roof_funnel_heated")
     systems = {
         row.system.lower()
         for row in list(project.sewage.pipes or []) + elements
@@ -196,13 +206,47 @@ def _shape(kind: str) -> str:
             f'stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "roof_funnel":
+        # Исходный CAD-вектор извлечён из предоставленного файла
+        # «воронка.pdf». Координаты m/l/c сохранены буквально; матрица
+        # выполняет только перенос, инверсию PDF-оси Y и масштабирование.
         return (
-            f'<path d="M-24,-3 H-11.5 M-24,3 H-11.5 '
-            f'M11.5,-3 H24 M11.5,3 H24" fill="none" stroke="{s}" '
-            f'stroke-width="{sw}"/>'
-            f'<circle cx="0" cy="0" r="12" fill="white" stroke="{s}" '
-            f'stroke-width="{sw}"/><path d="M0,12 V22" stroke="{s}" '
-            f'stroke-width="{sw}"/>'
+            '<g transform="matrix(0.008192524322 0 0 -0.008192524322 '
+            '-38.197644649258 47.725550435228)">'
+            f'<path d="M6400.38672,6147.68994 '
+            f'C6245.09668,6985.32129 5514.4043,7593 4662.5,7593 '
+            f'C3810.59546,7593 3079.90356,6985.32129 2924.61353,6147.68994 '
+            f'M2924.61353,5503.31006 '
+            f'C3079.90356,4665.67871 3810.59546,4058 4662.5,4058 '
+            f'C5514.4043,4058 6245.09668,4665.67871 6400.38672,5503.31006 '
+            f'M1733,6147 L2924,6147 M6400,6147 L7592,6147 '
+            f'M1733,5503 L2924,5503 M6400,5503 L7592,5503 '
+            f'M4662,4057 L4662,3045" fill="none" stroke="{s}" '
+            f'stroke-width="268.5375" stroke-linecap="butt" '
+            f'stroke-linejoin="miter"/>'
+            '</g>'
+        )
+    if kind == "roof_funnel_heated":
+        # Исходный CAD-вектор извлечён из предоставленного файла
+        # «воронка с подогревом.pdf» без ручной аппроксимации контуров.
+        return (
+            '<g transform="matrix(0.015187470337 0 0 -0.015187470337 '
+            '-77.547223540579 87.593735168486)">'
+            f'<path d="M5833.61035,5902.11816 '
+            f'C5768.63867,6252.09863 5462.92627,6506 5106.5,6506 '
+            f'C4750.07373,6506 4444.36133,6252.09863 4379.38965,5902.11816 '
+            f'M4379.38965,5632.88184 '
+            f'C4444.36133,5282.90137 4750.07373,5029 5106.5,5029 '
+            f'C5462.92627,5029 5768.63867,5282.90137 5833.61035,5632.88184 '
+            f'M3881,5902 L4379,5902 M5832,5902 L6330,5902 '
+            f'M3881,5633 L4379,5633 M5832,5633 L6330,5633 '
+            f'M5106,5028 L5106,4605 '
+            f'M7213,8174 L6334,7607 M6717,7514 L5606,6798 L5980,7157 '
+            f'M5606,6798 L6088,6989 M6334,7607 L6717,7514 '
+            f'M2999,8174 L3878,7607 M3494,7514 L4605,6798 L4232,7157 '
+            f'M4605,6798 L4124,6989 M3878,7607 L3494,7514" '
+            f'fill="none" stroke="{s}" stroke-width="144.85625" '
+            f'stroke-linecap="butt" stroke-linejoin="miter"/>'
+            '</g>'
         )
     if kind == "trap":
         return (
