@@ -116,6 +116,21 @@ def build_wastewater_scheme(
                 f'L{x-11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
             )
 
+    def cleanout_callout(x: float, y: float, dn_mm: Optional[int]):
+        """Leader with the cleanout name above and its DN below the shelf."""
+        side = -1 if x <= (building_x1 + building_x2) / 2 else 1
+        anchor_x = x + side * 13
+        knee_x = x + side * 34
+        shelf_y = y - 34
+        shelf_outer_x = knee_x + side * 78
+        shelf_x1, shelf_x2 = sorted((knee_x, shelf_outer_x))
+        label_x = (shelf_x1 + shelf_x2) / 2
+        line(anchor_x, y, knee_x, shelf_y, 1.0)
+        line(shelf_x1, shelf_y, shelf_x2, shelf_y, 1.0)
+        text(label_x, shelf_y - 5, "Прочистка", 7.4, "middle", "bold")
+        text(label_x, shelf_y + 12, f"DN{dn_mm if dn_mm is not None else '—'}",
+             7.2, "middle")
+
     def pipe_mark(pipe: SewerPipeSpec) -> str:
         value = (
             f"{pipe.section_id} Ø{pipe.outer_diameter_mm:g}×"
@@ -522,9 +537,13 @@ def build_wastewater_scheme(
         if sx is not None and sy is not None:
             G.append(
                 f'<g data-element-id="{escape(row.element_id)}">'
-                f'{render_ugo("cleanout", sx, sy, scale=0.60)}</g>'
+                f'{render_ugo("cleanout", sx, sy, scale=0.60)}'
+                f'<g data-cleanout-callout="{escape(row.element_id)}">'
             )
-            text(sx, sy + 27, row.element_id, 6.8, "middle")
+            cleanout_callout(sx, sy, row.dn_mm)
+            G.append(
+                '</g></g>'
+            )
 
     # Графический разрыв повторяющихся этажей выполняется после трубопроводов.
     if rupture_y is not None:
