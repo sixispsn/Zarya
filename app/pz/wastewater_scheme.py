@@ -379,6 +379,31 @@ def build_wastewater_scheme(
     main_connection_x = {
         riser_id: x + lower_bend_dx for riser_id, x in riser_x.items()
     }
+
+    def draw_lower_bend_boundaries(
+        owner_id: str,
+        riser_axis: float,
+        main_axis_y: float,
+        pipe_width: float = 2.6,
+    ):
+        """Three fitting limits for a vertical-double-45-horizontal bend."""
+        bend_start_y = main_axis_y - lower_bend_dx
+        bend_mid_x = riser_axis + lower_bend_dx / 2
+        bend_mid_y = main_axis_y - lower_bend_dx / 2
+        bend_end_x = riser_axis + lower_bend_dx
+        boundary_half = 8.0
+        G.append(
+            f'<path data-fitting-boundaries="double-45" '
+            f'data-boundary-owner="{escape(owner_id)}" '
+            f'data-fitting-boundary-count="3" '
+            f'd="M{riser_axis-boundary_half:.1f},{bend_start_y:.1f} '
+            f'L{riser_axis+boundary_half:.1f},{bend_start_y:.1f} '
+            f'M{bend_mid_x-boundary_half:.1f},{bend_mid_y+boundary_half:.1f} '
+            f'L{bend_mid_x+boundary_half:.1f},{bend_mid_y-boundary_half:.1f} '
+            f'M{bend_end_x:.1f},{main_axis_y-boundary_half:.1f} '
+            f'L{bend_end_x:.1f},{main_axis_y+boundary_half:.1f}" '
+            f'fill="none" stroke="{BLACK}" stroke-width="{pipe_width:g}"/>'
+        )
     # Стояки проходят по общим шахтам; нижний поворот привязан к своей магистрали.
     for riser_id, pipe in topology.risers.items():
         x = riser_x.get(riser_id)
@@ -514,6 +539,7 @@ def build_wastewater_scheme(
                     f'L{x:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
                     'stroke-width="2.6"/>'
                 )
+                draw_lower_bend_boundaries(node, riser_axis, y)
         text(min(node_x.get(row.from_node, 1000) for row in rows) - 30,
              y + 5, system, 13, "end", "bold")
         for pipe in rows:
@@ -601,6 +627,15 @@ def build_wastewater_scheme(
                 pipe_width=2.6,
             )
 
+    # Границы фасонных частей относятся к уже показанной геометрии поворота,
+    # а не к наличию отдельной позиции отводов в спецификации. Поэтому они
+    # обязательны у каждого нижнего поворота К1/К2/К3 на полном листе.
+    for riser_id, pipe in topology.risers.items() if full_scope else []:
+        sx = riser_x.get(riser_id)
+        sy = main_y.get(pipe.system)
+        if sx is not None and sy is not None:
+            draw_lower_bend_boundaries(riser_id, sx, sy)
+
     # Два отвода по 45° у нижнего поворота уже образуют геометрию трубопровода;
     # адресная выноска связывает её с подтверждённой строкой реестра.
     for row in elements if full_scope else []:
@@ -617,23 +652,9 @@ def build_wastewater_scheme(
             if row.quantity == 2
             else f"Отвод {angle}"
         )
-        bend_start_y = sy - lower_bend_dx
-        bend_mid_x = sx + lower_bend_dx / 2
-        bend_mid_y = sy - lower_bend_dx / 2
-        bend_end_x = sx + lower_bend_dx
-        boundary_half = 8.0
         G.append(
             f'<g data-element-id="{escape(row.element_id)}" '
-            f'data-fitting-callout="elbow" '
-            f'data-fitting-boundary-count="3">'
-            f'<path data-fitting-boundaries="double-45" '
-            f'd="M{sx-boundary_half:.1f},{bend_start_y:.1f} '
-            f'L{sx+boundary_half:.1f},{bend_start_y:.1f} '
-            f'M{bend_mid_x-boundary_half:.1f},{bend_mid_y+boundary_half:.1f} '
-            f'L{bend_mid_x+boundary_half:.1f},{bend_mid_y-boundary_half:.1f} '
-            f'M{bend_end_x:.1f},{sy-boundary_half:.1f} '
-            f'L{bend_end_x:.1f},{sy+boundary_half:.1f}" '
-            f'fill="none" stroke="{BLACK}" stroke-width="2.6"/>'
+            f'data-fitting-callout="elbow">'
         )
         two_line_callout(
             sx + lower_bend_dx / 2,

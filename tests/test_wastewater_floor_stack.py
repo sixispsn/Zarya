@@ -104,6 +104,9 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     assert "отм. по АР" in svg
     assert "ZARYA-DEMO-001-ИОС3.СК" in svg
     assert "к К1-Ст2" not in svg
+    assert svg.count('data-fitting-boundaries="double-45"') == 2
+    assert 'data-boundary-owner="К1-Ст1"' in svg
+    assert 'data-boundary-owner="К1-Ст2"' in svg
 
 
 def test_floor_stack_pdf_is_a1(tmp_path):
