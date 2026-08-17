@@ -617,9 +617,23 @@ def build_wastewater_scheme(
             if row.quantity == 2
             else f"Отвод {angle}"
         )
+        bend_start_y = sy - lower_bend_dx
+        bend_mid_x = sx + lower_bend_dx / 2
+        bend_mid_y = sy - lower_bend_dx / 2
+        bend_end_x = sx + lower_bend_dx
+        boundary_half = 8.0
         G.append(
             f'<g data-element-id="{escape(row.element_id)}" '
-            f'data-fitting-callout="elbow">'
+            f'data-fitting-callout="elbow" '
+            f'data-fitting-boundary-count="3">'
+            f'<path data-fitting-boundaries="double-45" '
+            f'd="M{sx-boundary_half:.1f},{bend_start_y:.1f} '
+            f'L{sx+boundary_half:.1f},{bend_start_y:.1f} '
+            f'M{bend_mid_x-boundary_half:.1f},{bend_mid_y+boundary_half:.1f} '
+            f'L{bend_mid_x+boundary_half:.1f},{bend_mid_y-boundary_half:.1f} '
+            f'M{bend_end_x:.1f},{sy-boundary_half:.1f} '
+            f'L{bend_end_x:.1f},{sy+boundary_half:.1f}" '
+            f'fill="none" stroke="{BLACK}" stroke-width="2.6"/>'
         )
         two_line_callout(
             sx + lower_bend_dx / 2,
