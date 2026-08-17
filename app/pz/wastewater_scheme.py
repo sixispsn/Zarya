@@ -16,6 +16,10 @@ from app.pz.section_scaffold import build_section_scaffold
 from app.pz.wastewater_registry import audit_wastewater_registry
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
+from app.pz.wastewater_diagnostics import (
+    assess_wastewater_diagnostics,
+    service_limit_m,
+)
 from app.pz.wastewater_ugo import (
     fixture_trap_mode,
     get_ugo_connection_anchor,
@@ -30,6 +34,10 @@ FONT = "osifont"
 BLACK = "#000"
 GRAY = "#555"
 LIGHT = "#999"
+FLOW_BLUE = "#1877d2"
+SEDIMENT_BROWN = "#9a5b2f"
+SERVICE_PURPLE = "#7650b8"
+DIAGNOSTIC_RED = "#c62828"
 
 
 @dataclass
@@ -82,13 +90,21 @@ def build_wastewater_scheme(
     scope: WastewaterSchemeScope = WastewaterSchemeScope.FULL,
     *,
     focus_section_id: Optional[str] = None,
+    diagnostics: bool = False,
 ) -> WastewaterSchemeResult:
     doc = project.document
     elements = list(project.sewage.elements or [])
     topology = build_wastewater_topology(project)
     audit = audit_wastewater_registry(project)
     sp30_audit = audit_wastewater_sp30(project)
+    diagnostic = (
+        project.sewage.hydraulic_assessment
+        or assess_wastewater_diagnostics(project)
+    )
     warnings = list(dict.fromkeys(audit.errors + audit.warnings))
+    warnings.extend(diagnostic.errors)
+    warnings.extend(diagnostic.warnings)
+    warnings = list(dict.fromkeys(warnings))
     full_scope = scope == WastewaterSchemeScope.FULL
     G: List[str] = []
 
@@ -118,21 +134,21 @@ def build_wastewater_scheme(
             f'fill="{color}"{transform}>{escape(str(value))}</text>'
         )
 
-    def arrow(x, y, direction="right", scale=1.0):
+    def arrow(x, y, direction="right", scale=1.0, color=BLACK):
         if direction == "left":
             G.append(
                 f'<path d="M{x+11*scale},{y-7*scale} L{x},{y} '
-                f'L{x+11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
+                f'L{x+11*scale},{y+7*scale} Z" fill="{color}"/>'
             )
         elif direction == "down":
             G.append(
                 f'<path d="M{x-7*scale},{y-11*scale} L{x},{y} '
-                f'L{x+7*scale},{y-11*scale} Z" fill="{BLACK}"/>'
+                f'L{x+7*scale},{y-11*scale} Z" fill="{color}"/>'
             )
         else:
             G.append(
                 f'<path d="M{x-11*scale},{y-7*scale} L{x},{y} '
-                f'L{x-11*scale},{y+7*scale} Z" fill="{BLACK}"/>'
+                f'L{x-11*scale},{y+7*scale} Z" fill="{color}"/>'
             )
 
     def two_line_callout(
@@ -162,6 +178,7 @@ def build_wastewater_scheme(
         *,
         direction: str,
         pipe_width: float,
+        show_callout: bool = True,
     ):
         """Attach the cap-ended branch to a pipe without coordinate drift."""
         scale = pipe_width / 2.2
@@ -170,6 +187,22 @@ def build_wastewater_scheme(
         if direction == "up":
             center_x, center_y, rotation = attachment_x, attachment_y - reach, 90.0
             cap_x, cap_y = attachment_x, attachment_y - 2 * reach
+        elif direction == "up_left":
+            diagonal = reach / 2**0.5
+            center_x, center_y, rotation = (
+                attachment_x - diagonal,
+                attachment_y - diagonal,
+                45.0,
+            )
+            cap_x, cap_y = attachment_x - 2 * diagonal, attachment_y - 2 * diagonal
+        elif direction == "up_right":
+            diagonal = reach / 2**0.5
+            center_x, center_y, rotation = (
+                attachment_x + diagonal,
+                attachment_y - diagonal,
+                135.0,
+            )
+            cap_x, cap_y = attachment_x + 2 * diagonal, attachment_y - 2 * diagonal
         elif direction == "left":
             center_x, center_y, rotation = attachment_x - reach, attachment_y, 0.0
             cap_x, cap_y = attachment_x - 2 * reach, attachment_y
@@ -182,19 +215,24 @@ def build_wastewater_scheme(
             f'{render_ugo("cleanout", center_x, center_y, scale=scale, rotation=rotation)}'
             f'<g data-cleanout-callout="{escape(row.element_id)}">'
         )
-        two_line_callout(
-            cap_x,
-            cap_y,
-            "Прочистка",
-            f"DN{row.dn_mm if row.dn_mm is not None else '—'}",
-            side=side,
-            shelf_y=cap_y - 28,
-        )
+        if show_callout:
+            two_line_callout(
+                cap_x,
+                cap_y,
+                "Прочистка",
+                f"DN{row.dn_mm if row.dn_mm is not None else '—'}",
+                side=side,
+                shelf_y=cap_y - 28,
+            )
         G.append('</g></g>')
 
     def pipe_mark(pipe: SewerPipeSpec) -> str:
+        nominal = (
+            f"DN{pipe.nominal_diameter_mm}; "
+            if pipe.nominal_diameter_mm is not None else ""
+        )
         value = (
-            f"{pipe.section_id} Ø{pipe.outer_diameter_mm:g}×"
+            f"{pipe.section_id} {nominal}Ø{pipe.outer_diameter_mm:g}×"
             f"{pipe.wall_thickness_mm:g}"
         )
         if pipe.slope_per_mille is not None:
@@ -203,7 +241,13 @@ def build_wastewater_scheme(
 
     def branch_mark(pipe: SewerPipeSpec) -> str:
         """Compact mark for a branch already identified in the room heading."""
-        value = f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+        nominal = (
+            f"DN{pipe.nominal_diameter_mm}; "
+            if pipe.nominal_diameter_mm is not None else ""
+        )
+        value = (
+            f"{nominal}Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+        )
         if pipe.slope_per_mille is not None:
             value += f"; i={pipe.slope_per_mille:g}‰"
         return value.replace(".", ",")
@@ -468,11 +512,38 @@ def build_wastewater_scheme(
             f'<g data-gravity-branch="{escape(branch.pipe.section_id)}" '
             f'data-starts-at="{escape(branch.source_element_id)}" '
             f'data-discharges-to="{escape(branch.riser_id)}">'
-            f'<path data-gravity-trunk="true" '
-            f'd="M{trunk_start_x:.1f},{branch_y:.1f} '
-            f'L{riser_axis:.1f},{trunk_end_y:.1f}" fill="none" '
-            f'stroke="{BLACK}" stroke-width="2.2"/>'
         )
+        # Диаметр растёт по мере присоединения приборов. До унитаза ветвь
+        # может быть DN50, но участок после присоединения унитаза до стояка
+        # всегда получает минимум DN100. Один общий штрих DN100 от умывальника
+        # до стояка скрывал бы реальную монтажную логику.
+        running_dn = 0
+        branch_dns: List[int] = []
+        for index, placement in enumerate(placements):
+            running_dn = max(running_dn, placement.element.dn_mm or 0)
+            segment_start_x = placement.join_x
+            segment_end_x = (
+                placements[index + 1].join_x
+                if index + 1 < len(placements) else riser_axis
+            )
+            segment_start_y = trunk_y_at(segment_start_x)
+            segment_end_y = trunk_y_at(segment_end_x)
+            branch_dns.append(running_dn)
+            G.append(
+                f'<path data-gravity-trunk="true" '
+                f'data-segment-index="{index}" data-segment-dn="{running_dn}" '
+                f'd="M{segment_start_x:.1f},{segment_start_y:.1f} '
+                f'L{segment_end_x:.1f},{segment_end_y:.1f}" fill="none" '
+                f'stroke="{BLACK}" stroke-width="2.2"/>'
+            )
+            if diagnostics:
+                G.append(
+                    f'<path class="ww-flow" data-flow-branch="{escape(branch.pipe.section_id)}" '
+                    f'd="M{segment_start_x:.1f},{segment_start_y:.1f} '
+                    f'L{segment_end_x:.1f},{segment_end_y:.1f}" fill="none" '
+                    f'stroke="{FLOW_BLUE}" stroke-width="4.2" opacity="0.58" '
+                    'stroke-dasharray="14 8"/>'
+                )
         arrow_x = (placements[-1].join_x + riser_axis) / 2
         arrow(
             arrow_x,
@@ -483,7 +554,13 @@ def build_wastewater_scheme(
         text(
             (placements[-1].join_x + riser_axis) / 2,
             trunk_y_at((placements[-1].join_x + riser_axis) / 2) - 9,
-            branch_mark(branch.pipe),
+            (
+                branch_mark(branch.pipe)
+                + (
+                    f"; DN {'→'.join(str(value) for value in dict.fromkeys(branch_dns))}"
+                    if branch_dns else ""
+                )
+            ),
             7.4,
             "middle",
             color=GRAY,
@@ -522,6 +599,14 @@ def build_wastewater_scheme(
                 join_y,
                 2.2,
             )
+            if diagnostics:
+                G.append(
+                    f'<path class="ww-flow" data-flow-fixture="{escape(row.element_id)}" '
+                    f'd="M{placement.connection_x:.1f},{placement.connection_y:.1f} '
+                    f'V{bend_start_y:.1f} L{bend_end_x:.1f},{join_y:.1f}" '
+                    f'fill="none" stroke="{FLOW_BLUE}" stroke-width="4.0" '
+                    'stroke-dasharray="12 7" opacity="0.58"/>'
+                )
             boundary_half = 4.5
             bend_mid_x = (placement.connection_x + bend_end_x) / 2
             bend_mid_y = (bend_start_y + join_y) / 2
@@ -768,30 +853,66 @@ def build_wastewater_scheme(
             for node in terminal_nodes:
                 text(node_x[node], y + 38, f"к {node}", 7.2, "middle", "bold")
 
-    # Прочистки — на подтверждённых участках/стояках. Знак строится от точки
-    # присоединения, поэтому его трубная часть действительно доходит до узла.
+    # Прочистки — на подтверждённых участках/стояках. Для нижнего поворота
+    # заглушённый прямой конец косой фасонной части ориентирован вдоль
+    # выходящей магистрали: трос входит по направлению стока. Линейные
+    # прочистки размещаются по явной цепочке расчётной длины, а не в середине
+    # участка по умолчанию.
+    chainage_callout_sections: set[str] = set()
     for row in elements if full_scope else []:
         if row.kind != "cleanout":
             continue
-        main_pipe = None
-        if row.connects_to and row.connects_to in node_x:
-            main_pipe = next(
-                (p for p in topology.mains if p.section_id == row.section_id),
-                None,
-            )
-            if main_pipe is not None:
-                place_cleanout(
-                    row,
-                    node_x[row.connects_to],
-                    main_y[main_pipe.system],
-                    direction="up",
-                    pipe_width=2.8,
-                )
-                continue
         main_pipe = next(
             (p for p in topology.mains if p.section_id == row.section_id),
             None,
         )
+        if (
+            main_pipe is not None
+            and row.service_chainage_m is not None
+            and main_pipe.calculation_length_m is not None
+            and main_pipe.calculation_length_m > 0
+            and main_pipe.from_node in node_x
+            and main_pipe.to_node in node_x
+        ):
+            ratio = max(
+                0.0,
+                min(1.0, row.service_chainage_m / main_pipe.calculation_length_m),
+            )
+            x1, x2 = node_x[main_pipe.from_node], node_x[main_pipe.to_node]
+            attachment_x = x1 + (x2 - x1) * ratio
+            first_on_section = main_pipe.section_id not in chainage_callout_sections
+            chainage_callout_sections.add(main_pipe.section_id)
+            place_cleanout(
+                row,
+                attachment_x,
+                main_y[main_pipe.system],
+                direction="up_left" if x2 >= x1 else "up_right",
+                pipe_width=2.8,
+                show_callout=first_on_section,
+            )
+            continue
+        if (
+            main_pipe is not None
+            and row.connects_to
+            and row.connects_to in node_x
+        ):
+            x1, x2 = node_x[main_pipe.from_node], node_x[main_pipe.to_node]
+            is_downstream_turn = (
+                row.service_fitting == "wye_45"
+                and row.service_direction in {"downstream", "both"}
+                and row.connects_to == main_pipe.from_node
+            )
+            place_cleanout(
+                row,
+                node_x[row.connects_to],
+                main_y[main_pipe.system],
+                direction=(
+                    ("left" if x2 >= x1 else "right")
+                    if is_downstream_turn else "up"
+                ),
+                pipe_width=2.8,
+            )
+            continue
         if (
             main_pipe is not None
             and main_pipe.from_node in node_x
@@ -857,6 +978,205 @@ def build_wastewater_scheme(
             side=side,
             shelf_y=sy + 32,
             shelf_width=92,
+        )
+        G.append('</g>')
+
+    # Переход диаметра ставится на фактическом выходящем участке после узла
+    # объединения расходов; наружный Ø и номинальный DN не смешиваются.
+    for row in elements if full_scope else []:
+        if row.kind != "transition":
+            continue
+        pipe = next(
+            (item for item in topology.mains if item.section_id == row.section_id),
+            None,
+        )
+        if pipe is None or pipe.from_node not in node_x or pipe.to_node not in node_x:
+            continue
+        x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
+        direction = 1 if x2 >= x1 else -1
+        sx = x1 + direction * min(42.0, abs(x2 - x1) * 0.18)
+        sy = main_y[pipe.system]
+        G.append(
+            f'<g data-element-id="{escape(row.element_id)}" '
+            f'data-transition-section="{escape(pipe.section_id)}">'
+            f'{render_ugo("transition", sx, sy, scale=0.34)}</g>'
+        )
+        two_line_callout(
+            sx,
+            sy,
+            "Переход",
+            row.type_mark or f"DN{row.dn_mm or '—'}",
+            side=direction,
+            shelf_y=sy - 58,
+            shelf_width=82,
+        )
+
+    if diagnostics and full_scope:
+        # Служебный слой не входит в нормативный лист. В браузере штрих потока
+        # движется по направлению стока; в PDF остаётся статическая цветная
+        # проверка. Коричневые маркеры обозначают места вероятных отложений,
+        # фиолетовые линии - путь механического троса.
+        G.append(
+            '<style>'
+            '@keyframes wwFlow{to{stroke-dashoffset:-32}}'
+            '@keyframes wwRisk{50%{opacity:.95}}'
+            '.ww-flow{stroke-dasharray:18 10;animation:wwFlow 1.2s linear infinite}'
+            '.ww-risk{animation:wwRisk 1.4s ease-in-out infinite}'
+            '</style><g data-diagnostic-layer="true">'
+        )
+        for riser_id, pipe in topology.risers.items():
+            sx = riser_x.get(riser_id)
+            sy = main_y.get(pipe.system)
+            if sx is None or sy is None:
+                continue
+            G.append(
+                f'<path class="ww-flow" data-flow-riser="{escape(riser_id)}" '
+                f'd="M{sx:.1f},{roof_y+12:.1f} V{sy-lower_bend_dx:.1f} '
+                f'L{sx+lower_bend_dx:.1f},{sy:.1f}" fill="none" '
+                f'stroke="{FLOW_BLUE}" stroke-width="5.2" opacity="0.62"/>'
+            )
+            arrow(sx, (roof_y + sy) / 2, "down", 0.72, FLOW_BLUE)
+            # Осадок изображается в нижней внешней зоне поворота. Это
+            # качественный индикатор риска, а не фиктивная масса загрязнений.
+            G.append(
+                f'<ellipse class="ww-risk" data-sediment-zone="turn:{escape(riser_id)}" '
+                f'cx="{sx+lower_bend_dx-3:.1f}" cy="{sy+4:.1f}" '
+                f'rx="15" ry="5" fill="{SEDIMENT_BROWN}" opacity="0.62"/>'
+            )
+
+        hydraulic_by_section = {
+            row.section_id: row for row in diagnostic.hydraulics
+        }
+        for pipe in topology.mains:
+            if pipe.from_node not in node_x or pipe.to_node not in node_x:
+                continue
+            x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
+            sy = main_y[pipe.system]
+            G.append(
+                f'<path class="ww-flow" data-flow-section="{escape(pipe.section_id)}" '
+                f'd="M{x1:.1f},{sy:.1f} L{x2:.1f},{sy:.1f}" fill="none" '
+                f'stroke="{FLOW_BLUE}" stroke-width="5.2" opacity="0.62"/>'
+            )
+            arrow(
+                (x1 + x2) / 2,
+                sy,
+                "right" if x2 >= x1 else "left",
+                0.72,
+                FLOW_BLUE,
+            )
+            hydraulic = hydraulic_by_section.get(pipe.section_id)
+            if hydraulic is not None and hydraulic.status != "verified":
+                G.append(
+                    f'<path class="ww-risk" data-sediment-zone="hydraulic:{escape(pipe.section_id)}" '
+                    f'd="M{min(x1,x2):.1f},{sy+5:.1f} H{max(x1,x2):.1f}" '
+                    f'stroke="{SEDIMENT_BROWN}" stroke-width="9" opacity="0.72"/>'
+                )
+
+        # Достижимость линейных участков показывается от фактической заглушки
+        # косого тройника до предельной точки ввода троса. Длина берётся из
+        # таблицы 18.1 для системы и DN, а не из условного масштаба рисунка.
+        for row in elements:
+            if row.kind != "cleanout" or row.service_chainage_m is None:
+                continue
+            pipe = next(
+                (item for item in topology.mains if item.section_id == row.section_id),
+                None,
+            )
+            if (
+                pipe is None
+                or pipe.calculation_length_m is None
+                or pipe.calculation_length_m <= 0
+                or pipe.nominal_diameter_mm is None
+                or pipe.from_node not in node_x
+                or pipe.to_node not in node_x
+            ):
+                continue
+            limit = service_limit_m(
+                pipe.system, pipe.nominal_diameter_mm, "cleanout",
+            )
+            if limit is None:
+                continue
+            length = pipe.calculation_length_m
+            chainage = max(0.0, min(length, row.service_chainage_m))
+            x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
+            sy = main_y[pipe.system]
+            attach_x = x1 + (x2 - x1) * chainage / length
+            along = 1 if x2 >= x1 else -1
+            ranges = []
+            if row.service_direction in {"downstream", "both"}:
+                ranges.append((chainage, min(length, chainage + limit)))
+            if row.service_direction in {"upstream", "both"}:
+                ranges.append((chainage, max(0.0, chainage - limit)))
+            for start, end in ranges:
+                end_x = x1 + (x2 - x1) * end / length
+                cap_x = attach_x - along * 25
+                cap_y = sy - 25
+                G.append(
+                    f'<path data-service-linear="{escape(row.element_id)}" '
+                    f'data-service-range-m="{start:g}:{end:g}" '
+                    f'd="M{cap_x:.1f},{cap_y:.1f} L{attach_x:.1f},{sy:.1f} '
+                    f'L{end_x:.1f},{sy:.1f}" fill="none" '
+                    f'stroke="{SERVICE_PURPLE}" stroke-width="4" '
+                    'stroke-dasharray="8 6" opacity="0.82"/>'
+                )
+
+        turn_by_riser = {row.riser_id: row for row in diagnostic.turn_checks}
+        for riser_id, check in turn_by_riser.items():
+            sx = riser_x.get(riser_id)
+            pipe = topology.risers.get(riser_id)
+            if sx is None or pipe is None:
+                continue
+            sy = main_y.get(pipe.system)
+            if sy is None:
+                continue
+            if check.status != "verified":
+                text(sx + 30, sy - 30, "НЕТ ДОСТУПА", 8, weight="bold", color=DIAGNOSTIC_RED)
+                continue
+            if check.access_kind == "revision":
+                start_y = y_zero - 45
+                G.append(
+                    f'<path data-service-path="{escape(check.access_element_id)}" '
+                    f'd="M{sx:.1f},{start_y:.1f} V{sy-lower_bend_dx:.1f} '
+                    f'L{sx+lower_bend_dx:.1f},{sy:.1f} h68" fill="none" '
+                    f'stroke="{SERVICE_PURPLE}" stroke-width="4" '
+                    'stroke-dasharray="8 6" opacity="0.82"/>'
+                )
+            else:
+                join_x = node_x.get(riser_id, sx + lower_bend_dx)
+                direction = 1
+                outgoing = next(
+                    (
+                        p for p in topology.mains
+                        if p.section_id == check.outgoing_section_id
+                    ),
+                    None,
+                )
+                if outgoing is not None:
+                    direction = 1 if node_x[outgoing.to_node] >= join_x else -1
+                G.append(
+                    f'<path data-service-path="{escape(check.access_element_id)}" '
+                    f'd="M{join_x-direction*48:.1f},{sy:.1f} '
+                    f'H{join_x+direction*72:.1f}" fill="none" '
+                    f'stroke="{SERVICE_PURPLE}" stroke-width="4" '
+                    'stroke-dasharray="8 6" opacity="0.82"/>'
+                )
+
+        # Легенда режима диагностики.
+        dx, dy, dw, dh = 1710.0, 82.0, 720.0, 92.0
+        rect(dx, dy, dw, dh, stroke="#526170", fill="#f7fbff", sw=1.2)
+        text(dx + 12, dy + 20, "ДИАГНОСТИКА ПОТОКА И ОБСЛУЖИВАНИЯ", 9.2, weight="bold", color="#243447")
+        line(dx + 16, dy + 42, dx + 96, dy + 42, 5.2, FLOW_BLUE, "18 10")
+        text(dx + 108, dy + 46, "направление самотечного потока", 7.4, color="#243447")
+        G.append(f'<ellipse cx="{dx+45:.1f}" cy="{dy+65:.1f}" rx="16" ry="5" fill="{SEDIMENT_BROWN}" opacity="0.7"/>')
+        text(dx + 108, dy + 69, "зона риска отложений", 7.4, color="#243447")
+        line(dx + 370, dy + 42, dx + 450, dy + 42, 4, SERVICE_PURPLE, "8 6")
+        text(dx + 462, dy + 46, "маршрут прочистного троса", 7.4, color="#243447")
+        text(
+            dx + 370,
+            dy + 69,
+            "коричневый слой качественный; масса осадка не вычисляется",
+            6.7,
+            color="#526170",
         )
         G.append('</g>')
 
@@ -941,12 +1261,21 @@ def build_wastewater_scheme(
                 if sp30_audit.ready
                 else "СП 30: монтажная топология требует исправления."
             ),
+            (
+                "Шези / DN / путь троса: проверены по явным исходным данным."
+                if diagnostic.ready
+                else "Шези / DN / путь троса: есть блокирующие замечания."
+            ),
         ]
         for index, value in enumerate(info_rows):
             text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)
-        status_color = BLACK if topology.ready else "#a00"
+        scheme_ready = topology.ready and diagnostic.ready
+        status_color = BLACK if scheme_ready else "#a00"
         text(info_x + info_w - 10, info_y + info_h - 9,
-             "САМОТЕЧНЫЙ ГРАФ ПРОШЁЛ ПРОВЕРКУ" if topology.ready else "ТОПОЛОГИЯ НЕПОЛНА",
+             (
+                 "ГРАФ И ОБСЛУЖИВАНИЕ ПРОШЛИ ПРОВЕРКУ"
+                 if scheme_ready else "СХЕМА ИМЕЕТ БЛОКИРУЮЩИЕ ЗАМЕЧАНИЯ"
+             ),
              7.5, "end", "bold", status_color)
         if warnings:
             text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)

@@ -315,6 +315,10 @@ def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
 
 def generate_wastewater_calculation_html(project: Project) -> str:
     """Собрать отдельное приложение К1/К2 из результатов расчётного ядра."""
+    from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+
+    if project.sewage.hydraulic_assessment is None:
+        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
     env = _build_env()
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
@@ -326,6 +330,7 @@ def generate_wastewater_calculation_html(project: Project) -> str:
     )
     body_html = env.get_template("wastewater_calculation_body.html").render(
         sewage=project.sewage,
+        diagnostics=project.sewage.hydraulic_assessment,
         storm=project.storm,
         grease_trap=project.grease_trap,
     )
@@ -355,6 +360,10 @@ def generate_wastewater_calculation_pdf(
 
 def generate_wastewater_pz_html(project: Project) -> str:
     """Самостоятельная текстовая часть подраздела «Система водоотведения»."""
+    from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+
+    if project.sewage.hydraulic_assessment is None:
+        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
     env = _build_env()
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
@@ -462,7 +471,39 @@ def generate_wastewater_scheme_pdf(
     """Сформировать векторный лист А1 схемы К1/К2/К3 стадии П."""
     import cairosvg
 
+    from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+
+    assessment = (
+        project.sewage.hydraulic_assessment
+        or assess_wastewater_diagnostics(project)
+    )
+    # Пустое задание должно по-прежнему формировать лист с незаполненными
+    # местами: пользователь отдельно просил не блокировать комплект только
+    # из-за отсутствующих реквизитов/геометрии. Но если реестр сети уже начат,
+    # выпуск противоречивой схемы запрещается.
+    explicit_network = bool(project.sewage.pipes or project.sewage.elements)
+    if explicit_network and not assessment.ready:
+        raise ValueError(
+            "принципиальная схема заблокирована диагностикой: "
+            + "; ".join(assessment.errors)
+        )
+
     svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(project))
+    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
+    return output_path
+
+
+def generate_wastewater_diagnostic_pdf(
+    project: Project,
+    output_path: str,
+) -> str:
+    """Сформировать ненормативный цветной лист проверки потока и прочистки."""
+    import cairosvg
+
+    svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(
+        project,
+        diagnostics=True,
+    ))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
 
@@ -489,7 +530,11 @@ def generate_wastewater_ugo_pdf(
     return output_path
 
 
-def generate_wastewater_scheme_result(project: Project):
+def generate_wastewater_scheme_result(
+    project: Project,
+    *,
+    diagnostics: bool = False,
+):
     """Собрать схему и вернуть SVG вместе с предупреждениями реестра."""
     from app.pz.wastewater_scheme import build_wastewater_scheme
 
@@ -501,12 +546,22 @@ def generate_wastewater_scheme_result(project: Project):
         sheet_no="1",
         sheet_total="2",
     )
-    return build_wastewater_scheme(replace(project, document=scheme_doc))
+    return build_wastewater_scheme(
+        replace(project, document=scheme_doc),
+        diagnostics=diagnostics,
+    )
 
 
-def generate_wastewater_scheme_svg(project: Project) -> str:
+def generate_wastewater_scheme_svg(
+    project: Project,
+    *,
+    diagnostics: bool = False,
+) -> str:
     """SVG листа А1, построенный по реестру элементов и участков."""
-    return generate_wastewater_scheme_result(project).svg
+    return generate_wastewater_scheme_result(
+        project,
+        diagnostics=diagnostics,
+    ).svg
 
 
 # ── РАСЧЁТ И ПОДБОР НАСОСНЫХ УСТАНОВОК (отдельное приложение) ────────────

@@ -573,6 +573,11 @@ class SewerPipeSpec:
     outer_diameter_mm: float = 0.0
     wall_thickness_mm: float = 0.0
     length_m: float = 0.0
+    calculation_length_m: Optional[float] = None
+    nominal_diameter_mm: Optional[int] = None
+    design_flow_lps: Optional[float] = None
+    manning_n: Optional[float] = None
+    hydraulic_source: str = ""
     slope_per_mille: Optional[float] = None
     fill_ratio: Optional[float] = None
     from_node: str = ""
@@ -614,6 +619,10 @@ class SewerElementSpec:
     include_in_spec: bool = True
     note: str = ""
     layout_column: int = 0
+    service_direction: str = ""
+    service_fitting: str = ""
+    accessible: bool = True
+    service_chainage_m: Optional[float] = None
 
 
 @dataclass
@@ -624,6 +633,7 @@ class SewageDesign:
     elements: List[SewerElementSpec] = field(default_factory=list)
     outlets_count: int = 0
     result: Optional[object] = None
+    hydraulic_assessment: Optional[object] = None
     # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.
     design_assignment_ref: str = ""
     survey_ref: str = ""

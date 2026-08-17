@@ -24,7 +24,7 @@ def _request():
 def test_demo_element_registry_is_valid_and_roundtrips():
     request = _request()
     assert request.validate() == []
-    assert len(request.sewer_elements) == 32
+    assert len(request.sewer_elements) == 38
 
     loaded = load_request(dump_request(request))
     assert loaded.sewer_elements == request.sewer_elements
@@ -32,8 +32,8 @@ def test_demo_element_registry_is_valid_and_roundtrips():
     audit = audit_wastewater_registry(build_project(request))
     assert audit.ready
     assert audit.errors == []
-    assert audit.element_count == 32
-    assert audit.spec_position_count == 32
+    assert audit.element_count == 38
+    assert audit.spec_position_count == 38
 
 
 def test_registry_validation_rejects_duplicate_and_unknown_section():
@@ -76,14 +76,15 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "Принципиальная схема внутренних систем канализации и водоотведения" in result.svg
     assert "К1-Р1-7" in result.svg
     assert "R · эт. 4, 7, 10, 13" in result.svg
-    assert 'data-element-id="К1-Пр1"' in result.svg
-    assert 'data-element-id="К1-Пр2"' in result.svg
-    assert 'data-cleanout-callout="К1-Пр1"' in result.svg
-    assert result.svg.count('data-cleanout-pipe-width="2.8"') == 2
-    assert result.svg.count('data-cleanout-pipe-width="2.6"') == 2
+    assert 'data-element-id="К1-ПрМ1-10"' in result.svg
+    assert 'data-element-id="К1-ПрМ1-50"' in result.svg
+    assert 'data-cleanout-callout="К1-ПрМ1-10"' in result.svg
+    assert result.svg.count('data-cleanout-pipe-width="2.8"') == 8
     assert result.svg.count(">Прочистка</text>") == 4
-    assert result.svg.count(">DN160</text>") == 2
-    assert result.svg.count(">DN110</text>") == 4
+    assert result.svg.count(">DN150</text>") == 1
+    assert result.svg.count(">DN100</text>") == 5
+    assert 'data-element-id="К1-Пер1"' in result.svg
+    assert 'data-element-id="К2-Пер1"' in result.svg
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 2
@@ -104,7 +105,9 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "№ К-01 · К1-Ветв-Кух1" in result.svg
     assert result.svg.count('data-fixture-connection=') == 32
     assert result.svg.count('data-gravity-branch=') == 16
-    assert result.svg.count('data-gravity-trunk="true"') == 16
+    # Ветвь санузла теперь сегментирована: DN50 до присоединения унитаза и
+    # DN100 после него, поэтому один этаж содержит несколько проходных отрезков.
+    assert result.svg.count('data-gravity-trunk="true"') == 32
     assert result.svg.count('data-starts-at="К1-Ум1"') == 4
     assert result.svg.count('data-starts-at="К1-Ум2"') == 4
     assert result.svg.count('data-riser-adjacent="true"') == 8

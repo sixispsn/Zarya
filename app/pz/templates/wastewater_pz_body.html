@@ -77,20 +77,42 @@
 <p class="subhead">4. Трубопроводы, прокладка и пересечения конструкций (пп. 5.1.4.1, 5.1.6.1)</p>
 {% if sewage.pipes %}
 <table class="data calc-table pipe-calc gost-pipes">
-  <thead><tr><th>Система / участок</th><th>Помещение; откуда — куда</th><th>Материал, стандарт</th><th>Øнар×s; Øвн, мм</th><th>L, м</th><th>Уклон, ‰</th><th>h/d</th><th>Отметки начала / конца, м</th></tr></thead>
+  <thead><tr><th>Система / участок</th><th>Помещение; откуда — куда</th><th>Материал, стандарт</th><th>DN; Øнар×s; Øвн, мм</th><th>L спец. / расч., м</th><th>Уклон, ‰</th><th>h/d; V, м/с</th><th>Отметки начала / конца, м</th></tr></thead>
   <tbody>{% for p in sewage.pipes %}
+    {% set h = sewage.hydraulic_assessment.hydraulics|selectattr("section_id", "equalto", p.section_id)|first if sewage.hydraulic_assessment else none %}
     <tr>
       <td>{{ p.system }} / {{ p.section_id }}<br>{{ p.purpose }}</td>
       <td>{{ p.room or "" }}{% if p.from_node or p.to_node %}<br>{{ p.from_node }} → {{ p.to_node }}{% endif %}</td>
       <td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}{% if p.insulated %}<br>теплоизолирован{% endif %}</td>
-      <td>{{ p.outer_diameter_mm|compact(1) }}×{{ p.wall_thickness_mm|compact(1) }}; {{ p.inner_diameter_mm|compact(1) }}</td>
-      <td>{{ p.length_m|num(2) }}</td>
+      <td>{{ p.nominal_diameter_mm or "—" }}; {{ p.outer_diameter_mm|compact(1) }}×{{ p.wall_thickness_mm|compact(1) }}; {{ p.inner_diameter_mm|compact(1) }}</td>
+      <td>{{ p.length_m|num(2) }} / {{ p.calculation_length_m|num(2) }}</td>
       <td>{% if p.slope_per_mille is not none %}{{ p.slope_per_mille|num(1) }}{% endif %}</td>
-      <td>{% if p.fill_ratio is not none %}{{ p.fill_ratio|num(2) }}{% endif %}</td>
+      <td>{% if h %}{{ h.fill_ratio|num(3) }}; {{ h.velocity_mps|num(3) }}{% elif p.fill_ratio is not none %}{{ p.fill_ratio|num(2) }}{% endif %}</td>
       <td>{% if p.elevation_start_m is not none %}{{ p.elevation_start_m|num(2) }} / {{ p.elevation_end_m|num(2) }}{% endif %}</td>
     </tr>
   {% endfor %}</tbody>
 </table>
+{% if sewage.hydraulic_assessment %}
+<p class="subitem"><b>Диагностика самотёка:</b>
+  {% if sewage.hydraulic_assessment.ready %}направления потока, диаметры приборов, нижние повороты и доступ для прочистки подтверждены.{% else %}имеются блокирующие замечания: {{ sewage.hydraulic_assessment.errors|join("; ") }}.{% endif %}
+</p>
+{% if sewage.hydraulic_assessment.network_diameter_checks %}
+<table class="data calc-table">
+  <thead><tr><th>Узел сети</th><th>Участок после узла</th><th>DN до / после</th><th>Переход</th><th>Проверка</th></tr></thead>
+  <tbody>{% for d in sewage.hydraulic_assessment.network_diameter_checks %}
+    <tr><td>{{ d.node_id }}</td><td>{{ d.outgoing_section_id }}</td><td>{{ d.incoming_dn_mm or "—" }} / {{ d.outgoing_dn_mm or "—" }}</td><td>{{ d.transition_element_id or "не требуется" }}</td><td>{{ "соответствует" if d.status == "verified" else "не соответствует" if d.status == "fail" else "требует данных" }}<br>{{ d.note }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% if sewage.hydraulic_assessment.ventilation_checks %}
+<table class="data calc-table">
+  <thead><tr><th>Выпуск К1</th><th>Стояки</th><th>Сообщение с атмосферой</th><th>Проверка</th></tr></thead>
+  <tbody>{% for v in sewage.hydraulic_assessment.ventilation_checks %}
+    <tr><td>{{ v.outlet_node }}</td><td>{{ v.riser_ids|join(", ") }}</td><td>{{ v.ventilated_riser_ids|join(", ") if v.ventilated_riser_ids else "не подтверждено" }}</td><td>{{ "соответствует" if v.status == "verified" else "не соответствует" if v.status == "fail" else "требует отдельной проверки" }}<br>{{ v.note }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% endif %}
 {% else %}
 <p class="stage-note">Трубопроводы не заданы. Поля материала, стандарта,
 наружного диаметра, толщины стенки, длины, уклона, наполнения и отметок оставлены
@@ -100,6 +122,9 @@
   <tr><th>Способ прокладки</th><td>{{ sewage.laying_method or "" }}</td></tr>
   <tr><th>Пересечение противопожарных преград</th><td>{{ sewage.fire_barrier_note or "" }}</td></tr>
   <tr><th>Пересечение деформационных швов</th><td>{{ sewage.deformation_joint_note or "" }}</td></tr>
+  <tr><th>Крепления и температурные перемещения</th><td>Тип неподвижных и подвижных креплений, их шаг и компенсация температурных удлинений принимаются по ТУ выбранной трубной системы и раскладке стадии Р; универсальный шаг 1–1,5 м без привязки к материалу и DN не подставляется.</td></tr>
+  <tr><th>Проходки через стены и фундаменты</th><td>Гильзы, зазоры, эластичная заделка и защита выпуска назначаются по толщине конструкции и узлам КР после координатной привязки; пересечение наружной стены подвала проверяется отдельным узлом.</td></tr>
+  <tr><th>Защита от замерзания</th><td>{% if building.unheated_zones %}Есть неотапливаемые зоны: требуются теплоизоляция и/или электрообогрев по температурному расчёту и трассе.{% else %}Неотапливаемые внутренние зоны исходными данными не заявлены; глубина наружной сети проверяется только при включении наружных сетей в границы проекта.{% endif %}</td></tr>
 </table>
 {% if sewage.external_network_in_scope %}<p class="subitem"><b>Наружные сети:</b> {{ sewage.external_network_design_note }}</p>{% endif %}
 

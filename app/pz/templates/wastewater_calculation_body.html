@@ -25,7 +25,7 @@
 <p class="subhead">2. Проверка характерных стояков К1</p>
 {% if sewage.result and sewage.result.risers %}
 <table class="data calc-table riser-calc">
-  <thead><tr><th>Стояк</th><th>q, л/с</th><th>Материал / схема</th><th>DN стояка / отвода</th><th>Угол</th><th>Допустимо, л/с</th><th>Результат</th></tr></thead>
+  <thead><tr><th>Стояк</th><th>q, л/с</th><th>Материал / схема</th><th>Øнар стояка / отвода, мм</th><th>Угол</th><th>Допустимо, л/с</th><th>Результат</th></tr></thead>
   <tbody>
   {% for r in sewage.result.risers %}
     <tr>
@@ -45,24 +45,89 @@
 <p class="stage-note">Расходы характерных стояков не заданы. Общий расход К1 между стояками автоматически не распределяется; проверка приложения К переносится на стадию Р после разработки аксонометрии.</p>
 {% endif %}
 
-<p class="subhead">3. Граница гидравлического расчёта К1</p>
-<p class="subitem no-indent">
-  На стадии П подтверждены общий расход системы и заполненные табличные проверки
-  стояков. Диаметры горизонтальных участков, наполнение, скорость, уклон,
-  местные сопротивления и диктующий выпуск рассчитываются после назначения
-  приборов и длин по точной аксонометрии. Эти значения программой не имитируются.
+<p class="subhead">3. Гидравлика горизонтальных участков К1 по уравнению Шези</p>
+<p class="formula">
+  V = C√(R·i); &nbsp; Q = A·V; &nbsp; C = R<sup>1/6</sup>/n.
+  Проверка самоочищения: V√(h/d) ≥ K.
 </p>
-
-{% if sewage.pipes %}
+<p class="subitem no-indent">
+  Расходы магистралей получены суммированием только явно заданных нагрузок
+  стояков по направленному графу. Для ветвей без точной аксонометрии расход,
+  расчётная длина и коэффициент шероховатости не назначаются автоматически.
+</p>
+{% if diagnostics and diagnostics.hydraulics %}
 <table class="data calc-table pipe-calc">
-  <thead><tr><th>Система / участок</th><th>Назначение</th><th>Материал, стандарт</th><th>Øнар × стенка, мм</th><th>Øвн, мм</th><th>L, м</th></tr></thead>
-  <tbody>{% for p in sewage.pipes %}
-    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }}</td></tr>
+  <thead><tr><th>Участок</th><th>q, л/с</th><th>Øвн, мм</th><th>i, ‰</th><th>n / C</th><th>h/d</th><th>V, м/с</th><th>V√(h/d) / K</th><th>Результат</th></tr></thead>
+  <tbody>{% for h in diagnostics.hydraulics %}
+    <tr>
+      <td>{{ h.section_id }}</td>
+      <td>{{ h.design_flow_lps|num(3) }}</td>
+      <td>{{ h.inner_diameter_mm|compact(1) }}</td>
+      <td>{{ h.slope_per_mille|compact(1) }}</td>
+      <td>{{ h.manning_n }} / {{ h.chezy_c|num(2) }}</td>
+      <td>{{ h.fill_ratio|num(3) }}</td>
+      <td>{{ h.velocity_mps|num(3) }}</td>
+      <td>{{ h.self_cleaning_value|num(3) }} / {{ h.self_cleaning_k|num(1) }}</td>
+      <td><b>{{ "соответствует" if h.status == "verified" else "не соответствует" }}</b><br>{{ h.note }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<p class="source-line">СП 30.13330.2020, п. 19.1, формула (33): V ≥ 0,7 м/с; h/d ≥ 0,3; K=0,5 для полимерных труб и K=0,6 для остальных. Диапазон h/d=0,5–0,6 показан как проектная цель, а не как подмена нормативного критерия.</p>
+{% else %}
+<p class="stage-note">Полная гидравлика горизонтальных участков не выполнена: нужны явные расходы, расчётные длины, уклоны и коэффициенты шероховатости с источником.</p>
+{% endif %}
+
+<p class="subhead">4. Проверка DN приборов и труб</p>
+{% if diagnostics and diagnostics.diameter_checks %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Прибор</th><th>Ветвь</th><th>DN выпуска</th><th>DN сегмента после прибора</th><th>Макс. DN ветви у стояка</th><th>Минимум</th><th>Результат</th></tr></thead>
+  <tbody>{% for d in diagnostics.diameter_checks %}
+    <tr><td>{{ d.element_id }}</td><td>{{ d.section_id }}</td><td>{{ d.fixture_dn_mm or "—" }}</td><td>{{ d.generated_segment_dn_mm or "—" }}</td><td>{{ d.pipe_nominal_dn_mm or "—" }}</td><td>{{ d.minimum_dn_mm }}</td><td>{{ "соответствует" if d.status == "verified" else "не соответствует" if d.status == "fail" else "требует данных" }}<br>{{ d.note }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% if diagnostics and diagnostics.network_diameter_checks %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Узел</th><th>Приток</th><th>Участок после узла</th><th>DN до / после</th><th>Переход</th><th>Результат</th></tr></thead>
+  <tbody>{% for d in diagnostics.network_diameter_checks %}
+    <tr><td>{{ d.node_id }}</td><td>{{ d.incoming_section_id }}</td><td>{{ d.outgoing_section_id }}</td><td>{{ d.incoming_dn_mm or "—" }} / {{ d.outgoing_dn_mm or "—" }}</td><td>{{ d.transition_element_id or "не требуется" }}</td><td>{{ "соответствует" if d.status == "verified" else "не соответствует" if d.status == "fail" else "требует данных" }}<br>{{ d.note }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% if diagnostics and diagnostics.ventilation_checks %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Выпуск К1</th><th>Стояки группы</th><th>Вентилируемые стояки</th><th>Результат</th></tr></thead>
+  <tbody>{% for v in diagnostics.ventilation_checks %}
+    <tr><td>{{ v.outlet_node }}</td><td>{{ v.riser_ids|join(", ") }}</td><td>{{ v.ventilated_riser_ids|join(", ") if v.ventilated_riser_ids else "нет" }}</td><td>{{ "соответствует" if v.status == "verified" else "не соответствует" if v.status == "fail" else "требует отдельной проверки" }}<br>{{ v.note }}</td></tr>
   {% endfor %}</tbody>
 </table>
 {% endif %}
 
-<p class="subhead">4. Расчёт дождевого расхода К2</p>
+<p class="subhead">5. Доступ для прочистки и зоны риска</p>
+{% if diagnostics %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Проверка</th><th>Участок</th><th>Доступ / расстояния</th><th>Результат</th></tr></thead>
+  <tbody>
+  {% for t in diagnostics.turn_checks %}
+    <tr><td>Нижний поворот {{ t.riser_id }}</td><td>{{ t.outgoing_section_id or "—" }}</td><td>{{ t.access_element_id or "нет" }}; {% if t.access_fitting == "revision_opening" %}ревизионное отверстие{% elif t.access_fitting == "wye_45" %}косой тройник 45° с заглушкой{% else %}—{% endif %}</td><td>{{ "соответствует" if t.status == "verified" else "не соответствует" }}<br>{{ t.note }}</td></tr>
+  {% endfor %}
+  {% for s in diagnostics.linear_service_checks %}
+    <tr><td>Горизонтальный участок</td><td>{{ s.section_id }}</td><td>L={{ s.calculation_length_m|num(1) }} м; точки {{ s.access_chainages_m|join(", ") }}</td><td>{{ "соответствует" if s.status == "verified" else "не соответствует" if s.status == "fail" else "требует данных" }}<br>{{ s.note }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if sewage.pipes %}
+<table class="data calc-table pipe-calc">
+  <thead><tr><th>Система / участок</th><th>Назначение</th><th>Материал, стандарт</th><th>DN</th><th>Øнар × стенка, мм</th><th>Øвн, мм</th><th>L спец. / расч., м</th></tr></thead>
+  <tbody>{% for p in sewage.pipes %}
+    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}</td><td>{{ p.nominal_diameter_mm or "—" }}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }} / {{ p.calculation_length_m|num(2) }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+
+<p class="subhead">6. Расчёт дождевого расхода К2</p>
 {% if storm.result %}
 <table class="data calc-table compact-calc">
   <tr><th>Район строительства; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
@@ -77,7 +142,7 @@
 {% endif %}
 
 {% if storm.result %}
-<p class="subhead">5. Проверка воронок и стояков К2</p>
+<p class="subhead">7. Проверка воронок и стояков К2</p>
 {% if storm.network_assessment %}
 {% set a = storm.network_assessment %}
 <table class="data calc-table check-calc">
@@ -99,6 +164,6 @@
 {% endif %}
 
 {% if grease_trap.required %}
-<p class="subhead">6. Производственные стоки общепита</p>
+<p class="subhead">8. Производственные стоки общепита</p>
 <p class="subitem no-indent">{{ grease_trap.decision_note }} Число и производительность жироуловителей определяются по заданию ТХ и схеме выпусков; условный подбор не выполняется.</p>
 {% endif %}

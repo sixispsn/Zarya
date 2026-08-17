@@ -89,13 +89,13 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     assert nodes[route.from_placement_id].node_id == "К1-Ст1"
     assert nodes[route.to_placement_id].node_id == "К1-Ст2"
     assert route.points[-1].y - route.points[0].y == pytest.approx(
-        (route.points[-1].x - route.points[0].x) * 0.008,
+        (route.points[-1].x - route.points[0].x) * 0.010,
     )
 
     svg = build_wastewater_structure_svg(
         project, layout, scope=WastewaterStructureScope.BASEMENT_K1_MAIN,
     )
-    assert "К1-М1 Ø160×4,9 i=8‰" in svg
+    assert "К1-М1 DN100; Ø110×3,4 i=10‰" in svg
     assert "К1-Вып1" not in svg
     assert "К2-М1" not in svg
     assert ">16 этаж</text>" in svg

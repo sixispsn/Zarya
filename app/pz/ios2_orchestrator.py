@@ -33,7 +33,8 @@ from app.pz.generator import (
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
-    generate_wastewater_scheme_pdf, generate_wastewater_ugo_pdf,
+    generate_wastewater_scheme_pdf, generate_wastewater_diagnostic_pdf,
+    generate_wastewater_ugo_pdf,
     generate_wastewater_spec_pdf,
     generate_wastewater_balance_pdf,
     generate_commission_control_pdf, append_pdf, merge_pdfs,
@@ -63,6 +64,7 @@ class IOS2DesignBundle:
     wastewater_pz_pdf: Optional[str] = None
     wastewater_calculation_pdf: Optional[str] = None
     wastewater_scheme_pdf: Optional[str] = None
+    wastewater_diagnostic_pdf: Optional[str] = None
     wastewater_ugo_pdf: Optional[str] = None
     wastewater_spec_pdf: Optional[str] = None
     wastewater_package_pdf: Optional[str] = None
@@ -745,6 +747,27 @@ def design_ios2(
             "storm_k2: внутренний водосток требуется, но для расчёта не заданы "
             "город и площадь кровли")
 
+    # К1/К2: гидравлика Шези и эксплуатационная доступность считаются только
+    # по явному направленному графу. Расходы горизонтальных участков К1 могут
+    # быть суммированы из заданных нагрузок стояков; ветви без аксонометрии не
+    # получают условных расходов.
+    from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+    project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
+    diagnostic = project.sewage.hydraulic_assessment
+    if diagnostic.ready:
+        bundle.status.append(
+            "wastewater_diagnostics: поток, DN, нижние повороты и доступ "
+            "для прочистки проверены"
+        )
+    else:
+        bundle.warnings.append(
+            "wastewater_diagnostics: блокирующие замечания — "
+            + "; ".join(diagnostic.errors)
+        )
+    bundle.warnings.extend(
+        f"wastewater_diagnostics: {row}" for row in diagnostic.warnings
+    )
+
     # СП 253 задаёт исполнение насосных установок независимо от результата
     # каталожного подбора. Рабочая точка при этом остаётся расчётной.
     for pump_system in (project.pumps, project.fire_pumps):
@@ -816,6 +839,14 @@ def design_ios2(
     bundle.status.append(
         "Схема_К1_К2.pdf собрана как векторная принципиальная схема А1 "
         "по реестру элементов и топологических участков"
+    )
+
+    bundle.wastewater_diagnostic_pdf = generate_wastewater_diagnostic_pdf(
+        project, os.path.join(output_dir, "Диагностика_К1_К2.pdf")
+    )
+    bundle.status.append(
+        "Диагностика_К1_К2.pdf собрана отдельным ненормативным листом: "
+        "поток, зоны риска отложений и достижимость прочистным тросом"
     )
 
     bundle.wastewater_ugo_pdf = generate_wastewater_ugo_pdf(

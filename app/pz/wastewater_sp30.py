@@ -26,8 +26,14 @@ class WastewaterSP30Audit:
 
 
 def _is_riser(pipe: SewerPipeSpec) -> bool:
-    purpose = (pipe.purpose or "").lower()
-    return "стояк" in purpose or "вертикаль" in purpose
+    purpose = (pipe.purpose or "").strip().lower()
+    return purpose.startswith((
+        "стояк",
+        "канализационный стояк",
+        "водосточный стояк",
+        "вертикаль",
+        "вертикальный участок",
+    ))
 
 
 def _services_turn(
@@ -37,11 +43,20 @@ def _services_turn(
 ) -> bool:
     if element.system != riser.system or element.kind not in {"revision", "cleanout"}:
         return False
-    if element.section_id == riser.section_id:
-        return True
+    if not element.accessible:
+        return False
+    if element.kind == "revision":
+        return (
+            element.section_id == riser.section_id
+            and element.floor_from <= 1
+            and element.service_direction in {"downstream", "both"}
+            and element.service_fitting == "revision_opening"
+        )
     return (
         element.section_id in connected_main_ids
         and element.connects_to == riser.section_id
+        and element.service_direction in {"downstream", "both"}
+        and element.service_fitting == "wye_45"
     )
 
 

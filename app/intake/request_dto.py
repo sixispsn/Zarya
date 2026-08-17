@@ -263,6 +263,11 @@ class SewerPipeRequest:
     outer_diameter_mm: float
     wall_thickness_mm: float
     length_m: float
+    calculation_length_m: Optional[float] = None
+    nominal_diameter_mm: Optional[int] = None
+    design_flow_lps: Optional[float] = None
+    manning_n: Optional[float] = None
+    hydraulic_source: str = ""
     slope_per_mille: Optional[float] = None
     fill_ratio: Optional[float] = None
     from_node: str = ""
@@ -309,6 +314,10 @@ class SewerElementRequest:
     include_in_spec: bool = True
     note: str = ""
     layout_column: int = 0
+    service_direction: str = ""
+    service_fitting: str = ""
+    accessible: bool = True
+    service_chainage_m: Optional[float] = None
 
 
 @dataclass
@@ -579,6 +588,30 @@ class IOS2Request:
                     f"sewer_pipes[{i}]: толщина стенки исключает проходное "
                     "сечение"
                 )
+            if (
+                pipe.nominal_diameter_mm is not None
+                and pipe.nominal_diameter_mm <= 0
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].nominal_diameter_mm должен быть > 0"
+                )
+            if pipe.design_flow_lps is not None and pipe.design_flow_lps <= 0:
+                p.append(
+                    f"sewer_pipes[{i}].design_flow_lps должен быть > 0"
+                )
+            if (
+                pipe.calculation_length_m is not None
+                and pipe.calculation_length_m <= 0
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].calculation_length_m должен быть > 0"
+                )
+            if pipe.manning_n is not None and pipe.manning_n <= 0:
+                p.append(f"sewer_pipes[{i}].manning_n должен быть > 0")
+            if pipe.manning_n is not None and not pipe.hydraulic_source.strip():
+                p.append(
+                    f"sewer_pipes[{i}].hydraulic_source обязателен при manning_n"
+                )
             if not pipe.material.strip() or not pipe.standard.strip():
                 p.append(
                     f"sewer_pipes[{i}]: материал и стандарт/ТУ обязательны "
@@ -645,6 +678,27 @@ class IOS2Request:
                 )
             if element.layout_column < 0:
                 p.append(f"sewer_elements[{i}].layout_column не может быть < 0")
+            if element.service_direction not in (
+                "", "downstream", "upstream", "both",
+            ):
+                p.append(
+                    f"sewer_elements[{i}].service_direction должен быть "
+                    "downstream, upstream или both"
+                )
+            if element.service_fitting not in (
+                "", "wye_45", "revision_opening",
+            ):
+                p.append(
+                    f"sewer_elements[{i}].service_fitting должен быть "
+                    "wye_45 или revision_opening"
+                )
+            if (
+                element.service_chainage_m is not None
+                and element.service_chainage_m < 0
+            ):
+                p.append(
+                    f"sewer_elements[{i}].service_chainage_m не может быть < 0"
+                )
             if element.include_in_spec and not element.unit.strip():
                 p.append(
                     f"sewer_elements[{i}].unit обязателен для спецификации"

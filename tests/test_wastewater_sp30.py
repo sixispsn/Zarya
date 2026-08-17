@@ -41,7 +41,7 @@ def test_k2_turn_without_cleanout_is_rejected():
     project = deepcopy(_project())
     project.sewage.elements = [
         row for row in project.sewage.elements
-        if not (row.kind == "cleanout" and row.section_id == "К2-Ст1")
+        if row.element_id != "К2-Пр1"
     ]
     result = audit_wastewater_sp30(project)
     assert any("К2-Ст1" in row and "21.10" in row for row in result.errors)

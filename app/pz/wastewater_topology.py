@@ -66,8 +66,14 @@ class WastewaterTopology:
 
 
 def _is_riser(pipe: SewerPipeSpec) -> bool:
-    purpose = (pipe.purpose or "").lower()
-    return "стояк" in purpose or "вертикаль" in purpose
+    purpose = (pipe.purpose or "").strip().lower()
+    return purpose.startswith((
+        "стояк",
+        "канализационный стояк",
+        "водосточный стояк",
+        "вертикаль",
+        "вертикальный участок",
+    ))
 
 
 def _is_declared_branch(pipe: SewerPipeSpec) -> bool:

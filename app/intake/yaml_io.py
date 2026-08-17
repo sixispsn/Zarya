@@ -235,6 +235,23 @@ def load_request(text: str) -> IOS2Request:
             outer_diameter_mm=float(x.get("outer_diameter_mm", 0)),
             wall_thickness_mm=float(x.get("wall_thickness_mm", 0)),
             length_m=float(x.get("length_m", 0)),
+            calculation_length_m=(
+                float(x["calculation_length_m"])
+                if x.get("calculation_length_m") is not None else None
+            ),
+            nominal_diameter_mm=(
+                int(x["nominal_diameter_mm"])
+                if x.get("nominal_diameter_mm") is not None else None
+            ),
+            design_flow_lps=(
+                float(x["design_flow_lps"])
+                if x.get("design_flow_lps") is not None else None
+            ),
+            manning_n=(
+                float(x["manning_n"])
+                if x.get("manning_n") is not None else None
+            ),
+            hydraulic_source=str(x.get("hydraulic_source", "")),
             slope_per_mille=(
                 float(x["slope_per_mille"])
                 if x.get("slope_per_mille") is not None else None
@@ -303,6 +320,13 @@ def load_request(text: str) -> IOS2Request:
             include_in_spec=bool(x.get("include_in_spec", True)),
             note=str(x.get("note", "")),
             layout_column=int(x.get("layout_column", 0)),
+            service_direction=str(x.get("service_direction", "")),
+            service_fitting=str(x.get("service_fitting", "")),
+            accessible=bool(x.get("accessible", True)),
+            service_chainage_m=(
+                float(x["service_chainage_m"])
+                if x.get("service_chainage_m") is not None else None
+            ),
         )
         for x in (sewage_s.get("elements") or [])
         if isinstance(x, dict)
@@ -665,6 +689,16 @@ def dump_request(req: IOS2Request) -> str:
                 "outer_diameter_mm": x.outer_diameter_mm,
                 "wall_thickness_mm": x.wall_thickness_mm,
                 "length_m": x.length_m,
+                **({"calculation_length_m": x.calculation_length_m}
+                   if x.calculation_length_m is not None else {}),
+                **({"nominal_diameter_mm": x.nominal_diameter_mm}
+                   if x.nominal_diameter_mm is not None else {}),
+                **({"design_flow_lps": x.design_flow_lps}
+                   if x.design_flow_lps is not None else {}),
+                **({"manning_n": x.manning_n}
+                   if x.manning_n is not None else {}),
+                **({"hydraulic_source": x.hydraulic_source}
+                   if x.hydraulic_source else {}),
                 **({"slope_per_mille": x.slope_per_mille}
                    if x.slope_per_mille is not None else {}),
                 **({"fill_ratio": x.fill_ratio}
@@ -709,6 +743,13 @@ def dump_request(req: IOS2Request) -> str:
                 **({"note": x.note} if x.note else {}),
                 **({"layout_column": x.layout_column}
                    if x.layout_column else {}),
+                **({"service_direction": x.service_direction}
+                   if x.service_direction else {}),
+                **({"service_fitting": x.service_fitting}
+                   if x.service_fitting else {}),
+                "accessible": x.accessible,
+                **({"service_chainage_m": x.service_chainage_m}
+                   if x.service_chainage_m is not None else {}),
             } for x in req.sewer_elements],
             "design_assignment_ref": req.wastewater_design_assignment_ref,
             "survey_ref": req.wastewater_survey_ref,
