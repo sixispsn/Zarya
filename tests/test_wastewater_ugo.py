@@ -36,12 +36,16 @@ def test_normative_sewer_symbols_keep_table_and_position_traceability():
         "sink": ("табл. 3", "поз. 2"),
         "washbasin": ("табл. 3", "поз. 3"),
         "bath": ("табл. 3", "поз. 7"),
+        "shower": ("табл. 3", "поз. 9"),
         "toilet": ("табл. 3", "поз. 11"),
         "floor_drain": ("табл. 3", "поз. 16"),
         "roof_funnel": ("табл. 3", "поз. 18"),
         "trap": ("табл. 4", "поз. 4"),
         "revision": ("табл. 4", "поз. 11"),
         "flow_direction": ("табл. 5", "поз. 1"),
+        "pump": ("табл. 2", "поз. 3а"),
+        "check_valve": ("табл. 6", "поз. 5а"),
+        "ball_valve": ("табл. 6", "поз. 16"),
     }
     for key, fragments in expected.items():
         definition = get_ugo_definition(key)
@@ -88,10 +92,31 @@ def test_sink_and_washbasin_use_extracted_pdf_vector_geometry():
     assert "M14797,14660 L14773,14660 L14797,14390 Z" in washbasin
 
 
-def test_toilet_and_heated_roof_funnel_match_reference_geometry():
+def test_normative_fixture_shapes_match_gost_21205_geometry():
+    bath = render_ugo("bath", 0, 0)
+    assert 'x="-27" y="-12.5" width="54" height="25"' in bath
+
+    shower = render_ugo("shower", 0, 0)
+    assert 'x="-25" y="-9" width="50" height="18"' in shower
+
     toilet = render_ugo("toilet", 0, 0)
-    assert 'x="-12" y="-18" width="24" height="22"' in toilet
-    assert 'd="M-12,4 L0,17 L12,4 Z"' in toilet
+    assert 'x="-12" y="-20" width="24" height="21"' in toilet
+    assert 'd="M-12,1 L0,20 L12,1 Z"' in toilet
+
+    floor_drain = render_ugo("floor_drain", 0, 0)
+    assert 'd="M-21,-10 H21 L16,10 H-16 Z"' in floor_drain
+
+    roof_funnel = render_ugo("roof_funnel", 0, 0)
+    assert 'M-24,-3 H-11.5 M-24,3 H-11.5' in roof_funnel
+    assert 'M11.5,-3 H24 M11.5,3 H24' in roof_funnel
+    assert 'cx="0" cy="0" r="12"' in roof_funnel
+    assert 'd="M0,12 V22"' in roof_funnel
+
+    pump = render_ugo("pump", 0, 0)
+    assert 'd="M0,-12 L-5,-5 H5 Z"' in pump
+
+
+def test_heated_roof_funnel_matches_recommended_appendix_geometry():
 
     funnel = render_ugo("roof_funnel_heated", 0, 0)
     assert 'M-20,0 H-12 M12,0 H20' in funnel

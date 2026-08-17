@@ -178,39 +178,40 @@ def _shape(kind: str) -> str:
         )
     if kind == "bath":
         return (
-            f'<rect x="-25" y="-13" width="50" height="26" fill="none" '
+            f'<rect x="-27" y="-12.5" width="54" height="25" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M-22,-11 L-10,11 M22,13 V19" fill="none" '
+            f'<path d="M-25,-11 L-12,11 M25,12.5 V19" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "shower":
         return (
-            f'<rect x="-21" y="-13" width="42" height="26" fill="none" '
+            f'<rect x="-25" y="-9" width="50" height="18" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M18,13 V20" stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M22,9 V16" stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "toilet":
-        # Пропорции фронтального УГО сверены с легендой рекомендуемого
-        # примера приложения В ГОСТ Р 21.620-2023: верхняя часть почти
-        # квадратная, нижняя воронкообразная часть заметно короче.  Ранее
-        # высота нижнего треугольника была почти равна высоте корпуса, из-за
-        # чего обозначение не соответствовало референсу.
+        # Канонический вариант для схем - таблица 3, позиция 11 ГОСТ
+        # 21.205-2016.  Нижняя воронкообразная часть по высоте практически
+        # равна прямоугольной верхней части; укороченный вариант из легенды
+        # рекомендуемого примера приложения В здесь не применяется.
         return (
-            f'<rect x="-12" y="-18" width="24" height="22" fill="white" '
+            f'<rect x="-12" y="-20" width="24" height="21" fill="white" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<path d="M-12,4 L0,17 L12,4 Z" fill="white" stroke="{s}" '
+            f'<path d="M-12,1 L0,20 L12,1 Z" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "floor_drain":
         return (
-            f'<path d="M-16,-9 H16 L11,10 H-11 Z" fill="white" '
+            f'<path d="M-21,-10 H21 L16,10 H-16 Z" fill="white" '
             f'stroke="{s}" stroke-width="{sw}"/>'
         )
     if kind == "roof_funnel":
         return (
-            f'<path d="M-24,0 H-13 M13,0 H24" stroke="{s}" stroke-width="{sw}"/>'
-            f'<circle cx="0" cy="0" r="13" fill="white" stroke="{s}" '
-            f'stroke-width="{sw}"/><path d="M0,13 V22" stroke="{s}" '
+            f'<path d="M-24,-3 H-11.5 M-24,3 H-11.5 '
+            f'M11.5,-3 H24 M11.5,3 H24" fill="none" stroke="{s}" '
+            f'stroke-width="{sw}"/>'
+            f'<circle cx="0" cy="0" r="12" fill="white" stroke="{s}" '
+            f'stroke-width="{sw}"/><path d="M0,12 V22" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "roof_funnel_heated":
@@ -258,7 +259,7 @@ def _shape(kind: str) -> str:
             f'<path d="M0,-25 V-14 M0,14 V25" stroke="{s}" stroke-width="{sw}"/>'
             f'<circle cx="0" cy="0" r="14" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
-            f'<path d="M-4,-11 H4 L0,-5 Z" fill="{s}"/>'
+            f'<path d="M0,-12 L-5,-5 H5 Z" fill="{s}"/>'
         )
     if kind == "ball_valve":
         return (
