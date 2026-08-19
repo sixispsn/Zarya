@@ -101,6 +101,21 @@ def build_wastewater_scheme(
         project.sewage.hydraulic_assessment
         or assess_wastewater_diagnostics(project)
     )
+    risk_zones = tuple(diagnostic.risk_zones)
+    risk_ids_by_element: Dict[str, List[str]] = {}
+    for zone in risk_zones:
+        for element_id in zone.access_element_ids:
+            risk_ids_by_element.setdefault(element_id, []).append(zone.zone_id)
+
+    def risk_attributes(element_id: str) -> str:
+        risk_ids = risk_ids_by_element.get(element_id, [])
+        if not risk_ids:
+            return ""
+        return (
+            ' data-obstruction-risk-zones="'
+            + escape(" ".join(risk_ids), quote=True)
+            + '" data-obstruction-access="confirmed"'
+        )
     warnings = list(dict.fromkeys(audit.errors + audit.warnings))
     warnings.extend(diagnostic.errors)
     warnings.extend(diagnostic.warnings)
@@ -160,6 +175,7 @@ def build_wastewater_scheme(
         side: int,
         shelf_y: float,
         shelf_width: float = 78.0,
+        note: str = "",
     ):
         """Leader whose name is above and size is below the shelf."""
         knee_x = anchor_x + side * 28
@@ -170,6 +186,8 @@ def build_wastewater_scheme(
         line(shelf_x1, shelf_y, shelf_x2, shelf_y, 1.0)
         text(label_x, shelf_y - 5, top_label, 7.4, "middle", "bold")
         text(label_x, shelf_y + 12, bottom_label, 7.2, "middle")
+        if note:
+            text(label_x, shelf_y + 23, note, 5.8, "middle", color=GRAY)
 
     def place_cleanout(
         row: SewerElementSpec,
@@ -211,7 +229,8 @@ def build_wastewater_scheme(
             cap_x, cap_y = attachment_x + 2 * reach, attachment_y
         G.append(
             f'<g data-element-id="{escape(row.element_id)}" '
-            f'data-cleanout-pipe-width="{pipe_width:g}">'
+            f'data-cleanout-pipe-width="{pipe_width:g}"'
+            f'{risk_attributes(row.element_id)}>'
             f'{render_ugo("cleanout", center_x, center_y, scale=scale, rotation=rotation)}'
             f'<g data-cleanout-callout="{escape(row.element_id)}">'
         )
@@ -223,6 +242,10 @@ def build_wastewater_scheme(
                 f"DN{row.dn_mm if row.dn_mm is not None else '—'}",
                 side=side,
                 shelf_y=cap_y - 28,
+                note=(
+                    "доступ к зоне возможного засора"
+                    if row.element_id in risk_ids_by_element else ""
+                ),
             )
         G.append('</g></g>')
 
@@ -750,10 +773,13 @@ def build_wastewater_scheme(
             else:
                 continue
             G.append(
-                f'<g data-element-id="{escape(row.element_id)}">'
+                f'<g data-element-id="{escape(row.element_id)}"'
+                f'{risk_attributes(row.element_id)}>'
                 f'{render_ugo("revision", x, sy, scale=0.64, rotation=90)}</g>'
             )
             text(x + 15, sy + 3, f"R · {row.element_id}", 7.1)
+            if row.element_id in risk_ids_by_element:
+                text(x + 15, sy + 14, "доступ к зоне риска", 5.8, color=GRAY)
         elif row.kind == "fire_collar":
             shown = [1] + visible_floors
             for floor in shown:
@@ -844,7 +870,11 @@ def build_wastewater_scheme(
                      f"абс. {_fmt(pipe.absolute_elevation_end_m, 3)}", 7.0, color=GRAY)
                 outlet = next((row for row in elements if row.kind == "outlet" and row.section_id == pipe.section_id), None)
                 if outlet is not None:
-                    G.append(render_ugo("outlet", x2, y, scale=0.55))
+                    G.append(
+                        f'<g data-element-id="{escape(outlet.element_id)}"'
+                        f'{risk_attributes(outlet.element_id)}>'
+                        f'{render_ugo("outlet", x2, y, scale=0.55)}</g>'
+                    )
         if full_scope:
             terminal_nodes = {
                 row.to_node for row in rows
@@ -1044,9 +1074,12 @@ def build_wastewater_scheme(
                 f'rx="15" ry="5" fill="{SEDIMENT_BROWN}" opacity="0.62"/>'
             )
 
-        hydraulic_by_section = {
-            row.section_id: row for row in diagnostic.hydraulics
-        }
+        section_risks: Dict[str, List[object]] = {}
+        for zone in risk_zones:
+            if zone.section_id and zone.zone_id.startswith((
+                "transient:", "hydraulic:", "service:",
+            )):
+                section_risks.setdefault(zone.section_id, []).append(zone)
         for pipe in topology.mains:
             if pipe.from_node not in node_x or pipe.to_node not in node_x:
                 continue
@@ -1064,12 +1097,28 @@ def build_wastewater_scheme(
                 0.72,
                 FLOW_BLUE,
             )
-            hydraulic = hydraulic_by_section.get(pipe.section_id)
-            if hydraulic is not None and hydraulic.status != "verified":
+            pipe_risks = section_risks.get(pipe.section_id, [])
+            if pipe_risks:
+                risk_ids = " ".join(row.zone_id for row in pipe_risks)
                 G.append(
-                    f'<path class="ww-risk" data-sediment-zone="hydraulic:{escape(pipe.section_id)}" '
+                    f'<path class="ww-risk" '
+                    f'data-sediment-zone="{escape(pipe_risks[0].zone_id)}" '
+                    f'data-sediment-zones="{escape(risk_ids)}" '
                     f'd="M{min(x1,x2):.1f},{sy+5:.1f} H{max(x1,x2):.1f}" '
                     f'stroke="{SEDIMENT_BROWN}" stroke-width="9" opacity="0.72"/>'
+                )
+                serviced = all(row.serviced is True for row in pipe_risks)
+                text(
+                    (x1 + x2) / 2,
+                    sy + 34,
+                    (
+                        "возможны отложения; доступ подтверждён"
+                        if serviced else
+                        "возможны отложения; требуется точка доступа"
+                    ),
+                    6.5,
+                    "middle",
+                    color=(SEDIMENT_BROWN if serviced else DIAGNOSTIC_RED),
                 )
 
         # Достижимость линейных участков показывается от фактической заглушки
@@ -1211,7 +1260,8 @@ def build_wastewater_scheme(
             ids = " ".join(escape(row.element_id) for row in rows)
             floors = ", ".join(str(row.floor_from) for row in rows)
             G.append(
-                f'<g data-element-ids="{ids}">'
+                f'<g data-element-ids="{ids}"'
+                f'{risk_attributes(rows[0].element_id)}>'
                 f'{render_ugo("revision", x, rupture_y, scale=0.64, rotation=90)}</g>'
             )
             text(x + 15, rupture_y + 3, f"R · эт. {floors}", 7.1)
@@ -1262,9 +1312,11 @@ def build_wastewater_scheme(
                 else "СП 30: монтажная топология требует исправления."
             ),
             (
-                "Шези / DN / путь троса: проверены по явным исходным данным."
-                if diagnostic.ready
-                else "Шези / DN / путь троса: есть блокирующие замечания."
+                f"Риск засора: зон {len(risk_zones)}; доступ подтверждён "
+                f"{sum(row.serviced is True for row in risk_zones)}/"
+                f"{len(risk_zones)}; лишние прочистки на прямых не назначаются."
+                if risk_zones else
+                "Риск засора: сценарий или точная гидравлика не заданы."
             ),
         ]
         for index, value in enumerate(info_rows):

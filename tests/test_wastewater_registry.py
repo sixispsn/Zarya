@@ -79,6 +79,9 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К1-ПрМ1-10"' in result.svg
     assert 'data-element-id="К1-ПрМ1-50"' in result.svg
     assert 'data-cleanout-callout="К1-ПрМ1-10"' in result.svg
+    assert 'data-obstruction-risk-zones="transient:К1-М1"' in result.svg
+    assert "доступ к зоне возможного засора" in result.svg
+    assert "Риск засора: зон 6; доступ подтверждён 6/6" in result.svg
     assert result.svg.count('data-cleanout-pipe-width="2.8"') == 8
     assert result.svg.count(">Прочистка</text>") == 4
     assert result.svg.count(">DN150</text>") == 1

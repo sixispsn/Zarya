@@ -30,6 +30,22 @@ def test_demo_resolves_flow_and_passes_hydraulics_service_and_ventilation():
     assert {row.status for row in result.turn_checks} == {"verified"}
     assert {row.status for row in result.linear_service_checks} == {"verified"}
     assert {row.status for row in result.ventilation_checks} == {"verified"}
+    risks = {row.zone_id: row for row in result.risk_zones}
+    main_risk = risks["transient:К1-М1"]
+    assert main_risk.serviced is True
+    assert main_risk.access_element_ids == (
+        "К1-Р1-1",
+        "К1-ПрМ1-10",
+        "К1-ПрМ1-20",
+        "К1-ПрМ1-30",
+        "К1-ПрМ1-40",
+        "К1-ПрМ1-50",
+        "К1-Р2-1",
+    )
+    assert "одноячейковая модель не локализует" in main_risk.location_note
+    outlet_risk = risks["transient:К1-Вып1"]
+    assert outlet_risk.access_element_ids == ("К1-Р2-1", "К1-ВыпЭ1")
+    assert "дополнительная прочистка не требуется" in outlet_risk.placement_rule
 
 
 def test_toilet_and_its_branch_cannot_be_less_than_dn100():
@@ -92,3 +108,5 @@ def test_diagnostic_svg_contains_flow_sediment_and_real_cable_reach():
     assert 'data-service-range-m="10:20"' in result.svg
     assert 'data-segment-dn="50"' in result.svg
     assert 'data-segment-dn="100"' in result.svg
+    assert 'data-sediment-zone="transient:К1-М1"' in result.svg
+    assert "возможны отложения; доступ подтверждён" in result.svg

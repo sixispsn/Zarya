@@ -82,6 +82,9 @@ class SedimentRiskZone:
     reason: str
     severity: str
     serviced: Optional[bool]
+    location_note: str = ""
+    access_element_ids: Tuple[str, ...] = ()
+    placement_rule: str = ""
 
 
 @dataclass
@@ -424,6 +427,21 @@ def _linear_service_check(
     )
 
 
+def _service_access_element_ids(
+    project: Project,
+    pipe: SewerPipeSpec,
+) -> Tuple[str, ...]:
+    """Вернуть реальные точки, которыми достигается расчётный участок."""
+    length = pipe.calculation_length_m
+    if length is None or length <= 0:
+        return ()
+    return tuple(
+        dict.fromkeys(
+            point[3] for point in _access_points(project, pipe, length)
+        )
+    )
+
+
 def _network_diameter_checks(
     project: Project,
     topology,
@@ -645,6 +663,17 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
             reason="нижний поворот стояка в горизонтальную магистраль",
             severity="high" if not serviced else "controlled",
             serviced=serviced,
+            location_note=f"узел {riser_id}: нижний поворот стояка",
+            access_element_ids=(
+                (check.access_element_id,) if check.access_element_id else ()
+            ),
+            placement_rule=(
+                "использовать доступную ревизию перед поворотом"
+                if check.access_kind == "revision" else
+                "прочистка выполнена заглушённым концом косой фасонной части"
+                if check.access_kind == "cleanout" else
+                "нужна ревизия перед поворотом либо прочистка на выходящем участке"
+            ),
         ))
         if not serviced:
             assessment.errors.append(f"{riser_id}: {check.note}")
@@ -680,6 +709,12 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
                     reason="участок не покрыт доступом для механической прочистки",
                     severity="high",
                     serviced=False,
+                    location_note="непокрытый интервал горизонтального участка",
+                    access_element_ids=(),
+                    placement_rule=(
+                        "место новой прочистки определяется границами "
+                        "непокрытого интервала, а не серединой трубы"
+                    ),
                 ))
             elif service.status == "pending":
                 assessment.warnings.append(f"{pipe.section_id}: {service.note}")
@@ -716,7 +751,65 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
                 reason=hydraulic.note,
                 severity="high",
                 serviced=None,
+                location_note="расчётный горизонтальный участок",
+                access_element_ids=_service_access_element_ids(project, pipe),
+                placement_rule=(
+                    "сначала устранить гидравлическое несоответствие; "
+                    "прочистка не заменяет требуемую пропускную способность"
+                ),
             ))
+
+    # Стационарная проверка расчётного расхода и кратковременный сценарий
+    # отвечают на разные вопросы. Сценарий может выявить периоды V < Vкр даже
+    # у участка, который проходит нормативную проверку на расчётном расходе.
+    # Такая строка является зоной возможных отложений, но не доказывает массу
+    # осадка без концентрации взвесей и калибровки.
+    transient = project.sewage.transient_assessment
+    if transient is None and project.sewage.discharge_events:
+        from app.pz.wastewater_transients import assess_wastewater_transients
+        transient = assess_wastewater_transients(project)
+        project.sewage.transient_assessment = transient
+    pipe_by_id = {row.section_id: row for row in pipes}
+    service_by_section = {
+        row.section_id: row for row in assessment.linear_service_checks
+    }
+    for summary in (
+        getattr(transient, "network_summaries", ()) if transient else ()
+    ):
+        pipe = pipe_by_id.get(summary.section_id)
+        minimum_velocity = summary.minimum_wet_velocity_mps
+        critical_velocity = pipe.critical_velocity_mps if pipe else None
+        if (
+            pipe is None
+            or minimum_velocity is None
+            or critical_velocity is None
+            or minimum_velocity + 1e-12 >= critical_velocity
+        ):
+            continue
+        service = service_by_section.get(pipe.section_id)
+        serviced = bool(service and service.status == "verified")
+        assessment.risk_zones.append(SedimentRiskZone(
+            zone_id=f"transient:{pipe.section_id}",
+            section_id=pipe.section_id,
+            node_id="",
+            reason=(
+                "в заданном временном сценарии минимальная скорость "
+                f"{minimum_velocity:.3f} м/с ниже Vкр={critical_velocity:.3f} м/с"
+            ),
+            severity="controlled" if serviced else "high",
+            serviced=serviced,
+            location_note=(
+                "по длине участка; одноячейковая модель не локализует "
+                "точку осаждения внутри прямой трубы"
+            ),
+            access_element_ids=_service_access_element_ids(project, pipe),
+            placement_rule=(
+                "существующие точки обслуживания расставлены по достижимости "
+                "троса; дополнительная прочистка не требуется"
+                if serviced else
+                "добавить доступ в непокрытом интервале после точной привязки"
+            ),
+        ))
     assessment.errors = list(dict.fromkeys(assessment.errors))
     assessment.warnings = list(dict.fromkeys(assessment.warnings))
     return assessment

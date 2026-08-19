@@ -71,6 +71,11 @@ def test_disconnected_riser_is_rejected_instead_of_drawn_by_proximity():
     request = _request()
     main = next(row for row in request.sewer_pipes if row.section_id == "К1-М1")
     main.from_node = "Неизвестный-узел"
+    storage = next(
+        row for row in request.sewer_internal_nodes
+        if row.downstream_section_id == "К1-М1"
+    )
+    storage.node_id = "Неизвестный-узел"
 
     topology = build_wastewater_topology(build_project(request))
 
@@ -154,6 +159,12 @@ def test_every_riser_needs_directed_path_to_confirmed_outlet():
     request = _request()
     outlet = next(row for row in request.sewer_pipes if row.section_id == "К1-Вып1")
     outlet.from_node = "Изолированный-узел"
+    storage = next(
+        row for row in request.sewer_internal_nodes
+        if row.downstream_section_id == "К1-Вып1"
+    )
+    storage.node_id = "Изолированный-узел"
+    storage.upstream_section_ids = []
 
     topology = build_wastewater_topology(build_project(request))
 
