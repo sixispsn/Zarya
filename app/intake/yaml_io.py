@@ -46,7 +46,8 @@ from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
-    SewerDischargeEventRequest,
+    SewerDischargeEventRequest, SewerFixtureSafetyRequest,
+    SewerBoundaryLevelRequest, SewerFirstManholeRequest,
 )
 
 
@@ -382,6 +383,48 @@ def load_request(text: str) -> IOS2Request:
         for x in (sewage_s.get("discharge_events") or [])
         if isinstance(x, dict)
     ]
+    sewer_fixture_safety_inputs = [
+        SewerFixtureSafetyRequest(
+            fixture_id=str(x.get("fixture_id", "")),
+            floor=int(x.get("floor", 1)),
+            instance_no=int(x.get("instance_no", 1)),
+            connection_absolute_elevation_m=float(
+                x.get("connection_absolute_elevation_m", 0)
+            ),
+            overflow_absolute_elevation_m=float(
+                x.get("overflow_absolute_elevation_m", 0)
+            ),
+            trap_seal_depth_mm=float(x.get("trap_seal_depth_mm", 0)),
+            minimum_residual_seal_mm=float(
+                x.get("minimum_residual_seal_mm", 0)
+            ),
+            source=str(x.get("source", "")),
+        )
+        for x in (sewage_s.get("fixture_safety") or [])
+        if isinstance(x, dict)
+    ]
+    sewer_first_manholes = [
+        SewerFirstManholeRequest(
+            manhole_id=str(x.get("id", x.get("manhole_id", ""))),
+            outlet_section_id=str(x.get("outlet_section_id", "")),
+            invert_absolute_elevation_m=float(
+                x.get("invert_absolute_elevation_m", 0)
+            ),
+            levels=[
+                SewerBoundaryLevelRequest(
+                    time_seconds=float(point.get("time_seconds", 0)),
+                    water_level_absolute_elevation_m=float(
+                        point.get("water_level_absolute_elevation_m", 0)
+                    ),
+                )
+                for point in (x.get("levels") or [])
+                if isinstance(point, dict)
+            ],
+            source=str(x.get("source", "")),
+        )
+        for x in (sewage_s.get("first_manholes") or [])
+        if isinstance(x, dict)
+    ]
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
@@ -493,6 +536,8 @@ def load_request(text: str) -> IOS2Request:
         sewer_pipes=sewer_pipes,
         sewer_elements=sewer_elements,
         sewer_discharge_events=sewer_discharge_events,
+        sewer_fixture_safety_inputs=sewer_fixture_safety_inputs,
+        sewer_first_manholes=sewer_first_manholes,
         sewer_transient_step_seconds=(
             float(sewage_s["transient_step_seconds"])
             if sewage_s.get("transient_step_seconds") is not None else None
@@ -839,6 +884,30 @@ def dump_request(req: IOS2Request) -> str:
                 **({"suspended_solids_source": x.suspended_solids_source}
                    if x.suspended_solids_source else {}),
             } for x in req.sewer_discharge_events],
+            "fixture_safety": [{
+                "fixture_id": x.fixture_id,
+                "floor": x.floor,
+                "instance_no": x.instance_no,
+                "connection_absolute_elevation_m":
+                    x.connection_absolute_elevation_m,
+                "overflow_absolute_elevation_m":
+                    x.overflow_absolute_elevation_m,
+                "trap_seal_depth_mm": x.trap_seal_depth_mm,
+                "minimum_residual_seal_mm": x.minimum_residual_seal_mm,
+                "source": x.source,
+            } for x in req.sewer_fixture_safety_inputs],
+            "first_manholes": [{
+                "id": x.manhole_id,
+                "outlet_section_id": x.outlet_section_id,
+                "invert_absolute_elevation_m":
+                    x.invert_absolute_elevation_m,
+                "levels": [{
+                    "time_seconds": point.time_seconds,
+                    "water_level_absolute_elevation_m":
+                        point.water_level_absolute_elevation_m,
+                } for point in x.levels],
+                "source": x.source,
+            } for x in req.sewer_first_manholes],
             "design_assignment_ref": req.wastewater_design_assignment_ref,
             "survey_ref": req.wastewater_survey_ref,
             "service_life_years": req.wastewater_service_life_years,

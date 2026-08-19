@@ -188,11 +188,22 @@ def _project_fingerprint(project: Project) -> str:
             "discharge_events": [
                 vars(row) for row in project.sewage.discharge_events
             ],
+            "fixture_safety_inputs": [
+                vars(row) for row in project.sewage.fixture_safety_inputs
+            ],
+            "first_manholes": [{
+                **{
+                    key: value for key, value in vars(row).items()
+                    if key != "levels"
+                },
+                "levels": [vars(point) for point in row.levels],
+            } for row in project.sewage.first_manholes],
             "gost_inputs": {
                 key: value for key, value in vars(project.sewage).items()
                 if key not in {
                     "result", "hydraulic_assessment", "transient_assessment",
                     "risers", "pipes", "elements", "discharge_events",
+                    "fixture_safety_inputs", "first_manholes",
                 }
             },
         },
@@ -293,6 +304,17 @@ def build_commission_report(
     ]
 
     flow_ok = bool(project.consumer_groups) and project.flows.q_day_tot > 0
+    transient = project.sewage.transient_assessment
+    fixture_checks = list(
+        getattr(transient, "fixture_checks", ()) if transient else ()
+    )
+    fixture_safety_ok = bool(fixture_checks) and all(
+        row.status.value == "Норма" for row in fixture_checks
+    )
+    fixture_safety_critical = any(
+        row.status.value in {"Критическое состояние", "Подпор", "Подтопление"}
+        for row in fixture_checks
+    )
     trace_rows = [
         TraceRow(
             "Расчётные расходы В1/Т3",
@@ -319,6 +341,28 @@ def build_commission_report(
             ),
             "ПЗ К1/К2; Расчёты К1/К2; схема К1/К2",
             "verified" if project.sewage.result else "missing",
+        ),
+        TraceRow(
+            "Гидрозатворы и подпор от первого колодца",
+            "СП 30.13330.2020, раздел 19",
+            (
+                f"точных привязок приборов: {len(fixture_checks)}; "
+                f"первых колодцев: {len(project.sewage.first_manholes)}"
+                if fixture_checks else
+                "абсолютные отметки приборов/уровни первых колодцев не заданы"
+            ),
+            (
+                "гидрозатворы сохранены, подпор к приборам отсутствует"
+                if fixture_safety_ok else
+                "обнаружено критическое состояние/подпор"
+                if fixture_safety_critical else
+                "требуются точные высотные и граничные данные"
+            ),
+            "Расчёты К1/К2 — временной сценарий",
+            (
+                "verified" if fixture_safety_ok else
+                "fail" if fixture_safety_critical else "stage_r"
+            ),
         ),
         TraceRow(
             "Требуемый напор В1",
@@ -606,6 +650,28 @@ def build_commission_report(
             "СП 30.13330.2020, пп. 19.7–19.8, приложение К",
             blocking=bool(failed_risers),
         )
+    add(
+        "K1-03", "Конкретные гидрозатворы проверены по давлению стояков и уровню первого колодца",
+        (
+            "verified" if fixture_safety_ok else
+            "missing" if fixture_safety_critical else "stage_r"
+        ),
+        (
+            f"проверено {len(fixture_checks)} приборов; срыв и подпор отсутствуют"
+            if fixture_safety_ok else
+            "обнаружено критическое состояние, подпор или подтопление"
+            if fixture_safety_critical else
+            "нет полной абсолютной привязки приборов и первых колодцев"
+        ),
+        (
+            "Нет действий" if fixture_safety_ok else
+            "Устранить причину подпора/срыва и пересчитать"
+            if fixture_safety_critical else
+            "Задать абсолютные отметки, гидрозатворы и уровни первых колодцев"
+        ),
+        "СП 30.13330.2020, раздел 19; профиль выпуска",
+        blocking=fixture_safety_critical,
+    )
     if project.storm.system_kind == "internal":
         storm_ok = project.storm.result is not None
         add(

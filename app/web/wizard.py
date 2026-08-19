@@ -32,7 +32,8 @@ from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
-    SewerDischargeEventRequest,
+    SewerDischargeEventRequest, SewerFixtureSafetyRequest,
+    SewerBoundaryLevelRequest, SewerFirstManholeRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
@@ -415,6 +416,49 @@ async def wizard_design(request: Request):
                 ),
             ))
 
+    sewer_fixture_safety_inputs = []
+    for i in range(1, 9):
+        fixture_id = fv(f"sewer_safety{i}_fixture")
+        if fixture_id:
+            sewer_fixture_safety_inputs.append(SewerFixtureSafetyRequest(
+                fixture_id=fixture_id,
+                floor=fi(f"sewer_safety{i}_floor", 1),
+                instance_no=fi(f"sewer_safety{i}_instance", 1),
+                connection_absolute_elevation_m=ff(
+                    f"sewer_safety{i}_connection_abs"
+                ),
+                overflow_absolute_elevation_m=ff(
+                    f"sewer_safety{i}_overflow_abs"
+                ),
+                trap_seal_depth_mm=ff(f"sewer_safety{i}_trap_seal"),
+                minimum_residual_seal_mm=ff(
+                    f"sewer_safety{i}_minimum_residual"
+                ),
+                source=fv(f"sewer_safety{i}_source"),
+            ))
+
+    sewer_first_manholes = []
+    for i in range(1, 4):
+        manhole_id = fv(f"sewer_manhole{i}_id")
+        if manhole_id:
+            levels = []
+            for j in range(1, 4):
+                level_value = fv(f"sewer_manhole{i}_level{j}")
+                if level_value:
+                    levels.append(SewerBoundaryLevelRequest(
+                        time_seconds=ff(f"sewer_manhole{i}_time{j}"),
+                        water_level_absolute_elevation_m=ff(
+                            f"sewer_manhole{i}_level{j}"
+                        ),
+                    ))
+            sewer_first_manholes.append(SewerFirstManholeRequest(
+                manhole_id=manhole_id,
+                outlet_section_id=fv(f"sewer_manhole{i}_outlet"),
+                invert_absolute_elevation_m=ff(f"sewer_manhole{i}_invert_abs"),
+                levels=levels,
+                source=fv(f"sewer_manhole{i}_source"),
+            ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -458,6 +502,8 @@ async def wizard_design(request: Request):
         sewer_pipes=sewer_pipes,
         sewer_elements=sewer_elements,
         sewer_discharge_events=sewer_discharge_events,
+        sewer_fixture_safety_inputs=sewer_fixture_safety_inputs,
+        sewer_first_manholes=sewer_first_manholes,
         sewer_transient_step_seconds=(
             ff("sewer_transient_step_seconds")
             if fv("sewer_transient_step_seconds") else None

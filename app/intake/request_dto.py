@@ -345,6 +345,35 @@ class SewerDischargeEventRequest:
 
 
 @dataclass
+class SewerFixtureSafetyRequest:
+    """Абсолютные отметки конкретного прибора; ничего не выводится из этажности."""
+    fixture_id: str
+    floor: int
+    instance_no: int
+    connection_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    trap_seal_depth_mm: float
+    minimum_residual_seal_mm: float
+    source: str
+
+
+@dataclass
+class SewerBoundaryLevelRequest:
+    time_seconds: float
+    water_level_absolute_elevation_m: float
+
+
+@dataclass
+class SewerFirstManholeRequest:
+    """Первый колодец как заданная граничная отметка, не наружная модель."""
+    manhole_id: str
+    outlet_section_id: str
+    invert_absolute_elevation_m: float
+    levels: List[SewerBoundaryLevelRequest] = field(default_factory=list)
+    source: str = ""
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -391,6 +420,8 @@ class IOS2Request:
     sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
     sewer_elements: List[SewerElementRequest] = field(default_factory=list)
     sewer_discharge_events: List[SewerDischargeEventRequest] = field(default_factory=list)
+    sewer_fixture_safety_inputs: List[SewerFixtureSafetyRequest] = field(default_factory=list)
+    sewer_first_manholes: List[SewerFirstManholeRequest] = field(default_factory=list)
     sewer_transient_step_seconds: Optional[float] = None
     sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
@@ -911,6 +942,161 @@ class IOS2Request:
                         "sewer_transient_duration_seconds должно быть "
                         f"кратно шагу {step:g} с"
                     )
+
+        seen_fixture_safety = set()
+        for i, row in enumerate(self.sewer_fixture_safety_inputs):
+            key = (row.fixture_id, row.floor, row.instance_no)
+            if key in seen_fixture_safety:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}]: привязка {key} "
+                    "задана повторно"
+                )
+            seen_fixture_safety.add(key)
+            fixture = elements_by_id.get(row.fixture_id)
+            if fixture is None:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].fixture_id ссылается "
+                    f"на неизвестный прибор '{row.fixture_id}'"
+                )
+            elif fixture.system != "K1" or fixture.kind not in {
+                "toilet", "washbasin", "sink", "bath", "shower",
+                "floor_drain", "washing_machine", "dishwasher",
+            }:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].fixture_id должен "
+                    "ссылаться на приёмник стоков К1"
+                )
+            else:
+                floor_to = (
+                    fixture.floor_to
+                    if fixture.floor_to is not None else fixture.floor_from
+                )
+                if not fixture.floor_from <= row.floor <= floor_to:
+                    p.append(
+                        f"sewer_fixture_safety_inputs[{i}].floor вне "
+                        f"диапазона {fixture.floor_from}--{floor_to}"
+                    )
+                if fixture.typical_quantity is None:
+                    p.append(
+                        f"sewer_fixture_safety_inputs[{i}]: у прибора не "
+                        "задано количество экземпляров на этаже"
+                    )
+                elif not 1 <= row.instance_no <= fixture.typical_quantity:
+                    p.append(
+                        f"sewer_fixture_safety_inputs[{i}].instance_no должен "
+                        f"быть от 1 до {fixture.typical_quantity}"
+                    )
+            if row.floor < 1:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].floor должен быть >= 1"
+                )
+            if row.instance_no < 1:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].instance_no должен быть >= 1"
+                )
+            if (
+                row.overflow_absolute_elevation_m
+                <= row.connection_absolute_elevation_m
+            ):
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}]: абсолютная отметка "
+                    "перелива должна быть выше отметки подключения"
+                )
+            if row.trap_seal_depth_mm <= 0:
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].trap_seal_depth_mm "
+                    "должен быть > 0"
+                )
+            if not (
+                0 <= row.minimum_residual_seal_mm < row.trap_seal_depth_mm
+            ):
+                p.append(
+                    f"sewer_fixture_safety_inputs[{i}].minimum_residual_seal_mm "
+                    "должен быть от 0 до глубины гидрозатвора"
+                )
+            if not row.source.strip():
+                p.append(f"sewer_fixture_safety_inputs[{i}].source обязателен")
+
+        pipe_by_id = {
+            row.section_id: row for row in self.sewer_pipes if row.section_id
+        }
+        seen_manholes = set()
+        seen_manhole_outlets = set()
+        for i, row in enumerate(self.sewer_first_manholes):
+            if not row.manhole_id or row.manhole_id in seen_manholes:
+                p.append(
+                    f"sewer_first_manholes[{i}]: ID пустой или повторяется"
+                )
+            seen_manholes.add(row.manhole_id)
+            if (
+                not row.outlet_section_id
+                or row.outlet_section_id in seen_manhole_outlets
+            ):
+                p.append(
+                    f"sewer_first_manholes[{i}]: выпуск пустой или повторяется"
+                )
+            seen_manhole_outlets.add(row.outlet_section_id)
+            outlet = pipe_by_id.get(row.outlet_section_id)
+            if outlet is None or outlet.system != "K1":
+                p.append(
+                    f"sewer_first_manholes[{i}].outlet_section_id должен "
+                    "ссылаться на выпуск К1"
+                )
+            else:
+                if outlet.to_node != row.manhole_id:
+                    p.append(
+                        f"sewer_first_manholes[{i}]: выпуск "
+                        f"{row.outlet_section_id} заканчивается в "
+                        f"'{outlet.to_node}', а не в '{row.manhole_id}'"
+                    )
+                if outlet.absolute_elevation_end_m is None:
+                    p.append(
+                        f"sewer_first_manholes[{i}]: у выпуска нужна "
+                        "абсолютная отметка конца"
+                    )
+                elif abs(
+                    outlet.absolute_elevation_end_m
+                    - row.invert_absolute_elevation_m
+                ) > 0.001:
+                    p.append(
+                        f"sewer_first_manholes[{i}]: отметка лотка не "
+                        "совпадает с отметкой конца выпуска"
+                    )
+            if not row.levels:
+                p.append(
+                    f"sewer_first_manholes[{i}]: нужен хотя бы один уровень"
+                )
+            else:
+                times = [point.time_seconds for point in row.levels]
+                if times[0] != 0 or times != sorted(set(times)):
+                    p.append(
+                        f"sewer_first_manholes[{i}]: уровни должны начинаться "
+                        "с t=0 и иметь строго возрастающее время"
+                    )
+                for j, point in enumerate(row.levels):
+                    if point.time_seconds < 0:
+                        p.append(
+                            f"sewer_first_manholes[{i}].levels[{j}].time_seconds "
+                            "не может быть < 0"
+                        )
+                    if (
+                        point.water_level_absolute_elevation_m
+                        < row.invert_absolute_elevation_m
+                    ):
+                        p.append(
+                            f"sewer_first_manholes[{i}].levels[{j}]: уровень "
+                            "не может быть ниже лотка"
+                        )
+                    step = self.sewer_transient_step_seconds
+                    if step is not None and step > 0:
+                        quotient = point.time_seconds / step
+                        if abs(quotient - round(quotient)) > 1e-9:
+                            p.append(
+                                f"sewer_first_manholes[{i}].levels[{j}]."
+                                f"time_seconds должно быть кратно шагу {step:g} с"
+                            )
+            if not row.source.strip():
+                p.append(f"sewer_first_manholes[{i}].source обязателен")
         if self.wastewater_disposal_mode not in (
             "not_set", "centralized", "local", "water_body",
         ):

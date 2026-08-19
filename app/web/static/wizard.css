@@ -248,6 +248,8 @@ table.grid th { padding: 10px 8px; color: var(--muted); background: var(--input)
 table.grid td { padding: 6px; border-top: 1px solid var(--line); }
 table.grid td:first-child { width: 34px; color: var(--quiet); text-align: center; font: 10px var(--mono); }
 table.grid input { height: 38px; padding: 7px 8px; font-size: 13px; }
+table.grid input.inline-pair { width: 48%; display: inline-block; margin-right: 2%; }
+table.grid input.inline-pair + input.inline-pair { margin-right: 0; }
 table.grid select { height: 38px; padding: 7px 6px; font-size: 12px; }
 table.grid .compact-check { align-items: center; gap: 3px; font-size: 8px; }
 table.grid .compact-check input[type="checkbox"] {

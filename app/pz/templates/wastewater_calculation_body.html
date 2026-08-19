@@ -93,6 +93,25 @@
   {% endfor %}</tbody>
 </table>
 {% endif %}
+{% if transient.fixture_checks %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Прибор / экземпляр</th><th>Стояк → первый колодец</th><th>Абс. отметки подключения / перелива / уровня, м</th><th>hз min / остаток min, мм</th><th>Подпор max, м</th><th>Проверки</th><th>Итог</th></tr></thead>
+  <tbody>{% for f in transient.fixture_checks %}
+    <tr>
+      <td>{{ f.fixture_id }}<br>этаж {{ f.floor }}, № {{ f.instance_no }}</td>
+      <td>{{ f.riser_id or "—" }} → {{ f.first_manhole_id or "не задан" }}</td>
+      <td>{{ f.connection_absolute_elevation_m|num(3) }} / {{ f.overflow_absolute_elevation_m|num(3) }} / {{ f.peak_boundary_level_m|num(3) }}</td>
+      <td>{{ f.trap_seal_depth_mm|num(1) }} / {{ f.minimum_remaining_trap_seal_mm|num(3) }}</td>
+      <td>{{ f.maximum_backwater_head_m|num(3) }}</td>
+      <td>{{ f.worst_backwater_status.value if f.worst_backwater_status else "требуется уровень" }}<br>{{ f.worst_trap_status.value if f.worst_trap_status else "требуется давление" }}</td>
+      <td><b>{{ f.status.value }}</b><br>{{ f.note }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<p class="source-line">Абсолютные отметки приборов и уровни первых колодцев введены явно. Давление принято из временного расчёта соответствующего стояка. Первый колодец является только граничной отметкой; наружная сеть не моделируется.</p>
+{% else %}
+<p class="stage-note">Давление стояков не передано конкретным гидрозатворам: требуются абсолютные отметки подключения и перелива приборов, паспортная глубина затвора, выпуск и сценарный уровень первого колодца.</p>
+{% endif %}
 {% if transient.network_summaries %}
 <table class="data calc-table pipe-calc">
   <thead><tr><th>Участок</th><th>Qвх макс, л/с</th><th>Qвых макс, л/с</th><th>(h/d)макс</th><th>Vмин при движении, м/с</th><th>Выход / остаток к концу, м³</th><th>Статус</th></tr></thead>
@@ -202,6 +221,7 @@
 </table>
 {% endif %}
 
+<div class="calculation-section">
 <p class="subhead">7. Расчёт дождевого расхода К2</p>
 {% if storm.result %}
 <table class="data calc-table compact-calc">
@@ -215,6 +235,7 @@
 {% else %}
 <p class="stage-note">Расход К2 не определён: требуется задать город и площадь кровли. Проверка воронок и стояков без плана кровли и нагрузок на диктующие элементы не выполняется; общий расход между элементами автоматически не делится.</p>
 {% endif %}
+</div>
 
 {% if storm.result %}
 <p class="subhead">8. Проверка воронок и стояков К2</p>

@@ -5,7 +5,7 @@
 <title>Заря — проектирование ИОС2 + ИОС3</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260730-7">
+<link rel="stylesheet" href="/static/wizard.css?v=20260819-8">
 <script defer src="/static/wizard.js?v=20260730-7"></script>
 </head><body>
 <header class="topbar">
@@ -262,6 +262,30 @@
         <td><input name="sewer_event{{ i + 1 }}_source" value="{{ e.source if e else '' }}"></td>
         <td><input name="sewer_event{{ i + 1 }}_solids" value="{{ e.suspended_solids_mg_l if e and e.suspended_solids_mg_l is not none else '' }}"></td>
         <td><input name="sewer_event{{ i + 1 }}_solids_source" value="{{ e.suspended_solids_source if e else '' }}"></td>
+      </tr>{% endfor %}</table></div>
+      <p class="technical-label">Конкретные гидрозатворы · только абсолютные отметки из АР/аксонометрии</p>
+      <p>Привязка не выводится из средней высоты этажа. Укажите нижние или иные проверяемые приборы каждой группы стояков.</p>
+      <div class="table-wrap"><table class="grid"><tr><th>ID прибора</th><th>Этаж</th><th>№</th><th>Абс. Z подключения, м</th><th>Абс. Z перелива, м</th><th>hз, мм</th><th>Остаток min, мм</th><th>Источник</th></tr>
+      {% for i in range(8) %}{% set s = prefill.sewer_fixture_safety_inputs[i] if prefill and i < prefill.sewer_fixture_safety_inputs|length else none %}
+      <tr>
+        <td><input name="sewer_safety{{ i + 1 }}_fixture" value="{{ s.fixture_id if s else '' }}" placeholder="К1-Ун1"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_floor" value="{{ s.floor if s else 1 }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_instance" value="{{ s.instance_no if s else 1 }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_connection_abs" value="{{ s.connection_absolute_elevation_m if s else '' }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_overflow_abs" value="{{ s.overflow_absolute_elevation_m if s else '' }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_trap_seal" value="{{ s.trap_seal_depth_mm if s else '' }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_minimum_residual" value="{{ s.minimum_residual_seal_mm if s else '' }}"></td>
+        <td><input name="sewer_safety{{ i + 1 }}_source" value="{{ s.source if s else '' }}" placeholder="АР, аксонометрия, паспорт"></td>
+      </tr>{% endfor %}</table></div>
+      <p class="technical-label">Первые колодцы · граничные уровни без расчёта наружной сети</p>
+      <div class="table-wrap"><table class="grid"><tr><th>ID колодца</th><th>Выпуск К1</th><th>Абс. Z лотка, м</th><th>t₁ / Zводы₁</th><th>t₂ / Zводы₂</th><th>t₃ / Zводы₃</th><th>Источник</th></tr>
+      {% for i in range(3) %}{% set m = prefill.sewer_first_manholes[i] if prefill and i < prefill.sewer_first_manholes|length else none %}
+      <tr>
+        <td><input name="sewer_manhole{{ i + 1 }}_id" value="{{ m.manhole_id if m else '' }}" placeholder="КК-1"></td>
+        <td><input name="sewer_manhole{{ i + 1 }}_outlet" value="{{ m.outlet_section_id if m else '' }}" placeholder="К1-Вып1"></td>
+        <td><input name="sewer_manhole{{ i + 1 }}_invert_abs" value="{{ m.invert_absolute_elevation_m if m else '' }}"></td>
+        {% for j in range(3) %}{% set level = m.levels[j] if m and j < m.levels|length else none %}<td><input class="inline-pair" name="sewer_manhole{{ i + 1 }}_time{{ j + 1 }}" value="{{ level.time_seconds if level else (0 if j == 0 else '') }}" placeholder="t, c"><input class="inline-pair" name="sewer_manhole{{ i + 1 }}_level{{ j + 1 }}" value="{{ level.water_level_absolute_elevation_m if level else '' }}" placeholder="Z, м"></td>{% endfor %}
+        <td><input name="sewer_manhole{{ i + 1 }}_source" value="{{ m.source if m else '' }}" placeholder="профиль выпуска, ТУ"></td>
       </tr>{% endfor %}</table></div>
     </details>
     <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>

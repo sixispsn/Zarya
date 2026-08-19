@@ -3,6 +3,11 @@ from pathlib import Path
 
 import pytest
 
+from app.calc.sewer_fixture_safety import (
+    BackwaterStatus,
+    FixtureSafetyStatus,
+    TrapSealStatus,
+)
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
 from app.pz.generator import generate_wastewater_calculation_html
@@ -89,6 +94,57 @@ def test_missing_solids_does_not_fake_sediment_prediction():
     assert not result.sediment_data_complete
     assert all(row.final_sediment_depth_mm == 0.0 for row in result.network_summaries)
     assert any("прогноз осадка отключён" in row for row in result.warnings)
+
+
+def test_stack_pressure_and_first_manhole_level_reach_specific_lower_fixtures():
+    result = assess_wastewater_transients(_project())
+
+    assert len(result.fixture_checks) == 2
+    checks = {row.fixture_id: row for row in result.fixture_checks}
+    first = checks["К1-Ун1"]
+    assert first.floor == 1 and first.instance_no == 1
+    assert first.riser_id == "К1-Ст1"
+    assert first.first_manhole_id == "КК-1"
+    assert first.peak_boundary_level_m == pytest.approx(146.60)
+    assert first.minimum_level_margin_to_overflow_m == pytest.approx(1.10)
+    assert first.maximum_backwater_head_m == 0.0
+    assert first.minimum_remaining_trap_seal_mm == pytest.approx(
+        50.0 - 14.18448020237986
+    )
+    assert first.worst_backwater_status is BackwaterStatus.CLEAR
+    assert first.worst_trap_status is TrapSealStatus.VERIFIED
+    assert first.status is FixtureSafetyStatus.NORMAL
+
+
+def test_first_manhole_level_can_prove_flooding_and_trap_blowout():
+    project = deepcopy(_project())
+    project.sewage.first_manholes[0].levels[0].water_level_absolute_elevation_m = (
+        147.80
+    )
+
+    result = assess_wastewater_transients(project)
+
+    assert result.ready
+    first = result.fixture_checks[0]
+    assert first.status is FixtureSafetyStatus.FLOODING
+    assert first.worst_backwater_status is BackwaterStatus.FLOODING
+    assert first.worst_trap_status is TrapSealStatus.BLOWN
+    assert first.maximum_backwater_head_m == pytest.approx(0.38)
+
+
+def test_missing_first_manhole_is_reported_without_inventing_safe_boundary():
+    project = deepcopy(_project())
+    project.sewage.first_manholes.clear()
+
+    result = assess_wastewater_transients(project)
+
+    assert result.ready
+    assert all(
+        row.status is FixtureSafetyStatus.DATA_REQUIRED
+        for row in result.fixture_checks
+    )
+    assert all(row.snapshots == () for row in result.fixture_checks)
+    assert all("не задан первый колодец" in row.note for row in result.fixture_checks)
 
 
 def test_unknown_fixture_and_overlapping_same_instance_are_rejected():
@@ -179,4 +235,7 @@ def test_orchestrator_and_calculation_sheet_include_transient_proof(tmp_path):
     assert "Временной сценарий сбросов" in html
     assert "СБР-1" in html and "СБР-2" in html
     assert "14,184" in html
+    assert "35,816" in html
+    assert "КК-1" in html
+    assert "Подпор отсутствует" in html
     assert "не заменяет нормативный расход" in html

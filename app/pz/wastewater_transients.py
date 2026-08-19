@@ -18,6 +18,16 @@ from app.calc.sewer_network_simulation import (
     PipeConnection,
     SewerNetworkSimulator,
 )
+from app.calc.sewer_fixture_safety import (
+    BackwaterStatus,
+    BoundaryLevelPoint,
+    FirstManholeBoundary,
+    FixtureSafetyInput,
+    FixtureSafetySnapshot,
+    FixtureSafetyStatus,
+    TrapSealStatus,
+    evaluate_fixture_safety,
+)
 from app.calc.sewer_simulation import (
     PipeSection,
     PipeSectionConfig,
@@ -30,11 +40,14 @@ from app.calc.sewer_stack_pressure import (
     StackPressureTimeline,
     StackVentilationMode,
     calculate_pressure_timeline,
+    timeline_to_trap_pressure,
 )
 from app.pz.project import (
     Project,
     SewerDischargeEventSpec,
     SewerElementSpec,
+    SewerFixtureSafetySpec,
+    SewerFirstManholeSpec,
     SewerPipeSpec,
     SewageRiserSpec,
 )
@@ -107,6 +120,35 @@ class NetworkTransientSummary:
     status: PipeStatus
 
 
+@dataclass(frozen=True)
+class FixtureTransientCheck:
+    fixture_id: str
+    fixture_name: str
+    floor: int
+    instance_no: int
+    riser_id: str
+    first_manhole_id: str
+    connection_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    trap_seal_depth_mm: float
+    minimum_residual_seal_mm: float
+    peak_boundary_level_m: Optional[float]
+    minimum_level_margin_to_overflow_m: Optional[float]
+    maximum_backwater_head_m: Optional[float]
+    minimum_remaining_trap_seal_mm: Optional[float]
+    worst_backwater_status: Optional[BackwaterStatus]
+    worst_trap_status: Optional[TrapSealStatus]
+    status: FixtureSafetyStatus
+    critical_time_seconds: Optional[float]
+    snapshots: Tuple[FixtureSafetySnapshot, ...]
+    source: str
+    note: str
+
+    @property
+    def instance_label(self) -> str:
+        return f"{self.fixture_id}: этаж {self.floor}, № {self.instance_no}"
+
+
 @dataclass
 class WastewaterTransientAssessment:
     events: Tuple[ResolvedFixtureDischarge, ...] = ()
@@ -115,6 +157,7 @@ class WastewaterTransientAssessment:
     network_inflows: Tuple[InflowHydrograph, ...] = ()
     network_steps: Tuple[NetworkStepSnapshot, ...] = ()
     network_summaries: Tuple[NetworkTransientSummary, ...] = ()
+    fixture_checks: Tuple[FixtureTransientCheck, ...] = ()
     step_seconds: Optional[float] = None
     duration_seconds: Optional[float] = None
     sediment_data_complete: bool = False
@@ -662,6 +705,276 @@ def _run_network(
     result.network_summaries = tuple(summaries)
 
 
+_FIXTURE_STATUS_RANK = {
+    FixtureSafetyStatus.NORMAL: 0,
+    FixtureSafetyStatus.DATA_REQUIRED: 1,
+    FixtureSafetyStatus.CRITICAL: 2,
+    FixtureSafetyStatus.BACKWATER: 3,
+    FixtureSafetyStatus.FLOODING: 4,
+}
+_BACKWATER_STATUS_RANK = {
+    BackwaterStatus.CLEAR: 0,
+    BackwaterStatus.BACKWATER: 1,
+    BackwaterStatus.FLOODING: 2,
+}
+_TRAP_STATUS_RANK = {
+    TrapSealStatus.VERIFIED: 0,
+    TrapSealStatus.DATA_REQUIRED: 1,
+    TrapSealStatus.CRITICAL: 2,
+    TrapSealStatus.SIPHONED: 3,
+    TrapSealStatus.BLOWN: 3,
+}
+
+
+def _data_required_fixture_check(
+    row: SewerFixtureSafetySpec,
+    fixture: Optional[SewerElementSpec],
+    *,
+    riser_id: str = "",
+    manhole_id: str = "",
+    note: str,
+) -> FixtureTransientCheck:
+    return FixtureTransientCheck(
+        fixture_id=row.fixture_id,
+        fixture_name=fixture.name if fixture else "не найден в реестре",
+        floor=row.floor,
+        instance_no=row.instance_no,
+        riser_id=riser_id,
+        first_manhole_id=manhole_id,
+        connection_absolute_elevation_m=(
+            row.connection_absolute_elevation_m
+        ),
+        overflow_absolute_elevation_m=row.overflow_absolute_elevation_m,
+        trap_seal_depth_mm=row.trap_seal_depth_mm,
+        minimum_residual_seal_mm=row.minimum_residual_seal_mm,
+        peak_boundary_level_m=None,
+        minimum_level_margin_to_overflow_m=None,
+        maximum_backwater_head_m=None,
+        minimum_remaining_trap_seal_mm=None,
+        worst_backwater_status=None,
+        worst_trap_status=TrapSealStatus.DATA_REQUIRED,
+        status=FixtureSafetyStatus.DATA_REQUIRED,
+        critical_time_seconds=None,
+        snapshots=(),
+        source=row.source,
+        note=note,
+    )
+
+
+def _calculate_fixture_checks(
+    project: Project,
+    result: WastewaterTransientAssessment,
+) -> Tuple[FixtureTransientCheck, ...]:
+    """Передать давление стояка и уровень колодца конкретным приборам."""
+    rows = tuple(project.sewage.fixture_safety_inputs)
+    if not rows:
+        result.warnings.append(
+            "конкретные гидрозатворы не привязаны: нужны ID прибора, этаж, "
+            "экземпляр, абсолютные отметки подключения/перелива и паспортная "
+            "глубина затвора"
+        )
+        return ()
+
+    topology = build_wastewater_topology(project)
+    if topology.errors:
+        result.warnings.append(
+            "проверка гидрозатворов пропущена из-за ошибок топологии"
+        )
+        return ()
+    fixture_index = {
+        element.element_id: element
+        for element in project.sewage.elements
+        if element.system == "K1" and element.kind in GRAVITY_SOURCE_KINDS
+    }
+    branch_index: Dict[str, SewerBranch] = {
+        element.element_id: branch
+        for branch in topology.branches
+        if branch.pipe.system == "K1"
+        for element in branch.elements
+        if element.kind in GRAVITY_SOURCE_KINDS
+    }
+    route_by_riser: Dict[str, Tuple[str, ...]] = {}
+    for riser_id in {branch.riser_id for branch in branch_index.values()}:
+        route, error = _main_route(riser_id, tuple(topology.mains))
+        if error:
+            result.warnings.append(
+                f"{riser_id}: проверка гидрозатворов не выполнена; {error}"
+            )
+        else:
+            route_by_riser[riser_id] = route
+
+    manhole_by_outlet: Dict[str, SewerFirstManholeSpec] = {
+        row.outlet_section_id: row for row in project.sewage.first_manholes
+    }
+    pressure_by_riser = {
+        row.riser_id: row.pressure_timeline
+        for row in result.stack_checks
+        if row.pressure_timeline is not None
+    }
+    network_step_by_time = {
+        round(row.time_seconds, 9): row for row in result.network_steps
+    }
+    checks: List[FixtureTransientCheck] = []
+    covered_risers = set()
+
+    for row in rows:
+        fixture = fixture_index.get(row.fixture_id)
+        branch = branch_index.get(row.fixture_id)
+        if fixture is None or branch is None:
+            checks.append(_data_required_fixture_check(
+                row,
+                fixture,
+                note="прибор или его этажная ветвь отсутствует в топологии К1",
+            ))
+            continue
+        riser_id = branch.riser_id
+        covered_risers.add(riser_id)
+        main_route = route_by_riser.get(riser_id)
+        if not main_route:
+            checks.append(_data_required_fixture_check(
+                row,
+                fixture,
+                riser_id=riser_id,
+                note="не найден единственный маршрут от стояка до выпуска",
+            ))
+            continue
+        manhole_spec = manhole_by_outlet.get(main_route[-1])
+        if manhole_spec is None:
+            checks.append(_data_required_fixture_check(
+                row,
+                fixture,
+                riser_id=riser_id,
+                note=(
+                    f"для выпуска {main_route[-1]} не задан первый колодец "
+                    "и его сценарный уровень"
+                ),
+            ))
+            continue
+
+        instance_id = f"{row.fixture_id}@{row.floor}.{row.instance_no}"
+        try:
+            fixture_input = FixtureSafetyInput(
+                fixture_id=instance_id,
+                pipe_id=main_route[0],
+                name=(
+                    f"{fixture.name}, этаж {row.floor}, № {row.instance_no}"
+                ),
+                connection_elevation_m=(
+                    row.connection_absolute_elevation_m
+                ),
+                overflow_elevation_m=row.overflow_absolute_elevation_m,
+                trap_seal_depth_mm=row.trap_seal_depth_mm,
+                minimum_residual_seal_mm=row.minimum_residual_seal_mm,
+                source=row.source,
+            )
+            first_manhole = FirstManholeBoundary(
+                manhole_id=manhole_spec.manhole_id,
+                invert_elevation_m=(
+                    manhole_spec.invert_absolute_elevation_m
+                ),
+                levels=tuple(
+                    BoundaryLevelPoint(
+                        time_seconds=point.time_seconds,
+                        water_level_elevation_m=(
+                            point.water_level_absolute_elevation_m
+                        ),
+                    )
+                    for point in manhole_spec.levels
+                ),
+                source=manhole_spec.source,
+            )
+            timeline = pressure_by_riser.get(riser_id)
+            pressure = (
+                timeline_to_trap_pressure(timeline, instance_id)
+                if timeline is not None else None
+            )
+            snapshots = tuple(
+                evaluate_fixture_safety(
+                    fixture=fixture_input,
+                    first_manhole=first_manhole,
+                    time_seconds=point.time_seconds,
+                    pressure=pressure,
+                    network_step=network_step_by_time.get(
+                        round(point.time_seconds, 9)
+                    ),
+                )
+                for point in result.points
+            )
+        except ValueError as exc:
+            checks.append(_data_required_fixture_check(
+                row,
+                fixture,
+                riser_id=riser_id,
+                manhole_id=manhole_spec.manhole_id,
+                note="исходные данные проверки отклонены: " + str(exc),
+            ))
+            continue
+
+        worst = max(
+            snapshots,
+            key=lambda snapshot: _FIXTURE_STATUS_RANK[snapshot.status],
+        )
+        worst_backwater = max(
+            (snapshot.backwater_status for snapshot in snapshots),
+            key=lambda status: _BACKWATER_STATUS_RANK[status],
+        )
+        worst_trap = max(
+            (snapshot.trap_status for snapshot in snapshots),
+            key=lambda status: _TRAP_STATUS_RANK[status],
+        )
+        remaining = [
+            snapshot.remaining_trap_seal_mm
+            for snapshot in snapshots
+            if snapshot.remaining_trap_seal_mm is not None
+        ]
+        note_parts = [worst_backwater.value, worst_trap.value]
+        note_parts.extend(worst.notes)
+        checks.append(FixtureTransientCheck(
+            fixture_id=row.fixture_id,
+            fixture_name=fixture.name,
+            floor=row.floor,
+            instance_no=row.instance_no,
+            riser_id=riser_id,
+            first_manhole_id=manhole_spec.manhole_id,
+            connection_absolute_elevation_m=(
+                row.connection_absolute_elevation_m
+            ),
+            overflow_absolute_elevation_m=row.overflow_absolute_elevation_m,
+            trap_seal_depth_mm=row.trap_seal_depth_mm,
+            minimum_residual_seal_mm=row.minimum_residual_seal_mm,
+            peak_boundary_level_m=max(
+                snapshot.manhole_water_level_elevation_m
+                for snapshot in snapshots
+            ),
+            minimum_level_margin_to_overflow_m=min(
+                snapshot.level_margin_to_overflow_m
+                for snapshot in snapshots
+            ),
+            maximum_backwater_head_m=max(
+                snapshot.backwater_head_above_connection_m
+                for snapshot in snapshots
+            ),
+            minimum_remaining_trap_seal_mm=(
+                min(remaining) if remaining else None
+            ),
+            worst_backwater_status=worst_backwater,
+            worst_trap_status=worst_trap,
+            status=worst.status,
+            critical_time_seconds=worst.time_seconds,
+            snapshots=snapshots,
+            source=f"{row.source}; {manhole_spec.source}",
+            note="; ".join(dict.fromkeys(note_parts)),
+        ))
+
+    scenario_risers = {row.riser_id for row in result.events}
+    for riser_id in sorted(scenario_risers - covered_risers):
+        result.warnings.append(
+            f"{riser_id}: давление рассчитано, но не передано конкретному "
+            "гидрозатвору — отсутствует точная высотная привязка прибора"
+        )
+    return tuple(checks)
+
+
 def assess_wastewater_transients(project: Project) -> WastewaterTransientAssessment:
     """Рассчитать единый детерминированный сценарий внутренних систем К1."""
     result = WastewaterTransientAssessment(
@@ -735,6 +1048,7 @@ def assess_wastewater_transients(project: Project) -> WastewaterTransientAssessm
             end_seconds,
             result,
         )
+    result.fixture_checks = _calculate_fixture_checks(project, result)
     if (
         project.sewage.result is not None
         and result.peak_total_flow_lps

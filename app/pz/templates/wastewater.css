@@ -10,6 +10,7 @@
 .calc-table tr { break-inside: avoid; page-break-inside: avoid; }
 .calc-table th { text-align: center; }
 .calc-table td { vertical-align: top; }
+.calculation-section { break-inside: avoid; page-break-inside: avoid; }
 .compact-calc th { width: 58%; text-align: left; }
 .compact-calc td { text-align: center; }
 .riser-calc { font-size: 8.5pt !important; }

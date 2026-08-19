@@ -183,6 +183,18 @@ sewage:
   discharge_events:
     - {id: СБР-1, fixture_id: К1-Ун1, floor: 16, instance_no: 1, start_seconds: 0.0, duration_seconds: 5.0, flow_lps: 1.6, source: "явный учебный сценарий; q0s=1,6 л/с из исходных данных"}
     - {id: СБР-2, fixture_id: К1-Ун2, floor: 16, instance_no: 1, start_seconds: 3.0, duration_seconds: 5.0, flow_lps: 1.6, source: "явный учебный сценарий; q0s=1,6 л/с из исходных данных"}
+  # Нижние проверяемые приборы заданы отдельными точными строками. Программа
+  # не получает абсолютные отметки умножением средней высоты этажа.
+  fixture_safety:
+    - {fixture_id: К1-Ун1, floor: 1, instance_no: 1, connection_absolute_elevation_m: 147.42, overflow_absolute_elevation_m: 147.70, trap_seal_depth_mm: 50.0, minimum_residual_seal_mm: 20.0, source: "явные абсолютные отметки учебной АР/аксонометрии; глубина затвора по паспорту прибора"}
+    - {fixture_id: К1-Ун2, floor: 1, instance_no: 1, connection_absolute_elevation_m: 147.42, overflow_absolute_elevation_m: 147.70, trap_seal_depth_mm: 50.0, minimum_residual_seal_mm: 20.0, source: "явные абсолютные отметки учебной АР/аксонометрии; глубина затвора по паспорту прибора"}
+  first_manholes:
+    - id: КК-1
+      outlet_section_id: К1-Вып1
+      invert_absolute_elevation_m: 146.45
+      levels:
+        - {time_seconds: 0.0, water_level_absolute_elevation_m: 146.60}
+      source: "явный учебный профиль выпуска и заданный сценарный уровень первого колодца"
 rooms:
   - name: Коридор типового этажа
     length_m: 42.0

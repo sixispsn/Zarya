@@ -650,12 +650,44 @@ class SewerDischargeEventSpec:
 
 
 @dataclass
+class SewerFixtureSafetySpec:
+    """Точная высотная привязка конкретного гидрозатвора К1."""
+    fixture_id: str = ""
+    floor: int = 1
+    instance_no: int = 1
+    connection_absolute_elevation_m: float = 0.0
+    overflow_absolute_elevation_m: float = 0.0
+    trap_seal_depth_mm: float = 0.0
+    minimum_residual_seal_mm: float = 0.0
+    source: str = ""
+
+
+@dataclass
+class SewerBoundaryLevelSpec:
+    """Одна явно заданная точка сценарного уровня первого колодца."""
+    time_seconds: float = 0.0
+    water_level_absolute_elevation_m: float = 0.0
+
+
+@dataclass
+class SewerFirstManholeSpec:
+    """Граница внутренней К1 у первого колодца без расчёта наружной сети."""
+    manhole_id: str = ""
+    outlet_section_id: str = ""
+    invert_absolute_elevation_m: float = 0.0
+    levels: List[SewerBoundaryLevelSpec] = field(default_factory=list)
+    source: str = ""
+
+
+@dataclass
 class SewageDesign:
     """К1: расчёт системы и явно подтверждённые данные стадии П."""
     risers: List[SewageRiserSpec] = field(default_factory=list)
     pipes: List[SewerPipeSpec] = field(default_factory=list)
     elements: List[SewerElementSpec] = field(default_factory=list)
     discharge_events: List[SewerDischargeEventSpec] = field(default_factory=list)
+    fixture_safety_inputs: List[SewerFixtureSafetySpec] = field(default_factory=list)
+    first_manholes: List[SewerFirstManholeSpec] = field(default_factory=list)
     transient_step_seconds: Optional[float] = None
     transient_duration_seconds: Optional[float] = None
     transient_assessment: Optional[object] = None
