@@ -244,6 +244,10 @@ def test_demo_yaml_is_valid_complete_and_roundtrips():
     assert req.sewer_first_manholes[0].outlet_section_id == "К1-Вып1"
     first_level = req.sewer_first_manholes[0].levels[0]
     assert first_level.water_level_absolute_elevation_m == 146.60
+    assert len(req.sewer_internal_nodes) == 2
+    assert req.sewer_internal_nodes[1].node_id == "К1-Ст2"
+    assert req.sewer_internal_nodes[1].upstream_section_ids == ["К1-М1"]
+    assert req.sewer_internal_nodes[1].storage_volume_m3 == 0.08
     assert req.sewage_risers[0].inner_diameter_mm == 103.2
     assert req.sewer_pipes[6].critical_velocity_mps == 0.6
     assert all(x.repair_section_id for x in req.network.runs)
@@ -265,5 +269,29 @@ def test_first_manhole_must_match_outlet_node_and_invert_elevation():
     request.sewer_first_manholes[0].invert_absolute_elevation_m += 0.01
     assert any(
         "отметка лотка не совпадает" in problem
+        for problem in request.validate()
+    )
+
+
+def test_internal_node_must_match_pipe_topology_and_explicit_geometry():
+    from pathlib import Path
+    raw = Path("demo/demo_project.yaml").read_text(encoding="utf-8")
+
+    request = load_request(raw)
+    request.sewer_internal_nodes[1].upstream_section_ids = []
+    # DTO проверяет ссылки; точное покрытие графа повторно проверяет симулятор.
+    assert request.validate() == []
+
+    request = load_request(raw)
+    request.sewer_internal_nodes[1].invert_absolute_elevation_m += 0.01
+    assert any(
+        "не совпадает с началом нижнего участка" in problem
+        for problem in request.validate()
+    )
+
+    request = load_request(raw)
+    request.sewer_internal_nodes[0].storage_volume_m3 = 0
+    assert any(
+        "storage_volume_m3 должен быть > 0" in problem
         for problem in request.validate()
     )

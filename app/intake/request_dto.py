@@ -374,6 +374,19 @@ class SewerFirstManholeRequest:
 
 
 @dataclass
+class SewerInternalNodeRequest:
+    """Внутренний узел К1: отметки и объём задаются, а не вычисляются."""
+    node_id: str
+    downstream_section_id: str
+    upstream_section_ids: List[str]
+    invert_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    storage_volume_m3: float
+    overflow_location: str
+    source: str
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -422,6 +435,7 @@ class IOS2Request:
     sewer_discharge_events: List[SewerDischargeEventRequest] = field(default_factory=list)
     sewer_fixture_safety_inputs: List[SewerFixtureSafetyRequest] = field(default_factory=list)
     sewer_first_manholes: List[SewerFirstManholeRequest] = field(default_factory=list)
+    sewer_internal_nodes: List[SewerInternalNodeRequest] = field(default_factory=list)
     sewer_transient_step_seconds: Optional[float] = None
     sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
@@ -1020,6 +1034,70 @@ class IOS2Request:
         pipe_by_id = {
             row.section_id: row for row in self.sewer_pipes if row.section_id
         }
+        seen_internal_nodes = set()
+        seen_internal_downstream = set()
+        for i, row in enumerate(self.sewer_internal_nodes):
+            prefix = f"sewer_internal_nodes[{i}]"
+            if not row.node_id or row.node_id in seen_internal_nodes:
+                p.append(f"{prefix}: ID пустой или повторяется")
+            seen_internal_nodes.add(row.node_id)
+            if (
+                not row.downstream_section_id
+                or row.downstream_section_id in seen_internal_downstream
+            ):
+                p.append(f"{prefix}: нижний участок пустой или повторяется")
+            seen_internal_downstream.add(row.downstream_section_id)
+            downstream = pipe_by_id.get(row.downstream_section_id)
+            if downstream is None or downstream.system != "K1":
+                p.append(
+                    f"{prefix}.downstream_section_id должен ссылаться на К1"
+                )
+            else:
+                if downstream.from_node != row.node_id:
+                    p.append(
+                        f"{prefix}: участок {row.downstream_section_id} "
+                        f"начинается в '{downstream.from_node}', а не "
+                        f"в '{row.node_id}'"
+                    )
+                if (
+                    downstream.absolute_elevation_start_m is not None
+                    and abs(
+                        downstream.absolute_elevation_start_m
+                        - row.invert_absolute_elevation_m
+                    ) > 0.001
+                ):
+                    p.append(
+                        f"{prefix}: отметка лотка не совпадает с началом "
+                        "нижнего участка"
+                    )
+            if (
+                len(set(row.upstream_section_ids))
+                != len(row.upstream_section_ids)
+            ):
+                p.append(f"{prefix}: верхний участок задан повторно")
+            for upstream_id in row.upstream_section_ids:
+                upstream = pipe_by_id.get(upstream_id)
+                if upstream is None or upstream.system != "K1":
+                    p.append(
+                        f"{prefix}.upstream_section_ids содержит не К1 "
+                        f"'{upstream_id}'"
+                    )
+                elif upstream.to_node != row.node_id:
+                    p.append(
+                        f"{prefix}: участок {upstream_id} заканчивается в "
+                        f"'{upstream.to_node}', а не в '{row.node_id}'"
+                    )
+            if (
+                row.overflow_absolute_elevation_m
+                <= row.invert_absolute_elevation_m
+            ):
+                p.append(f"{prefix}: отметка перелива должна быть выше лотка")
+            if row.storage_volume_m3 <= 0:
+                p.append(f"{prefix}.storage_volume_m3 должен быть > 0")
+            if not row.overflow_location.strip():
+                p.append(f"{prefix}.overflow_location обязателен")
+            if not row.source.strip():
+                p.append(f"{prefix}.source обязателен")
         seen_manholes = set()
         seen_manhole_outlets = set()
         for i, row in enumerate(self.sewer_first_manholes):

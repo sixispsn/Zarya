@@ -24,6 +24,7 @@ from app.pz.project import (
     InsulationDesign, SewageRiserSpec, SewerPipeSpec, SewerElementSpec,
     SewerDischargeEventSpec, SewerFixtureSafetySpec,
     SewerBoundaryLevelSpec, SewerFirstManholeSpec,
+    SewerInternalNodeSpec,
     HwsType,
 )
 from app.pz.normative import derive_requirements, decide_grease_trap, decide_storm_system
@@ -268,6 +269,19 @@ def build_project(req: IOS2Request) -> Project:
             source=row.source,
         )
         for row in req.sewer_first_manholes
+    ]
+    p.sewage.internal_nodes = [
+        SewerInternalNodeSpec(
+            node_id=row.node_id,
+            downstream_section_id=row.downstream_section_id,
+            upstream_section_ids=list(row.upstream_section_ids),
+            invert_absolute_elevation_m=row.invert_absolute_elevation_m,
+            overflow_absolute_elevation_m=row.overflow_absolute_elevation_m,
+            storage_volume_m3=row.storage_volume_m3,
+            overflow_location=row.overflow_location,
+            source=row.source,
+        )
+        for row in req.sewer_internal_nodes
     ]
     p.sewage.transient_step_seconds = req.sewer_transient_step_seconds
     p.sewage.transient_duration_seconds = req.sewer_transient_duration_seconds

@@ -6,10 +6,10 @@
 участка. Непринятый нижним участком объём остаётся в верхнем, поэтому подпор
 распространяется против направления графа без создания воды.
 
-Модель является кинематической. Она не заменяет решение полных уравнений
-Сен-Венана для определения пьезометрических отметок при затоплении и не
-вычисляет влияние заданного уровня наружной сети. Для этого потребуется
-динамический волновой решатель и отметки узлов.
+Модель является кинематической. Явно заданные внутренние узлы могут
+накапливать воду и локализовать аварийный перелив, но уровень между их
+отметками не интерполируется: для этого нужна геометрия ёмкости. Модель не
+заменяет решение полных уравнений Сен-Венана и не вычисляет наружную сеть.
 """
 from __future__ import annotations
 
@@ -141,6 +141,95 @@ class NetworkSedimentModel:
             raise ValueError("для модели осадка нужен источник или калибровка")
 
 
+class NodeStatus(str, Enum):
+    EMPTY = "empty"
+    STORING = "storing"
+    OVERFLOW = "overflow"
+
+
+@dataclass(frozen=True)
+class NetworkStorageNodeConfig:
+    """Явно заданный внутренний узел приёма, накопления и перелива.
+
+    Узел перехватывает все связи и внешние притоки у входа
+    ``downstream_pipe_id``. Объём хранения и отметка перелива являются
+    исходными данными; движок не выводит их из высоты этажа или DN трубы.
+    """
+
+    node_id: str
+    downstream_pipe_id: str
+    upstream_pipe_ids: tuple[str, ...]
+    invert_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    storage_volume_m3: float
+    overflow_location: str
+    source: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "upstream_pipe_ids", tuple(self.upstream_pipe_ids)
+        )
+        if not self.node_id.strip():
+            raise ValueError("для внутреннего узла не задан ID")
+        if not self.downstream_pipe_id.strip():
+            raise ValueError(f"{self.node_id}: не задан нижний участок")
+        if len(set(self.upstream_pipe_ids)) != len(self.upstream_pipe_ids):
+            raise ValueError(f"{self.node_id}: верхний участок задан повторно")
+        if any(not row.strip() for row in self.upstream_pipe_ids):
+            raise ValueError(f"{self.node_id}: пустой ID верхнего участка")
+        if (
+            self.overflow_absolute_elevation_m
+            <= self.invert_absolute_elevation_m
+        ):
+            raise ValueError(
+                f"{self.node_id}: отметка перелива должна быть выше лотка"
+            )
+        if self.storage_volume_m3 <= 0:
+            raise ValueError(f"{self.node_id}: объём хранения должен быть > 0")
+        if not self.overflow_location.strip():
+            raise ValueError(
+                f"{self.node_id}: не задано место аварийного выхода"
+            )
+        if not self.source.strip():
+            raise ValueError(f"{self.node_id}: не задан источник геометрии")
+
+
+@dataclass
+class NetworkStorageNodeState:
+    stored_water_m3: float = 0.0
+    suspended_solids_kg: float = 0.0
+    flooded_volume_m3: float = 0.0
+
+    def __post_init__(self) -> None:
+        if min(
+            self.stored_water_m3,
+            self.suspended_solids_kg,
+            self.flooded_volume_m3,
+        ) < 0:
+            raise ValueError(
+                "состояние внутреннего узла не может быть отрицательным"
+            )
+
+
+@dataclass
+class NetworkStorageNode:
+    config: NetworkStorageNodeConfig
+    state: NetworkStorageNodeState
+
+    def __post_init__(self) -> None:
+        if self.state.stored_water_m3 > self.config.storage_volume_m3 + 1e-12:
+            raise ValueError(
+                f"{self.config.node_id}: начальный объём больше объёма хранения"
+            )
+        if (
+            self.state.suspended_solids_kg > 0
+            and self.state.stored_water_m3 == 0
+        ):
+            raise ValueError(
+                f"{self.config.node_id}: взвеси заданы без объёма воды"
+            )
+
+
 @dataclass(frozen=True)
 class PipeStepSnapshot:
     time_seconds: float
@@ -169,10 +258,30 @@ class PipeStepSnapshot:
 
 
 @dataclass(frozen=True)
+class NodeStepSnapshot:
+    time_seconds: float
+    node_id: str
+    downstream_pipe_id: str
+    invert_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    inflow_lps: float
+    outflow_lps: float
+    stored_water_m3: float
+    storage_volume_m3: float
+    fill_ratio: float
+    suspended_solids_kg: float
+    flooded_volume_m3: float
+    cumulative_flooded_volume_m3: float
+    status: NodeStatus
+    overflow_location: str
+
+
+@dataclass(frozen=True)
 class NetworkStepSnapshot:
     time_seconds: float
     dt_seconds: float
     pipes: tuple[PipeStepSnapshot, ...]
+    nodes: tuple[NodeStepSnapshot, ...]
     external_inflow_m3: float
     outlet_discharge_m3: float
     flooded_volume_m3: float
@@ -186,6 +295,12 @@ class NetworkStepSnapshot:
                 return row
         raise KeyError(pipe_id)
 
+    def by_node(self, node_id: str) -> NodeStepSnapshot:
+        for row in self.nodes:
+            if row.node_id == node_id:
+                return row
+        raise KeyError(node_id)
+
 
 class SewerNetworkSimulator:
     """Пошаговый расчёт сети без ветвления потока и без циклов."""
@@ -197,6 +312,7 @@ class SewerNetworkSimulator:
         connections: Iterable[PipeConnection],
         inflows: Iterable[InflowHydrograph],
         outlets: Iterable[OutletBoundary],
+        nodes: Iterable[NetworkStorageNode] = (),
         sediment_models: Optional[Mapping[str, NetworkSedimentModel]] = None,
     ) -> None:
         pipe_rows = list(pipes)
@@ -260,6 +376,31 @@ class SewerNetworkSimulator:
                 )
             self.inflows_by_pipe[hydrograph.pipe_id].append(hydrograph)
 
+        node_rows = list(nodes)
+        self.nodes = {row.config.node_id: row for row in node_rows}
+        if len(self.nodes) != len(node_rows):
+            raise ValueError("ID внутренних узлов должны быть уникальными")
+        self.node_by_downstream_pipe: dict[str, NetworkStorageNode] = {}
+        for node in node_rows:
+            config = node.config
+            if config.downstream_pipe_id not in self.pipes:
+                raise ValueError(
+                    f"{config.node_id}: неизвестный нижний участок "
+                    f"{config.downstream_pipe_id}"
+                )
+            if config.downstream_pipe_id in self.node_by_downstream_pipe:
+                raise ValueError(
+                    f"{config.downstream_pipe_id}: у входа задано несколько узлов"
+                )
+            expected = set(self.upstreams[config.downstream_pipe_id])
+            actual = set(config.upstream_pipe_ids)
+            if actual != expected:
+                raise ValueError(
+                    f"{config.node_id}: верхние участки не совпадают с графом; "
+                    f"ожидались {sorted(expected)}, заданы {sorted(actual)}"
+                )
+            self.node_by_downstream_pipe[config.downstream_pipe_id] = node
+
         self.sediment_models = dict(sediment_models or {})
         unknown_models = set(self.sediment_models) - set(self.pipes)
         if unknown_models:
@@ -284,6 +425,16 @@ class SewerNetworkSimulator:
         }
         old_total_volume = sum(old_volume.values())
         old_total_solids = sum(old_solids.values())
+        old_node_volume = {
+            node_id: node.state.stored_water_m3
+            for node_id, node in self.nodes.items()
+        }
+        old_node_solids = {
+            node_id: node.state.suspended_solids_kg
+            for node_id, node in self.nodes.items()
+        }
+        old_total_volume += sum(old_node_volume.values())
+        old_total_solids += sum(old_node_solids.values())
 
         external_volume: dict[str, float] = {}
         external_solids: dict[str, float] = {}
@@ -297,6 +448,14 @@ class SewerNetworkSimulator:
                 mass_kg += row_volume * point.suspended_solids_mg_l * 0.001
             external_volume[pipe_id] = volume_m3
             external_solids[pipe_id] = mass_kg
+
+        node_external_volume = {node_id: 0.0 for node_id in self.nodes}
+        node_external_solids = {node_id: 0.0 for node_id in self.nodes}
+        for pipe_id, node in self.node_by_downstream_pipe.items():
+            node_external_volume[node.config.node_id] = external_volume[pipe_id]
+            node_external_solids[node.config.node_id] = external_solids[pipe_id]
+            external_volume[pipe_id] = 0.0
+            external_solids[pipe_id] = 0.0
 
         desired_out: dict[str, float] = {}
         for pipe_id in ids:
@@ -333,6 +492,10 @@ class SewerNetworkSimulator:
             upstream_ids = self.upstreams[downstream_id]
             if not upstream_ids:
                 continue
+            if downstream_id in self.node_by_downstream_pipe:
+                for upstream_id in upstream_ids:
+                    actual_out[upstream_id] = desired_out[upstream_id]
+                continue
             base_volume = (
                 old_volume[downstream_id]
                 - actual_out[downstream_id]
@@ -351,7 +514,8 @@ class SewerNetworkSimulator:
 
         incoming_internal = {pipe_id: 0.0 for pipe_id in ids}
         for upstream_id, downstream_id in self.downstream.items():
-            incoming_internal[downstream_id] += actual_out[upstream_id]
+            if downstream_id not in self.node_by_downstream_pipe:
+                incoming_internal[downstream_id] += actual_out[upstream_id]
 
         outgoing_solids: dict[str, float] = {}
         for pipe_id in ids:
@@ -366,7 +530,58 @@ class SewerNetworkSimulator:
 
         incoming_internal_solids = {pipe_id: 0.0 for pipe_id in ids}
         for upstream_id, downstream_id in self.downstream.items():
-            incoming_internal_solids[downstream_id] += outgoing_solids[upstream_id]
+            if downstream_id not in self.node_by_downstream_pipe:
+                incoming_internal_solids[downstream_id] += (
+                    outgoing_solids[upstream_id]
+                )
+
+        node_out_volume: dict[str, float] = {}
+        node_out_solids: dict[str, float] = {}
+        node_in_volume: dict[str, float] = {}
+        node_flooded_volume: dict[str, float] = {}
+        node_flooded_solids: dict[str, float] = {}
+        for node_id, node in self.nodes.items():
+            config = node.config
+            upstream_volume = sum(
+                actual_out[row] for row in config.upstream_pipe_ids
+            )
+            upstream_solids = sum(
+                outgoing_solids[row] for row in config.upstream_pipe_ids
+            )
+            incoming = node_external_volume[node_id] + upstream_volume
+            incoming_solids = node_external_solids[node_id] + upstream_solids
+            node_in_volume[node_id] = incoming
+            available_for_node = max(
+                0.0,
+                self.pipes[config.downstream_pipe_id].available_storage_m3
+                - (
+                    old_volume[config.downstream_pipe_id]
+                    - actual_out[config.downstream_pipe_id]
+                    + external_volume[config.downstream_pipe_id]
+                    + incoming_internal[config.downstream_pipe_id]
+                ),
+            )
+            mixed_volume = old_node_volume[node_id] + incoming
+            mixed_solids = old_node_solids[node_id] + incoming_solids
+            passed = min(mixed_volume, available_for_node)
+            passed_fraction = passed / mixed_volume if mixed_volume > 0 else 0.0
+            passed_solids = mixed_solids * passed_fraction
+            remaining = mixed_volume - passed
+            remaining_solids = mixed_solids - passed_solids
+            overflow = max(0.0, remaining - config.storage_volume_m3)
+            overflow_fraction = overflow / remaining if remaining > 0 else 0.0
+            overflow_solids = remaining_solids * overflow_fraction
+            node.state.stored_water_m3 = min(remaining, config.storage_volume_m3)
+            node.state.suspended_solids_kg = max(
+                0.0, remaining_solids - overflow_solids
+            )
+            node.state.flooded_volume_m3 += overflow
+            node_out_volume[node_id] = passed
+            node_out_solids[node_id] = passed_solids
+            node_flooded_volume[node_id] = overflow
+            node_flooded_solids[node_id] = overflow_solids
+            incoming_internal[config.downstream_pipe_id] += passed
+            incoming_internal_solids[config.downstream_pipe_id] += passed_solids
 
         new_volume: dict[str, float] = {}
         new_solids: dict[str, float] = {}
@@ -531,24 +746,64 @@ class SewerNetworkSimulator:
                 active_flags=tuple(flags),
             ))
 
-        external_total = sum(external_volume.values())
+        node_rows: list[NodeStepSnapshot] = []
+        for node_id, node in self.nodes.items():
+            config = node.config
+            flooded = node_flooded_volume[node_id]
+            if flooded > 1e-12:
+                status = NodeStatus.OVERFLOW
+            elif node.state.stored_water_m3 > 1e-12:
+                status = NodeStatus.STORING
+            else:
+                status = NodeStatus.EMPTY
+            node_rows.append(NodeStepSnapshot(
+                time_seconds=self.time_seconds + dt_seconds,
+                node_id=node_id,
+                downstream_pipe_id=config.downstream_pipe_id,
+                invert_absolute_elevation_m=config.invert_absolute_elevation_m,
+                overflow_absolute_elevation_m=(
+                    config.overflow_absolute_elevation_m
+                ),
+                inflow_lps=node_in_volume[node_id] / dt_seconds * 1000.0,
+                outflow_lps=node_out_volume[node_id] / dt_seconds * 1000.0,
+                stored_water_m3=node.state.stored_water_m3,
+                storage_volume_m3=config.storage_volume_m3,
+                fill_ratio=(
+                    node.state.stored_water_m3 / config.storage_volume_m3
+                ),
+                suspended_solids_kg=node.state.suspended_solids_kg,
+                flooded_volume_m3=flooded,
+                cumulative_flooded_volume_m3=node.state.flooded_volume_m3,
+                status=status,
+                overflow_location=config.overflow_location,
+            ))
+
+        external_total = (
+            sum(external_volume.values()) + sum(node_external_volume.values())
+        )
         outlet_total = sum(actual_out[row] for row in self.outlets)
-        flood_total = sum(flooded_volume.values())
+        flood_total = (
+            sum(flooded_volume.values()) + sum(node_flooded_volume.values())
+        )
         new_total_volume = sum(
             pipe.state.stored_water_m3 for pipe in self.pipes.values()
-        )
+        ) + sum(node.state.stored_water_m3 for node in self.nodes.values())
         water_error = (
             old_total_volume + external_total
             - new_total_volume - outlet_total - flood_total
         )
 
-        external_mass_total = sum(external_solids.values())
+        external_mass_total = (
+            sum(external_solids.values()) + sum(node_external_solids.values())
+        )
         outlet_mass_total = sum(outgoing_solids[row] for row in self.outlets)
-        flooded_mass_total = sum(flooded_solids.values())
+        flooded_mass_total = (
+            sum(flooded_solids.values()) + sum(node_flooded_solids.values())
+        )
         deposited_mass_total = sum(deposited_mass.values())
         new_total_solids = sum(
             pipe.state.suspended_solids_kg for pipe in self.pipes.values()
-        )
+        ) + sum(node.state.suspended_solids_kg for node in self.nodes.values())
         solids_error = (
             old_total_solids + external_mass_total
             - new_total_solids
@@ -566,6 +821,7 @@ class SewerNetworkSimulator:
             time_seconds=self.time_seconds,
             dt_seconds=dt_seconds,
             pipes=tuple(rows),
+            nodes=tuple(node_rows),
             external_inflow_m3=external_total,
             outlet_discharge_m3=outlet_total,
             flooded_volume_m3=flood_total,

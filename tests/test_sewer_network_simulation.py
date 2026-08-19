@@ -4,6 +4,10 @@ from app.calc.sewer_network_simulation import (
     HydrographPoint,
     InflowHydrograph,
     NetworkSedimentModel,
+    NetworkStorageNode,
+    NetworkStorageNodeConfig,
+    NetworkStorageNodeState,
+    NodeStatus,
     OutletBoundary,
     OutletBoundaryKind,
     PipeConnection,
@@ -40,6 +44,28 @@ def _free_outlet(pipe_id):
         pipe_id=pipe_id,
         kind=OutletBoundaryKind.FREE_OUTFALL,
         source="заданная свободная выходная граница",
+    )
+
+
+def _storage_node(
+    node_id,
+    downstream_pipe_id,
+    *,
+    upstream_pipe_ids=(),
+    volume=0.05,
+):
+    return NetworkStorageNode(
+        NetworkStorageNodeConfig(
+            node_id=node_id,
+            downstream_pipe_id=downstream_pipe_id,
+            upstream_pipe_ids=tuple(upstream_pipe_ids),
+            invert_absolute_elevation_m=146.50,
+            overflow_absolute_elevation_m=147.20,
+            storage_volume_m3=volume,
+            overflow_location="техническое подполье у узла",
+            source="точная геометрия BIM",
+        ),
+        NetworkStorageNodeState(),
     )
 
 
@@ -190,3 +216,66 @@ def test_inflow_above_gravity_capacity_is_flagged_before_physical_flooding():
     assert snapshot.maximum_gravity_capacity_lps < snapshot.inflow_lps
     assert snapshot.status is PipeStatus.CRITICAL_FILL
     assert snapshot.flooded_volume_m3 == 0
+
+
+def test_internal_node_buffers_water_and_localizes_actual_overflow():
+    pipe = _pipe("К1-1")
+    node = _storage_node("У1", "К1-1", volume=0.05)
+    simulator = SewerNetworkSimulator(
+        pipes=[pipe],
+        connections=[],
+        inflows=[InflowHydrograph(
+            pipe_id="К1-1",
+            points=(HydrographPoint(0.0, 1000.0, 200.0),),
+            source="испытательный залповый сброс",
+        )],
+        outlets=[_free_outlet("К1-1")],
+        nodes=[node],
+    )
+
+    snapshot = simulator.step(1.0)
+    node_row = snapshot.by_node("У1")
+    pipe_row = snapshot.by_pipe("К1-1")
+    assert node_row.status is NodeStatus.OVERFLOW
+    assert node_row.stored_water_m3 == pytest.approx(0.05)
+    assert node_row.flooded_volume_m3 > 0
+    assert node_row.overflow_location == "техническое подполье у узла"
+    assert pipe_row.flooded_volume_m3 == 0
+    assert snapshot.flooded_volume_m3 == pytest.approx(
+        node_row.flooded_volume_m3
+    )
+    assert snapshot.water_balance_error_m3 == pytest.approx(0.0, abs=1e-12)
+    assert snapshot.solids_balance_error_kg == pytest.approx(0.0, abs=1e-12)
+
+
+def test_internal_node_accepts_upstream_flow_before_downstream_pipe():
+    upper = _pipe("К1-1")
+    lower = _pipe("К1-2")
+    upper.state.stored_water_m3 = 0.001
+    simulator = SewerNetworkSimulator(
+        pipes=[upper, lower],
+        connections=[PipeConnection("К1-1", "К1-2")],
+        inflows=[],
+        outlets=[_free_outlet("К1-2")],
+        nodes=[_storage_node(
+            "У2",
+            "К1-2",
+            upstream_pipe_ids=("К1-1",),
+        )],
+    )
+
+    snapshot = simulator.step(1.0)
+    assert snapshot.by_node("У2").inflow_lps > 0
+    assert snapshot.by_pipe("К1-2").inflow_lps > 0
+    assert snapshot.water_balance_error_m3 == pytest.approx(0.0, abs=1e-12)
+
+
+def test_internal_node_topology_must_match_graph_exactly():
+    with pytest.raises(ValueError, match="не совпадают с графом"):
+        SewerNetworkSimulator(
+            pipes=[_pipe("К1-1"), _pipe("К1-2")],
+            connections=[PipeConnection("К1-1", "К1-2")],
+            inflows=[],
+            outlets=[_free_outlet("К1-2")],
+            nodes=[_storage_node("У2", "К1-2")],
+        )

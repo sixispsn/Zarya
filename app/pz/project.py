@@ -680,6 +680,19 @@ class SewerFirstManholeSpec:
 
 
 @dataclass
+class SewerInternalNodeSpec:
+    """Точная геометрия внутреннего узла К1 для динамической модели."""
+    node_id: str = ""
+    downstream_section_id: str = ""
+    upstream_section_ids: List[str] = field(default_factory=list)
+    invert_absolute_elevation_m: float = 0.0
+    overflow_absolute_elevation_m: float = 0.0
+    storage_volume_m3: float = 0.0
+    overflow_location: str = ""
+    source: str = ""
+
+
+@dataclass
 class SewageDesign:
     """К1: расчёт системы и явно подтверждённые данные стадии П."""
     risers: List[SewageRiserSpec] = field(default_factory=list)
@@ -688,6 +701,7 @@ class SewageDesign:
     discharge_events: List[SewerDischargeEventSpec] = field(default_factory=list)
     fixture_safety_inputs: List[SewerFixtureSafetySpec] = field(default_factory=list)
     first_manholes: List[SewerFirstManholeSpec] = field(default_factory=list)
+    internal_nodes: List[SewerInternalNodeSpec] = field(default_factory=list)
     transient_step_seconds: Optional[float] = None
     transient_duration_seconds: Optional[float] = None
     transient_assessment: Optional[object] = None

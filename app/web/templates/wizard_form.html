@@ -287,6 +287,20 @@
         {% for j in range(3) %}{% set level = m.levels[j] if m and j < m.levels|length else none %}<td><input class="inline-pair" name="sewer_manhole{{ i + 1 }}_time{{ j + 1 }}" value="{{ level.time_seconds if level else (0 if j == 0 else '') }}" placeholder="t, c"><input class="inline-pair" name="sewer_manhole{{ i + 1 }}_level{{ j + 1 }}" value="{{ level.water_level_absolute_elevation_m if level else '' }}" placeholder="Z, м"></td>{% endfor %}
         <td><input name="sewer_manhole{{ i + 1 }}_source" value="{{ m.source if m else '' }}" placeholder="профиль выпуска, ТУ"></td>
       </tr>{% endfor %}</table></div>
+      <p class="technical-label">Внутренние узлы К1 · накопление и точка аварийного перелива</p>
+      <p>Укажите узлы у входов расчётных горизонтальных участков. Объём и отметки берутся только из аксонометрии/АР; верхние участки перечисляются через запятую, для первого узла поле может быть пустым.</p>
+      <div class="table-wrap"><table class="grid"><tr><th>ID узла</th><th>Нижний участок</th><th>Верхние участки</th><th>Абс. Z лотка, м</th><th>Абс. Z перелива, м</th><th>Доступный объём, м³</th><th>Место выхода воды</th><th>Источник</th></tr>
+      {% for i in range(4) %}{% set n = prefill.sewer_internal_nodes[i] if prefill and i < prefill.sewer_internal_nodes|length else none %}
+      <tr>
+        <td><input name="sewer_internal_node{{ i + 1 }}_id" value="{{ n.node_id if n else '' }}" placeholder="К1-Ст1"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_downstream" value="{{ n.downstream_section_id if n else '' }}" placeholder="К1-М1"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_upstream" value="{{ n.upstream_section_ids|join(', ') if n else '' }}" placeholder="К1-М0, К1-М00"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_invert_abs" value="{{ n.invert_absolute_elevation_m if n else '' }}"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_overflow_abs" value="{{ n.overflow_absolute_elevation_m if n else '' }}"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_storage" value="{{ n.storage_volume_m3 if n else '' }}"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_location" value="{{ n.overflow_location if n else '' }}" placeholder="техподполье у стояка"></td>
+        <td><input name="sewer_internal_node{{ i + 1 }}_source" value="{{ n.source if n else '' }}" placeholder="аксонометрия, АР"></td>
+      </tr>{% endfor %}</table></div>
     </details>
     <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>
       <div class="row">

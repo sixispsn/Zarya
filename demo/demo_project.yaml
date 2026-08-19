@@ -195,6 +195,25 @@ sewage:
       levels:
         - {time_seconds: 0.0, water_level_absolute_elevation_m: 146.60}
       source: "явный учебный профиль выпуска и заданный сценарный уровень первого колодца"
+  # Внутренние узлы динамической модели. Отметки и доступные объёмы являются
+  # явными учебными данными аксонометрии/АР, а не выводятся из этажности или DN.
+  internal_nodes:
+    - id: К1-Ст1
+      downstream_section_id: К1-М1
+      upstream_section_ids: []
+      invert_absolute_elevation_m: 147.07
+      overflow_absolute_elevation_m: 147.27
+      storage_volume_m3: 0.05
+      overflow_location: "техническое подполье у основания К1-Ст1"
+      source: "явная учебная геометрия узла по аксонометрии и плану АР"
+    - id: К1-Ст2
+      downstream_section_id: К1-Вып1
+      upstream_section_ids: [К1-М1]
+      invert_absolute_elevation_m: 146.55
+      overflow_absolute_elevation_m: 147.27
+      storage_volume_m3: 0.08
+      overflow_location: "техническое подполье у основания К1-Ст2"
+      source: "явная учебная геометрия узла по аксонометрии и плану АР"
 rooms:
   - name: Коридор типового этажа
     length_m: 42.0

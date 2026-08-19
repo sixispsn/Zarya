@@ -112,6 +112,25 @@
 {% else %}
 <p class="stage-note">Давление стояков не передано конкретным гидрозатворам: требуются абсолютные отметки подключения и перелива приборов, паспортная глубина затвора, выпуск и сценарный уровень первого колодца.</p>
 {% endif %}
+{% if transient.internal_node_summaries %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Внутренний узел / нижний участок</th><th>Место аварийного выхода</th><th>Абс. отметка лотка / перелива, м</th><th>Объём доступный / пик, м³</th><th>Заполнение max</th><th>Перелив / первый момент</th><th>Статус</th></tr></thead>
+  <tbody>{% for n in transient.internal_node_summaries %}
+    <tr>
+      <td>{{ n.node_id }} → {{ n.downstream_section_id }}</td>
+      <td>{{ n.overflow_location }}</td>
+      <td>{{ n.invert_absolute_elevation_m|num(3) }} / {{ n.overflow_absolute_elevation_m|num(3) }}</td>
+      <td>{{ n.storage_volume_m3|num(6) }} / {{ n.peak_stored_water_m3|num(6) }}</td>
+      <td>{{ (n.maximum_fill_ratio * 100)|num(1) }}%</td>
+      <td>{{ n.flooded_volume_m3|num(6) }} м³ / {{ (n.first_overflow_time_seconds|compact(2)) ~ " с" if n.first_overflow_time_seconds is not none else "нет" }}</td>
+      <td><b>{{ "аварийный перелив" if n.status.value == "overflow" else "накопление" if n.status.value == "storing" else "свободен" }}</b></td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<p class="source-line">Перелив локализуется только в явно зарегистрированном внутреннем узле. Доступный объём и обе абсолютные отметки приняты из исходной геометрии; промежуточный уровень по проценту заполнения не вычисляется.</p>
+{% else %}
+<p class="stage-note">Место аварийного выхода воды не локализовано: для входов расчётных участков нужны реестр внутренних узлов, абсолютные отметки лотка и перелива и доступный объём хранения.</p>
+{% endif %}
 {% if transient.network_summaries %}
 <table class="data calc-table pipe-calc">
   <thead><tr><th>Участок</th><th>Qвх макс, л/с</th><th>Qвых макс, л/с</th><th>(h/d)макс</th><th>Vмин при движении, м/с</th><th>Выход / остаток к концу, м³</th><th>Статус</th></tr></thead>

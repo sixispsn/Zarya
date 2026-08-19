@@ -198,12 +198,16 @@ def _project_fingerprint(project: Project) -> str:
                 },
                 "levels": [vars(point) for point in row.levels],
             } for row in project.sewage.first_manholes],
+            "internal_nodes": [
+                vars(row) for row in project.sewage.internal_nodes
+            ],
             "gost_inputs": {
                 key: value for key, value in vars(project.sewage).items()
                 if key not in {
                     "result", "hydraulic_assessment", "transient_assessment",
                     "risers", "pipes", "elements", "discharge_events",
                     "fixture_safety_inputs", "first_manholes",
+                    "internal_nodes",
                 }
             },
         },
@@ -315,6 +319,13 @@ def build_commission_report(
         row.status.value in {"Критическое состояние", "Подпор", "Подтопление"}
         for row in fixture_checks
     )
+    internal_node_checks = list(
+        getattr(transient, "internal_node_summaries", ()) if transient else ()
+    )
+    internal_node_overflow = any(
+        row.status.value == "overflow" for row in internal_node_checks
+    )
+    internal_nodes_ok = bool(internal_node_checks) and not internal_node_overflow
     trace_rows = [
         TraceRow(
             "Расчётные расходы В1/Т3",
@@ -362,6 +373,28 @@ def build_commission_report(
             (
                 "verified" if fixture_safety_ok else
                 "fail" if fixture_safety_critical else "stage_r"
+            ),
+        ),
+        TraceRow(
+            "Локализация накопления и аварийного перелива К1",
+            "СП 30.13330.2020, раздел 19; профиль и аксонометрия К1",
+            (
+                f"внутренних узлов с точной геометрией: "
+                f"{len(project.sewage.internal_nodes)}"
+                if project.sewage.internal_nodes else
+                "отметки перелива и объёмы внутренних узлов не заданы"
+            ),
+            (
+                "перелив в расчётном сценарии отсутствует"
+                if internal_nodes_ok else
+                "обнаружен аварийный перелив в зарегистрированном узле"
+                if internal_node_overflow else
+                "место выхода воды нельзя подтвердить"
+            ),
+            "Расчёты К1/К2 — временной сценарий",
+            (
+                "verified" if internal_nodes_ok else
+                "fail" if internal_node_overflow else "stage_r"
             ),
         ),
         TraceRow(
@@ -671,6 +704,28 @@ def build_commission_report(
         ),
         "СП 30.13330.2020, раздел 19; профиль выпуска",
         blocking=fixture_safety_critical,
+    )
+    add(
+        "K1-04", "Накопление и аварийный перелив локализованы внутренними узлами",
+        (
+            "verified" if internal_nodes_ok else
+            "missing" if internal_node_overflow else "stage_r"
+        ),
+        (
+            f"проверено узлов: {len(internal_node_checks)}; перелив отсутствует"
+            if internal_nodes_ok else
+            "в расчётном сценарии зафиксирован аварийный перелив"
+            if internal_node_overflow else
+            "нет полного реестра отметок перелива и доступных объёмов"
+        ),
+        (
+            "Нет действий" if internal_nodes_ok else
+            "Устранить перегрузку и пересчитать сценарий"
+            if internal_node_overflow else
+            "Задать внутренние узлы по аксонометрии и планам АР"
+        ),
+        "СП 30.13330.2020, раздел 19; профиль и аксонометрия К1",
+        blocking=internal_node_overflow,
     )
     if project.storm.system_kind == "internal":
         storm_ok = project.storm.result is not None

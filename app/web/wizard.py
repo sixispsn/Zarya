@@ -34,6 +34,7 @@ from app.intake.request_dto import (
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
     SewerDischargeEventRequest, SewerFixtureSafetyRequest,
     SewerBoundaryLevelRequest, SewerFirstManholeRequest,
+    SewerInternalNodeRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
@@ -459,6 +460,36 @@ async def wizard_design(request: Request):
                 source=fv(f"sewer_manhole{i}_source"),
             ))
 
+    sewer_internal_nodes = []
+    for i in range(1, 5):
+        node_id = fv(f"sewer_internal_node{i}_id")
+        if node_id:
+            upstream_ids = [
+                row.strip()
+                for row in fv(f"sewer_internal_node{i}_upstream").split(",")
+                if row.strip()
+            ]
+            sewer_internal_nodes.append(SewerInternalNodeRequest(
+                node_id=node_id,
+                downstream_section_id=fv(
+                    f"sewer_internal_node{i}_downstream"
+                ),
+                upstream_section_ids=upstream_ids,
+                invert_absolute_elevation_m=ff(
+                    f"sewer_internal_node{i}_invert_abs"
+                ),
+                overflow_absolute_elevation_m=ff(
+                    f"sewer_internal_node{i}_overflow_abs"
+                ),
+                storage_volume_m3=ff(
+                    f"sewer_internal_node{i}_storage"
+                ),
+                overflow_location=fv(
+                    f"sewer_internal_node{i}_location"
+                ),
+                source=fv(f"sewer_internal_node{i}_source"),
+            ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -504,6 +535,7 @@ async def wizard_design(request: Request):
         sewer_discharge_events=sewer_discharge_events,
         sewer_fixture_safety_inputs=sewer_fixture_safety_inputs,
         sewer_first_manholes=sewer_first_manholes,
+        sewer_internal_nodes=sewer_internal_nodes,
         sewer_transient_step_seconds=(
             ff("sewer_transient_step_seconds")
             if fv("sewer_transient_step_seconds") else None

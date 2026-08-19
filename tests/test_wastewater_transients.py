@@ -86,6 +86,33 @@ def test_time_step_network_preserves_balance_and_propagates_flow():
     assert 1.6 < summaries["К1-Вып1"].peak_inflow_lps < 3.2
     assert summaries["К1-Вып1"].flooded_volume_m3 == 0.0
     assert summaries["К1-Вып1"].final_stored_water_m3 > 0.0
+    nodes = {row.node_id: row for row in result.internal_node_summaries}
+    assert set(nodes) == {"К1-Ст1", "К1-Ст2"}
+    assert nodes["К1-Ст2"].overflow_absolute_elevation_m == 147.27
+    assert nodes["К1-Ст2"].flooded_volume_m3 == 0.0
+
+
+def test_internal_node_reports_location_and_time_of_overflow():
+    project = deepcopy(_project())
+    for event in project.sewage.discharge_events:
+        event.start_seconds = 0.0
+        event.duration_seconds = 1.0
+        event.flow_lps = 1000.0
+    project.sewage.transient_duration_seconds = 2.0
+
+    result = assess_wastewater_transients(project)
+
+    flooded = [
+        row for row in result.internal_node_summaries
+        if row.flooded_volume_m3 > 0
+    ]
+    assert flooded
+    assert flooded[0].first_overflow_time_seconds == 1.0
+    assert "техническое подполье" in flooded[0].overflow_location
+    assert all(
+        abs(step.water_balance_error_m3) < 1e-10
+        for step in result.network_steps
+    )
 
 
 def test_missing_solids_does_not_fake_sediment_prediction():
@@ -238,4 +265,6 @@ def test_orchestrator_and_calculation_sheet_include_transient_proof(tmp_path):
     assert "35,816" in html
     assert "КК-1" in html
     assert "Подпор отсутствует" in html
+    assert "Внутренний узел / нижний участок" in html
+    assert "техническое подполье у основания К1-Ст2" in html
     assert "не заменяет нормативный расход" in html

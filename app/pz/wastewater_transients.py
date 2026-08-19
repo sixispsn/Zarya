@@ -13,6 +13,10 @@ from app.calc.sewer_network_simulation import (
     HydrographPoint,
     InflowHydrograph,
     NetworkStepSnapshot,
+    NetworkStorageNode,
+    NetworkStorageNodeConfig,
+    NetworkStorageNodeState,
+    NodeStatus,
     OutletBoundary,
     OutletBoundaryKind,
     PipeConnection,
@@ -48,6 +52,7 @@ from app.pz.project import (
     SewerElementSpec,
     SewerFixtureSafetySpec,
     SewerFirstManholeSpec,
+    SewerInternalNodeSpec,
     SewerPipeSpec,
     SewageRiserSpec,
 )
@@ -121,6 +126,22 @@ class NetworkTransientSummary:
 
 
 @dataclass(frozen=True)
+class InternalNodeTransientSummary:
+    node_id: str
+    downstream_section_id: str
+    overflow_location: str
+    invert_absolute_elevation_m: float
+    overflow_absolute_elevation_m: float
+    storage_volume_m3: float
+    peak_stored_water_m3: float
+    maximum_fill_ratio: float
+    flooded_volume_m3: float
+    first_overflow_time_seconds: Optional[float]
+    status: NodeStatus
+    source: str
+
+
+@dataclass(frozen=True)
 class FixtureTransientCheck:
     fixture_id: str
     fixture_name: str
@@ -157,6 +178,7 @@ class WastewaterTransientAssessment:
     network_inflows: Tuple[InflowHydrograph, ...] = ()
     network_steps: Tuple[NetworkStepSnapshot, ...] = ()
     network_summaries: Tuple[NetworkTransientSummary, ...] = ()
+    internal_node_summaries: Tuple[InternalNodeTransientSummary, ...] = ()
     fixture_checks: Tuple[FixtureTransientCheck, ...] = ()
     step_seconds: Optional[float] = None
     duration_seconds: Optional[float] = None
@@ -590,6 +612,7 @@ def _network_missing(pipe: SewerPipeSpec) -> Tuple[str, ...]:
 
 def _run_network(
     mains: Tuple[SewerPipeSpec, ...],
+    internal_nodes: Tuple[SewerInternalNodeSpec, ...],
     inflows: Tuple[InflowHydrograph, ...],
     step_seconds: float,
     end_seconds: float,
@@ -652,12 +675,39 @@ def _run_network(
             "наружная сеть не моделируется"
         ),
     ) for pipe_id in sorted(terminal_ids))
+    covered_sections = {row.downstream_section_id for row in internal_nodes}
+    missing_node_sections = sorted(
+        row.section_id for row in k1_mains
+        if row.section_id not in covered_sections
+    )
+    if missing_node_sections:
+        result.warnings.append(
+            "аварийный выход нельзя точно локализовать у входов участков: "
+            + ", ".join(missing_node_sections)
+            + "; нужны отметка перелива и доступный объём внутреннего узла"
+        )
     try:
+        nodes = tuple(NetworkStorageNode(
+            NetworkStorageNodeConfig(
+                node_id=row.node_id,
+                downstream_pipe_id=row.downstream_section_id,
+                upstream_pipe_ids=tuple(row.upstream_section_ids),
+                invert_absolute_elevation_m=row.invert_absolute_elevation_m,
+                overflow_absolute_elevation_m=(
+                    row.overflow_absolute_elevation_m
+                ),
+                storage_volume_m3=row.storage_volume_m3,
+                overflow_location=row.overflow_location,
+                source=row.source,
+            ),
+            NetworkStorageNodeState(),
+        ) for row in internal_nodes)
         simulator = SewerNetworkSimulator(
             pipes=sections,
             connections=connections,
             inflows=inflows,
             outlets=outlets,
+            nodes=nodes,
         )
         steps: List[NetworkStepSnapshot] = []
         for _ in range(int(round(end_seconds / step_seconds))):
@@ -703,6 +753,43 @@ def _run_network(
             status=status,
         ))
     result.network_summaries = tuple(summaries)
+
+    node_summaries: List[InternalNodeTransientSummary] = []
+    source_by_id = {row.node_id: row.source for row in internal_nodes}
+    for node in nodes:
+        rows = [step.by_node(node.config.node_id) for step in steps]
+        overflow_rows = [row for row in rows if row.flooded_volume_m3 > 1e-12]
+        if overflow_rows:
+            status = NodeStatus.OVERFLOW
+        elif any(row.stored_water_m3 > 1e-12 for row in rows):
+            status = NodeStatus.STORING
+        else:
+            status = NodeStatus.EMPTY
+        node_summaries.append(InternalNodeTransientSummary(
+            node_id=node.config.node_id,
+            downstream_section_id=node.config.downstream_pipe_id,
+            overflow_location=node.config.overflow_location,
+            invert_absolute_elevation_m=(
+                node.config.invert_absolute_elevation_m
+            ),
+            overflow_absolute_elevation_m=(
+                node.config.overflow_absolute_elevation_m
+            ),
+            storage_volume_m3=node.config.storage_volume_m3,
+            peak_stored_water_m3=max(
+                (row.stored_water_m3 for row in rows), default=0.0
+            ),
+            maximum_fill_ratio=max(
+                (row.fill_ratio for row in rows), default=0.0
+            ),
+            flooded_volume_m3=sum(row.flooded_volume_m3 for row in rows),
+            first_overflow_time_seconds=(
+                overflow_rows[0].time_seconds if overflow_rows else None
+            ),
+            status=status,
+            source=source_by_id[node.config.node_id],
+        ))
+    result.internal_node_summaries = tuple(node_summaries)
 
 
 _FIXTURE_STATUS_RANK = {
@@ -1043,6 +1130,7 @@ def assess_wastewater_transients(project: Project) -> WastewaterTransientAssessm
     if not result.errors:
         _run_network(
             mains,
+            tuple(project.sewage.internal_nodes),
             result.network_inflows,
             step,
             end_seconds,

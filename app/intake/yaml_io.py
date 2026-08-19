@@ -48,6 +48,7 @@ from app.intake.request_dto import (
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
     SewerDischargeEventRequest, SewerFixtureSafetyRequest,
     SewerBoundaryLevelRequest, SewerFirstManholeRequest,
+    SewerInternalNodeRequest,
 )
 
 
@@ -425,6 +426,26 @@ def load_request(text: str) -> IOS2Request:
         for x in (sewage_s.get("first_manholes") or [])
         if isinstance(x, dict)
     ]
+    sewer_internal_nodes = [
+        SewerInternalNodeRequest(
+            node_id=str(x.get("id", x.get("node_id", ""))),
+            downstream_section_id=str(x.get("downstream_section_id", "")),
+            upstream_section_ids=[
+                str(row) for row in (x.get("upstream_section_ids") or [])
+            ],
+            invert_absolute_elevation_m=float(
+                x.get("invert_absolute_elevation_m", 0)
+            ),
+            overflow_absolute_elevation_m=float(
+                x.get("overflow_absolute_elevation_m", 0)
+            ),
+            storage_volume_m3=float(x.get("storage_volume_m3", 0)),
+            overflow_location=str(x.get("overflow_location", "")),
+            source=str(x.get("source", "")),
+        )
+        for x in (sewage_s.get("internal_nodes") or [])
+        if isinstance(x, dict)
+    ]
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
@@ -538,6 +559,7 @@ def load_request(text: str) -> IOS2Request:
         sewer_discharge_events=sewer_discharge_events,
         sewer_fixture_safety_inputs=sewer_fixture_safety_inputs,
         sewer_first_manholes=sewer_first_manholes,
+        sewer_internal_nodes=sewer_internal_nodes,
         sewer_transient_step_seconds=(
             float(sewage_s["transient_step_seconds"])
             if sewage_s.get("transient_step_seconds") is not None else None
@@ -908,6 +930,18 @@ def dump_request(req: IOS2Request) -> str:
                 } for point in x.levels],
                 "source": x.source,
             } for x in req.sewer_first_manholes],
+            "internal_nodes": [{
+                "id": x.node_id,
+                "downstream_section_id": x.downstream_section_id,
+                "upstream_section_ids": list(x.upstream_section_ids),
+                "invert_absolute_elevation_m":
+                    x.invert_absolute_elevation_m,
+                "overflow_absolute_elevation_m":
+                    x.overflow_absolute_elevation_m,
+                "storage_volume_m3": x.storage_volume_m3,
+                "overflow_location": x.overflow_location,
+                "source": x.source,
+            } for x in req.sewer_internal_nodes],
             "design_assignment_ref": req.wastewater_design_assignment_ref,
             "survey_ref": req.wastewater_survey_ref,
             "service_life_years": req.wastewater_service_life_years,
