@@ -147,6 +147,7 @@ class PipeSectionState:
 
     sediment_depth_mm: float = 0.0
     stored_water_m3: float = 0.0
+    suspended_solids_kg: float = 0.0
     flooded_volume_m3: float = 0.0
 
 
@@ -169,6 +170,10 @@ class PipeSection:
             raise ValueError("осадок не может перекрывать всё сечение трубы")
         if self.state.stored_water_m3 < 0 or self.state.flooded_volume_m3 < 0:
             raise ValueError("объём воды не может быть отрицательным")
+        if self.state.suspended_solids_kg < 0:
+            raise ValueError("масса взвесей не может быть отрицательной")
+        if self.state.stored_water_m3 > self.available_storage_m3 + 1e-12:
+            raise ValueError("накопленная вода превышает доступный объём трубы")
 
     @property
     def diameter_m(self) -> float:
@@ -193,6 +198,16 @@ class PipeSection:
     @property
     def available_storage_m3(self) -> float:
         return self.available_cross_section_m2 * self.config.length_m
+
+    @property
+    def maximum_gravity_capacity_lps(self) -> float:
+        """Максимум расходной характеристики со свободной поверхностью."""
+        return self._peak_capacity()[1]
+
+    @property
+    def full_section_capacity_lps(self) -> float:
+        """Расход по Шези-Маннингу при заполненном доступном сечении."""
+        return self.capacity_at_water_surface(self.diameter_m)[0]
 
     def geometry_at_water_surface(self, water_surface_m: float) -> FlowGeometry:
         """Вернуть точную геометрию воды над плоским слоем осадка."""
@@ -237,6 +252,41 @@ class PipeSection:
         )
         flow_lps = geometry.water_area_m2 * velocity * 1000.0
         return flow_lps, velocity, geometry
+
+    def geometry_for_stored_volume(
+        self,
+        stored_water_m3: float,
+    ) -> Optional[FlowGeometry]:
+        """Преобразовать накопленный объём в уровень и живое сечение.
+
+        Участок на этом уровне модели является одной расчётной ячейкой, поэтому
+        объём делится на его длину. Для длинных трасс сетевой движок должен
+        создавать несколько участков/ячеек и соблюдать условие Куранта.
+        """
+        if stored_water_m3 < 0:
+            raise ValueError("накопленный объём не может быть отрицательным")
+        if stored_water_m3 == 0:
+            return None
+        if stored_water_m3 > self.available_storage_m3 + 1e-12:
+            raise ValueError("накопленный объём превышает доступный объём трубы")
+
+        target_area = min(
+            stored_water_m3 / self.config.length_m,
+            self.available_cross_section_m2,
+        )
+        if abs(target_area - self.available_cross_section_m2) <= 1e-12:
+            return self.geometry_at_water_surface(self.diameter_m)
+
+        lower = self.sediment_depth_m + self.diameter_m * 1e-12
+        upper = self.diameter_m
+        for _ in range(80):
+            middle = (lower + upper) / 2.0
+            geometry = self.geometry_at_water_surface(middle)
+            if geometry.water_area_m2 < target_area:
+                lower = middle
+            else:
+                upper = middle
+        return self.geometry_at_water_surface((lower + upper) / 2.0)
 
     def calculate_hydraulics(self, inflow_lps: float) -> PipeHydraulicState:
         """Рассчитать локальный безнапорный режим при текущем осадке.
@@ -377,12 +427,43 @@ class PipeSection:
             water_volume_m3 * calibration.suspended_solids_mg_l * 0.001
         )
         deposited_mass_kg = suspended_mass_kg * capture_fraction
-        deposited_volume_m3 = (
-            deposited_mass_kg / calibration.sediment_bulk_density_kg_m3
+        return self.deposit_suspended_mass(
+            deposited_mass_kg=deposited_mass_kg,
+            sediment_bulk_density_kg_m3=(
+                calibration.sediment_bulk_density_kg_m3
+            ),
+            capture_fraction=capture_fraction,
         )
+
+    def deposit_suspended_mass(
+        self,
+        *,
+        deposited_mass_kg: float,
+        sediment_bulk_density_kg_m3: float,
+        capture_fraction: float,
+    ) -> SedimentStepResult:
+        """Добавить уже рассчитанную массу осадка в геометрию участка."""
+        if deposited_mass_kg < 0:
+            raise ValueError("масса осадка не может быть отрицательной")
+        if sediment_bulk_density_kg_m3 <= 0:
+            raise ValueError("объёмная плотность осадка должна быть больше 0")
+        if not 0 <= capture_fraction <= 1:
+            raise ValueError("доля осаждения должна быть от 0 до 1")
+        if deposited_mass_kg == 0:
+            return SedimentStepResult(
+                deposited_mass_kg=0.0,
+                deposited_volume_m3=0.0,
+                sediment_increment_mm=0.0,
+                sediment_depth_mm=self.state.sediment_depth_mm,
+                capture_fraction=capture_fraction,
+            )
+
+        requested_volume_m3 = (
+            deposited_mass_kg / sediment_bulk_density_kg_m3
+        )
+        previous_area = self.sediment_cross_section_m2
         new_sediment_area = (
-            self.sediment_cross_section_m2
-            + deposited_volume_m3 / self.config.length_m
+            previous_area + requested_volume_m3 / self.config.length_m
         )
         maximum_area = self.gross_cross_section_m2 * (1.0 - 1e-9)
         new_sediment_area = min(new_sediment_area, maximum_area)
@@ -392,9 +473,13 @@ class PipeSection:
         )
         previous_depth_mm = self.state.sediment_depth_mm
         self.state.sediment_depth_mm = new_depth_m * 1000.0
+        accepted_volume_m3 = (
+            new_sediment_area - previous_area
+        ) * self.config.length_m
+        accepted_mass_kg = accepted_volume_m3 * sediment_bulk_density_kg_m3
         return SedimentStepResult(
-            deposited_mass_kg=deposited_mass_kg,
-            deposited_volume_m3=deposited_volume_m3,
+            deposited_mass_kg=accepted_mass_kg,
+            deposited_volume_m3=accepted_volume_m3,
             sediment_increment_mm=self.state.sediment_depth_mm - previous_depth_mm,
             sediment_depth_mm=self.state.sediment_depth_mm,
             capture_fraction=capture_fraction,
