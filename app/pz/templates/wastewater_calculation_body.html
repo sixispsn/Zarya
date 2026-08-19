@@ -45,7 +45,82 @@
 <p class="stage-note">Расходы характерных стояков не заданы. Общий расход К1 между стояками автоматически не распределяется; проверка приложения К переносится на стадию Р после разработки аксонометрии.</p>
 {% endif %}
 
-<p class="subhead">3. Гидравлика горизонтальных участков К1 по уравнению Шези</p>
+<p class="subhead">3. Временной сценарий сбросов, разрежение и движение по сети К1</p>
+{% set transient = sewage.transient_assessment %}
+{% if transient and transient.events and not transient.errors %}
+<p class="subitem no-indent">
+  Сценарий является диагностической проверкой заданной комбинации сбросов и
+  не заменяет нормативный расход q<sub>s</sub>. Прибор и маршрут прочитаны из
+  реестра; время, длительность и расход каждого события заданы явно. Шаг
+  {{ transient.step_seconds|compact(3) }} с; горизонт
+  {{ transient.duration_seconds|compact(3) }} с.
+</p>
+<table class="data calc-table check-calc">
+  <thead><tr><th>Событие</th><th>Прибор</th><th>Экземпляр</th><th>Ветвь → стояк</th><th>tнач / Δt, с</th><th>q, л/с</th><th>Источник</th></tr></thead>
+  <tbody>{% for e in transient.events %}
+    <tr>
+      <td>{{ e.event_id }}</td>
+      <td>{{ e.fixture_id }}<br>{{ e.fixture_name }}</td>
+      <td>этаж {{ e.floor }}, № {{ e.instance_no }}</td>
+      <td>{{ e.branch_section_id }} → {{ e.riser_id }}</td>
+      <td>{{ e.start_seconds|compact(2) }} / {{ e.duration_seconds|compact(2) }}</td>
+      <td>{{ e.flow_lps|num(3) }}</td>
+      <td>{{ e.source }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<table class="data calc-table check-calc">
+  <thead><tr><th>t, с</th><th>Активные события</th><th>QΣ, л/с</th><th>Расходы стояков, л/с</th></tr></thead>
+  <tbody>{% for p in transient.report_points %}
+    <tr>
+      <td>{{ p.time_seconds|compact(2) }}</td>
+      <td>{{ p.active_event_ids|join(", ") if p.active_event_ids else "нет" }}</td>
+      <td>{{ p.total_flow_lps|num(3) }}</td>
+      <td>{% for key, value in p.riser_flows_lps.items() %}{{ key }}={{ value|num(3) }}{% if not loop.last %}; {% endif %}{% else %}—{% endfor %}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+{% if transient.stack_checks %}
+<table class="data calc-table check-calc">
+  <thead><tr><th>Стояк</th><th>Qсцен / Qрасч, л/с</th><th>Δpмакс / 0,9hз, мм вод. ст.</th><th>Результат</th></tr></thead>
+  <tbody>{% for s in transient.stack_checks %}
+    <tr>
+      <td>{{ s.riser_id }}</td>
+      <td>{{ s.peak_scenario_flow_lps|num(3) }} / {{ s.design_flow_lps|num(3) }}</td>
+      <td>{{ s.peak_vacuum_mm_water|num(3) }} / {{ s.allowable_vacuum_mm_water|num(3) }}</td>
+      <td><b>{{ "соответствует" if s.status == "verified" else "критично" if s.status == "critical" else "требует данных" }}</b><br>{{ s.note }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% if transient.network_summaries %}
+<table class="data calc-table pipe-calc">
+  <thead><tr><th>Участок</th><th>Qвх макс, л/с</th><th>Qвых макс, л/с</th><th>(h/d)макс</th><th>Vмин при движении, м/с</th><th>Выход / остаток к концу, м³</th><th>Статус</th></tr></thead>
+  <tbody>{% for n in transient.network_summaries %}
+    <tr>
+      <td>{{ n.section_id }}</td>
+      <td>{{ n.peak_inflow_lps|num(3) }}</td>
+      <td>{{ n.peak_outflow_lps|num(3) }}</td>
+      <td>{{ n.peak_fill_ratio_h_d|num(3) }}</td>
+      <td>{{ n.minimum_wet_velocity_mps|num(3) }}</td>
+      <td>{{ n.flooded_volume_m3|num(6) }} / {{ n.final_stored_water_m3|num(6) }}</td>
+      <td>{% if n.status.value == "Заиливание" and not transient.sediment_data_complete %}риск заиливания (V&lt;Vкр){% else %}{{ n.status.value }}{% endif %}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<p class="source-line">Горизонтальная сеть рассчитана пошагово по уравнению Шези в форме Маннинга. Приток к первому горизонтальному участку принят на момент поступления к основанию стояка; наружная сеть не моделируется.</p>
+{% else %}
+<p class="stage-note">Гидрограф стояков сформирован, но динамика горизонтальной сети требует явных L, Øвн, i, n, Vкр и порога критического наполнения каждого участка.</p>
+{% endif %}
+{% if not transient.sediment_data_complete %}<p class="stage-note">Прогноз роста осадка не выполняется: для всех событий нужны концентрации взвесей и источники, а для участков — отдельная калибровка осаждения.</p>{% endif %}
+{% for warning in transient.warnings %}<p class="source-line">• {{ warning }}</p>{% endfor %}
+{% elif transient and transient.errors %}
+<p class="stage-note">Временной сценарий отклонён: {{ transient.errors|join("; ") }}.</p>
+{% else %}
+<p class="stage-note">Временной сценарий не задан. Количество приборов не преобразуется в случайную одновременность автоматически.</p>
+{% endif %}
+
+<p class="subhead">4. Гидравлика горизонтальных участков К1 по уравнению Шези</p>
 <p class="formula">
   V = C√(R·i); &nbsp; Q = A·V; &nbsp; C = R<sup>1/6</sup>/n.
   Проверка самоочищения: V√(h/d) ≥ K.
@@ -77,7 +152,7 @@
 <p class="stage-note">Полная гидравлика горизонтальных участков не выполнена: нужны явные расходы, расчётные длины, уклоны и коэффициенты шероховатости с источником.</p>
 {% endif %}
 
-<p class="subhead">4. Проверка DN приборов и труб</p>
+<p class="subhead">5. Проверка DN приборов и труб</p>
 {% if diagnostics and diagnostics.diameter_checks %}
 <table class="data calc-table check-calc">
   <thead><tr><th>Прибор</th><th>Ветвь</th><th>DN выпуска</th><th>DN сегмента после прибора</th><th>Макс. DN ветви у стояка</th><th>Минимум</th><th>Результат</th></tr></thead>
@@ -103,7 +178,7 @@
 </table>
 {% endif %}
 
-<p class="subhead">5. Доступ для прочистки и зоны риска</p>
+<p class="subhead">6. Доступ для прочистки и зоны риска</p>
 {% if diagnostics %}
 <table class="data calc-table check-calc">
   <thead><tr><th>Проверка</th><th>Участок</th><th>Доступ / расстояния</th><th>Результат</th></tr></thead>
@@ -127,7 +202,7 @@
 </table>
 {% endif %}
 
-<p class="subhead">6. Расчёт дождевого расхода К2</p>
+<p class="subhead">7. Расчёт дождевого расхода К2</p>
 {% if storm.result %}
 <table class="data calc-table compact-calc">
   <tr><th>Район строительства; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
@@ -142,7 +217,7 @@
 {% endif %}
 
 {% if storm.result %}
-<p class="subhead">7. Проверка воронок и стояков К2</p>
+<p class="subhead">8. Проверка воронок и стояков К2</p>
 {% if storm.network_assessment %}
 {% set a = storm.network_assessment %}
 <table class="data calc-table check-calc">
@@ -164,6 +239,6 @@
 {% endif %}
 
 {% if grease_trap.required %}
-<p class="subhead">8. Производственные стоки общепита</p>
+<p class="subhead">9. Производственные стоки общепита</p>
 <p class="subitem no-indent">{{ grease_trap.decision_note }} Число и производительность жироуловителей определяются по заданию ТХ и схеме выпусков; условный подбор не выполняется.</p>
 {% endif %}

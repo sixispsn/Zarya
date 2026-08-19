@@ -693,6 +693,27 @@ def design_ios2(
             "sewage_k1: расход не определён — группы потребителей не заданы"
         )
 
+    # Детерминированный временной сценарий К1 строится только из явно заданных
+    # событий. Приборы и маршруты берутся из единого реестра/топологии.
+    from app.pz.wastewater_transients import assess_wastewater_transients
+    project.sewage.transient_assessment = assess_wastewater_transients(project)
+    transient = project.sewage.transient_assessment
+    if transient.ready:
+        bundle.status.append(
+            "sewage_transients: "
+            f"событий {len(transient.events)}; "
+            f"пик {transient.peak_total_flow_lps:.3f} л/с; "
+            f"сетевых шагов {len(transient.network_steps)}"
+        )
+    elif transient.errors:
+        bundle.warnings.append(
+            "sewage_transients: сценарий не рассчитан — "
+            + "; ".join(transient.errors)
+        )
+    bundle.warnings.extend(
+        f"sewage_transients: {row}" for row in transient.warnings
+    )
+
     # К2 считается только при полном наборе исходных данных. Формулы и
     # округление перенесены из legacy/sp30_calculator.html в app.calc.storm.
     if project.storm.city_code and project.storm.roof_area_m2 > 0:

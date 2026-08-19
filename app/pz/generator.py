@@ -316,9 +316,12 @@ def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
 def generate_wastewater_calculation_html(project: Project) -> str:
     """Собрать отдельное приложение К1/К2 из результатов расчётного ядра."""
     from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+    from app.pz.wastewater_transients import assess_wastewater_transients
 
     if project.sewage.hydraulic_assessment is None:
         project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
+    if project.sewage.transient_assessment is None:
+        project.sewage.transient_assessment = assess_wastewater_transients(project)
     env = _build_env()
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(

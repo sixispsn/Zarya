@@ -32,6 +32,7 @@ from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
+    SewerDischargeEventRequest,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
@@ -275,6 +276,26 @@ async def wizard_design(request: Request):
                     ff(f"sewage_riser{i}_height")
                     if fv(f"sewage_riser{i}_height") else None
                 ),
+                inner_diameter_mm=(
+                    ff(f"sewage_riser{i}_inner")
+                    if fv(f"sewage_riser{i}_inner") else None
+                ),
+                branch_inner_diameter_mm=(
+                    ff(f"sewage_riser{i}_branch_inner")
+                    if fv(f"sewage_riser{i}_branch_inner") else None
+                ),
+                minimum_trap_seal_mm=(
+                    ff(f"sewage_riser{i}_trap_seal")
+                    if fv(f"sewage_riser{i}_trap_seal") else None
+                ),
+                pressure_input_source=fv(
+                    f"sewage_riser{i}_pressure_source"
+                ),
+                air_valve_free_area_mm2=(
+                    ff(f"sewage_riser{i}_valve_area")
+                    if fv(f"sewage_riser{i}_valve_area") else None
+                ),
+                air_valve_source=fv(f"sewage_riser{i}_valve_source"),
             ))
 
     sewer_pipes = []
@@ -318,6 +339,17 @@ async def wizard_design(request: Request):
                     if fv(f"sewer_pipe{i}_abs_elev_end") else None
                 ),
                 insulated=bool(form.get(f"sewer_pipe{i}_insulated")),
+                critical_velocity_mps=(
+                    ff(f"sewer_pipe{i}_critical_velocity")
+                    if fv(f"sewer_pipe{i}_critical_velocity") else None
+                ),
+                critical_velocity_source=fv(
+                    f"sewer_pipe{i}_critical_velocity_source"
+                ),
+                critical_fill_ratio=(
+                    ff(f"sewer_pipe{i}_critical_fill")
+                    if fv(f"sewer_pipe{i}_critical_fill") else None
+                ),
             ))
 
     sewer_elements = []
@@ -359,6 +391,28 @@ async def wizard_design(request: Request):
                 standard=fv(f"sewer_element{i}_standard"),
                 include_in_spec=bool(form.get(f"sewer_element{i}_include_spec")),
                 layout_column=fi(f"sewer_element{i}_column"),
+            ))
+
+    sewer_discharge_events = []
+    for i in range(1, 9):
+        event_id = fv(f"sewer_event{i}_id")
+        if event_id:
+            sewer_discharge_events.append(SewerDischargeEventRequest(
+                event_id=event_id,
+                fixture_id=fv(f"sewer_event{i}_fixture"),
+                floor=fi(f"sewer_event{i}_floor", 1),
+                instance_no=fi(f"sewer_event{i}_instance", 1),
+                start_seconds=ff(f"sewer_event{i}_start"),
+                duration_seconds=ff(f"sewer_event{i}_duration"),
+                flow_lps=ff(f"sewer_event{i}_flow"),
+                source=fv(f"sewer_event{i}_source"),
+                suspended_solids_mg_l=(
+                    ff(f"sewer_event{i}_solids")
+                    if fv(f"sewer_event{i}_solids") else None
+                ),
+                suspended_solids_source=fv(
+                    f"sewer_event{i}_solids_source"
+                ),
             ))
 
     req = IOS2Request(
@@ -403,6 +457,15 @@ async def wizard_design(request: Request):
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
         sewer_elements=sewer_elements,
+        sewer_discharge_events=sewer_discharge_events,
+        sewer_transient_step_seconds=(
+            ff("sewer_transient_step_seconds")
+            if fv("sewer_transient_step_seconds") else None
+        ),
+        sewer_transient_duration_seconds=(
+            ff("sewer_transient_duration_seconds")
+            if fv("sewer_transient_duration_seconds") else None
+        ),
         sewage_outlets_count=fi("sewage_outlets_count"),
         wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
         wastewater_survey_ref=fv("wastewater_survey_ref"),

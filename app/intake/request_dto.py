@@ -246,6 +246,12 @@ class SewageRiserRequest:
     branch_angle_deg: float
     has_toilet: bool = True
     working_height_m: Optional[float] = None
+    inner_diameter_mm: Optional[float] = None
+    branch_inner_diameter_mm: Optional[float] = None
+    minimum_trap_seal_mm: Optional[float] = None
+    pressure_input_source: str = ""
+    air_valve_free_area_mm2: Optional[float] = None
+    air_valve_source: str = ""
 
 
 @dataclass
@@ -268,6 +274,9 @@ class SewerPipeRequest:
     design_flow_lps: Optional[float] = None
     manning_n: Optional[float] = None
     hydraulic_source: str = ""
+    critical_velocity_mps: Optional[float] = None
+    critical_velocity_source: str = ""
+    critical_fill_ratio: Optional[float] = None
     slope_per_mille: Optional[float] = None
     fill_ratio: Optional[float] = None
     from_node: str = ""
@@ -321,6 +330,21 @@ class SewerElementRequest:
 
 
 @dataclass
+class SewerDischargeEventRequest:
+    """Сценарный сброс; время и расход не выводятся из количества приборов."""
+    event_id: str
+    fixture_id: str
+    floor: int
+    instance_no: int
+    start_seconds: float
+    duration_seconds: float
+    flow_lps: float
+    source: str
+    suspended_solids_mg_l: Optional[float] = None
+    suspended_solids_source: str = ""
+
+
+@dataclass
 class IOS2Request:
     """Полное намерение: «спроектируй мне ИОС2 для такого объекта»."""
     document: DocumentRequest
@@ -366,6 +390,9 @@ class IOS2Request:
     sewage_risers: List[SewageRiserRequest] = field(default_factory=list)
     sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
     sewer_elements: List[SewerElementRequest] = field(default_factory=list)
+    sewer_discharge_events: List[SewerDischargeEventRequest] = field(default_factory=list)
+    sewer_transient_step_seconds: Optional[float] = None
+    sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
     wastewater_design_assignment_ref: str = ""
     wastewater_survey_ref: str = ""
@@ -565,6 +592,34 @@ class IOS2Request:
                 p.append(
                     f"sewage_risers[{i}].working_height_m должен быть > 0"
                 )
+            for field_name, value in (
+                ("inner_diameter_mm", riser.inner_diameter_mm),
+                ("branch_inner_diameter_mm", riser.branch_inner_diameter_mm),
+                ("minimum_trap_seal_mm", riser.minimum_trap_seal_mm),
+                ("air_valve_free_area_mm2", riser.air_valve_free_area_mm2),
+            ):
+                if value is not None and value <= 0:
+                    p.append(f"sewage_risers[{i}].{field_name} должен быть > 0")
+            if (
+                riser.branch_inner_diameter_mm is not None
+                and riser.inner_diameter_mm is not None
+                and riser.branch_inner_diameter_mm > riser.inner_diameter_mm
+            ):
+                p.append(
+                    f"sewage_risers[{i}]: внутренний диаметр отвода "
+                    "не может быть больше внутреннего диаметра стояка"
+                )
+            if riser.air_valve_free_area_mm2 is not None:
+                if riser.ventilation != "vacuum_valve":
+                    p.append(
+                        f"sewage_risers[{i}].air_valve_free_area_mm2 допустима "
+                        "только для стояка с воздушным клапаном"
+                    )
+                if not riser.air_valve_source.strip():
+                    p.append(
+                        f"sewage_risers[{i}].air_valve_source обязателен "
+                        "для площади клапана"
+                    )
         seen_sewer_sections = set()
         for i, pipe in enumerate(self.sewer_pipes):
             if pipe.system not in ("K1", "K2", "K3"):
@@ -611,6 +666,27 @@ class IOS2Request:
             if pipe.manning_n is not None and not pipe.hydraulic_source.strip():
                 p.append(
                     f"sewer_pipes[{i}].hydraulic_source обязателен при manning_n"
+                )
+            if (
+                pipe.critical_velocity_mps is not None
+                and pipe.critical_velocity_mps <= 0
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].critical_velocity_mps должен быть > 0"
+                )
+            if (
+                pipe.critical_velocity_mps is not None
+                and not pipe.critical_velocity_source.strip()
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].critical_velocity_source обязателен"
+                )
+            if (
+                pipe.critical_fill_ratio is not None
+                and not 0 < pipe.critical_fill_ratio <= 1
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].critical_fill_ratio должен быть в (0; 1]"
                 )
             if not pipe.material.strip() or not pipe.standard.strip():
                 p.append(
@@ -729,6 +805,112 @@ class IOS2Request:
                     f"sewer_elements[{i}].connects_to ссылается на неизвестный "
                     f"элемент или узел '{element.connects_to}'"
                 )
+        if (
+            self.sewer_transient_step_seconds is not None
+            and self.sewer_transient_step_seconds <= 0
+        ):
+            p.append("sewer_transient_step_seconds должен быть > 0")
+        if (
+            self.sewer_transient_duration_seconds is not None
+            and self.sewer_transient_duration_seconds <= 0
+        ):
+            p.append("sewer_transient_duration_seconds должен быть > 0")
+        if self.sewer_discharge_events and self.sewer_transient_step_seconds is None:
+            p.append(
+                "для sewer_discharge_events требуется "
+                "sewer_transient_step_seconds"
+            )
+        elements_by_id = {
+            row.element_id: row for row in self.sewer_elements if row.element_id
+        }
+        seen_discharge_events = set()
+        for i, event in enumerate(self.sewer_discharge_events):
+            if not event.event_id or event.event_id in seen_discharge_events:
+                p.append(
+                    f"sewer_discharge_events[{i}]: ID пустой или повторяется"
+                )
+            seen_discharge_events.add(event.event_id)
+            fixture = elements_by_id.get(event.fixture_id)
+            if fixture is None:
+                p.append(
+                    f"sewer_discharge_events[{i}].fixture_id ссылается "
+                    f"на неизвестный прибор '{event.fixture_id}'"
+                )
+            elif fixture.system != "K1" or fixture.kind not in {
+                "toilet", "washbasin", "sink", "bath", "shower",
+                "floor_drain", "washing_machine", "dishwasher",
+            }:
+                p.append(
+                    f"sewer_discharge_events[{i}].fixture_id должен "
+                    "ссылаться на приёмник стоков К1"
+                )
+            if event.floor < 1:
+                p.append(f"sewer_discharge_events[{i}].floor должен быть >= 1")
+            if event.instance_no < 1:
+                p.append(
+                    f"sewer_discharge_events[{i}].instance_no должен быть >= 1"
+                )
+            if event.start_seconds < 0:
+                p.append(
+                    f"sewer_discharge_events[{i}].start_seconds не может быть < 0"
+                )
+            if event.duration_seconds <= 0:
+                p.append(
+                    f"sewer_discharge_events[{i}].duration_seconds должен быть > 0"
+                )
+            if event.flow_lps <= 0:
+                p.append(
+                    f"sewer_discharge_events[{i}].flow_lps должен быть > 0"
+                )
+            if not event.source.strip():
+                p.append(f"sewer_discharge_events[{i}].source обязателен")
+            if (
+                event.suspended_solids_mg_l is not None
+                and event.suspended_solids_mg_l < 0
+            ):
+                p.append(
+                    f"sewer_discharge_events[{i}].suspended_solids_mg_l "
+                    "не может быть < 0"
+                )
+            if (
+                event.suspended_solids_mg_l is not None
+                and not event.suspended_solids_source.strip()
+            ):
+                p.append(
+                    f"sewer_discharge_events[{i}].suspended_solids_source "
+                    "обязателен при заданной концентрации"
+                )
+            step = self.sewer_transient_step_seconds
+            if step is not None and step > 0:
+                for field_name, value in (
+                    ("start_seconds", event.start_seconds),
+                    ("end_seconds", event.start_seconds + event.duration_seconds),
+                ):
+                    quotient = value / step
+                    if abs(quotient - round(quotient)) > 1e-9:
+                        p.append(
+                            f"sewer_discharge_events[{i}].{field_name} "
+                            f"должно быть кратно шагу {step:g} с"
+                        )
+        if self.sewer_discharge_events:
+            last_event_end = max(
+                row.start_seconds + row.duration_seconds
+                for row in self.sewer_discharge_events
+            )
+            duration = self.sewer_transient_duration_seconds
+            if duration is not None and duration < last_event_end:
+                p.append(
+                    "sewer_transient_duration_seconds не может быть меньше "
+                    f"конца последнего события ({last_event_end:g} с)"
+                )
+            step = self.sewer_transient_step_seconds
+            if duration is not None and step is not None and step > 0:
+                quotient = duration / step
+                if abs(quotient - round(quotient)) > 1e-9:
+                    p.append(
+                        "sewer_transient_duration_seconds должно быть "
+                        f"кратно шагу {step:g} с"
+                    )
         if self.wastewater_disposal_mode not in (
             "not_set", "centralized", "local", "water_body",
         ):

@@ -221,6 +221,49 @@
         <td><label class="check-label compact-check"><input type="checkbox" name="sewer_element{{ i + 1 }}_include_spec"{% if not r or r.include_in_spec %} checked{% endif %}>да</label></td>
       </tr>{% endfor %}</table></div>
     </details>
+    <details class="field-help"><summary>Динамический сценарий К1 · разрежение, подпор и риск заиливания</summary>
+      <p>Блок необязательный. Программа сама находит ветвь, стояк и путь до выпуска по ID прибора. Расход и временной интервал каждого события задаются проектировщиком; количество приборов не превращается в случайную одновременность.</p>
+      <div class="row">
+        <label>Шаг симуляции, с<input name="sewer_transient_step_seconds" value="{{ prefill.sewer_transient_step_seconds if prefill and prefill.sewer_transient_step_seconds is not none else '' }}" placeholder="1,0"></label>
+        <label>Горизонт симуляции, с<input name="sewer_transient_duration_seconds" value="{{ prefill.sewer_transient_duration_seconds if prefill and prefill.sewer_transient_duration_seconds is not none else '' }}" placeholder="не меньше конца событий"></label>
+      </div>
+      <p class="technical-label">Точные исходные данные давления стояков</p>
+      <div class="table-wrap"><table class="grid"><tr><th>Стояк</th><th>Øвн стояка, мм</th><th>Øвн отвода, мм</th><th>hз min, мм</th><th>Источник</th><th>Живое сечение клапана, мм²</th><th>Паспорт клапана</th></tr>
+      {% for i in range(3) %}{% set r = prefill.sewage_risers[i] if prefill and i < prefill.sewage_risers|length else none %}
+      <tr>
+        <td>{{ r.riser_id if r else "стояк " ~ (i + 1) }}</td>
+        <td><input name="sewage_riser{{ i + 1 }}_inner" value="{{ r.inner_diameter_mm if r and r.inner_diameter_mm is not none else '' }}"></td>
+        <td><input name="sewage_riser{{ i + 1 }}_branch_inner" value="{{ r.branch_inner_diameter_mm if r and r.branch_inner_diameter_mm is not none else '' }}"></td>
+        <td><input name="sewage_riser{{ i + 1 }}_trap_seal" value="{{ r.minimum_trap_seal_mm if r and r.minimum_trap_seal_mm is not none else '' }}"></td>
+        <td><input name="sewage_riser{{ i + 1 }}_pressure_source" value="{{ r.pressure_input_source if r else '' }}" placeholder="аксонометрия, паспорт прибора"></td>
+        <td><input name="sewage_riser{{ i + 1 }}_valve_area" value="{{ r.air_valve_free_area_mm2 if r and r.air_valve_free_area_mm2 is not none else '' }}"></td>
+        <td><input name="sewage_riser{{ i + 1 }}_valve_source" value="{{ r.air_valve_source if r else '' }}"></td>
+      </tr>{% endfor %}</table></div>
+      <p class="technical-label">Параметры пошаговой гидравлики горизонтальных участков</p>
+      <div class="table-wrap"><table class="grid"><tr><th>Участок</th><th>Vкр, м/с</th><th>Источник Vкр</th><th>(h/d)крит</th></tr>
+      {% for i in range(12) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
+      <tr>
+        <td>{{ r.section_id if r else "участок " ~ (i + 1) }}</td>
+        <td><input name="sewer_pipe{{ i + 1 }}_critical_velocity" value="{{ r.critical_velocity_mps if r and r.critical_velocity_mps is not none else '' }}"></td>
+        <td><input name="sewer_pipe{{ i + 1 }}_critical_velocity_source" value="{{ r.critical_velocity_source if r else '' }}"></td>
+        <td><input name="sewer_pipe{{ i + 1 }}_critical_fill" value="{{ r.critical_fill_ratio if r and r.critical_fill_ratio is not none else '' }}"></td>
+      </tr>{% endfor %}</table></div>
+      <p class="technical-label">Явные события сброса</p>
+      <div class="table-wrap"><table class="grid"><tr><th>ID</th><th>ID прибора</th><th>Этаж</th><th>№ прибора</th><th>tнач, с</th><th>Δt, с</th><th>q, л/с</th><th>Источник</th><th>Взвеси, мг/л</th><th>Источник взвесей</th></tr>
+      {% for i in range(8) %}{% set e = prefill.sewer_discharge_events[i] if prefill and i < prefill.sewer_discharge_events|length else none %}
+      <tr>
+        <td><input name="sewer_event{{ i + 1 }}_id" value="{{ e.event_id if e else '' }}" placeholder="СБР-1"></td>
+        <td><input name="sewer_event{{ i + 1 }}_fixture" value="{{ e.fixture_id if e else '' }}" placeholder="К1-Ун1"></td>
+        <td><input name="sewer_event{{ i + 1 }}_floor" value="{{ e.floor if e else 1 }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_instance" value="{{ e.instance_no if e else 1 }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_start" value="{{ e.start_seconds if e else '' }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_duration" value="{{ e.duration_seconds if e else '' }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_flow" value="{{ e.flow_lps if e else '' }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_source" value="{{ e.source if e else '' }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_solids" value="{{ e.suspended_solids_mg_l if e and e.suspended_solids_mg_l is not none else '' }}"></td>
+        <td><input name="sewer_event{{ i + 1 }}_solids_source" value="{{ e.suspended_solids_source if e else '' }}"></td>
+      </tr>{% endfor %}</table></div>
+    </details>
     <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>
       <div class="row">
         <label class="check-label"><input type="checkbox" name="wastewater_pump_required"{% if prefill and prefill.wastewater_pump_required %} checked{% endif %}>Предусмотрена КНС</label>

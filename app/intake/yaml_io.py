@@ -46,6 +46,7 @@ from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
+    SewerDischargeEventRequest,
 )
 
 
@@ -221,6 +222,24 @@ def load_request(text: str) -> IOS2Request:
                 float(x["working_height_m"])
                 if x.get("working_height_m") is not None else None
             ),
+            inner_diameter_mm=(
+                float(x["inner_diameter_mm"])
+                if x.get("inner_diameter_mm") is not None else None
+            ),
+            branch_inner_diameter_mm=(
+                float(x["branch_inner_diameter_mm"])
+                if x.get("branch_inner_diameter_mm") is not None else None
+            ),
+            minimum_trap_seal_mm=(
+                float(x["minimum_trap_seal_mm"])
+                if x.get("minimum_trap_seal_mm") is not None else None
+            ),
+            pressure_input_source=str(x.get("pressure_input_source", "")),
+            air_valve_free_area_mm2=(
+                float(x["air_valve_free_area_mm2"])
+                if x.get("air_valve_free_area_mm2") is not None else None
+            ),
+            air_valve_source=str(x.get("air_valve_source", "")),
         )
         for x in (sewage_s.get("risers") or [])
         if isinstance(x, dict)
@@ -252,6 +271,17 @@ def load_request(text: str) -> IOS2Request:
                 if x.get("manning_n") is not None else None
             ),
             hydraulic_source=str(x.get("hydraulic_source", "")),
+            critical_velocity_mps=(
+                float(x["critical_velocity_mps"])
+                if x.get("critical_velocity_mps") is not None else None
+            ),
+            critical_velocity_source=str(
+                x.get("critical_velocity_source", "")
+            ),
+            critical_fill_ratio=(
+                float(x["critical_fill_ratio"])
+                if x.get("critical_fill_ratio") is not None else None
+            ),
             slope_per_mille=(
                 float(x["slope_per_mille"])
                 if x.get("slope_per_mille") is not None else None
@@ -329,6 +359,27 @@ def load_request(text: str) -> IOS2Request:
             ),
         )
         for x in (sewage_s.get("elements") or [])
+        if isinstance(x, dict)
+    ]
+    sewer_discharge_events = [
+        SewerDischargeEventRequest(
+            event_id=str(x.get("id", x.get("event_id", ""))),
+            fixture_id=str(x.get("fixture_id", "")),
+            floor=int(x.get("floor", 1)),
+            instance_no=int(x.get("instance_no", 1)),
+            start_seconds=float(x.get("start_seconds", 0)),
+            duration_seconds=float(x.get("duration_seconds", 0)),
+            flow_lps=float(x.get("flow_lps", 0)),
+            source=str(x.get("source", "")),
+            suspended_solids_mg_l=(
+                float(x["suspended_solids_mg_l"])
+                if x.get("suspended_solids_mg_l") is not None else None
+            ),
+            suspended_solids_source=str(
+                x.get("suspended_solids_source", "")
+            ),
+        )
+        for x in (sewage_s.get("discharge_events") or [])
         if isinstance(x, dict)
     ]
     return IOS2Request(
@@ -441,6 +492,15 @@ def load_request(text: str) -> IOS2Request:
         sewage_risers=sewage_risers,
         sewer_pipes=sewer_pipes,
         sewer_elements=sewer_elements,
+        sewer_discharge_events=sewer_discharge_events,
+        sewer_transient_step_seconds=(
+            float(sewage_s["transient_step_seconds"])
+            if sewage_s.get("transient_step_seconds") is not None else None
+        ),
+        sewer_transient_duration_seconds=(
+            float(sewage_s["transient_duration_seconds"])
+            if sewage_s.get("transient_duration_seconds") is not None else None
+        ),
         sewage_outlets_count=int(sewage_s.get("outlets_count", 0)),
         wastewater_design_assignment_ref=str(
             sewage_s.get("design_assignment_ref", "")
@@ -679,6 +739,12 @@ def dump_request(req: IOS2Request) -> str:
                 "branch_angle_deg": x.branch_angle_deg,
                 "has_toilet": x.has_toilet,
                 "working_height_m": x.working_height_m,
+                "inner_diameter_mm": x.inner_diameter_mm,
+                "branch_inner_diameter_mm": x.branch_inner_diameter_mm,
+                "minimum_trap_seal_mm": x.minimum_trap_seal_mm,
+                "pressure_input_source": x.pressure_input_source,
+                "air_valve_free_area_mm2": x.air_valve_free_area_mm2,
+                "air_valve_source": x.air_valve_source,
             } for x in req.sewage_risers],
             "pipes": [{
                 "system": x.system,
@@ -699,6 +765,12 @@ def dump_request(req: IOS2Request) -> str:
                    if x.manning_n is not None else {}),
                 **({"hydraulic_source": x.hydraulic_source}
                    if x.hydraulic_source else {}),
+                **({"critical_velocity_mps": x.critical_velocity_mps}
+                   if x.critical_velocity_mps is not None else {}),
+                **({"critical_velocity_source": x.critical_velocity_source}
+                   if x.critical_velocity_source else {}),
+                **({"critical_fill_ratio": x.critical_fill_ratio}
+                   if x.critical_fill_ratio is not None else {}),
                 **({"slope_per_mille": x.slope_per_mille}
                    if x.slope_per_mille is not None else {}),
                 **({"fill_ratio": x.fill_ratio}
@@ -751,6 +823,22 @@ def dump_request(req: IOS2Request) -> str:
                 **({"service_chainage_m": x.service_chainage_m}
                    if x.service_chainage_m is not None else {}),
             } for x in req.sewer_elements],
+            "transient_step_seconds": req.sewer_transient_step_seconds,
+            "transient_duration_seconds": req.sewer_transient_duration_seconds,
+            "discharge_events": [{
+                "id": x.event_id,
+                "fixture_id": x.fixture_id,
+                "floor": x.floor,
+                "instance_no": x.instance_no,
+                "start_seconds": x.start_seconds,
+                "duration_seconds": x.duration_seconds,
+                "flow_lps": x.flow_lps,
+                "source": x.source,
+                **({"suspended_solids_mg_l": x.suspended_solids_mg_l}
+                   if x.suspended_solids_mg_l is not None else {}),
+                **({"suspended_solids_source": x.suspended_solids_source}
+                   if x.suspended_solids_source else {}),
+            } for x in req.sewer_discharge_events],
             "design_assignment_ref": req.wastewater_design_assignment_ref,
             "survey_ref": req.wastewater_survey_ref,
             "service_life_years": req.wastewater_service_life_years,

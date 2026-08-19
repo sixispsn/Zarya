@@ -38,6 +38,12 @@ class SewageRiserInput:
     branch_angle_deg: float
     has_toilet: bool = True
     working_height_m: Optional[float] = None
+    inner_diameter_mm: Optional[float] = None
+    branch_inner_diameter_mm: Optional[float] = None
+    minimum_trap_seal_mm: Optional[float] = None
+    pressure_input_source: str = ""
+    air_valve_free_area_mm2: Optional[float] = None
+    air_valve_source: str = ""
 
 
 @dataclass(frozen=True)

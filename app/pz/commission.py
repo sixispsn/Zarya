@@ -185,11 +185,14 @@ def _project_fingerprint(project: Project) -> str:
             "risers": [vars(row) for row in project.sewage.risers],
             "pipes": [vars(row) for row in project.sewage.pipes],
             "elements": [vars(row) for row in project.sewage.elements],
+            "discharge_events": [
+                vars(row) for row in project.sewage.discharge_events
+            ],
             "gost_inputs": {
                 key: value for key, value in vars(project.sewage).items()
                 if key not in {
-                    "result", "hydraulic_assessment",
-                    "risers", "pipes", "elements",
+                    "result", "hydraulic_assessment", "transient_assessment",
+                    "risers", "pipes", "elements", "discharge_events",
                 }
             },
         },

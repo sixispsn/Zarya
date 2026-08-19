@@ -561,6 +561,12 @@ class SewageRiserSpec:
     branch_angle_deg: float = 87.5
     has_toilet: bool = True
     working_height_m: Optional[float] = None
+    inner_diameter_mm: Optional[float] = None
+    branch_inner_diameter_mm: Optional[float] = None
+    minimum_trap_seal_mm: Optional[float] = None
+    pressure_input_source: str = ""
+    air_valve_free_area_mm2: Optional[float] = None
+    air_valve_source: str = ""
 
 
 @dataclass
@@ -578,6 +584,9 @@ class SewerPipeSpec:
     design_flow_lps: Optional[float] = None
     manning_n: Optional[float] = None
     hydraulic_source: str = ""
+    critical_velocity_mps: Optional[float] = None
+    critical_velocity_source: str = ""
+    critical_fill_ratio: Optional[float] = None
     slope_per_mille: Optional[float] = None
     fill_ratio: Optional[float] = None
     from_node: str = ""
@@ -626,11 +635,30 @@ class SewerElementSpec:
 
 
 @dataclass
+class SewerDischargeEventSpec:
+    """Явное событие сброса от конкретного экземпляра прибора К1."""
+    event_id: str = ""
+    fixture_id: str = ""
+    floor: int = 1
+    instance_no: int = 1
+    start_seconds: float = 0.0
+    duration_seconds: float = 0.0
+    flow_lps: float = 0.0
+    source: str = ""
+    suspended_solids_mg_l: Optional[float] = None
+    suspended_solids_source: str = ""
+
+
+@dataclass
 class SewageDesign:
     """К1: расчёт системы и явно подтверждённые данные стадии П."""
     risers: List[SewageRiserSpec] = field(default_factory=list)
     pipes: List[SewerPipeSpec] = field(default_factory=list)
     elements: List[SewerElementSpec] = field(default_factory=list)
+    discharge_events: List[SewerDischargeEventSpec] = field(default_factory=list)
+    transient_step_seconds: Optional[float] = None
+    transient_duration_seconds: Optional[float] = None
+    transient_assessment: Optional[object] = None
     outlets_count: int = 0
     result: Optional[object] = None
     hydraulic_assessment: Optional[object] = None
