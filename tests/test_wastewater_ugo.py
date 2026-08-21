@@ -185,8 +185,8 @@ def test_ugo_sheet_is_a3_and_contains_only_used_source_classes(tmp_path):
     assert 'width="420mm"' in svg
     assert "нормативное УГО" in svg
     assert "рекомендуемый пример" in svg
-    assert "проектное обозначение" in svg
-    assert "заглушённый доступный конец" in svg
+    assert "проектное обозначение" not in svg
+    assert "заглушённый доступный конец" not in svg
     assert "систем К1, К2" in svg
     assert "систем К1, К2 и К3" not in svg
     assert "ГОСТ 21.205-2016, табл. 3, поз. 11" in svg

@@ -1,8 +1,9 @@
-"""Контроль реестра элементов внутренних систем К1/К2/К3.
+"""Контроль технического списка элементов внутренних систем К1/К2/К3.
 
-Реестр не выполняет расчётов и не выводит количества из протяжённости труб.
-Он связывает подтверждённые проектировщиком элементы с топологическими
-участками, чтобы схема и спецификация собирались из одного источника.
+Список не является нормативным источником и не принимает проектных решений.
+Он только связывает подтверждённые проектировщиком элементы с топологическими
+участками. Требования СП проверяются отдельным аудитом и не материализуются в
+элементы автоматически.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ class WastewaterRegistryAudit:
 
 
 def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
-    """Проверить связи реестра без попытки восстановить отсутствующие данные."""
+    """Проверить связи списка без восстановления отсутствующих данных."""
     elements = list(project.sewage.elements or [])
     pipes = list(project.sewage.pipes or [])
     result = WastewaterRegistryAudit(
@@ -37,7 +38,7 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     )
     if not elements:
         result.warnings.append(
-            "реестр элементов К1/К2/К3 не заполнен: схема может показать "
+            "список элементов К1/К2/К3 не заполнен: схема может показать "
             "только подтверждённые трубопроводные участки"
         )
         return result
@@ -99,7 +100,7 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     result.covered_sections = sorted(covered)
     result.uncovered_sections = sorted(pipe_ids - covered)
     # Магистральный участок может не нести самостоятельного штучного элемента;
-    # его наличие уже подтверждено реестром труб и топологическим графом.
+    # его наличие уже подтверждено списком труб и топологическим графом.
     from app.pz.wastewater_topology import build_wastewater_topology
 
     topology = build_wastewater_topology(project)
@@ -108,15 +109,6 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     )
     result.warnings.extend(
         problem for problem in topology.warnings if problem not in result.warnings
-    )
-    from app.pz.wastewater_sp30 import audit_wastewater_sp30
-
-    sp30 = audit_wastewater_sp30(project)
-    result.errors.extend(
-        problem for problem in sp30.errors if problem not in result.errors
-    )
-    result.warnings.extend(
-        problem for problem in sp30.warnings if problem not in result.warnings
     )
     return result
 

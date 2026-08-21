@@ -154,13 +154,9 @@ sewage:
     - {id: К1-Р2-13, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 13, room_name: сантехническая шахта 2, dn_mm: 100, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
     - {id: К1-Р2-16, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 16, room_name: сантехническая шахта 2, dn_mm: 100, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
     # Нижние повороты К1 обслуживаются через доступные ревизии первого этажа.
-    # Отдельные прочистки К1-М1 размещены по расчётной длине 52 м так, чтобы
-    # интервалы не превышали 10 м по таблице 18.1 СП 30.
-    - {id: К1-ПрМ1-10, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, service_chainage_m: 10.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 1}
-    - {id: К1-ПрМ1-20, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, service_chainage_m: 20.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 1}
-    - {id: К1-ПрМ1-30, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, service_chainage_m: 30.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 2}
-    - {id: К1-ПрМ1-40, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, service_chainage_m: 40.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 2}
-    - {id: К1-ПрМ1-50, system: K1, kind: cleanout, name: Прочистка канализационная, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, service_chainage_m: 50.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 2}
+    # Точки обслуживания горизонтальной магистрали не подставляются: их тип и
+    # координаты должны быть подтверждены планом/аксонометрией с проверкой
+    # предельных расстояний по таблице 18.1 СП 30.13330.2020.
     # Нижний поворот стояка выполняется двумя отводами 45°, а не одним 87,5°,
     # п. 18.4 СП 30.
     - {id: К1-ОтвСт1, system: K1, kind: elbow, name: Отвод канализационный 45°, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Ст1, connects_to: К1-М1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 1}
@@ -171,9 +167,9 @@ sewage:
     - {id: К1-ВыпЭ1, system: K1, kind: outlet, name: Узел выпуска хозяйственно-бытовой канализации К1, quantity: 1, floor_from: 0, room_number: ТП-01, room_name: Техническое подполье, dn_mm: 150, section_id: К1-Вып1, connects_to: КК-1, standard: по узлу ИОС3, layout_column: 3}
     - {id: К2-Вр1, system: K2, kind: roof_funnel, name: Воронка водосточная с электрообогревом, quantity: 2, floor_from: 17, room_name: кровля, dn_mm: 100, slope_per_mille: 5.0, section_id: К2-Ст1, connects_to: К2-Ст1, type_mark: по плану кровли, standard: ТУ изготовителя, layout_column: 3}
     - {id: К2-Вр2, system: K2, kind: roof_funnel, name: Воронка водосточная с электрообогревом, quantity: 2, floor_from: 17, room_name: кровля, dn_mm: 100, slope_per_mille: 5.0, section_id: К2-Ст2, connects_to: К2-Ст2, type_mark: по плану кровли, standard: ТУ изготовителя, layout_column: 4}
-    - {id: К2-Пр1, system: K2, kind: cleanout, name: Прочистка внутреннего водостока, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-М1, connects_to: К2-Ст1, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 3}
-    - {id: К2-ПрМ1-10, system: K2, kind: cleanout, name: Прочистка внутреннего водостока, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 150, section_id: К2-М1, service_chainage_m: 10.0, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 3}
-    - {id: К2-Пр2, system: K2, kind: cleanout, name: Прочистка внутреннего водостока, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Вып1, connects_to: К2-Ст2, service_direction: downstream, service_fitting: wye_45, accessible: true, standard: ГОСТ 32414-2013, layout_column: 4}
+    # Для К2 тип и положение ревизий/прочисток должны быть подтверждены
+    # проектировщиком по п. 21.8 и разделу 18 СП 30.13330.2020. Учебные
+    # косые тройники без плановой привязки исключены.
     - {id: К2-Пер1, system: K2, kind: transition, name: Переход водосточный концентрический, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 150, section_id: К2-М1, connects_to: К2-Ст1, type_mark: DN100×150, standard: ГОСТ 32414-2013, layout_column: 3}
     - {id: К2-ВыпЭ1, system: K2, kind: outlet, name: Узел выпуска дождевой канализации К2, quantity: 1, floor_from: 0, room_number: ТП-01, room_name: Техническое подполье, dn_mm: 150, section_id: К2-Вып1, connects_to: КК-2, standard: по узлу ИОС3, layout_column: 4}
   # Временные интервалы ниже заданы вручную и не выводятся из количества

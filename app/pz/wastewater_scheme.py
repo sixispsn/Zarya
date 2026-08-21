@@ -756,7 +756,7 @@ def build_wastewater_scheme(
              f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}",
              7.5, "middle", "bold")
 
-    # Ревизии и противопожарные муфты ставятся только из реестра.
+    # Ревизии и противопожарные муфты ставятся только из подтверждённых данных.
     band_by_floor = {band.floor: band for band in bands}
     rupture_y = None
     if scaffold.has_rupture and len(bands) >= 2:
@@ -981,7 +981,7 @@ def build_wastewater_scheme(
             draw_lower_bend_boundaries(riser_id, sx, sy)
 
     # Два отвода по 45° у нижнего поворота уже образуют геометрию трубопровода;
-    # адресная выноска связывает её с подтверждённой строкой реестра.
+    # адресная выноска связывает её с подтверждённым элементом проекта.
     for row in elements if full_scope else []:
         if row.kind != "elbow":
             continue

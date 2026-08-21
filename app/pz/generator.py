@@ -476,21 +476,14 @@ def generate_wastewater_scheme_pdf(
 
     from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
 
-    assessment = (
-        project.sewage.hydraulic_assessment
-        or assess_wastewater_diagnostics(project)
-    )
-    # Пустое задание должно по-прежнему формировать лист с незаполненными
-    # местами: пользователь отдельно просил не блокировать комплект только
-    # из-за отсутствующих реквизитов/геометрии. Но если реестр сети уже начат,
-    # выпуск противоречивой схемы запрещается.
-    explicit_network = bool(project.sewage.pipes or project.sewage.elements)
-    if explicit_network and not assessment.ready:
-        raise ValueError(
-            "принципиальная схема заблокирована диагностикой: "
-            + "; ".join(assessment.errors)
+    if project.sewage.hydraulic_assessment is None:
+        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(
+            project
         )
-
+    # Неполные исходные данные не замещаются условными элементами. Лист всё
+    # равно формируется, но рендерер явно ставит блокирующий статус и выводит
+    # диагностическое замечание. Так комплект показывает реальную степень
+    # готовности, не материализуя выдуманную прочистку или трассу.
     svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(project))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
@@ -538,7 +531,7 @@ def generate_wastewater_scheme_result(
     *,
     diagnostics: bool = False,
 ):
-    """Собрать схему и вернуть SVG вместе с предупреждениями реестра."""
+    """Собрать схему и вернуть SVG вместе с диагностическими замечаниями."""
     from app.pz.wastewater_scheme import build_wastewater_scheme
 
     cipher = _wastewater_document_cipher(project.document.cipher or "")
@@ -560,7 +553,7 @@ def generate_wastewater_scheme_svg(
     *,
     diagnostics: bool = False,
 ) -> str:
-    """SVG листа А1, построенный по реестру элементов и участков."""
+    """SVG листа А1 по подтверждённым элементам и участкам."""
     return generate_wastewater_scheme_result(
         project,
         diagnostics=diagnostics,

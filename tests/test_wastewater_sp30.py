@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
+from app.pz.project import SewerElementSpec
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 
 
@@ -13,10 +14,11 @@ def _project():
     return build_project(load_request_file(str(DEMO)))
 
 
-def test_demo_revision_schedule_and_turn_access_pass_sp30_audit():
+def test_demo_preserves_revision_schedule_but_reports_unconfirmed_k2_access():
     result = audit_wastewater_sp30(_project())
-    assert result.ready
-    assert result.errors == []
+    assert not result.ready
+    assert any("К2-Ст1" in row and "21.8" in row for row in result.errors)
+    assert any("К2-Ст2" in row and "21.8" in row for row in result.errors)
     assert result.warnings == []
     assert result.revision_floors["К1-Ст1"] == [1, 4, 7, 10, 13, 16]
     assert result.revision_floors["К1-Ст2"] == [1, 4, 7, 10, 13, 16]
@@ -37,14 +39,23 @@ def test_revision_gap_over_three_floors_is_rejected():
     assert any("этажах 1 и 10" in row for row in result.errors)
 
 
-def test_k2_turn_without_cleanout_is_rejected():
+def test_k2_turn_access_can_be_confirmed_by_revisions_without_wye_cleanouts():
     project = deepcopy(_project())
-    project.sewage.elements = [
-        row for row in project.sewage.elements
-        if row.element_id != "К2-Пр1"
-    ]
+    for index in (1, 2):
+        project.sewage.elements.append(SewerElementSpec(
+            element_id=f"К2-Р{index}-1",
+            system="K2",
+            kind="revision",
+            name="Ревизия внутреннего водостока",
+            floor_from=1,
+            dn_mm=100,
+            section_id=f"К2-Ст{index}",
+            service_direction="downstream",
+            service_fitting="revision_opening",
+            accessible=True,
+        ))
     result = audit_wastewater_sp30(project)
-    assert any("К2-Ст1" in row and "21.10" in row for row in result.errors)
+    assert not any("К2-Ст" in row for row in result.errors)
 
 
 def test_single_unconfirmed_lower_bend_is_rejected():
