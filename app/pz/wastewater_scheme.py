@@ -80,6 +80,11 @@ def _short(value: str, limit: int) -> str:
     return value if len(value) <= limit else value[: max(1, limit - 1)] + "…"
 
 
+def _system_mark(value: str) -> str:
+    """Display engineering system marks with Cyrillic К per GOST drawings."""
+    return {"K1": "К1", "K2": "К2", "K3": "К3"}.get(value, value)
+
+
 def _applies(element: SewerElementSpec, floor: int) -> bool:
     end = element.floor_to if element.floor_to is not None else element.floor_from
     return element.floor_from <= floor <= end
@@ -415,20 +420,61 @@ def build_wastewater_scheme(
     rect(building_x1, y_zero, building_x2 - building_x1,
          y_ground_bottom - y_zero, sw=1.2)
 
-    def draw_branch(branch: SewerBranch, floor: int, x0: float, x1: float,
-                    y_top: float, y_bottom: float, riser_axis: float,
-                    branch_index: int):
-        if not (branch.floor_from <= floor <= branch.floor_to):
+    def draw_branch(branches: List[SewerBranch], floor: int, x0: float, x1: float,
+                    y_top: float, y_bottom: float, riser_axis: float):
+        """Draw one typical-floor collector for every branch of one riser.
+
+        The calculation graph keeps its individual kitchen and sanitary branch
+        sections.  On the principle sheet they converge into one readable floor
+        collector by the selected project display rule; GOST linework and
+        dimension conventions remain unchanged.  Source section IDs stay in SVG.
+        """
+        active_branches = [
+            row for row in branches if row.floor_from <= floor <= row.floor_to
+        ]
+        if not active_branches:
             return
+        section_ids = [row.pipe.section_id for row in active_branches]
+        room_numbers = ", ".join(dict.fromkeys(
+            row.room_number for row in active_branches if row.room_number
+        ))
+        room_names = "; ".join(dict.fromkeys(
+            row.room_name for row in active_branches if row.room_name
+        ))
         text(x0 + 8, y_top + 17,
-             _short(f"№ {branch.room_number} · {branch.pipe.section_id}", 32),
+             _short(f"№ {room_numbers} · {active_branches[0].riser_id}", 52),
              8.2, weight="bold")
-        text(x0 + 8, y_top + 32, _short(branch.room_name, 38), 7.2, color=GRAY)
-        fixtures = [row for row in branch.elements if _applies(row, floor)]
+        text(x0 + 8, y_top + 32, _short(room_names, 76), 7.2, color=GRAY)
+        fixtures = [
+            element
+            for branch in active_branches
+            for element in branch.elements
+            if _applies(element, floor)
+        ]
         if not fixtures:
             return
+        # The branch is read in the direction of gravity flow.  A WC is always
+        # placed last, immediately before the riser; grey-water receivers are
+        # shown upstream on the same collector instead of on parallel floating
+        # lines.
+        fixture_priority = {
+            "sink": 0,
+            "dishwasher": 1,
+            "washing_machine": 2,
+            "washbasin": 3,
+            "bath": 4,
+            "shower": 5,
+            "floor_drain": 6,
+            "grease_trap": 7,
+            "toilet": 99,
+        }
+        fixtures.sort(key=lambda row: (
+            fixture_priority.get(row.kind, 50),
+            row.layout_column if row.layout_column is not None else 999,
+            row.element_id,
+        ))
         side = 1 if riser_axis > (x0 + x1) / 2 else -1
-        branch_y = y_bottom - 22 - branch_index * 24
+        branch_y = y_bottom - 22
         lowest = min(
             (row.elevation_m for row in fixtures if row.elevation_m is not None),
             default=None,
@@ -513,7 +559,7 @@ def build_wastewater_scheme(
 
         if len(placements) != len(fixtures):
             warnings.append(
-                f"{branch.pipe.section_id}: ветвь не отрисована, пока для всех "
+                f"{'+'.join(section_ids)}: ветвь не отрисована, пока для всех "
                 "приёмников стоков не заданы точки выпуска УГО"
             )
             return
@@ -531,17 +577,18 @@ def build_wastewater_scheme(
             progress = (x - trunk_start_x) / run
             return branch_y + (trunk_end_y - branch_y) * progress
 
+        branch_group_id = "+".join(section_ids)
         G.append(
-            f'<g data-gravity-branch="{escape(branch.pipe.section_id)}" '
-            f'data-starts-at="{escape(branch.source_element_id)}" '
-            f'data-discharges-to="{escape(branch.riser_id)}">'
+            f'<g data-gravity-branch="{escape(branch_group_id)}" '
+            f'data-source-sections="{escape(" ".join(section_ids))}" '
+            f'data-starts-at="{escape(fixtures[0].element_id)}" '
+            f'data-discharges-to="{escape(active_branches[0].riser_id)}">'
         )
         # Диаметр растёт по мере присоединения приборов. До унитаза ветвь
         # может быть DN50, но участок после присоединения унитаза до стояка
         # всегда получает минимум DN100. Один общий штрих DN100 от умывальника
         # до стояка скрывал бы реальную монтажную логику.
         running_dn = 0
-        branch_dns: List[int] = []
         for index, placement in enumerate(placements):
             running_dn = max(running_dn, placement.element.dn_mm or 0)
             segment_start_x = placement.join_x
@@ -551,7 +598,6 @@ def build_wastewater_scheme(
             )
             segment_start_y = trunk_y_at(segment_start_x)
             segment_end_y = trunk_y_at(segment_end_x)
-            branch_dns.append(running_dn)
             G.append(
                 f'<path data-gravity-trunk="true" '
                 f'data-segment-index="{index}" data-segment-dn="{running_dn}" '
@@ -561,7 +607,7 @@ def build_wastewater_scheme(
             )
             if diagnostics:
                 G.append(
-                    f'<path class="ww-flow" data-flow-branch="{escape(branch.pipe.section_id)}" '
+                    f'<path class="ww-flow" data-flow-branch="{escape(branch_group_id)}" '
                     f'd="M{segment_start_x:.1f},{segment_start_y:.1f} '
                     f'L{segment_end_x:.1f},{segment_end_y:.1f}" fill="none" '
                     f'stroke="{FLOW_BLUE}" stroke-width="4.2" opacity="0.58" '
@@ -574,17 +620,19 @@ def build_wastewater_scheme(
             "right" if side > 0 else "left",
             0.5,
         )
-        text(
-            (placements[-1].join_x + riser_axis) / 2,
-            trunk_y_at((placements[-1].join_x + riser_axis) / 2) - 9,
-            (
-                branch_mark(branch.pipe)
-                + (
-                    f"; DN {'→'.join(str(value) for value in dict.fromkeys(branch_dns))}"
-                    if branch_dns else ""
-                )
+        branch_pipes = sorted(
+            (row.pipe for row in active_branches),
+            key=lambda row: (
+                row.nominal_diameter_mm if row.nominal_diameter_mm is not None else 0,
+                row.section_id,
             ),
-            7.4,
+        )
+        pipe_marks = "; ".join(dict.fromkeys(branch_mark(row) for row in branch_pipes))
+        text(
+            (trunk_start_x + riser_axis) / 2,
+            trunk_y_at((trunk_start_x + riser_axis) / 2) - 15,
+            pipe_marks,
+            6.5,
             "middle",
             color=GRAY,
         )
@@ -595,13 +643,22 @@ def build_wastewater_scheme(
             join_y = trunk_y_at(placement.join_x)
             bend_start_y = join_y - 12.0
             bend_end_x = placement.join_x
-            riser_adjacent = row.kind == "toilet" and row.connects_to == branch.riser_id
+            graphical_flow_to = (
+                placements[flow_index + 1].element.element_id
+                if flow_index + 1 < len(placements)
+                else active_branches[0].riser_id
+            )
+            riser_adjacent = (
+                row.kind == "toilet"
+                and graphical_flow_to == active_branches[0].riser_id
+            )
             G.append(
                 f'<g data-fixture-placement="{escape(row.element_id)}" '
                 f'data-floor="{floor}" '
                 f'data-elevation-m="{_fmt(row.elevation_m, 3)}" '
                 f'data-flow-index="{flow_index}" '
-                f'data-flow-to="{escape(row.connects_to)}" '
+                f'data-flow-to="{escape(graphical_flow_to)}" '
+                f'data-model-flow-to="{escape(row.connects_to)}" '
                 f'data-riser-adjacent="{str(riser_adjacent).lower()}" '
                 f'data-trap-mode="{placement.trap_mode}">'
                 f'{render_ugo(row.kind, placement.sx, placement.symbol_y, scale=symbol_scale)}'
@@ -663,9 +720,12 @@ def build_wastewater_scheme(
             axis = riser_x.get(riser_id)
             if axis is None:
                 continue
-            for index, branch in enumerate(branches_by_riser.get(riser_id, [])[:len(slots)]):
-                x0, x1 = slots[index]
-                draw_branch(branch, floor, x0, x1, y_top, y_bottom, axis, index)
+            branches = branches_by_riser.get(riser_id, [])[:len(slots)]
+            if not branches:
+                continue
+            x0 = min(slot[0] for slot in slots[:len(branches)])
+            x1 = max(slot[1] for slot in slots[:len(branches)])
+            draw_branch(branches, floor, x0, x1, y_top, y_bottom, axis)
 
     if full_scope:
         for band in bands:
@@ -676,10 +736,32 @@ def build_wastewater_scheme(
     # Узел присоединения магистрали расположен после составного нижнего
     # поворота. Смещение образует две смены направления по 45°, а не один
     # графический отвод 87,5° (СП 30.13330.2020, п. 18.4).
-    lower_bend_dx = 20.0
+    lower_bend_dx = 34.0
     main_connection_x = {
         riser_id: x + lower_bend_dx for riser_id, x in riser_x.items()
     }
+
+    def draw_lower_bend(
+        owner_id: str,
+        riser_axis: float,
+        main_axis_y: float,
+        pipe_width: float = 2.6,
+    ):
+        """Vertical-to-horizontal transition made by two 45-degree elbows."""
+        start_y = main_axis_y - lower_bend_dx
+        end_x = riser_axis + lower_bend_dx
+        radius = 5.0
+        G.append(
+            f'<path data-lower-connection="double-45" '
+            f'data-connection-owner="{escape(owner_id)}" '
+            f'd="M{riser_axis:.1f},{start_y:.1f} '
+            f'Q{riser_axis:.1f},{start_y+radius:.1f} '
+            f'{riser_axis+radius:.1f},{start_y+radius:.1f} '
+            f'L{end_x-radius:.1f},{main_axis_y-radius:.1f} '
+            f'Q{end_x:.1f},{main_axis_y-radius:.1f} '
+            f'{end_x:.1f},{main_axis_y:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="{pipe_width:g}"/>'
+        )
 
     def draw_lower_bend_boundaries(
         owner_id: str,
@@ -692,7 +774,9 @@ def build_wastewater_scheme(
         bend_mid_x = riser_axis + lower_bend_dx / 2
         bend_mid_y = main_axis_y - lower_bend_dx / 2
         bend_end_x = riser_axis + lower_bend_dx
-        boundary_half = 8.0
+        # Короткие границы фасонных частей читаются как два полуотвода и не
+        # превращают весь узел в крупный X-образный знак.
+        boundary_half = 4.5
         G.append(
             f'<path data-fitting-boundaries="double-45" '
             f'data-boundary-owner="{escape(owner_id)}" '
@@ -715,11 +799,7 @@ def build_wastewater_scheme(
         target_y = main_y.get(pipe.system, 1490.0)
         start_y = roof_y if pipe.system == "K2" else roof_y - 30
         line(x, start_y, x, target_y - lower_bend_dx, 2.6)
-        G.append(
-            f'<path d="M{x:.1f},{target_y-lower_bend_dx:.1f} '
-            f'L{x+lower_bend_dx:.1f},{target_y:.1f}" fill="none" '
-            f'stroke="{BLACK}" stroke-width="2.6"/>'
-        )
+        draw_lower_bend(riser_id, x, target_y)
         label = f"Ст.{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}".replace(".", ",")
         label_y = 610.0 if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2 else 650.0
         text(x + (13 if pipe.system != "K2" else -13), label_y,
@@ -756,6 +836,35 @@ def build_wastewater_scheme(
              f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}",
              7.5, "middle", "bold")
 
+    def draw_revision_height_dimension(
+        element_id: str,
+        riser_axis: float,
+        floor_y: float,
+        revision_y: float,
+    ):
+        """Размерная привязка ревизии 1000 мм над полом по приложению В."""
+        side = 1 if riser_axis <= (building_x1 + building_x2) / 2 else -1
+        dim_x = riser_axis + side * 34.0
+        tick = 5.0
+        G.append(
+            f'<g data-gost-dimension="revision-height" '
+            f'data-element-id="{escape(element_id)}" data-value-mm="1000">'
+        )
+        line(riser_axis, floor_y, dim_x + side * 5, floor_y, 0.8)
+        line(riser_axis, revision_y, dim_x + side * 5, revision_y, 0.8)
+        line(dim_x, floor_y, dim_x, revision_y, 0.9)
+        line(dim_x - tick, floor_y + tick, dim_x + tick, floor_y - tick, 0.9)
+        line(dim_x - tick, revision_y + tick, dim_x + tick, revision_y - tick, 0.9)
+        text(
+            dim_x + side * 10,
+            (floor_y + revision_y) / 2 + 12,
+            "1000",
+            7.3,
+            "middle",
+            rotate=-90,
+        )
+        G.append('</g>')
+
     # Ревизии и противопожарные муфты ставятся только из подтверждённых данных.
     band_by_floor = {band.floor: band for band in bands}
     rupture_y = None
@@ -767,7 +876,9 @@ def build_wastewater_scheme(
             continue
         if row.kind == "revision":
             if row.floor_from == 1:
-                sy = y_zero - 45
+                # На первом этаже показываем нормативную размерную привязку,
+                # а не произвольный графический отступ от линии пола.
+                sy = y_zero - min(78.0, (y_zero - y_tech) / 3.0)
             elif row.floor_from in band_by_floor:
                 sy = band_by_floor[row.floor_from].bottom_y - 45
             else:
@@ -777,7 +888,11 @@ def build_wastewater_scheme(
                 f'{risk_attributes(row.element_id)}>'
                 f'{render_ugo("revision", x, sy, scale=0.64, rotation=90)}</g>'
             )
-            text(x + 15, sy + 3, f"R · {row.element_id}", 7.1)
+            # Идентификатор остаётся машинно-читаемым в data-element-id;
+            # на нормативном листе рядом со стояком остаётся компактное «R».
+            text(x + 15, sy + 3, "R", 7.1)
+            if row.floor_from == 1:
+                draw_revision_height_dimension(row.element_id, x, y_zero, sy)
             if row.element_id in risk_ids_by_element:
                 text(x + 15, sy + 14, "доступ к зоне риска", 5.8, color=GRAY)
         elif row.kind == "fire_collar":
@@ -794,7 +909,13 @@ def build_wastewater_scheme(
              "противопожарное перекрытие; муфты в проходках по узлам КР", 7.8, color=GRAY)
 
     # Магистрали и выпуски — рёбра явного графа from_node/to_node.
-    external_defaults = {"K1": 2160.0, "K3": 2220.0, "K2": 2160.0}
+    # Конечные узлы расположены снаружи правого контура здания: выпуск обязан
+    # пересечь наружную стену и продолжиться к первому колодцу.
+    external_defaults = {
+        "K1": building_x2 + 170.0,
+        "K3": building_x2 + 230.0,
+        "K2": building_x2 + 250.0,
+    }
     node_x: Dict[str, float] = dict(main_connection_x)
     stage_focus = focus_section_id
     if not full_scope and not stage_focus:
@@ -838,24 +959,27 @@ def build_wastewater_scheme(
                 riser_axis = riser_x.get(node, x - lower_bend_dx)
                 line(riser_axis, y_ground_bottom, riser_axis,
                      y - lower_bend_dx, 2.6)
-                G.append(
-                    f'<path d="M{riser_axis:.1f},{y-lower_bend_dx:.1f} '
-                    f'L{x:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
-                    'stroke-width="2.6"/>'
-                )
+                draw_lower_bend(node, riser_axis, y)
                 draw_lower_bend_boundaries(node, riser_axis, y)
         text(min(node_x.get(row.from_node, 1000) for row in rows) - 30,
-             y + 5, system, 13, "end", "bold")
+             y + 5, _system_mark(system), 13, "end", "bold")
         for pipe in rows:
             x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
             line(x1, y, x2, y, 2.8)
+            if min(x1, x2) < building_x2 < max(x1, x2):
+                G.append(
+                    f'<g data-building-outlet-crossing="{escape(pipe.section_id)}">'
+                )
+                line(building_x2 - 4, y - 10, building_x2 - 4, y + 10, 1.4)
+                line(building_x2 + 4, y - 10, building_x2 + 4, y + 10, 1.4)
+                G.append('</g>')
             arrow((x1 + x2) / 2, y, "right" if x2 >= x1 else "left", 0.62)
             text((x1 + x2) / 2, y - 13, pipe_mark(pipe), 8.5, "middle", "bold")
-            relative = f"отн. {_fmt(pipe.elevation_start_m, 2)} → {_fmt(pipe.elevation_end_m, 2)}"
+            relative = f"отн. {_fmt(pipe.elevation_start_m, 2)} / {_fmt(pipe.elevation_end_m, 2)}"
             absolute = ""
             if pipe.absolute_elevation_start_m is not None:
                 absolute = (
-                    f"; абс. {_fmt(pipe.absolute_elevation_start_m, 2)} → "
+                    f"; абс. {_fmt(pipe.absolute_elevation_start_m, 2)} / "
                     f"{_fmt(pipe.absolute_elevation_end_m, 2)}"
                 )
             text((x1 + x2) / 2, y + 18, relative + absolute, 7.3, "middle", color=GRAY)
@@ -864,10 +988,14 @@ def build_wastewater_scheme(
                 line(x2, y, min(x2 + 20, leader_end), y - 34, 1.0)
                 line(min(x2 + 20, leader_end), y - 34, leader_end, y - 34, 1.0)
                 text(min(x2 + 25, leader_end), y - 40,
-                     f"Выпуск {pipe.section_id} Ø{pipe.outer_diameter_mm:g}",
+                     f"Выпуск {_system_mark(pipe.system)} Ø{pipe.outer_diameter_mm:g}",
                      7.4, weight="bold")
                 text(min(x2 + 25, leader_end), y - 24,
-                     f"абс. {_fmt(pipe.absolute_elevation_end_m, 3)}", 7.0, color=GRAY)
+                     (
+                         f"Абс. отм. {_fmt(pipe.absolute_elevation_end_m, 3)} "
+                         f"({_fmt(pipe.elevation_end_m, 3)})"
+                     ),
+                     7.0, color=GRAY)
                 outlet = next((row for row in elements if row.kind == "outlet" and row.section_id == pipe.section_id), None)
                 if outlet is not None:
                     G.append(
@@ -1182,7 +1310,7 @@ def build_wastewater_scheme(
                 text(sx + 30, sy - 30, "НЕТ ДОСТУПА", 8, weight="bold", color=DIAGNOSTIC_RED)
                 continue
             if check.access_kind == "revision":
-                start_y = y_zero - 45
+                start_y = y_zero - min(78.0, (y_zero - y_tech) / 3.0)
                 G.append(
                     f'<path data-service-path="{escape(check.access_element_id)}" '
                     f'd="M{sx:.1f},{start_y:.1f} V{sy-lower_bend_dx:.1f} '
@@ -1332,17 +1460,20 @@ def build_wastewater_scheme(
         if warnings:
             text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)
 
-    if not full_scope:
-        # Плита из приложения В: конструктивная штриховка показана только на
-        # промежуточном листе, пока нижняя зона не занята легендой.
+    # Плита основания с конструктивной штриховкой завершает разрез, как в
+    # приложении В. На полном листе она сжата по высоте, чтобы не перекрывать
+    # легенду, но остаётся частью принципиальной схемы.
+    if full_scope:
+        slab_y, slab_h = 1696.0, 34.0
+    else:
         slab_y, slab_h = basement_y, 74.0
-        rect(building_x1, slab_y, building_x2 - building_x1, slab_h, sw=1.5, fill="white")
-        step = 26.0
-        x = building_x1 - slab_h
-        while x < building_x2:
-            line(max(building_x1, x), slab_y + slab_h,
-                 min(building_x2, x + slab_h), slab_y, 0.85, color=GRAY)
-            x += step
+    rect(building_x1, slab_y, building_x2 - building_x1, slab_h, sw=1.5, fill="white")
+    step = 26.0
+    x = building_x1 - slab_h
+    while x < building_x2:
+        line(max(building_x1, x), slab_y + slab_h,
+             min(building_x2, x + slab_h), slab_y, 0.85, color=GRAY)
+        x += step
 
     # Рамка и основная надпись формы 3.
     fx0, fy0, fx1, fy1 = 20 * PXMM, 5 * PXMM, W - 5 * PXMM, H - 5 * PXMM
@@ -1394,7 +1525,7 @@ def build_wastewater_scheme(
     text(mmx(142.5), mmy(37), doc.stage_label or "П", 11, "middle")
     text(mmx(157.5), mmy(37), doc.sheet_no or "1", 11, "middle")
     text(mmx(175), mmy(37), doc.sheet_total or "2", 11, "middle")
-    shown_present = present if full_scope else ["К1"]
+    shown_present = [_system_mark(row) for row in present] if full_scope else ["К1"]
     text(mmx(100), mmy(47), "Принципиальная схема внутренних систем", 10, "middle")
     text(mmx(100), mmy(53), ", ".join(shown_present) or "К1", 12, "middle", "bold")
     text(mmx(160), mmy(49), _short(doc.organization or "", 30), 9, "middle")

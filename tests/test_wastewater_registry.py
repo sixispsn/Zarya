@@ -101,15 +101,18 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "К2-Ст2" in result.svg
     assert "К1-М1" in result.svg
     assert "К1-Вып1" in result.svg
-    assert "абс. 146,55 → 146,45" in result.svg
-    assert "№ К-01 · К1-Ветв-Кух1" in result.svg
+    assert "абс. 146,55 / 146,45" in result.svg
+    assert "№ К-01, СУ-01 · К1-Ст1" in result.svg
     assert result.svg.count('data-fixture-connection=') == 32
-    assert result.svg.count('data-gravity-branch=') == 16
-    # Ветвь санузла теперь сегментирована: DN50 до присоединения унитаза и
-    # DN100 после него, поэтому один этаж содержит несколько проходных отрезков.
+    # Кухонная и санитарная ветви одного стояка показаны одним этажным
+    # коллектором, но исходные участки остаются адресными в SVG.
+    assert result.svg.count('data-gravity-branch=') == 8
+    assert result.svg.count('data-source-sections=') == 8
+    # Коллектор сегментирован: DN50 до присоединения унитаза и DN100 после него,
+    # поэтому один этаж содержит несколько проходных отрезков.
     assert result.svg.count('data-gravity-trunk="true"') == 32
-    assert result.svg.count('data-starts-at="К1-Ум1"') == 4
-    assert result.svg.count('data-starts-at="К1-Ум2"') == 4
+    assert result.svg.count('data-starts-at="К1-Мой1"') == 4
+    assert result.svg.count('data-starts-at="К1-Мой2"') == 4
     assert result.svg.count('data-riser-adjacent="true"') == 8
     assert 'data-flow-to="К1-Ван1"' in result.svg
     assert 'data-flow-to="К1-Ун1"' in result.svg
@@ -129,7 +132,12 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "планировочная" in result.svg
     assert "часть по АР" in result.svg
     assert "ДАННЫЕ И УКАЗАНИЯ К СХЕМЕ" in result.svg
-    assert "Выпуск К1-Вып1 Ø160" in result.svg
+    assert "Выпуск К1 Ø160" in result.svg
+    assert "Абс. отм. 146,450 (-0,820)" in result.svg
+    assert result.svg.count('data-gost-dimension="revision-height"') == 2
+    assert result.svg.count('data-value-mm="1000"') == 2
+    assert result.svg.count('data-lower-connection="double-45"') == 4
+    assert result.svg.count('data-building-outlet-crossing=') == 2
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg
 
