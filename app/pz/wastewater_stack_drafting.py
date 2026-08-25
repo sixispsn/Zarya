@@ -1,10 +1,10 @@
 """Multi-storey composer for the accepted parametric K1 floor module.
 
 Every floor is built as its own :class:`WastewaterFloorAssembly`; repeated
-storeys are never collapsed into an ellipsis.  The composer only covers the
-gravity riser and its ventilating extension.  A force main downstream of a
-sewage pumping unit is a different hydraulic regime and is intentionally not
-represented as a calculated part of this assembly.
+storeys are never collapsed into an ellipsis.  The gravity riser is continued
+through the accepted basement turn and building outlet.  A force main
+downstream of a sewage pumping unit is a different hydraulic regime and is
+intentionally not represented as a calculated part of this assembly.
 """
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ from io import BytesIO
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from app.pz.wastewater_basement_drafting import (
+    WastewaterBasementAssembly,
+    build_wastewater_basement_assembly,
+    build_wastewater_basement_control_svg,
+)
 from app.pz.wastewater_drafting import BLACK, FONT, GRAY
 from app.pz.wastewater_floor_drafting import (
     FloorFixtureInput,
@@ -56,6 +61,17 @@ class WastewaterStackPage:
 
 
 @dataclass(frozen=True)
+class StackBasementConnectionDraft:
+    """Semantic page-break connection between floor 1 and the basement."""
+
+    floor_no: int
+    floor_port_id: str
+    basement_port_id: str
+    dn_mm: int
+    shared_revision_fitting_id: str
+
+
+@dataclass(frozen=True)
 class WastewaterStackAssembly:
     assembly_id: str
     system: str
@@ -69,6 +85,8 @@ class WastewaterStackAssembly:
     floors: tuple[WastewaterFloorAssembly, ...]
     revisions: tuple[StackRevisionDraft, ...]
     pages: tuple[WastewaterStackPage, ...]
+    basement: WastewaterBasementAssembly
+    basement_connection: StackBasementConnectionDraft
 
     def floor(self, floor_no: int) -> WastewaterFloorAssembly:
         try:
@@ -79,6 +97,14 @@ class WastewaterStackAssembly:
     @property
     def revision_floors(self) -> tuple[int, ...]:
         return tuple(row.floor_no for row in self.revisions)
+
+    @property
+    def basement_page_no(self) -> int:
+        return len(self.pages) + 1
+
+    @property
+    def total_sheet_count(self) -> int:
+        return self.basement_page_no
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -116,6 +142,34 @@ class WastewaterStackAssembly:
             errors.append("the first page must contain the roof and vent extension")
         if any(page.show_roof for page in self.pages[1:]):
             errors.append("the roof must not be duplicated on continuation pages")
+        if not self.pages or not self.pages[-1].continues_below:
+            errors.append("the last floor page must continue to the basement page")
+        connection = self.basement_connection
+        try:
+            floor_port = self.floor(connection.floor_no).port(connection.floor_port_id)
+            basement_port = self.basement.draft.port(connection.basement_port_id)
+            shared_revision = self.basement.draft.fitting(
+                connection.shared_revision_fitting_id
+            )
+        except KeyError as exc:
+            errors.append(str(exc))
+        else:
+            if connection.floor_no != 1:
+                errors.append("basement connection must originate on floor 1")
+            if floor_port.role != "riser_to_below":
+                errors.append("floor connection must use the downward riser port")
+            if basement_port.role != "hydraulic_inlet":
+                errors.append("basement connection must enter its hydraulic inlet")
+            if connection.dn_mm != self.riser_dn_mm:
+                errors.append("basement connection DN differs from the stack DN")
+            if shared_revision.kind != "revision":
+                errors.append("first-floor overlap must reference the revision")
+        for error in self.basement.validate():
+            errors.append(f"basement: {error}")
+        if self.basement.riser_id != self.riser_id:
+            errors.append("basement riser ID differs from the stack")
+        if self.basement.dn_mm != self.riser_dn_mm:
+            errors.append("basement DN differs from the stack")
         expected_vent = _ROOF_VENT_HEIGHT_M.get(self.roof_kind)
         if expected_vent is None:
             errors.append("unsupported roof kind")
@@ -184,9 +238,17 @@ def build_wastewater_stack_assembly(
             floor_numbers=chunk,
             show_roof=index == 0,
             continues_above=index > 0,
-            continues_below=index < len(chunks) - 1,
+            # Every floor page continues either to another floor page or to
+            # the dedicated basement sheet.
+            continues_below=True,
         )
         for index, chunk in enumerate(chunks)
+    )
+    basement = build_wastewater_basement_assembly(
+        assembly_id=f"{assembly_id}-Подвал",
+        riser_id=riser_id,
+        dn_mm=riser_dn_mm,
+        first_floor_elevation_m=0.0,
     )
     stack = WastewaterStackAssembly(
         assembly_id=assembly_id,
@@ -203,6 +265,14 @@ def build_wastewater_stack_assembly(
             StackRevisionDraft(floor_no=row) for row in _revision_floors(floors_above)
         ),
         pages=pages,
+        basement=basement,
+        basement_connection=StackBasementConnectionDraft(
+            floor_no=1,
+            floor_port_id="riser_bottom",
+            basement_port_id="first_floor_connection",
+            dn_mm=riser_dn_mm,
+            shared_revision_fitting_id="first_floor_revision",
+        ),
     )
     errors = stack.validate()
     if errors:
@@ -282,7 +352,7 @@ def build_wastewater_stack_page_svg(
     start_y = 245.0
     origins = _page_floor_origins(page, start_y=start_y, floor_scale=floor_scale)
     panel_x = 1550.0
-    total_pages = len(stack.pages)
+    total_pages = stack.total_sheet_count
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
         'viewBox="0 0 2800 1980">',
@@ -444,7 +514,36 @@ def build_wastewater_stack_page_svg(
 def build_wastewater_stack_control_svgs(
     stack: WastewaterStackAssembly,
 ) -> tuple[str, ...]:
-    return tuple(build_wastewater_stack_page_svg(stack, page) for page in stack.pages)
+    floor_pages = tuple(
+        build_wastewater_stack_page_svg(stack, page) for page in stack.pages
+    )
+    return floor_pages + (build_wastewater_stack_basement_page_svg(stack),)
+
+
+def build_wastewater_stack_basement_page_svg(
+    stack: WastewaterStackAssembly,
+) -> str:
+    """Render the accepted basement module as the final A1 stack sheet."""
+    errors = stack.validate()
+    if errors:
+        raise ValueError("cannot render invalid wastewater stack: " + "; ".join(errors))
+    return build_wastewater_basement_control_svg(
+        stack.basement,
+        page_width_mm=841,
+        page_height_mm=594,
+        sheet_title="Параметрический стояк К1. Подвал и выпуск",
+        sheet_subtitle=(
+            f"{stack.riser_id} DN{stack.riser_dn_mm}; лист "
+            f"{stack.basement_page_no} из {stack.total_sheet_count}; "
+            "продолжение самотечной системы"
+        ),
+        continuation_from_sheet=stack.basement_page_no - 1,
+        # Both pages are A1, but the accepted basement scene retains its A3
+        # coordinate grid.  Scale only the header typography so its printed
+        # size matches the other stack sheets.
+        title_font_size=19.3,
+        subtitle_font_size=10.3,
+    )
 
 
 def generate_wastewater_stack_control_pdf(

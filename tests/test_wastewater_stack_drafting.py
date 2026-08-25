@@ -6,6 +6,7 @@ from pypdf import PdfReader
 from app.pz.generator import generate_wastewater_stack_node_pdf
 from app.pz.wastewater_floor_drafting import FloorFixtureInput
 from app.pz.wastewater_stack_drafting import (
+    build_wastewater_stack_basement_page_svg,
     build_wastewater_stack_assembly,
     build_wastewater_stack_control_svgs,
 )
@@ -24,6 +25,23 @@ def test_stack_builds_every_floor_without_collapsing_repeated_storeys():
         (4, 3, 2, 1),
     ]
     assert stack.flow_regime == "gravity"
+    assert stack.basement_page_no == 3
+    assert stack.total_sheet_count == 3
+
+
+def test_floor_one_connects_semantically_to_the_basement_inlet():
+    stack = build_wastewater_stack_assembly(floors_above=9)
+    connection = stack.basement_connection
+
+    floor_port = stack.floor(connection.floor_no).port(connection.floor_port_id)
+    basement_port = stack.basement.draft.port(connection.basement_port_id)
+    assert connection.floor_no == 1
+    assert floor_port.role == "riser_to_below"
+    assert basement_port.role == "hydraulic_inlet"
+    assert connection.dn_mm == stack.riser_dn_mm == stack.basement.dn_mm
+    assert stack.basement.draft.fitting(
+        connection.shared_revision_fitting_id
+    ).kind == "revision"
 
 
 @pytest.mark.parametrize(
@@ -83,7 +101,7 @@ def test_stack_svgs_mark_every_floor_revisions_roof_and_page_continuations():
     stack = build_wastewater_stack_assembly(floors_above=9)
     pages = build_wastewater_stack_control_svgs(stack)
 
-    assert len(pages) == 2
+    assert len(pages) == 3
     combined = "".join(pages)
     assert combined.count('data-floor-assembly="') == 9
     for floor in range(1, 10):
@@ -93,7 +111,22 @@ def test_stack_svgs_mark_every_floor_revisions_roof_and_page_continuations():
     assert pages[0].count('data-roof="flat_non_accessible"') == 1
     assert 'продолжение на листе 2' in pages[0]
     assert 'продолжение с листа 1' in pages[1]
+    assert 'продолжение на листе 3' in pages[1]
+    assert 'data-stack-basement-continuation="from-sheet-2"' in pages[2]
+    assert 'data-basement-segment="outlet_segment"' in pages[2]
+    assert "Выпуск К1-1 DN100" in pages[2]
     assert "Напорная линия после КНС сюда не входит" in combined
+
+
+def test_basement_stack_page_is_a1_and_uses_the_accepted_module():
+    stack = build_wastewater_stack_assembly(floors_above=3)
+    svg = build_wastewater_stack_basement_page_svg(stack)
+    root = ElementTree.fromstring(svg)
+
+    assert root.get("width") == "841mm"
+    assert root.get("height") == "594mm"
+    assert "Параметрический стояк К1. Подвал и выпуск" in svg
+    assert 'data-draft-assembly="К1-Стояк-01-Подвал-НП"' in svg
 
 
 def test_svg_decimal_comma_formatting_never_corrupts_numeric_coordinates():
@@ -129,7 +162,7 @@ def test_stack_pdf_is_multipage_a1_landscape(tmp_path):
         max_floors_per_sheet=5,
     )
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 2
+    assert len(pages) == 3
     for page in pages:
         width_mm = float(page.mediabox.width) * 25.4 / 72
         height_mm = float(page.mediabox.height) * 25.4 / 72

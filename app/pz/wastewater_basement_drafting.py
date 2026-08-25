@@ -253,6 +253,14 @@ def _elevation(value: float | None) -> str:
 
 def build_wastewater_basement_control_svg(
     basement: WastewaterBasementAssembly,
+    *,
+    page_width_mm: int = 420,
+    page_height_mm: int = 297,
+    sheet_title: str = "Контрольный модуль подвала К1",
+    sheet_subtitle: str | None = None,
+    continuation_from_sheet: int | None = None,
+    title_font_size: float = 30.0,
+    subtitle_font_size: float = 16.0,
 ) -> str:
     """Render an isolated A3 basement control sheet for topology approval."""
     errors = basement.validate()
@@ -286,8 +294,13 @@ def build_wastewater_basement_control_svg(
     outlet_x, outlet_y = xy("outlet_end")
     sleeve_in_x, sleeve_in_y = xy("sleeve_in")
     sleeve_out_x, sleeve_out_y = xy("sleeve_out")
+    subtitle = sheet_subtitle or (
+        f"{basement.riser_id} DN{basement.dn_mm}; "
+        "самотечный путь до границы внутренней системы"
+    )
     body: list[str] = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{page_width_mm}mm" height="{page_height_mm}mm" '
         f'viewBox="0 0 {width} {height}">',
         '<defs><pattern id="basement-hatch" width="18" height="18" '
         'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
@@ -297,10 +310,9 @@ def build_wastewater_basement_control_svg(
         f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
         f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+34}" y="{margin+48}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Контрольный модуль подвала К1</text>',
+        f'font-size="{title_font_size:g}" font-weight="bold">{escape(sheet_title)}</text>',
         f'<text x="{margin+34}" y="{margin+82}" font-family="{FONT}" '
-        f'font-size="16" fill="{GRAY}">{escape(basement.riser_id)} DN{basement.dn_mm}; '
-        'самотечный путь до границы внутренней системы</text>',
+        f'font-size="{subtitle_font_size:g}" fill="{GRAY}">{escape(subtitle)}</text>',
         # First-floor slab and basement slab are architectural context only.
         f'<line data-level="first-floor" x1="{margin+55}" y1="{first_floor_y:.1f}" '
         f'x2="{wall_inner_x:.1f}" y2="{first_floor_y:.1f}" stroke="{BLACK}" stroke-width="2"/>',
@@ -343,6 +355,24 @@ def build_wastewater_basement_control_svg(
         f'<text x="{revision_x+36:.1f}" y="{revision_y-14:.1f}" '
         f'font-family="{FONT}" font-size="15" font-weight="bold">Ревизия DN{basement.dn_mm}</text>',
     ]
+
+    if continuation_from_sheet is not None:
+        connection_x, connection_y = xy("first_floor_connection")
+        body.extend(
+            (
+                f'<g data-stack-basement-continuation="from-sheet-{continuation_from_sheet}">',
+                f'<path d="M{connection_x-10:.1f},{connection_y-24:.1f} '
+                f'L{connection_x:.1f},{connection_y-46:.1f} '
+                f'L{connection_x+10:.1f},{connection_y-24:.1f} Z" fill="{BLACK}"/>',
+                f'<line x1="{connection_x:.1f}" y1="{connection_y-24:.1f}" '
+                f'x2="{connection_x:.1f}" y2="{connection_y:.1f}" '
+                f'stroke="{BLACK}" stroke-width="3"/>',
+                f'<text x="{connection_x+24:.1f}" y="{connection_y-34:.1f}" '
+                f'font-family="{FONT}" font-size="13">продолжение с листа '
+                f'{continuation_from_sheet}</text>',
+                '</g>',
+            )
+        )
 
     # Dimension the first-floor revision exactly as a requirement, without
     # pretending that the schematic vertical scale is a construction scale.
