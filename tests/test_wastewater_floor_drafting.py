@@ -1,3 +1,4 @@
+from dataclasses import replace
 from math import isclose
 from xml.etree import ElementTree
 
@@ -5,8 +6,10 @@ import pytest
 from pypdf import PdfReader
 
 from app.pz.generator import generate_wastewater_typical_floor_node_pdf
+from app.pz.wastewater_drafting import DraftPipeSegment
 from app.pz.wastewater_floor_drafting import (
     FloorFixtureInput,
+    audit_floor_simplification,
     build_typical_floor_assembly,
     build_typical_floor_control_sheet_svg,
     render_typical_floor_assembly_svg,
@@ -37,8 +40,12 @@ def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
 
     for fixture in floor.fixtures:
         connection = [floor.segment(row) for row in fixture.connection_segment_ids]
+        direct_joint = floor.direct_fitting_joint(fixture.connection_joint_id)
         assert connection[0].start_port_id == fixture.fixture_outlet_port_id
-        assert connection[-1].end_port_id == fixture.junction_port_id
+        assert connection[-1].end_port_id == direct_joint.start_port_id
+        assert direct_joint.end_port_id == fixture.junction_port_id
+        assert direct_joint.start_fitting_id.endswith("_elbow_45")
+        assert direct_joint.end_fitting_id.endswith("_wye_45")
         assert all(row.carries_flow for row in connection)
         assert all(
             floor.port(row.end_port_id).point.y_mm
@@ -50,6 +57,46 @@ def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
             - floor.port(fixture.fixture_outlet_port_id).point.y_mm
         )
         assert vertical_gap <= 70.0
+
+
+def test_fixture_elbows_are_directly_socketed_into_wyes_without_pipe_spools():
+    floor = build_typical_floor_assembly()
+
+    assert audit_floor_simplification(floor) == ()
+    assert all("_diagonal" not in row.segment_id for row in floor.segments)
+    assert len(floor.direct_fitting_joints) == len(floor.fixtures) + 1
+    for fixture in floor.fixtures:
+        joint = floor.direct_fitting_joint(fixture.connection_joint_id)
+        start = floor.port(joint.start_port_id).point
+        end = floor.port(joint.end_port_id).point
+        dx, dy = start.vector_to(end)
+        assert dx == pytest.approx(dy)
+        assert 0 < dx <= 8.0
+
+
+def test_simplification_audit_rejects_old_graphic_elbow_wye_spool():
+    floor = build_typical_floor_assembly()
+    fixture = floor.fixtures[0]
+    joint = floor.direct_fitting_joint(fixture.connection_joint_id)
+    obsolete = DraftPipeSegment(
+        "obsolete_fixture_diagonal",
+        joint.start_port_id,
+        joint.end_port_id,
+        joint.dn_mm,
+        "fixture_connection",
+    )
+    old_style = replace(
+        floor,
+        segments=(*floor.segments, obsolete),
+        direct_fitting_joints=tuple(
+            row for row in floor.direct_fitting_joints if row.joint_id != joint.joint_id
+        ),
+    )
+
+    findings = audit_floor_simplification(old_style)
+    assert [(row.code, row.element_id) for row in findings] == [
+        ("avoidable_elbow_wye_spool", "obsolete_fixture_diagonal")
+    ]
 
 
 def test_floor_branch_enters_riser_through_elbow_and_oblique_tee():
@@ -140,7 +187,9 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert 'data-floor-fitting="riser_branch_elbow_45"' in normative
     assert 'data-floor-fitting="riser_branch_wye_45"' in normative
     assert 'data-direct-fitting-joint="riser_elbow_to_wye"' in normative
+    assert normative.count('data-direct-fitting-joint=') == 5
     assert 'data-floor-segment="riser_branch_diagonal"' not in normative
+    assert 'data-floor-segment="К1-Мой1_diagonal"' not in normative
     assert 'data-fitting-boundary="riser_elbow_outlet_45"' in normative
     assert 'data-fitting-label="riser_branch_wye_45"' in normative
     assert 'data-role="cleanout_access"' in normative
@@ -196,6 +245,52 @@ def test_riser_fitting_ticks_and_label_do_not_collide_with_direct_joint():
         if row.get("data-fitting-label") == "riser_branch_wye_45"
     )
     assert float(label.get("y")) < direct_joint[3]
+
+
+def test_fixture_fitting_ticks_do_not_create_false_pipe_spools():
+    floor = build_typical_floor_assembly()
+    root = ElementTree.fromstring(
+        render_typical_floor_assembly_svg(floor, diagnostics=False)
+    )
+
+    def line_with(attribute: str, value: str):
+        return next(row for row in root.iter("line") if row.get(attribute) == value)
+
+    def endpoints(row):
+        return tuple(float(row.get(key)) for key in ("x1", "y1", "x2", "y2"))
+
+    def intersects(a, b):
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+
+        def orient(px, py, qx, qy, rx, ry):
+            return (qx - px) * (ry - py) - (qy - py) * (rx - px)
+
+        return (
+            orient(ax1, ay1, ax2, ay2, bx1, by1)
+            * orient(ax1, ay1, ax2, ay2, bx2, by2)
+            <= 0
+            and orient(bx1, by1, bx2, by2, ax1, ay1)
+            * orient(bx1, by1, bx2, by2, ax2, ay2)
+            <= 0
+        )
+
+    for fixture in floor.fixtures:
+        direct_joint = endpoints(
+            line_with("data-direct-fitting-joint", fixture.connection_joint_id)
+        )
+        upstream_tick = endpoints(
+            line_with(
+                "data-fitting-boundary", f"{fixture.fixture_id}_wye_upstream"
+            )
+        )
+        outlet_tick = endpoints(
+            line_with(
+                "data-fitting-boundary", f"{fixture.fixture_id}_elbow_outlet_45"
+            )
+        )
+        assert not intersects(upstream_tick, direct_joint)
+        assert intersects(outlet_tick, direct_joint)
 
 
 def test_control_sheet_is_a4_landscape_vector_pdf(tmp_path):

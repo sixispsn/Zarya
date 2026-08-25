@@ -99,6 +99,7 @@ class FloorFixtureDraft:
     fixture_outlet_port_id: str
     junction_port_id: str
     connection_segment_ids: tuple[str, ...]
+    connection_joint_id: str
     trap_inlet_port_id: str = ""
     trap_outlet_port_id: str = ""
 
@@ -113,6 +114,15 @@ class DirectFittingJointDraft:
     start_port_id: str
     end_port_id: str
     dn_mm: int
+
+
+@dataclass(frozen=True)
+class SimplificationFinding:
+    """A deterministic indication that drawn pipe can be removed."""
+
+    code: str
+    element_id: str
+    message: str
 
 
 @dataclass(frozen=True)
@@ -271,10 +281,22 @@ class WastewaterFloorAssembly:
                     errors.append(
                         f"{fixture.fixture_id}: connection does not start at fixture"
                     )
-                if connection[-1].end_port_id != fixture.junction_port_id:
-                    errors.append(
-                        f"{fixture.fixture_id}: connection misses common branch"
+                try:
+                    direct_joint = self.direct_fitting_joint(
+                        fixture.connection_joint_id
                     )
+                except KeyError as exc:
+                    errors.append(str(exc))
+                else:
+                    if connection[-1].end_port_id != direct_joint.start_port_id:
+                        errors.append(
+                            f"{fixture.fixture_id}: pipe misses connection elbow"
+                        )
+                    if direct_joint.end_port_id != fixture.junction_port_id:
+                        errors.append(
+                            f"{fixture.fixture_id}: direct fitting joint misses "
+                            "common branch"
+                        )
 
         try:
             branch = [self.segment(row) for row in self.branch_segment_ids]
@@ -333,7 +355,65 @@ class WastewaterFloorAssembly:
                     )
             except StopIteration:
                 errors.append("floor module needs a physical cleanout access segment")
+        errors.extend(
+            f"{row.element_id}: {row.message}"
+            for row in audit_floor_simplification(self)
+        )
         return errors
+
+
+def audit_floor_simplification(
+    assembly: WastewaterFloorAssembly,
+    *,
+    maximum_graphic_spool_mm: float = 30.0,
+) -> tuple[SimplificationFinding, ...]:
+    """Reject short graphic-only spools between an elbow and an oblique wye.
+
+    A real measured straight piece can be longer and may be required by the
+    project layout.  The small 45-degree links produced solely to separate
+    adjacent fitting symbols are not pipework and must instead be represented
+    by :class:`DirectFittingJointDraft`.
+    """
+    if maximum_graphic_spool_mm <= 0:
+        raise ValueError("maximum_graphic_spool_mm must be positive")
+
+    fittings_by_point: dict[tuple[float, float], list[DraftFitting]] = {}
+    for fitting in assembly.fittings:
+        key = (fitting.point.x_mm, fitting.point.y_mm)
+        fittings_by_point.setdefault(key, []).append(fitting)
+
+    findings: list[SimplificationFinding] = []
+    for segment in assembly.segments:
+        try:
+            start = assembly.port(segment.start_port_id).point
+            end = assembly.port(segment.end_port_id).point
+        except KeyError:
+            continue
+        if start.distance_to(end) > maximum_graphic_spool_mm:
+            continue
+        dx, dy = start.vector_to(end)
+        if abs(abs(dx) - abs(dy)) > 1e-6 or abs(dx) <= 1e-9:
+            continue
+        start_kinds = {
+            row.kind for row in fittings_by_point.get((start.x_mm, start.y_mm), ())
+        }
+        end_kinds = {
+            row.kind for row in fittings_by_point.get((end.x_mm, end.y_mm), ())
+        }
+        if not (
+            ("elbow_45" in start_kinds and "wye_45" in end_kinds)
+            or ("wye_45" in start_kinds and "elbow_45" in end_kinds)
+        ):
+            continue
+        findings.append(
+            SimplificationFinding(
+                "avoidable_elbow_wye_spool",
+                segment.segment_id,
+                "короткий графический отрезок между полуотводом и косым "
+                "тройником следует заменить прямым стыком фасонных частей",
+            )
+        )
+    return tuple(findings)
 
 
 def default_typical_floor_fixtures() -> tuple[FloorFixtureInput, ...]:
@@ -404,6 +484,7 @@ def build_typical_floor_assembly(
     ports: list[DraftPort] = []
     segments: list[DraftPipeSegment] = []
     fittings: list[DraftFitting] = []
+    direct_fitting_joints: list[DirectFittingJointDraft] = []
     floor_fixtures: list[FloorFixtureDraft] = []
 
     junction_x = [
@@ -522,7 +603,10 @@ def build_typical_floor_assembly(
     ):
         junction = next(row.point for row in ports if row.port_id == junction_id)
         elbow_id = f"{source.fixture_id}_elbow"
-        elbow = DraftPoint(junction.x_mm - 18.0, junction.y_mm - 18.0)
+        # The 45-degree elbow is socketed directly into the oblique wye.  The
+        # eight-millimetre centreline represents the adjacent fitting bodies,
+        # not a separately measured or specified pipe spool.
+        elbow = DraftPoint(junction.x_mm - 8.0, junction.y_mm - 8.0)
         ports.append(DraftPort(elbow_id, elbow, "connection_elbow_45"))
         mode = fixture_trap_mode(source.kind)
         fixture_outlet_id = f"{source.fixture_id}_outlet"
@@ -546,7 +630,6 @@ def build_typical_floor_assembly(
             )
             before_id = f"{source.fixture_id}_to_trap"
             vertical_id = f"{source.fixture_id}_vertical"
-            diagonal_id = f"{source.fixture_id}_diagonal"
             segments.extend(
                 (
                     DraftPipeSegment(
@@ -563,16 +646,9 @@ def build_typical_floor_assembly(
                         dn,
                         "fixture_connection",
                     ),
-                    DraftPipeSegment(
-                        diagonal_id,
-                        elbow_id,
-                        junction_id,
-                        dn,
-                        "fixture_connection",
-                    ),
                 )
             )
-            connection_ids.extend((before_id, vertical_id, diagonal_id))
+            connection_ids.extend((before_id, vertical_id))
             fittings.append(
                 DraftFitting(
                     f"{source.fixture_id}_trap",
@@ -588,47 +664,50 @@ def build_typical_floor_assembly(
                 DraftPort(fixture_outlet_id, fixture_outlet, "fixture_outlet")
             )
             vertical_id = f"{source.fixture_id}_vertical"
-            diagonal_id = f"{source.fixture_id}_diagonal"
-            segments.extend(
-                (
-                    DraftPipeSegment(
-                        vertical_id,
-                        fixture_outlet_id,
-                        elbow_id,
-                        dn,
-                        "fixture_connection",
-                    ),
-                    DraftPipeSegment(
-                        diagonal_id,
-                        elbow_id,
-                        junction_id,
-                        dn,
-                        "fixture_connection",
-                    ),
+            segments.append(
+                DraftPipeSegment(
+                    vertical_id,
+                    fixture_outlet_id,
+                    elbow_id,
+                    dn,
+                    "fixture_connection",
                 )
             )
-            connection_ids.extend((vertical_id, diagonal_id))
+            connection_ids.append(vertical_id)
 
+        elbow_fitting_id = f"{source.fixture_id}_elbow_45"
         fittings.append(
             DraftFitting(
-                f"{source.fixture_id}_elbow_45",
+                elbow_fitting_id,
                 "elbow_45",
                 elbow,
                 dn,
-                tuple(connection_ids[-2:]),
+                (connection_ids[-1],),
             )
         )
         upstream_segment = (
             "cleanout_access" if index == 1 else branch_segment_ids[index - 2]
         )
         downstream_segment = branch_segment_ids[index - 1]
+        wye_fitting_id = f"{source.fixture_id}_wye_45"
         fittings.append(
             DraftFitting(
-                f"{source.fixture_id}_wye_45",
+                wye_fitting_id,
                 "wye_45",
                 junction,
                 max(value for _, value in resolved[:index]),
-                (upstream_segment, downstream_segment, connection_ids[-1]),
+                (upstream_segment, downstream_segment),
+            )
+        )
+        connection_joint_id = f"{source.fixture_id}_elbow_to_wye"
+        direct_fitting_joints.append(
+            DirectFittingJointDraft(
+                connection_joint_id,
+                elbow_fitting_id,
+                wye_fitting_id,
+                elbow_id,
+                junction_id,
+                dn,
             )
         )
         floor_fixtures.append(
@@ -641,6 +720,7 @@ def build_typical_floor_assembly(
                 fixture_outlet_port_id=fixture_outlet_id,
                 junction_port_id=junction_id,
                 connection_segment_ids=tuple(connection_ids),
+                connection_joint_id=connection_joint_id,
                 trap_inlet_port_id=trap_inlet_id,
                 trap_outlet_port_id=trap_outlet_id,
             )
@@ -672,7 +752,7 @@ def build_typical_floor_assembly(
         )
     )
 
-    direct_fitting_joints = (
+    direct_fitting_joints.append(
         DirectFittingJointDraft(
             "riser_elbow_to_wye",
             "riser_branch_elbow_45",
@@ -680,7 +760,7 @@ def build_typical_floor_assembly(
             "riser_branch_elbow",
             "riser_join",
             max(100, outlet_dn),
-        ),
+        )
     )
 
     assembly = WastewaterFloorAssembly(
@@ -693,7 +773,7 @@ def build_typical_floor_assembly(
         ports=tuple(ports),
         segments=tuple(segments),
         fittings=tuple(fittings),
-        direct_fitting_joints=direct_fitting_joints,
+        direct_fitting_joints=tuple(direct_fitting_joints),
         branch_segment_ids=tuple(branch_segment_ids),
         riser_segment_ids=("riser_upper", "riser_lower"),
         service_path=DraftServicePath(
@@ -878,13 +958,16 @@ def render_typical_floor_assembly_svg(
             )
         )
 
-    # Manufactured fitting boundaries: three ports of every wye and both
-    # sides of each 45-degree elbow.  These ticks prevent a connected line
-    # from being mistaken for an undefined freehand branch.
+    # Every fixture elbow is socketed directly into its oblique wye.  The
+    # collector boundaries are shifted outside the short fitting bodies, and
+    # only the elbow receives a boundary on the 45-degree joint.  Therefore a
+    # direct fitting connection cannot be mistaken for a straight pipe spool.
     for fixture in assembly.fixtures:
         joint = assembly.port(fixture.junction_port_id).point
+        direct_joint = assembly.direct_fitting_joint(fixture.connection_joint_id)
+        elbow = assembly.port(direct_joint.start_port_id).point
         connection = assembly.segment(fixture.connection_segment_ids[-1])
-        diagonal = assembly.port(connection.start_port_id).point
+        vertical_start = assembly.port(connection.start_port_id).point
         index = assembly.fixtures.index(fixture)
         upstream_id = "cleanout_cap" if index == 0 else assembly.fixtures[index - 1].junction_port_id
         downstream_id = (
@@ -893,18 +976,45 @@ def render_typical_floor_assembly_svg(
             else "riser_branch_elbow"
         )
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_wye_45">')
-        for toward_id in (upstream_id, downstream_id):
-            body.append(_tick_svg(joint, assembly.port(toward_id).point, xy=xy))
-        body.append(_tick_svg(joint, diagonal, xy=xy))
+        body.append(
+            _tick_svg(
+                joint,
+                assembly.port(upstream_id).point,
+                xy=xy,
+                offset_mm=10.0,
+                marker_id=f"{fixture.fixture_id}_wye_upstream",
+            )
+        )
+        body.append(
+            _tick_svg(
+                joint,
+                assembly.port(downstream_id).point,
+                xy=xy,
+                marker_id=f"{fixture.fixture_id}_wye_downstream",
+            )
+        )
         body.append("</g>")
 
-        elbow = assembly.port(connection.start_port_id).point
-        vertical = assembly.port(connection.start_port_id).point
-        previous_segment = assembly.segment(fixture.connection_segment_ids[-2])
-        vertical_start = assembly.port(previous_segment.start_port_id).point
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_elbow_45">')
-        body.append(_tick_svg(elbow, vertical_start, xy=xy, offset_mm=4.0))
-        body.append(_tick_svg(elbow, joint, xy=xy, offset_mm=4.0))
+        body.append(
+            _tick_svg(
+                elbow,
+                vertical_start,
+                xy=xy,
+                offset_mm=4.0,
+                marker_id=f"{fixture.fixture_id}_elbow_inlet",
+            )
+        )
+        body.append(
+            _tick_svg(
+                elbow,
+                joint,
+                xy=xy,
+                offset_mm=2.8,
+                half_length_px=4.0,
+                marker_id=f"{fixture.fixture_id}_elbow_outlet_45",
+            )
+        )
         body.append("</g>")
 
     # The floor collector does not terminate in an undefined T intersection.
