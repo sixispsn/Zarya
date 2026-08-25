@@ -999,29 +999,37 @@ def _slope_sign_svg(
     *,
     xy,
 ) -> str:
-    """Render the open angle slope sign above the referenced pipe group."""
+    """Render an open angle pointing towards the downstream end.
+
+    The numeric value is placed beside the angle.  No line is allowed below
+    the value: a horizontal baseline would turn the sign into an underlined
+    caption instead of the compact direction mark used by the reference.
+    """
     x1, y1 = xy(start)
     x2, y2 = xy(end)
     centre_x = (x1 + x2) / 2
-    baseline_y = min(y1, y2) - 13.0
+    sign_y = min(y1, y2) - 17.0
     direction = 1.0 if x2 >= x1 else -1.0
-    half_width = 24.0
-    upstream_x = centre_x - direction * half_width
-    downstream_x = centre_x + direction * half_width
-    angle_x = downstream_x - direction * 8.0
+    apex_x = centre_x + direction * 18.0
+    arm_x = apex_x - direction * 10.0
+    text_x = arm_x - direction * 5.0
+    text_anchor = "end" if direction > 0 else "start"
+    direction_label = "right" if direction > 0 else "left"
     value = f"{annotation.slope:.3f}".replace(".", ",")
     return (
         f'<g data-slope-marker="{escape(annotation.annotation_id)}" '
         f'data-first-segment="{escape(annotation.first_segment_id)}" '
         f'data-last-segment="{escape(annotation.last_segment_id)}" '
-        f'data-placement="above" data-slope-value="{value}">'
-        f'<path d="M{upstream_x:.1f},{baseline_y:.1f} '
-        f'L{downstream_x:.1f},{baseline_y:.1f} '
-        f'M{downstream_x:.1f},{baseline_y:.1f} '
-        f'L{angle_x:.1f},{baseline_y-6.0:.1f}" fill="none" '
+        f'data-placement="above" data-slope-value="{value}" '
+        f'data-sign-shape="open-angle" data-slope-direction="{direction_label}" '
+        'data-label-underline="false">'
+        f'<path data-slope-angle="true" '
+        f'd="M{arm_x:.1f},{sign_y-6.0:.1f} '
+        f'L{apex_x:.1f},{sign_y:.1f} '
+        f'L{arm_x:.1f},{sign_y+6.0:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="1.3"/>'
-        f'<text x="{centre_x:.1f}" y="{baseline_y-3.0:.1f}" '
-        f'text-anchor="middle" font-family="{FONT}" font-size="9.5">'
+        f'<text x="{text_x:.1f}" y="{sign_y+3.5:.1f}" '
+        f'text-anchor="{text_anchor}" font-family="{FONT}" font-size="9.5">'
         f'{value}</text></g>'
     )
 
@@ -1486,6 +1494,17 @@ def audit_floor_rendering_conventions(
                     "slope_not_above_pipe",
                     expected.annotation_id,
                     "знак уклона должен находиться над трубопроводом",
+                )
+            )
+        elif (
+            element.get("data-sign-shape") != "open-angle"
+            or element.get("data-label-underline") != "false"
+        ):
+            findings.append(
+                DraftingConventionFinding(
+                    "invalid_slope_sign_geometry",
+                    expected.annotation_id,
+                    "уклон должен быть показан открытым углом без линии под текстом",
                 )
             )
 
