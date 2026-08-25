@@ -305,6 +305,7 @@ def build_typical_floor_assembly(
     riser_id: str = "К1-Ст1",
     slope_dn50: float = 0.03,
     slope_dn100: float = 0.02,
+    junction_spacing_mm: float = 60.0,
 ) -> WastewaterFloorAssembly:
     """Build one connected gravity branch from fixtures to a K1 riser.
 
@@ -320,6 +321,8 @@ def build_typical_floor_assembly(
         raise ValueError("riser_id must not be empty")
     if slope_dn50 <= 0 or slope_dn100 <= 0:
         raise ValueError("design slopes must be positive")
+    if junction_spacing_mm < 45.0:
+        raise ValueError("junction_spacing_mm must be at least 45 mm")
 
     raw = tuple(fixtures or default_typical_floor_fixtures())
     if len(raw) < 3:
@@ -352,7 +355,9 @@ def build_typical_floor_assembly(
     fittings: list[DraftFitting] = []
     floor_fixtures: list[FloorFixtureDraft] = []
 
-    junction_x = [70.0 + index * 60.0 for index in range(len(resolved))]
+    junction_x = [
+        70.0 + index * junction_spacing_mm for index in range(len(resolved))
+    ]
     junction_y = [205.0]
     joined_dn = resolved[0][1]
     branch_dns: list[int] = []
@@ -831,11 +836,16 @@ def render_typical_floor_assembly_svg(
         end = assembly.port(segment.end_port_id).point
         mx, my = xy(DraftPoint((start.x_mm + end.x_mm) / 2, (start.y_mm + end.y_mm) / 2))
         slope = assembly.slope(100 if dn >= 100 else 50)
+        slope_label = f"{slope:.3f}".replace(".", ",")
+        anchor = "middle"
+        if segment.segment_id == "collector_to_riser":
+            mx = xy(end)[0] - 12.0
+            anchor = "end"
         body.append(
             f'<text data-branch-label="DN{dn}" x="{mx:.1f}" y="{my+22:.1f}" '
-            f'text-anchor="middle" font-family="{FONT}" font-size="9.5">'
+            f'text-anchor="{anchor}" font-family="{FONT}" font-size="9.5">'
             f'{_system_mark(assembly.system)}-М{group_index} DN{dn}; '
-            f'i={slope:.3f}</text>'.replace(".", ",")
+            f'i={slope_label}</text>'
         )
 
     riser_join_x, riser_join_y = xy("riser_join")

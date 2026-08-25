@@ -593,6 +593,34 @@ def generate_wastewater_typical_floor_node_pdf(
     )
 
 
+def generate_wastewater_stack_node_pdf(
+    output_path: str,
+    *,
+    floors_above: int = 9,
+    floor_height_m: float = 3.0,
+    riser_id: str = "К1-Ст1",
+    riser_dn_mm: int = 100,
+    roof_kind: str = "flat_non_accessible",
+    fixtures_by_floor=None,
+    max_floors_per_sheet: int = 5,
+) -> str:
+    """Generate the multi-page gravity K1 stack control drawing."""
+    from app.pz.wastewater_stack_drafting import (
+        generate_wastewater_stack_control_pdf,
+    )
+
+    return generate_wastewater_stack_control_pdf(
+        output_path,
+        floors_above=floors_above,
+        floor_height_m=floor_height_m,
+        riser_id=riser_id,
+        riser_dn_mm=riser_dn_mm,
+        roof_kind=roof_kind,
+        fixtures_by_floor=fixtures_by_floor,
+        max_floors_per_sheet=max_floors_per_sheet,
+    )
+
+
 def generate_wastewater_scheme_svg(
     project: Project,
     *,
