@@ -71,6 +71,14 @@ _FIXTURE_SYMBOL_RATIO = 0.36
 _TRAP_SYMBOL_RATIO = 0.28
 _TRAP_DX = 37.0 * _TRAP_SYMBOL_RATIO
 _TRAP_DY = 40.0 * _TRAP_SYMBOL_RATIO
+_FIXTURE_OUTLET_Y_MM = {
+    "sink": 130.0,
+    "washbasin": 130.0,
+    "bath": 138.0,
+    "shower": 138.0,
+    "floor_drain": 158.0,
+    "toilet": 158.0,
+}
 
 
 @dataclass(frozen=True)
@@ -358,7 +366,10 @@ def build_typical_floor_assembly(
     junction_x = [
         70.0 + index * junction_spacing_mm for index in range(len(resolved))
     ]
-    junction_y = [205.0]
+    # The collector is drawn close to the fixture outlets, as it is installed
+    # in the floor/ceiling zone in reality.  The former 205/62 coordinates
+    # exaggerated every fixture connection into a full-height vertical drop.
+    junction_y = [185.0]
     joined_dn = resolved[0][1]
     branch_dns: list[int] = []
     for index in range(len(resolved) - 1):
@@ -376,12 +387,20 @@ def build_typical_floor_assembly(
         junction_ids.append(port_id)
         ports.append(DraftPort(port_id, DraftPoint(x_mm, y_mm), "fixture_wye"))
 
-    riser_x = junction_x[-1] + 52.0
-    riser_y = junction_y[-1] + 52.0 * (
-        slope_dn100 if outlet_dn >= 100 else slope_dn50
-    )
+    outlet_slope = slope_dn100 if outlet_dn >= 100 else slope_dn50
+    riser_elbow_x = junction_x[-1] + 30.0
+    riser_elbow_y = junction_y[-1] + 30.0 * outlet_slope
+    # One-sided floor branch: a 45-degree elbow turns the shallow collector
+    # into the branch of an oblique 45-degree tee on the vertical riser.
+    riser_x = riser_elbow_x + 18.0
+    riser_y = riser_elbow_y + 18.0
     ports.extend(
         (
+            DraftPort(
+                "riser_branch_elbow",
+                DraftPoint(riser_elbow_x, riser_elbow_y),
+                "riser_connection_elbow_45",
+            ),
             DraftPort("riser_top", DraftPoint(riser_x, 5.0), "riser_from_above"),
             DraftPort("riser_join", DraftPoint(riser_x, riser_y), "riser_branch_joint"),
             DraftPort("riser_bottom", DraftPoint(riser_x, 252.0), "riser_to_below"),
@@ -429,9 +448,19 @@ def build_typical_floor_assembly(
         DraftPipeSegment(
             "collector_to_riser",
             junction_ids[-1],
-            "riser_join",
+            "riser_branch_elbow",
             outlet_dn,
             "common_floor_branch",
+        )
+    )
+    branch_segment_ids.append("riser_branch_diagonal")
+    segments.append(
+        DraftPipeSegment(
+            "riser_branch_diagonal",
+            "riser_branch_elbow",
+            "riser_join",
+            outlet_dn,
+            "riser_connection_45",
         )
     )
     segments.extend(
@@ -465,12 +494,14 @@ def build_typical_floor_assembly(
         connection_ids: list[str] = []
         trap_inlet_id = ""
         trap_outlet_id = ""
+        fixture_outlet_y = _FIXTURE_OUTLET_Y_MM[source.kind]
         if mode == "external":
             trap_inlet_id = f"{source.fixture_id}_trap_in"
             trap_outlet_id = f"{source.fixture_id}_trap_out"
-            trap_in = DraftPoint(elbow.x_mm - _TRAP_DX, 82.0)
-            trap_out = DraftPoint(elbow.x_mm, 82.0 + _TRAP_DY)
-            fixture_outlet = DraftPoint(trap_in.x_mm, 62.0)
+            trap_in_y = fixture_outlet_y + 12.0
+            trap_in = DraftPoint(elbow.x_mm - _TRAP_DX, trap_in_y)
+            trap_out = DraftPoint(elbow.x_mm, trap_in_y + _TRAP_DY)
+            fixture_outlet = DraftPoint(trap_in.x_mm, fixture_outlet_y)
             ports.extend(
                 (
                     DraftPort(fixture_outlet_id, fixture_outlet, "fixture_outlet"),
@@ -517,7 +548,7 @@ def build_typical_floor_assembly(
                 )
             )
         else:
-            fixture_outlet = DraftPoint(elbow.x_mm, 62.0)
+            fixture_outlet = DraftPoint(elbow.x_mm, fixture_outlet_y)
             ports.append(
                 DraftPort(fixture_outlet_id, fixture_outlet, "fixture_outlet")
             )
@@ -590,11 +621,18 @@ def build_typical_floor_assembly(
                 ("cleanout_access",),
             ),
             DraftFitting(
+                "riser_branch_elbow_45",
+                "elbow_45",
+                DraftPoint(riser_elbow_x, riser_elbow_y),
+                max(100, outlet_dn),
+                ("collector_to_riser", "riser_branch_diagonal"),
+            ),
+            DraftFitting(
                 "riser_branch_wye",
                 "wye_45",
                 DraftPoint(riser_x, riser_y),
                 max(100, outlet_dn),
-                ("collector_to_riser", "riser_upper", "riser_lower"),
+                ("riser_branch_diagonal", "riser_upper", "riser_lower"),
             ),
         )
     )
@@ -615,7 +653,12 @@ def build_typical_floor_assembly(
             "floor_cleanout_cable",
             "cleanout_cap",
             f"{floor_fixtures[0].fixture_id}_wye_45",
-            ("cleanout_cap", *junction_ids, "riser_join"),
+            (
+                "cleanout_cap",
+                *junction_ids,
+                "riser_branch_elbow",
+                "riser_join",
+            ),
             tuple(branch_segment_ids),
         ),
         slope_by_dn=((50, slope_dn50), (100, slope_dn100)),
@@ -780,7 +823,7 @@ def render_typical_floor_assembly_svg(
         downstream_id = (
             assembly.fixtures[index + 1].junction_port_id
             if index + 1 < len(assembly.fixtures)
-            else "riser_join"
+            else "riser_branch_elbow"
         )
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_wye_45">')
         for toward_id in (upstream_id, downstream_id):
@@ -796,6 +839,25 @@ def render_typical_floor_assembly_svg(
         body.append(_tick_svg(elbow, vertical_start, xy=xy, offset_mm=4.0))
         body.append(_tick_svg(elbow, joint, xy=xy, offset_mm=4.0))
         body.append("</g>")
+
+    # The floor collector does not terminate in an undefined T intersection.
+    # It turns through a 45-degree elbow and enters the branch of an oblique
+    # 45-degree tee on the vertical riser.  Three port-boundary ticks make the
+    # manufactured tee explicit on the principle schematic.
+    riser_elbow = assembly.port("riser_branch_elbow").point
+    last_joint = assembly.port(assembly.fixtures[-1].junction_port_id).point
+    riser_join = assembly.port("riser_join").point
+    riser_top = assembly.port("riser_top").point
+    riser_bottom = assembly.port("riser_bottom").point
+    body.append('<g data-floor-fitting="riser_branch_elbow_45">')
+    body.append(_tick_svg(riser_elbow, last_joint, xy=xy, offset_mm=4.0))
+    body.append(_tick_svg(riser_elbow, riser_join, xy=xy, offset_mm=4.0))
+    body.append("</g>")
+    body.append('<g data-floor-fitting="riser_branch_wye_45">')
+    body.append(_tick_svg(riser_join, riser_elbow, xy=xy, offset_mm=5.0))
+    body.append(_tick_svg(riser_join, riser_top, xy=xy, offset_mm=5.0))
+    body.append(_tick_svg(riser_join, riser_bottom, xy=xy, offset_mm=5.0))
+    body.append("</g>")
 
     cap = assembly.port("cleanout_cap").point
     first_joint = assembly.port(assembly.fixtures[0].junction_port_id).point
@@ -849,19 +911,31 @@ def render_typical_floor_assembly_svg(
         )
 
     riser_join_x, riser_join_y = xy("riser_join")
+    collector_to_riser = assembly.segment("collector_to_riser")
+    collector_start = assembly.port(collector_to_riser.start_port_id).point
+    collector_end = assembly.port(collector_to_riser.end_port_id).point
+    flow_x, flow_y = xy(
+        DraftPoint(
+            (collector_start.x_mm + collector_end.x_mm) / 2,
+            (collector_start.y_mm + collector_end.y_mm) / 2,
+        )
+    )
     body.extend(
         (
             f'<text x="{riser_join_x+12:.1f}" y="{riser_join_y-52:.1f}" '
             f'font-family="{FONT}" font-size="10.5" font-weight="bold">'
             f'{escape(assembly.riser_id)} DN{assembly.segment("riser_lower").dn_mm}</text>',
             f'<path data-flow-direction="collector" '
-            f'd="M{riser_join_x-54:.1f},{riser_join_y-6:.1f} '
-            f'L{riser_join_x-42:.1f},{riser_join_y:.1f} '
-            f'L{riser_join_x-54:.1f},{riser_join_y+6:.1f} Z" fill="{BLACK}"/>',
+            f'd="M{flow_x-8:.1f},{flow_y-5:.1f} '
+            f'L{flow_x+3:.1f},{flow_y:.1f} '
+            f'L{flow_x-8:.1f},{flow_y+5:.1f} Z" fill="{BLACK}"/>',
             f'<path data-flow-direction="riser" '
             f'd="M{riser_join_x-6:.1f},{riser_join_y+42:.1f} '
             f'L{riser_join_x:.1f},{riser_join_y+54:.1f} '
             f'L{riser_join_x+6:.1f},{riser_join_y+42:.1f} Z" fill="{BLACK}"/>',
+            f'<text data-fitting-label="riser_branch_wye_45" '
+            f'x="{riser_join_x+13:.1f}" y="{riser_join_y+21:.1f}" '
+            f'font-family="{FONT}" font-size="8.5">Тр. 45°</text>',
         )
     )
 

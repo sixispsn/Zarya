@@ -24,7 +24,7 @@ def test_floor_module_is_one_connected_branch_with_toilet_last():
     ]
     assert floor.fixtures[-1].dn_mm == 100
     branch = [floor.segment(row) for row in floor.branch_segment_ids]
-    assert [row.dn_mm for row in branch] == [50, 50, 50, 100]
+    assert [row.dn_mm for row in branch] == [50, 50, 50, 100, 100]
     assert all(
         upstream.end_port_id == downstream.start_port_id
         for upstream, downstream in zip(branch, branch[1:])
@@ -44,6 +44,35 @@ def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
             >= floor.port(row.start_port_id).point.y_mm
             for row in connection
         )
+        vertical_gap = (
+            floor.port(fixture.junction_port_id).point.y_mm
+            - floor.port(fixture.fixture_outlet_port_id).point.y_mm
+        )
+        assert vertical_gap <= 70.0
+
+
+def test_floor_branch_enters_riser_through_elbow_and_oblique_tee():
+    floor = build_typical_floor_assembly()
+    elbow = floor.fitting("riser_branch_elbow_45")
+    tee = floor.fitting("riser_branch_wye")
+    diagonal = floor.segment("riser_branch_diagonal")
+    start = floor.port(diagonal.start_port_id).point
+    end = floor.port(diagonal.end_port_id).point
+
+    assert elbow.kind == "elbow_45"
+    assert set(elbow.connected_segment_ids) == {
+        "collector_to_riser",
+        "riser_branch_diagonal",
+    }
+    assert tee.kind == "wye_45"
+    assert set(tee.connected_segment_ids) == {
+        "riser_branch_diagonal",
+        "riser_upper",
+        "riser_lower",
+    }
+    dx, dy = start.vector_to(end)
+    assert dx == pytest.approx(dy)
+    assert dx > 0
 
 
 def test_external_and_integral_traps_are_not_confused():
@@ -76,6 +105,7 @@ def test_cleanout_is_capped_collinear_and_reaches_the_riser():
     assert floor.port("cleanout_cap").accessible
     assert floor.fitting("cleanout_cap_fitting").kind == "cap"
     assert floor.service_path.point_ids[0] == "cleanout_cap"
+    assert "riser_branch_elbow" in floor.service_path.point_ids
     assert floor.service_path.point_ids[-1] == "riser_join"
     assert floor.service_path.serviced_segment_ids == floor.branch_segment_ids
 
@@ -108,8 +138,11 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert normative.count('data-floor-fixture=') == 4
     assert normative.count('data-ugo="trap"') == 3
     assert 'data-trap-mode="integral"' in normative
-    assert normative.count('_wye_45">') == 4
-    assert normative.count('_elbow_45">') == 4
+    assert normative.count('_wye_45">') == 5
+    assert normative.count('_elbow_45">') == 5
+    assert 'data-floor-fitting="riser_branch_elbow_45"' in normative
+    assert 'data-floor-fitting="riser_branch_wye_45"' in normative
+    assert 'data-fitting-label="riser_branch_wye_45"' in normative
     assert 'data-role="cleanout_access"' in normative
     assert 'data-carries-flow="false"' in normative
     assert 'data-service-path="floor_cleanout_cable"' not in normative
