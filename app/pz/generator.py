@@ -548,6 +548,27 @@ def generate_wastewater_scheme_result(
     )
 
 
+def generate_wastewater_lower_turn_node_pdf(
+    output_path: str,
+    *,
+    system: str = "K1",
+    dn_mm: int = 100,
+) -> str:
+    """Generate the first reusable installation node of the sewer drafter.
+
+    This approval sheet is intentionally separate from the full principle
+    scheme.  Once accepted, the same semantic assembly will be inserted by the
+    floor/basement layout engine instead of redrawing the node ad hoc.
+    """
+    from app.pz.wastewater_drafting import generate_lower_turn_control_pdf
+
+    return generate_lower_turn_control_pdf(
+        output_path,
+        system=system,
+        dn_mm=dn_mm,
+    )
+
+
 def generate_wastewater_scheme_svg(
     project: Project,
     *,
