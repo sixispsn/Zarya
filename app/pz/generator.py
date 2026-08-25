@@ -569,6 +569,30 @@ def generate_wastewater_lower_turn_node_pdf(
     )
 
 
+def generate_wastewater_typical_floor_node_pdf(
+    output_path: str,
+    *,
+    fixtures=None,
+    floor_no: int = 2,
+    floor_elevation_m: float = 3.0,
+    riser_id: str = "К1-Ст1",
+) -> str:
+    """Generate the isolated reusable K1 typical-floor module.
+
+    The control sheet remains separate from the complete building scheme
+    until its installation topology and GOST-style layout are accepted.
+    """
+    from app.pz.wastewater_floor_drafting import generate_typical_floor_control_pdf
+
+    return generate_typical_floor_control_pdf(
+        output_path,
+        fixtures=fixtures,
+        floor_no=floor_no,
+        floor_elevation_m=floor_elevation_m,
+        riser_id=riser_id,
+    )
+
+
 def generate_wastewater_scheme_svg(
     project: Project,
     *,
