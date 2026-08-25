@@ -621,6 +621,30 @@ def generate_wastewater_stack_node_pdf(
     )
 
 
+def generate_wastewater_basement_node_pdf(
+    output_path: str,
+    *,
+    riser_id: str = "К1-Ст1",
+    dn_mm: int = 100,
+    first_floor_elevation_m: float = 0.0,
+    basement_floor_elevation_m: float | None = None,
+    outlet_invert_elevation_m: float | None = None,
+) -> str:
+    """Generate the isolated reusable K1 basement and outlet module."""
+    from app.pz.wastewater_basement_drafting import (
+        generate_wastewater_basement_control_pdf,
+    )
+
+    return generate_wastewater_basement_control_pdf(
+        output_path,
+        riser_id=riser_id,
+        dn_mm=dn_mm,
+        first_floor_elevation_m=first_floor_elevation_m,
+        basement_floor_elevation_m=basement_floor_elevation_m,
+        outlet_invert_elevation_m=outlet_invert_elevation_m,
+    )
+
+
 def generate_wastewater_scheme_svg(
     project: Project,
     *,
