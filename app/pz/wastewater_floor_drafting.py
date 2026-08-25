@@ -104,6 +104,18 @@ class FloorFixtureDraft:
 
 
 @dataclass(frozen=True)
+class DirectFittingJointDraft:
+    """A socketed fitting-to-fitting joint with no intervening pipe piece."""
+
+    joint_id: str
+    start_fitting_id: str
+    end_fitting_id: str
+    start_port_id: str
+    end_port_id: str
+    dn_mm: int
+
+
+@dataclass(frozen=True)
 class WastewaterFloorAssembly:
     assembly_id: str
     system: str
@@ -114,6 +126,7 @@ class WastewaterFloorAssembly:
     ports: tuple[DraftPort, ...]
     segments: tuple[DraftPipeSegment, ...]
     fittings: tuple[DraftFitting, ...]
+    direct_fitting_joints: tuple[DirectFittingJointDraft, ...]
     branch_segment_ids: tuple[str, ...]
     riser_segment_ids: tuple[str, ...]
     service_path: DraftServicePath
@@ -137,6 +150,14 @@ class WastewaterFloorAssembly:
         except StopIteration as exc:
             raise KeyError(f"unknown floor fitting: {fitting_id}") from exc
 
+    def direct_fitting_joint(self, joint_id: str) -> DirectFittingJointDraft:
+        try:
+            return next(
+                row for row in self.direct_fitting_joints if row.joint_id == joint_id
+            )
+        except StopIteration as exc:
+            raise KeyError(f"unknown direct fitting joint: {joint_id}") from exc
+
     def slope(self, dn_mm: int) -> float:
         rows = dict(self.slope_by_dn)
         try:
@@ -150,11 +171,13 @@ class WastewaterFloorAssembly:
         port_ids = [row.port_id for row in self.ports]
         segment_ids = [row.segment_id for row in self.segments]
         fitting_ids = [row.fitting_id for row in self.fittings]
+        joint_ids = [row.joint_id for row in self.direct_fitting_joints]
         fixture_ids = [row.fixture_id for row in self.fixtures]
         for label, values in (
             ("port", port_ids),
             ("segment", segment_ids),
             ("fitting", fitting_ids),
+            ("direct fitting joint", joint_ids),
             ("fixture", fixture_ids),
         ):
             duplicates = sorted({value for value in values if values.count(value) > 1})
@@ -190,6 +213,26 @@ class WastewaterFloorAssembly:
                     f"{fitting.fitting_id}: unknown segments "
                     f"{', '.join(sorted(missing))}"
                 )
+
+        known_fittings = set(fitting_ids)
+        for joint in self.direct_fitting_joints:
+            for fitting_id in (joint.start_fitting_id, joint.end_fitting_id):
+                if fitting_id not in known_fittings:
+                    errors.append(
+                        f"{joint.joint_id}: unknown fitting {fitting_id}"
+                    )
+            for port_id in (joint.start_port_id, joint.end_port_id):
+                if port_id not in known_ports:
+                    errors.append(f"{joint.joint_id}: unknown port {port_id}")
+            if joint.dn_mm <= 0:
+                errors.append(f"{joint.joint_id}: DN must be positive")
+            if joint.start_port_id in known_ports and joint.end_port_id in known_ports:
+                start = self.port(joint.start_port_id).point
+                end = self.port(joint.end_port_id).point
+                if start.distance_to(end) <= 1e-9:
+                    errors.append(f"{joint.joint_id}: fitting bodies overlap")
+                if end.y_mm < start.y_mm - 1e-9:
+                    errors.append(f"{joint.joint_id}: gravity path rises")
 
         toilets = [row for row in self.fixtures if row.kind == "toilet"]
         if len(toilets) != 1:
@@ -392,8 +435,10 @@ def build_typical_floor_assembly(
     riser_elbow_y = junction_y[-1] + 30.0 * outlet_slope
     # One-sided floor branch: a 45-degree elbow turns the shallow collector
     # into the branch of an oblique 45-degree tee on the vertical riser.
-    riser_x = riser_elbow_x + 18.0
-    riser_y = riser_elbow_y + 18.0
+    # The hubs are adjacent in the drawing: this is a direct socketed joint,
+    # not a separately measured pipe segment between the two fittings.
+    riser_x = riser_elbow_x + 8.0
+    riser_y = riser_elbow_y + 8.0
     ports.extend(
         (
             DraftPort(
@@ -451,16 +496,6 @@ def build_typical_floor_assembly(
             "riser_branch_elbow",
             outlet_dn,
             "common_floor_branch",
-        )
-    )
-    branch_segment_ids.append("riser_branch_diagonal")
-    segments.append(
-        DraftPipeSegment(
-            "riser_branch_diagonal",
-            "riser_branch_elbow",
-            "riser_join",
-            outlet_dn,
-            "riser_connection_45",
         )
     )
     segments.extend(
@@ -625,16 +660,27 @@ def build_typical_floor_assembly(
                 "elbow_45",
                 DraftPoint(riser_elbow_x, riser_elbow_y),
                 max(100, outlet_dn),
-                ("collector_to_riser", "riser_branch_diagonal"),
+                ("collector_to_riser",),
             ),
             DraftFitting(
                 "riser_branch_wye",
                 "wye_45",
                 DraftPoint(riser_x, riser_y),
                 max(100, outlet_dn),
-                ("riser_branch_diagonal", "riser_upper", "riser_lower"),
+                ("riser_upper", "riser_lower"),
             ),
         )
+    )
+
+    direct_fitting_joints = (
+        DirectFittingJointDraft(
+            "riser_elbow_to_wye",
+            "riser_branch_elbow_45",
+            "riser_branch_wye",
+            "riser_branch_elbow",
+            "riser_join",
+            max(100, outlet_dn),
+        ),
     )
 
     assembly = WastewaterFloorAssembly(
@@ -647,6 +693,7 @@ def build_typical_floor_assembly(
         ports=tuple(ports),
         segments=tuple(segments),
         fittings=tuple(fittings),
+        direct_fitting_joints=direct_fitting_joints,
         branch_segment_ids=tuple(branch_segment_ids),
         riser_segment_ids=("riser_upper", "riser_lower"),
         service_path=DraftServicePath(
@@ -768,6 +815,22 @@ def render_typical_floor_assembly_svg(
             f'stroke="{BLACK}" stroke-width="3" fill="none"/>'
         )
 
+    # Directly socketed fitting bodies have a centreline for flow continuity,
+    # but are deliberately not emitted as a pipe segment or bounded by two
+    # pipe-end ticks.  This prevents the joint from looking like a cut piece
+    # of pipe between the elbow and the oblique tee.
+    for joint in assembly.direct_fitting_joints:
+        x1, y1 = xy(joint.start_port_id)
+        x2, y2 = xy(joint.end_port_id)
+        body.append(
+            f'<line data-direct-fitting-joint="{escape(joint.joint_id)}" '
+            f'data-start-fitting="{escape(joint.start_fitting_id)}" '
+            f'data-end-fitting="{escape(joint.end_fitting_id)}" '
+            f'data-dn="{joint.dn_mm}" x1="{x1:.1f}" y1="{y1:.1f}" '
+            f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{BLACK}" '
+            f'stroke-width="3" fill="none"/>'
+        )
+
     # UGO symbols are anchored at their actual outlet points.  External traps
     # are anchored at both graph ports, so there is no visual gap.
     for fixture in assembly.fixtures:
@@ -851,10 +914,8 @@ def render_typical_floor_assembly_svg(
     riser_bottom = assembly.port("riser_bottom").point
     body.append('<g data-floor-fitting="riser_branch_elbow_45">')
     body.append(_tick_svg(riser_elbow, last_joint, xy=xy, offset_mm=4.0))
-    body.append(_tick_svg(riser_elbow, riser_join, xy=xy, offset_mm=4.0))
     body.append("</g>")
     body.append('<g data-floor-fitting="riser_branch_wye_45">')
-    body.append(_tick_svg(riser_join, riser_elbow, xy=xy, offset_mm=5.0))
     body.append(_tick_svg(riser_join, riser_top, xy=xy, offset_mm=5.0))
     body.append(_tick_svg(riser_join, riser_bottom, xy=xy, offset_mm=5.0))
     body.append("</g>")

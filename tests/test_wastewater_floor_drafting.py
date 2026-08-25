@@ -24,7 +24,7 @@ def test_floor_module_is_one_connected_branch_with_toilet_last():
     ]
     assert floor.fixtures[-1].dn_mm == 100
     branch = [floor.segment(row) for row in floor.branch_segment_ids]
-    assert [row.dn_mm for row in branch] == [50, 50, 50, 100, 100]
+    assert [row.dn_mm for row in branch] == [50, 50, 50, 100]
     assert all(
         upstream.end_port_id == downstream.start_port_id
         for upstream, downstream in zip(branch, branch[1:])
@@ -55,24 +55,20 @@ def test_floor_branch_enters_riser_through_elbow_and_oblique_tee():
     floor = build_typical_floor_assembly()
     elbow = floor.fitting("riser_branch_elbow_45")
     tee = floor.fitting("riser_branch_wye")
-    diagonal = floor.segment("riser_branch_diagonal")
-    start = floor.port(diagonal.start_port_id).point
-    end = floor.port(diagonal.end_port_id).point
+    joint = floor.direct_fitting_joint("riser_elbow_to_wye")
+    start = floor.port(joint.start_port_id).point
+    end = floor.port(joint.end_port_id).point
 
     assert elbow.kind == "elbow_45"
-    assert set(elbow.connected_segment_ids) == {
-        "collector_to_riser",
-        "riser_branch_diagonal",
-    }
+    assert elbow.connected_segment_ids == ("collector_to_riser",)
     assert tee.kind == "wye_45"
-    assert set(tee.connected_segment_ids) == {
-        "riser_branch_diagonal",
-        "riser_upper",
-        "riser_lower",
-    }
+    assert set(tee.connected_segment_ids) == {"riser_upper", "riser_lower"}
+    assert joint.start_fitting_id == elbow.fitting_id
+    assert joint.end_fitting_id == tee.fitting_id
+    assert all(row.segment_id != "riser_branch_diagonal" for row in floor.segments)
     dx, dy = start.vector_to(end)
     assert dx == pytest.approx(dy)
-    assert dx > 0
+    assert 0 < dx <= 8.0
 
 
 def test_external_and_integral_traps_are_not_confused():
@@ -142,6 +138,8 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert normative.count('_elbow_45">') == 5
     assert 'data-floor-fitting="riser_branch_elbow_45"' in normative
     assert 'data-floor-fitting="riser_branch_wye_45"' in normative
+    assert 'data-direct-fitting-joint="riser_elbow_to_wye"' in normative
+    assert 'data-floor-segment="riser_branch_diagonal"' not in normative
     assert 'data-fitting-label="riser_branch_wye_45"' in normative
     assert 'data-role="cleanout_access"' in normative
     assert 'data-carries-flow="false"' in normative
