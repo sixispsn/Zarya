@@ -30,7 +30,7 @@ def test_floor_module_is_one_connected_branch_with_toilet_last():
     ]
     assert floor.fixtures[-1].dn_mm == 100
     branch = [floor.segment(row) for row in floor.branch_segment_ids]
-    assert [row.dn_mm for row in branch] == [50, 50, 50, 100]
+    assert [row.dn_mm for row in branch] == [50, 50, 50, 100, 100]
     assert all(
         upstream.end_port_id == downstream.start_port_id
         for upstream, downstream in zip(branch, branch[1:])
@@ -131,8 +131,35 @@ def test_floor_annotations_derive_slopes_and_dn_transition_from_topology():
     ]
     assert len(transitions) == 1
     transition = transitions[0]
-    assert transition.port_id == floor.fixtures[-1].junction_port_id
+    toilet = floor.fixtures[-1]
+    transition_point = floor.port(transition.port_id).point
+    toilet_join = floor.port(toilet.junction_port_id).point
+    assert transition.port_id == "transition_before_junction_4"
+    assert transition_point.x_mm < toilet_join.x_mm
     assert (transition.upstream_dn_mm, transition.downstream_dn_mm) == (50, 100)
+
+    toilet_wye = floor.fitting(f"{toilet.fixture_id}_wye_45")
+    toilet_main = [floor.segment(row) for row in toilet_wye.connected_segment_ids]
+    assert [row.dn_mm for row in toilet_main] == [100, 100]
+
+
+def test_floor_validation_rejects_dn_increase_after_toilet_connection():
+    floor = build_typical_floor_assembly()
+    toilet = floor.fixtures[-1]
+    wye = floor.fitting(f"{toilet.fixture_id}_wye_45")
+    upstream_id = wye.connected_segment_ids[0]
+    wrong = replace(
+        floor,
+        segments=tuple(
+            replace(row, dn_mm=50) if row.segment_id == upstream_id else row
+            for row in floor.segments
+        ),
+    )
+
+    assert any(
+        "collector must increase to DN100 before the toilet connection" in error
+        for error in wrong.validate()
+    )
 
 
 def test_external_and_integral_traps_are_not_confused():

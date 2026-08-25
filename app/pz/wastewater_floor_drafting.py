@@ -324,6 +324,20 @@ class WastewaterFloorAssembly:
                             f"{fixture.fixture_id}: direct fitting joint misses "
                             "common branch"
                         )
+            if fixture.kind == "toilet":
+                try:
+                    wye = self.fitting(f"{fixture.fixture_id}_wye_45")
+                    main_run = [
+                        self.segment(row) for row in wye.connected_segment_ids[:2]
+                    ]
+                except KeyError as exc:
+                    errors.append(str(exc))
+                else:
+                    if any(row.dn_mm < fixture.dn_mm for row in main_run):
+                        errors.append(
+                            f"{fixture.fixture_id}: collector must increase to "
+                            f"DN{fixture.dn_mm} before the toilet connection"
+                        )
 
         try:
             branch = [self.segment(row) for row in self.branch_segment_ids]
@@ -574,14 +588,37 @@ def build_typical_floor_assembly(
     # exaggerated every fixture connection into a full-height vertical drop.
     junction_y = [185.0]
     joined_dn = resolved[0][1]
-    branch_dns: list[int] = []
+    interval_data: list[tuple[int, int, str, DraftPoint | None]] = []
     for index in range(len(resolved) - 1):
-        joined_dn = max(joined_dn, resolved[index][1])
-        branch_dns.append(joined_dn)
-        slope = slope_dn100 if joined_dn >= 100 else slope_dn50
+        upstream_dn = joined_dn
+        downstream_dn = max(upstream_dn, resolved[index + 1][1])
         dx = junction_x[index + 1] - junction_x[index]
-        junction_y.append(junction_y[-1] + dx * slope)
-    joined_dn = max(joined_dn, resolved[-1][1])
+        transition_port_id = ""
+        transition_point: DraftPoint | None = None
+        if downstream_dn > upstream_dn:
+            # Increase the collector diameter before the larger fixture joins
+            # it.  In particular, a DN100 toilet must enter an already-DN100
+            # main, never a DN50 run enlarged only after the toilet wye.
+            setback = min(24.0, dx * 0.4)
+            transition_x = junction_x[index + 1] - setback
+            upstream_slope = slope_dn100 if upstream_dn >= 100 else slope_dn50
+            downstream_slope = (
+                slope_dn100 if downstream_dn >= 100 else slope_dn50
+            )
+            transition_y = junction_y[-1] + (
+                transition_x - junction_x[index]
+            ) * upstream_slope
+            next_y = transition_y + setback * downstream_slope
+            transition_port_id = f"transition_before_junction_{index + 2}"
+            transition_point = DraftPoint(transition_x, transition_y)
+        else:
+            slope = slope_dn100 if upstream_dn >= 100 else slope_dn50
+            next_y = junction_y[-1] + dx * slope
+        interval_data.append(
+            (upstream_dn, downstream_dn, transition_port_id, transition_point)
+        )
+        junction_y.append(next_y)
+        joined_dn = downstream_dn
     outlet_dn = joined_dn
 
     junction_ids: list[str] = []
@@ -589,6 +626,9 @@ def build_typical_floor_assembly(
         port_id = f"junction_{index}"
         junction_ids.append(port_id)
         ports.append(DraftPort(port_id, DraftPoint(x_mm, y_mm), "fixture_wye"))
+    for upstream_dn, downstream_dn, port_id, point in interval_data:
+        if point is not None:
+            ports.append(DraftPort(port_id, point, "diameter_transition"))
 
     outlet_slope = slope_dn100 if outlet_dn >= 100 else slope_dn50
     riser_elbow_x = junction_x[-1] + 30.0
@@ -636,18 +676,63 @@ def build_typical_floor_assembly(
     )
 
     branch_segment_ids: list[str] = []
-    for index in range(len(junction_ids) - 1):
-        segment_id = f"collector_{index + 1}"
-        branch_segment_ids.append(segment_id)
-        segments.append(
-            DraftPipeSegment(
-                segment_id,
-                junction_ids[index],
-                junction_ids[index + 1],
-                branch_dns[index],
-                "common_floor_branch",
+    junction_upstream_segment: dict[str, str] = {
+        junction_ids[0]: "cleanout_access"
+    }
+    junction_downstream_segment: dict[str, str] = {}
+    for index, (upstream_dn, downstream_dn, transition_id, transition_point) in enumerate(
+        interval_data
+    ):
+        start_id = junction_ids[index]
+        end_id = junction_ids[index + 1]
+        if transition_point is None:
+            segment_id = f"collector_{index + 1}"
+            branch_segment_ids.append(segment_id)
+            segments.append(
+                DraftPipeSegment(
+                    segment_id,
+                    start_id,
+                    end_id,
+                    upstream_dn,
+                    "common_floor_branch",
+                )
+            )
+            junction_downstream_segment[start_id] = segment_id
+            junction_upstream_segment[end_id] = segment_id
+            continue
+
+        before_id = f"collector_{index + 1}_before_transition"
+        after_id = f"collector_{index + 1}_after_transition"
+        branch_segment_ids.extend((before_id, after_id))
+        segments.extend(
+            (
+                DraftPipeSegment(
+                    before_id,
+                    start_id,
+                    transition_id,
+                    upstream_dn,
+                    "common_floor_branch",
+                ),
+                DraftPipeSegment(
+                    after_id,
+                    transition_id,
+                    end_id,
+                    downstream_dn,
+                    "common_floor_branch",
+                ),
             )
         )
+        fittings.append(
+            DraftFitting(
+                f"diameter_transition_{index + 1}",
+                "diameter_transition",
+                transition_point,
+                downstream_dn,
+                (before_id, after_id),
+            )
+        )
+        junction_downstream_segment[start_id] = before_id
+        junction_upstream_segment[end_id] = after_id
     branch_segment_ids.append("collector_to_riser")
     segments.append(
         DraftPipeSegment(
@@ -658,6 +743,7 @@ def build_typical_floor_assembly(
             "common_floor_branch",
         )
     )
+    junction_downstream_segment[junction_ids[-1]] = "collector_to_riser"
     segments.extend(
         (
             DraftPipeSegment(
@@ -764,10 +850,8 @@ def build_typical_floor_assembly(
                 (connection_ids[-1],),
             )
         )
-        upstream_segment = (
-            "cleanout_access" if index == 1 else branch_segment_ids[index - 2]
-        )
-        downstream_segment = branch_segment_ids[index - 1]
+        upstream_segment = junction_upstream_segment[junction_id]
+        downstream_segment = junction_downstream_segment[junction_id]
         wye_fitting_id = f"{source.fixture_id}_wye_45"
         fittings.append(
             DraftFitting(
@@ -1123,12 +1207,18 @@ def render_typical_floor_assembly_svg(
         elbow = assembly.port(direct_joint.start_port_id).point
         connection = assembly.segment(fixture.connection_segment_ids[-1])
         vertical_start = assembly.port(connection.start_port_id).point
-        index = assembly.fixtures.index(fixture)
-        upstream_id = "cleanout_cap" if index == 0 else assembly.fixtures[index - 1].junction_port_id
+        wye = assembly.fitting(f"{fixture.fixture_id}_wye_45")
+        upstream_segment = assembly.segment(wye.connected_segment_ids[0])
+        downstream_segment = assembly.segment(wye.connected_segment_ids[1])
+        upstream_id = (
+            upstream_segment.start_port_id
+            if upstream_segment.end_port_id == fixture.junction_port_id
+            else upstream_segment.end_port_id
+        )
         downstream_id = (
-            assembly.fixtures[index + 1].junction_port_id
-            if index + 1 < len(assembly.fixtures)
-            else "riser_branch_elbow"
+            downstream_segment.end_port_id
+            if downstream_segment.start_port_id == fixture.junction_port_id
+            else downstream_segment.start_port_id
         )
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_wye_45">')
         body.append(
