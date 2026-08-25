@@ -20,6 +20,7 @@ from html import escape
 from math import hypot
 from pathlib import Path
 from typing import Iterable
+from xml.etree import ElementTree
 
 from app.pz.wastewater_drafting import (
     BLACK,
@@ -120,6 +121,32 @@ class DirectFittingJointDraft:
 class SimplificationFinding:
     """A deterministic indication that drawn pipe can be removed."""
 
+    code: str
+    element_id: str
+    message: str
+
+
+@dataclass(frozen=True)
+class FloorSlopeAnnotationDraft:
+    annotation_id: str
+    first_segment_id: str
+    last_segment_id: str
+    dn_mm: int
+    slope: float
+
+
+@dataclass(frozen=True)
+class FloorDiameterTransitionDraft:
+    transition_id: str
+    port_id: str
+    upstream_segment_id: str
+    downstream_segment_id: str
+    upstream_dn_mm: int
+    downstream_dn_mm: int
+
+
+@dataclass(frozen=True)
+class DraftingConventionFinding:
     code: str
     element_id: str
     message: str
@@ -414,6 +441,58 @@ def audit_floor_simplification(
             )
         )
     return tuple(findings)
+
+
+def build_floor_graphic_annotations(
+    assembly: WastewaterFloorAssembly,
+) -> tuple[
+    tuple[FloorSlopeAnnotationDraft, ...],
+    tuple[FloorDiameterTransitionDraft, ...],
+]:
+    """Derive slope signs and diameter transitions from the pipe topology."""
+    branch = [assembly.segment(row) for row in assembly.branch_segment_ids]
+    slope_rows: list[FloorSlopeAnnotationDraft] = []
+    if branch:
+        group: list[DraftPipeSegment] = [branch[0]]
+        for segment in branch[1:]:
+            if segment.dn_mm == group[-1].dn_mm:
+                group.append(segment)
+                continue
+            slope_rows.append(
+                FloorSlopeAnnotationDraft(
+                    f"slope_{len(slope_rows) + 1}",
+                    group[0].segment_id,
+                    group[-1].segment_id,
+                    group[-1].dn_mm,
+                    assembly.slope(100 if group[-1].dn_mm >= 100 else 50),
+                )
+            )
+            group = [segment]
+        slope_rows.append(
+            FloorSlopeAnnotationDraft(
+                f"slope_{len(slope_rows) + 1}",
+                group[0].segment_id,
+                group[-1].segment_id,
+                group[-1].dn_mm,
+                assembly.slope(100 if group[-1].dn_mm >= 100 else 50),
+            )
+        )
+
+    transitions = tuple(
+        FloorDiameterTransitionDraft(
+            f"transition_{index}",
+            upstream.end_port_id,
+            upstream.segment_id,
+            downstream.segment_id,
+            upstream.dn_mm,
+            downstream.dn_mm,
+        )
+        for index, (upstream, downstream) in enumerate(
+            zip(branch, branch[1:]), start=1
+        )
+        if upstream.dn_mm != downstream.dn_mm
+    )
+    return tuple(slope_rows), transitions
 
 
 def default_typical_floor_fixtures() -> tuple[FloorFixtureInput, ...]:
@@ -829,6 +908,77 @@ def _tick_svg(
     )
 
 
+def _slope_sign_svg(
+    annotation: FloorSlopeAnnotationDraft,
+    start: DraftPoint,
+    end: DraftPoint,
+    *,
+    xy,
+) -> str:
+    """Render the open angle slope sign above the referenced pipe group."""
+    x1, y1 = xy(start)
+    x2, y2 = xy(end)
+    centre_x = (x1 + x2) / 2
+    baseline_y = min(y1, y2) - 13.0
+    direction = 1.0 if x2 >= x1 else -1.0
+    half_width = 24.0
+    upstream_x = centre_x - direction * half_width
+    downstream_x = centre_x + direction * half_width
+    angle_x = downstream_x - direction * 8.0
+    value = f"{annotation.slope:.3f}".replace(".", ",")
+    return (
+        f'<g data-slope-marker="{escape(annotation.annotation_id)}" '
+        f'data-first-segment="{escape(annotation.first_segment_id)}" '
+        f'data-last-segment="{escape(annotation.last_segment_id)}" '
+        f'data-placement="above" data-slope-value="{value}">'
+        f'<path d="M{upstream_x:.1f},{baseline_y:.1f} '
+        f'L{downstream_x:.1f},{baseline_y:.1f} '
+        f'M{downstream_x:.1f},{baseline_y:.1f} '
+        f'L{angle_x:.1f},{baseline_y-6.0:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="1.3"/>'
+        f'<text x="{centre_x:.1f}" y="{baseline_y-3.0:.1f}" '
+        f'text-anchor="middle" font-family="{FONT}" font-size="9.5">'
+        f'{value}</text></g>'
+    )
+
+
+def _diameter_transition_svg(
+    transition: FloorDiameterTransitionDraft,
+    point: DraftPoint,
+    toward: DraftPoint,
+    *,
+    xy,
+) -> str:
+    """Render an unfilled triangle at a pipe diameter change."""
+    apex_x, apex_y = xy(point)
+    toward_x, toward_y = xy(toward)
+    dx, dy = toward_x - apex_x, toward_y - apex_y
+    length = hypot(dx, dy)
+    if length <= 1e-9:
+        return ""
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+    base_x = apex_x + ux * 11.0
+    base_y = apex_y + uy * 11.0
+    half_width = 5.5
+    triangle_d = (
+        f"M{apex_x:.1f},{apex_y:.1f} "
+        f"L{base_x+px*half_width:.1f},{base_y+py*half_width:.1f} "
+        f"L{base_x-px*half_width:.1f},{base_y-py*half_width:.1f} Z"
+    )
+    return (
+        f'<g data-diameter-transition-group="{escape(transition.transition_id)}">'
+        f'<path data-diameter-transition-mask="{escape(transition.transition_id)}" '
+        f'd="{triangle_d}" fill="white" stroke="white" stroke-width="3"/>'
+        f'<path data-diameter-transition="{escape(transition.transition_id)}" '
+        f'data-transition-port="{escape(transition.port_id)}" '
+        f'data-upstream-dn="{transition.upstream_dn_mm}" '
+        f'data-downstream-dn="{transition.downstream_dn_mm}" '
+        f'd="{triangle_d}" fill="none" stroke="{BLACK}" '
+        f'stroke-width="1.5"/></g>'
+    )
+
+
 def render_typical_floor_assembly_svg(
     assembly: WastewaterFloorAssembly,
     *,
@@ -845,6 +995,11 @@ def render_typical_floor_assembly_svg(
     def xy(value: str | DraftPoint) -> tuple[float, float]:
         point = assembly.port(value).point if isinstance(value, str) else value
         return x + point.x_mm * scale, y + point.y_mm * scale
+
+    slope_annotations, diameter_transitions = build_floor_graphic_annotations(
+        assembly
+    )
+    diameter_transition_ports = {row.port_id for row in diameter_transitions}
 
     body: list[str] = [
         f'<g data-floor-assembly="{escape(assembly.assembly_id)}" '
@@ -985,14 +1140,15 @@ def render_typical_floor_assembly_svg(
                 marker_id=f"{fixture.fixture_id}_wye_upstream",
             )
         )
-        body.append(
-            _tick_svg(
-                joint,
-                assembly.port(downstream_id).point,
-                xy=xy,
-                marker_id=f"{fixture.fixture_id}_wye_downstream",
+        if fixture.junction_port_id not in diameter_transition_ports:
+            body.append(
+                _tick_svg(
+                    joint,
+                    assembly.port(downstream_id).point,
+                    xy=xy,
+                    marker_id=f"{fixture.fixture_id}_wye_downstream",
+                )
             )
-        )
         body.append("</g>")
 
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_elbow_45">')
@@ -1098,26 +1254,37 @@ def render_typical_floor_assembly_svg(
         )
     )
 
-    branch = [assembly.segment(row) for row in assembly.branch_segment_ids]
-    label_groups: list[tuple[int, DraftPipeSegment]] = []
-    for row in branch:
-        if not label_groups or label_groups[-1][0] != row.dn_mm:
-            label_groups.append((row.dn_mm, row))
-    for group_index, (dn, segment) in enumerate(label_groups, start=1):
-        start = assembly.port(segment.start_port_id).point
-        end = assembly.port(segment.end_port_id).point
-        mx, my = xy(DraftPoint((start.x_mm + end.x_mm) / 2, (start.y_mm + end.y_mm) / 2))
-        slope = assembly.slope(100 if dn >= 100 else 50)
-        slope_label = f"{slope:.3f}".replace(".", ",")
-        anchor = "middle"
-        if segment.segment_id == "collector_to_riser":
-            mx = xy(end)[0] - 12.0
-            anchor = "end"
+    for group_index, annotation in enumerate(slope_annotations, start=1):
+        first = assembly.segment(annotation.first_segment_id)
+        last = assembly.segment(annotation.last_segment_id)
+        start = assembly.port(first.start_port_id).point
+        end = assembly.port(last.end_port_id).point
+        mx, my = xy(
+            DraftPoint(
+                (start.x_mm + end.x_mm) / 2,
+                (start.y_mm + end.y_mm) / 2,
+            )
+        )
         body.append(
-            f'<text data-branch-label="DN{dn}" x="{mx:.1f}" y="{my+22:.1f}" '
-            f'text-anchor="{anchor}" font-family="{FONT}" font-size="9.5">'
-            f'{_system_mark(assembly.system)}-М{group_index} DN{dn}; '
-            f'i={slope_label}</text>'
+            f'<text data-branch-label="DN{annotation.dn_mm}" '
+            f'x="{mx:.1f}" y="{my+22:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="9.5">'
+            f'{_system_mark(assembly.system)}-М{group_index} '
+            f'DN{annotation.dn_mm}</text>'
+        )
+        body.append(
+            _slope_sign_svg(annotation, start, end, xy=xy)
+        )
+
+    for transition in diameter_transitions:
+        downstream = assembly.segment(transition.downstream_segment_id)
+        body.append(
+            _diameter_transition_svg(
+                transition,
+                assembly.port(transition.port_id).point,
+                assembly.port(downstream.end_port_id).point,
+                xy=xy,
+            )
         )
 
     riser_join_x, riser_join_y = xy("riser_join")
@@ -1126,8 +1293,10 @@ def render_typical_floor_assembly_svg(
     collector_end = assembly.port(collector_to_riser.end_port_id).point
     flow_x, flow_y = xy(
         DraftPoint(
-            (collector_start.x_mm + collector_end.x_mm) / 2,
-            (collector_start.y_mm + collector_end.y_mm) / 2,
+            collector_start.x_mm
+            + (collector_end.x_mm - collector_start.x_mm) * 0.78,
+            collector_start.y_mm
+            + (collector_end.y_mm - collector_start.y_mm) * 0.78,
         )
     )
     body.extend(
@@ -1165,7 +1334,96 @@ def render_typical_floor_assembly_svg(
             )
         )
     body.append("</g>")
-    return "".join(body)
+    svg = "".join(body)
+    convention_errors = audit_floor_rendering_conventions(assembly, svg)
+    if convention_errors:
+        raise ValueError(
+            "invalid floor graphic conventions: "
+            + "; ".join(row.message for row in convention_errors)
+        )
+    return svg
+
+
+def audit_floor_rendering_conventions(
+    assembly: WastewaterFloorAssembly,
+    svg: str,
+) -> tuple[DraftingConventionFinding, ...]:
+    """Check GOST-style slope and diameter-change annotations in an SVG."""
+    findings: list[DraftingConventionFinding] = []
+    try:
+        root = ElementTree.fromstring(svg)
+    except ElementTree.ParseError as exc:
+        return (
+            DraftingConventionFinding(
+                "invalid_svg",
+                assembly.assembly_id,
+                f"SVG не разобран: {exc}",
+            ),
+        )
+
+    visible_text = " ".join(root.itertext())
+    if "i=" in visible_text or "i =" in visible_text:
+        findings.append(
+            DraftingConventionFinding(
+                "legacy_slope_notation",
+                assembly.assembly_id,
+                "уклон нельзя подписывать под трубой в виде i=; требуется "
+                "знак уклона над трубопроводом",
+            )
+        )
+
+    expected_slopes, expected_transitions = build_floor_graphic_annotations(
+        assembly
+    )
+    slope_elements = {
+        row.get("data-slope-marker"): row
+        for row in root.iter()
+        if row.get("data-slope-marker")
+    }
+    for expected in expected_slopes:
+        element = slope_elements.get(expected.annotation_id)
+        if element is None:
+            findings.append(
+                DraftingConventionFinding(
+                    "missing_slope_sign",
+                    expected.annotation_id,
+                    "отсутствует нормативный знак уклона",
+                )
+            )
+        elif element.get("data-placement") != "above":
+            findings.append(
+                DraftingConventionFinding(
+                    "slope_not_above_pipe",
+                    expected.annotation_id,
+                    "знак уклона должен находиться над трубопроводом",
+                )
+            )
+
+    transition_elements = {
+        row.get("data-diameter-transition"): row
+        for row in root.iter()
+        if row.get("data-diameter-transition")
+    }
+    for expected in expected_transitions:
+        element = transition_elements.get(expected.transition_id)
+        if element is None:
+            findings.append(
+                DraftingConventionFinding(
+                    "missing_diameter_transition",
+                    expected.transition_id,
+                    f"не показан переход DN{expected.upstream_dn_mm} -> "
+                    f"DN{expected.downstream_dn_mm}",
+                )
+            )
+        elif element.get("fill") != "none":
+            findings.append(
+                DraftingConventionFinding(
+                    "filled_diameter_transition",
+                    expected.transition_id,
+                    "знак перехода диаметра должен быть незалитым треугольником",
+                )
+            )
+    return tuple(findings)
 
 
 def build_typical_floor_control_sheet_svg(

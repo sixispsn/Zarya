@@ -10,8 +10,10 @@ from app.pz.wastewater_drafting import DraftPipeSegment
 from app.pz.wastewater_floor_drafting import (
     FloorFixtureInput,
     audit_floor_simplification,
+    audit_floor_rendering_conventions,
     build_typical_floor_assembly,
     build_typical_floor_control_sheet_svg,
+    build_floor_graphic_annotations,
     render_typical_floor_assembly_svg,
 )
 
@@ -119,6 +121,20 @@ def test_floor_branch_enters_riser_through_elbow_and_oblique_tee():
     assert 0 < dx <= 8.0
 
 
+def test_floor_annotations_derive_slopes_and_dn_transition_from_topology():
+    floor = build_typical_floor_assembly()
+    slopes, transitions = build_floor_graphic_annotations(floor)
+
+    assert [(row.dn_mm, row.slope) for row in slopes] == [
+        (50, pytest.approx(0.03)),
+        (100, pytest.approx(0.02)),
+    ]
+    assert len(transitions) == 1
+    transition = transitions[0]
+    assert transition.port_id == floor.fixtures[-1].junction_port_id
+    assert (transition.upstream_dn_mm, transition.downstream_dn_mm) == (50, 100)
+
+
 def test_external_and_integral_traps_are_not_confused():
     floor = build_typical_floor_assembly()
     by_kind = {row.kind: row for row in floor.fixtures}
@@ -192,10 +208,38 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert 'data-floor-segment="К1-Мой1_diagonal"' not in normative
     assert 'data-fitting-boundary="riser_elbow_outlet_45"' in normative
     assert 'data-fitting-label="riser_branch_wye_45"' in normative
+    assert "i=" not in normative
+    assert normative.count('data-slope-marker=') == 2
+    assert 'data-placement="above"' in normative
+    assert 'data-slope-value="0,030"' in normative
+    assert 'data-slope-value="0,020"' in normative
+    assert normative.count('data-diameter-transition=') == 1
+    assert normative.count('data-diameter-transition-mask=') == 1
+    assert 'data-upstream-dn="50"' in normative
+    assert 'data-downstream-dn="100"' in normative
     assert 'data-role="cleanout_access"' in normative
     assert 'data-carries-flow="false"' in normative
     assert 'data-service-path="floor_cleanout_cable"' not in normative
     assert 'data-service-path="floor_cleanout_cable"' in diagnostic
+    assert audit_floor_rendering_conventions(floor, normative) == ()
+
+
+def test_graphic_convention_audit_rejects_legacy_i_and_missing_open_triangle():
+    floor = build_typical_floor_assembly()
+    normative = render_typical_floor_assembly_svg(floor, diagnostics=False)
+    broken = normative.replace(
+        "</g>", '<text>i=0,030</text></g>', 1
+    ).replace(
+        'data-diameter-transition="transition_3"',
+        'data-removed-transition="transition_3"',
+        1,
+    )
+
+    findings = audit_floor_rendering_conventions(floor, broken)
+    assert {row.code for row in findings} == {
+        "legacy_slope_notation",
+        "missing_diameter_transition",
+    }
 
 
 def test_riser_fitting_ticks_and_label_do_not_collide_with_direct_joint():
