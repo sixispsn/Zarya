@@ -727,6 +727,7 @@ def _tick_svg(
     xy,
     offset_mm: float = 5.5,
     half_length_px: float = 5.0,
+    marker_id: str = "",
 ) -> str:
     dx, dy = point.vector_to(toward)
     length = hypot(dx, dy)
@@ -736,8 +737,11 @@ def _tick_svg(
     center = DraftPoint(point.x_mm + ux * offset_mm, point.y_mm + uy * offset_mm)
     cx, cy = xy(center)
     px, py = -uy, ux
+    marker_attr = (
+        f' data-fitting-boundary="{escape(marker_id)}"' if marker_id else ""
+    )
     return (
-        f'<line x1="{cx-px*half_length_px:.1f}" '
+        f'<line{marker_attr} x1="{cx-px*half_length_px:.1f}" '
         f'y1="{cy-py*half_length_px:.1f}" '
         f'x2="{cx+px*half_length_px:.1f}" '
         f'y2="{cy+py*half_length_px:.1f}" stroke="{BLACK}" '
@@ -905,19 +909,54 @@ def render_typical_floor_assembly_svg(
 
     # The floor collector does not terminate in an undefined T intersection.
     # It turns through a 45-degree elbow and enters the branch of an oblique
-    # 45-degree tee on the vertical riser.  Three port-boundary ticks make the
-    # manufactured tee explicit on the principle schematic.
+    # 45-degree tee on the vertical riser.  The elbow keeps boundaries on both
+    # legs.  The upper tee boundary is shifted beyond the direct 45-degree
+    # fitting joint so its horizontal tick cannot cross the diagonal line.
     riser_elbow = assembly.port("riser_branch_elbow").point
     last_joint = assembly.port(assembly.fixtures[-1].junction_port_id).point
     riser_join = assembly.port("riser_join").point
     riser_top = assembly.port("riser_top").point
     riser_bottom = assembly.port("riser_bottom").point
     body.append('<g data-floor-fitting="riser_branch_elbow_45">')
-    body.append(_tick_svg(riser_elbow, last_joint, xy=xy, offset_mm=4.0))
+    body.append(
+        _tick_svg(
+            riser_elbow,
+            last_joint,
+            xy=xy,
+            offset_mm=4.0,
+            marker_id="riser_elbow_inlet",
+        )
+    )
+    body.append(
+        _tick_svg(
+            riser_elbow,
+            riser_join,
+            xy=xy,
+            offset_mm=2.8,
+            half_length_px=4.0,
+            marker_id="riser_elbow_outlet_45",
+        )
+    )
     body.append("</g>")
     body.append('<g data-floor-fitting="riser_branch_wye_45">')
-    body.append(_tick_svg(riser_join, riser_top, xy=xy, offset_mm=5.0))
-    body.append(_tick_svg(riser_join, riser_bottom, xy=xy, offset_mm=5.0))
+    body.append(
+        _tick_svg(
+            riser_join,
+            riser_top,
+            xy=xy,
+            offset_mm=10.0,
+            marker_id="riser_wye_upper",
+        )
+    )
+    body.append(
+        _tick_svg(
+            riser_join,
+            riser_bottom,
+            xy=xy,
+            offset_mm=6.0,
+            marker_id="riser_wye_lower",
+        )
+    )
     body.append("</g>")
 
     cap = assembly.port("cleanout_cap").point
@@ -995,7 +1034,7 @@ def render_typical_floor_assembly_svg(
             f'L{riser_join_x:.1f},{riser_join_y+54:.1f} '
             f'L{riser_join_x+6:.1f},{riser_join_y+42:.1f} Z" fill="{BLACK}"/>',
             f'<text data-fitting-label="riser_branch_wye_45" '
-            f'x="{riser_join_x+13:.1f}" y="{riser_join_y+21:.1f}" '
+            f'x="{riser_join_x+17:.1f}" y="{riser_join_y-14:.1f}" '
             f'font-family="{FONT}" font-size="8.5">Тр. 45°</text>',
         )
     )

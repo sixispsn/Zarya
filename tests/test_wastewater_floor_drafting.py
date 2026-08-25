@@ -1,4 +1,5 @@
 from math import isclose
+from xml.etree import ElementTree
 
 import pytest
 from pypdf import PdfReader
@@ -140,11 +141,61 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert 'data-floor-fitting="riser_branch_wye_45"' in normative
     assert 'data-direct-fitting-joint="riser_elbow_to_wye"' in normative
     assert 'data-floor-segment="riser_branch_diagonal"' not in normative
+    assert 'data-fitting-boundary="riser_elbow_outlet_45"' in normative
     assert 'data-fitting-label="riser_branch_wye_45"' in normative
     assert 'data-role="cleanout_access"' in normative
     assert 'data-carries-flow="false"' in normative
     assert 'data-service-path="floor_cleanout_cable"' not in normative
     assert 'data-service-path="floor_cleanout_cable"' in diagnostic
+
+
+def test_riser_fitting_ticks_and_label_do_not_collide_with_direct_joint():
+    floor = build_typical_floor_assembly()
+    root = ElementTree.fromstring(
+        render_typical_floor_assembly_svg(floor, diagnostics=False)
+    )
+
+    def line_with(attribute: str, value: str):
+        return next(row for row in root.iter("line") if row.get(attribute) == value)
+
+    def endpoints(row):
+        return tuple(float(row.get(key)) for key in ("x1", "y1", "x2", "y2"))
+
+    def intersects(a, b):
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+
+        def orient(px, py, qx, qy, rx, ry):
+            return (qx - px) * (ry - py) - (qy - py) * (rx - px)
+
+        return (
+            orient(ax1, ay1, ax2, ay2, bx1, by1)
+            * orient(ax1, ay1, ax2, ay2, bx2, by2)
+            <= 0
+            and orient(bx1, by1, bx2, by2, ax1, ay1)
+            * orient(bx1, by1, bx2, by2, ax2, ay2)
+            <= 0
+        )
+
+    direct_joint = endpoints(
+        line_with("data-direct-fitting-joint", "riser_elbow_to_wye")
+    )
+    upper_tick = endpoints(
+        line_with("data-fitting-boundary", "riser_wye_upper")
+    )
+    outlet_tick = endpoints(
+        line_with("data-fitting-boundary", "riser_elbow_outlet_45")
+    )
+
+    assert not intersects(upper_tick, direct_joint)
+    assert intersects(outlet_tick, direct_joint)
+
+    label = next(
+        row
+        for row in root.iter("text")
+        if row.get("data-fitting-label") == "riser_branch_wye_45"
+    )
+    assert float(label.get("y")) < direct_joint[3]
 
 
 def test_control_sheet_is_a4_landscape_vector_pdf(tmp_path):
