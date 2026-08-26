@@ -308,7 +308,7 @@ def build_wastewater_stack_assembly(
     floor_assemblies = tuple(
         build_typical_floor_assembly(
             fixtures=fixture_map.get(floor_no, default_typical_floor_fixtures()),
-            assembly_id=f"К1-Этаж-{floor_no:02d}",
+            assembly_id=f"{assembly_id}-Этаж-{floor_no:02d}",
             floor_no=floor_no,
             floor_elevation_m=(floor_no - 1) * floor_height_m,
             riser_id=riser_id,

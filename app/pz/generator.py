@@ -685,6 +685,26 @@ def generate_wastewater_stack_node_pdf_from_project(
         outlet_dn_mm=inputs.basement.outlet_dn_mm,
     )
 
+
+def generate_wastewater_building_node_pdf_from_project(
+    output_path: str,
+    project: Project,
+    *,
+    floor_height_m: float,
+    roof_kind: str,
+) -> str:
+    """Generate the combined registry-backed K1/K2 building schematic."""
+    from app.pz.wastewater_building_drafting import (
+        generate_wastewater_building_pdf_from_project,
+    )
+
+    return generate_wastewater_building_pdf_from_project(
+        output_path,
+        project,
+        floor_height_m=floor_height_m,
+        roof_kind=roof_kind,
+    )
+
 def generate_wastewater_basement_node_pdf(
     output_path: str,
     *,

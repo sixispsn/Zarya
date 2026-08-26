@@ -96,6 +96,75 @@ class WastewaterStackProjectInputs:
         return not self.missing_project_inputs and not self.diagnostics
 
 
+@dataclass(frozen=True)
+class BuildingPipeProjectInput:
+    """Immutable registry edge used by the combined K1/K2 schematic."""
+
+    system: str
+    section_id: str
+    purpose: str
+    dn_mm: int
+    slope_per_mille: float | None
+    from_node: str
+    to_node: str
+    elevation_start_m: float | None
+    elevation_end_m: float | None
+
+
+@dataclass(frozen=True)
+class BuildingK1RiserProjectInput:
+    """One fully resolved K1 riser and its declared revision floors."""
+
+    stack: WastewaterStackProjectInputs
+    revision_floors: tuple[int, ...]
+    lower_elbow_element_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BuildingK2RiserProjectInput:
+    """One K2 riser linked to one declared roof-funnel register row."""
+
+    riser_id: str
+    riser_dn_mm: int
+    funnel_id: str
+    funnel_dn_mm: int
+    funnel_quantity: int
+    funnel_symbol_kind: str
+    funnel_slope_per_mille: float | None
+    elevation_start_m: float | None
+    elevation_end_m: float | None
+
+
+@dataclass(frozen=True)
+class WastewaterBuildingProjectInputs:
+    """Strict project contract for a combined building K1/K2 drawing."""
+
+    floors_above: int
+    basement_floor_elevation_m: float | None
+    k1_risers: tuple[BuildingK1RiserProjectInput, ...]
+    k1_collectors: tuple[BuildingPipeProjectInput, ...]
+    k1_outlet: BuildingPipeProjectInput | None
+    k1_transition_element_ids: tuple[str, ...]
+    k2_risers: tuple[BuildingK2RiserProjectInput, ...]
+    k2_collectors: tuple[BuildingPipeProjectInput, ...]
+    k2_outlet: BuildingPipeProjectInput | None
+    k2_transition_element_ids: tuple[str, ...]
+    diagnostics: tuple[str, ...]
+
+    @property
+    def complete(self) -> bool:
+        return (
+            self.floors_above > 0
+            and self.basement_floor_elevation_m is not None
+            and bool(self.k1_risers)
+            and all(row.stack.complete for row in self.k1_risers)
+            and self.k1_outlet is not None
+            and bool(self.k2_risers)
+            and self.k2_outlet is not None
+            and not self.diagnostics
+        )
+
+
 def _system(value: str) -> str:
     return value.strip().upper()
 
@@ -104,57 +173,84 @@ def _section(value: str) -> str:
     return " ".join(value.strip().casefold().split())
 
 
-def _select_outlet_pipe(project: Project) -> tuple[SewerPipeSpec | None, str, list[str]]:
+def _is_riser_pipe(pipe: SewerPipeSpec) -> bool:
+    purpose = pipe.purpose.strip().casefold()
+    return (
+        "стояк" in purpose
+        and "магистраль" not in purpose
+        and "выпуск" not in purpose
+    )
+
+
+def _select_outlet_pipe(
+    project: Project,
+    *,
+    system: str = "K1",
+) -> tuple[SewerPipeSpec | None, str, list[str]]:
     diagnostics: list[str] = []
-    k1_pipes = [row for row in project.sewage.pipes if _system(row.system) == "K1"]
+    system_key = _system(system)
+    system_mark = {"K1": "К1", "K2": "К2", "K3": "К3"}.get(
+        system_key, system_key
+    )
+    system_pipes = [
+        row for row in project.sewage.pipes if _system(row.system) == system_key
+    ]
     linked_section_ids = {
         _section(row.section_id): row.section_id.strip()
         for row in project.sewage.elements
-        if _system(row.system) == "K1"
+        if _system(row.system) == system_key
         and row.kind == "outlet"
         and row.section_id.strip()
     }
 
     if len(linked_section_ids) > 1:
         diagnostics.append(
-            "В реестре элементов К1 несколько выпусков; для листа стояка "
+            f"В реестре элементов {system_mark} несколько выпусков; для схемы "
             "нужен однозначный участок выпуска."
         )
         return None, "ambiguous", diagnostics
 
     if len(linked_section_ids) == 1:
         section_key, display_id = next(iter(linked_section_ids.items()))
-        matches = [row for row in k1_pipes if _section(row.section_id) == section_key]
+        matches = [
+            row for row in system_pipes if _section(row.section_id) == section_key
+        ]
         if len(matches) == 1:
             return matches[0], "linked", diagnostics
         if len(matches) > 1:
             diagnostics.append(
-                f"Участок выпуска {display_id} повторяется в реестре труб К1."
+                f"Участок выпуска {display_id} повторяется в реестре труб "
+                f"{system_mark}."
             )
             return None, "ambiguous", diagnostics
         diagnostics.append(
             f"Элемент выпуска ссылается на участок {display_id}, которого нет "
-            "в реестре труб К1."
+            f"в реестре труб {system_mark}."
         )
         return None, "missing", diagnostics
 
     purpose_matches = [
-        row for row in k1_pipes if "выпуск" in row.purpose.strip().casefold()
+        row
+        for row in system_pipes
+        if "выпуск" in row.purpose.strip().casefold()
     ]
     if len(purpose_matches) == 1:
         diagnostics.append(
-            "Выпуск выбран по единственной трубе К1 с назначением «выпуск»; "
+            f"Выпуск выбран по единственной трубе {system_mark} с назначением "
+            "«выпуск»; "
             "рекомендуется связать её с элементом типа «выпуск»."
         )
         return purpose_matches[0], "purpose", diagnostics
     if len(purpose_matches) > 1:
         diagnostics.append(
-            "Найдено несколько труб К1 с назначением «выпуск»; выбор не выполнен."
+            f"Найдено несколько труб {system_mark} с назначением «выпуск»; "
+            "выбор не выполнен."
         )
         return None, "ambiguous", diagnostics
 
     diagnostics.append(
-        "Выпуск К1 не найден: добавьте элемент типа «выпуск» и свяжите его "
+        f"Выпуск {system_mark} не найден: добавьте элемент типа «выпуск» и "
+        "свяжите его "
         "с участком трубы."
     )
     return None, "missing", diagnostics
@@ -247,7 +343,7 @@ def resolve_wastewater_stack_project_inputs(
         for row in project.sewage.pipes
         if _system(row.system) == "K1"
         and _section(row.section_id) == riser_key
-        and "стояк" in row.purpose.strip().casefold()
+        and _is_riser_pipe(row)
     ]
     if len(riser_matches) != 1:
         diagnostics.append(
@@ -488,5 +584,356 @@ def resolve_wastewater_stack_project_inputs(
         slope_dn100=resolved_slopes[100],
         basement=basement,
         selection_status=status,
+        diagnostics=tuple(dict.fromkeys(diagnostics)),
+    )
+
+
+def _building_pipe_input(pipe: SewerPipeSpec) -> BuildingPipeProjectInput:
+    return BuildingPipeProjectInput(
+        system=_system(pipe.system),
+        section_id=pipe.section_id.strip(),
+        purpose=pipe.purpose.strip(),
+        dn_mm=int(pipe.nominal_diameter_mm or 0),
+        slope_per_mille=pipe.slope_per_mille,
+        from_node=pipe.from_node.strip(),
+        to_node=pipe.to_node.strip(),
+        elevation_start_m=pipe.elevation_start_m,
+        elevation_end_m=pipe.elevation_end_m,
+    )
+
+
+def _validate_building_pipe(
+    pipe: SewerPipeSpec,
+    *,
+    label: str,
+    require_slope: bool,
+    diagnostics: list[str],
+) -> bool:
+    valid = True
+    if not pipe.section_id.strip():
+        diagnostics.append(f"{label}: не задано обозначение участка.")
+        valid = False
+    if pipe.nominal_diameter_mm is None or pipe.nominal_diameter_mm <= 0:
+        diagnostics.append(f"{label}: не задан положительный номинальный DN.")
+        valid = False
+    if not pipe.from_node.strip() or not pipe.to_node.strip():
+        diagnostics.append(f"{label}: не заданы оба узла топологии.")
+        valid = False
+    if require_slope and (
+        pipe.slope_per_mille is None or pipe.slope_per_mille <= 0
+    ):
+        diagnostics.append(f"{label}: не задан положительный уклон.")
+        valid = False
+    return valid
+
+
+def _validate_outlet_reachability(
+    *,
+    system_mark: str,
+    riser_ids: tuple[str, ...],
+    collectors: tuple[BuildingPipeProjectInput, ...],
+    outlet: BuildingPipeProjectInput | None,
+    diagnostics: list[str],
+) -> None:
+    if outlet is None:
+        return
+    edges = collectors + (outlet,)
+    outgoing: dict[str, list[BuildingPipeProjectInput]] = {}
+    for edge in edges:
+        outgoing.setdefault(_section(edge.from_node), []).append(edge)
+    for riser_id in riser_ids:
+        current = _section(riser_id)
+        visited: set[str] = set()
+        while current != _section(outlet.to_node):
+            if current in visited:
+                diagnostics.append(
+                    f"{system_mark}: цикл на пути от {riser_id} к выпуску."
+                )
+                break
+            visited.add(current)
+            candidates = outgoing.get(current, [])
+            if len(candidates) != 1:
+                diagnostics.append(
+                    f"{system_mark}: от узла {riser_id if not visited else current} "
+                    "до выпуска должен быть один однозначный путь."
+                )
+                break
+            current = _section(candidates[0].to_node)
+
+
+def resolve_wastewater_building_project_inputs(
+    project: Project,
+) -> WastewaterBuildingProjectInputs:
+    """Resolve the combined K1/K2 schematic without geometric defaults.
+
+    The function accepts registry order only as drawing order.  It does not
+    infer room coordinates, duplicate fixtures between risers, add K2 service
+    fittings, or synthesize a collector/outlet from the number of storeys.
+    """
+    diagnostics: list[str] = []
+    floors_above = project.building.floors_above
+    basement_floor = project.sewage.basement_floor_elevation_m
+    if floors_above < 1:
+        diagnostics.append("В проекте не задано положительное число этажей.")
+    if basement_floor is None:
+        diagnostics.append("Не задана относительная отметка чистого пола подвала.")
+
+    k1_riser_pipes = [
+        row
+        for row in project.sewage.pipes
+        if _system(row.system) == "K1"
+        and _is_riser_pipe(row)
+    ]
+    k1_ids = tuple(row.section_id.strip() for row in k1_riser_pipes)
+    if not k1_riser_pipes:
+        diagnostics.append("В реестре труб не найдено ни одного стояка К1.")
+    if any(not row for row in k1_ids) or len(
+        {_section(row) for row in k1_ids}
+    ) != len(k1_ids):
+        diagnostics.append("Стояки К1 должны иметь непустые уникальные обозначения.")
+
+    k1_risers: list[BuildingK1RiserProjectInput] = []
+    for pipe in k1_riser_pipes:
+        stack = resolve_wastewater_stack_project_inputs(
+            project,
+            riser_id=pipe.section_id,
+        )
+        diagnostics.extend(stack.diagnostics)
+        revisions = sorted(
+            {
+                row.floor_from
+                for row in project.sewage.elements
+                if _system(row.system) == "K1"
+                and row.kind == "revision"
+                and _section(row.section_id) == _section(pipe.section_id)
+            }
+        )
+        if not revisions:
+            diagnostics.append(
+                f"Для стояка {pipe.section_id} в реестре не задано ревизий."
+            )
+        elif revisions[0] != 1 or revisions[-1] != floors_above:
+            diagnostics.append(
+                f"Для стояка {pipe.section_id} ревизии должны включать первый "
+                "и верхний этажи."
+            )
+        lower_elbows = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K1"
+            and row.kind == "elbow"
+            and _section(row.section_id) == _section(pipe.section_id)
+            and row.quantity == 2
+            and "45" in row.type_mark
+            and row.element_id.strip()
+        )
+        if len(lower_elbows) != 1:
+            diagnostics.append(
+                f"Для нижнего поворота {pipe.section_id} нужна одна строка "
+                "реестра с двумя отводами 45°."
+            )
+        k1_risers.append(
+            BuildingK1RiserProjectInput(
+                stack=stack,
+                revision_floors=tuple(revisions),
+                lower_elbow_element_ids=lower_elbows,
+            )
+        )
+
+    k1_outlet_pipe, _, k1_outlet_diagnostics = _select_outlet_pipe(
+        project,
+        system="K1",
+    )
+    diagnostics.extend(k1_outlet_diagnostics)
+    k1_outlet: BuildingPipeProjectInput | None = None
+    if k1_outlet_pipe is not None and _validate_building_pipe(
+        k1_outlet_pipe,
+        label=f"Выпуск К1 {k1_outlet_pipe.section_id}",
+        require_slope=True,
+        diagnostics=diagnostics,
+    ):
+        k1_outlet = _building_pipe_input(k1_outlet_pipe)
+    k1_collector_pipes = [
+        row
+        for row in project.sewage.pipes
+        if _system(row.system) == "K1"
+        and row not in k1_riser_pipes
+        and row is not k1_outlet_pipe
+        and "магистраль" in row.purpose.strip().casefold()
+    ]
+    k1_collectors = tuple(
+        _building_pipe_input(row)
+        for row in k1_collector_pipes
+        if _validate_building_pipe(
+            row,
+            label=f"Магистраль К1 {row.section_id}",
+            require_slope=True,
+            diagnostics=diagnostics,
+        )
+    )
+    if len(k1_collectors) != max(0, len(k1_riser_pipes) - 1):
+        diagnostics.append(
+            "Количество подтверждённых магистралей К1 между стояками не "
+            "соответствует линейной схеме здания."
+        )
+
+    k2_riser_pipes = [
+        row
+        for row in project.sewage.pipes
+        if _system(row.system) == "K2"
+        and _is_riser_pipe(row)
+    ]
+    k2_ids = tuple(row.section_id.strip() for row in k2_riser_pipes)
+    if not k2_riser_pipes:
+        diagnostics.append("В реестре труб не найдено ни одного стояка К2.")
+    if any(not row for row in k2_ids) or len(
+        {_section(row) for row in k2_ids}
+    ) != len(k2_ids):
+        diagnostics.append("Стояки К2 должны иметь непустые уникальные обозначения.")
+
+    k2_risers: list[BuildingK2RiserProjectInput] = []
+    for pipe in k2_riser_pipes:
+        if not _validate_building_pipe(
+            pipe,
+            label=f"Стояк К2 {pipe.section_id}",
+            require_slope=False,
+            diagnostics=diagnostics,
+        ):
+            continue
+        funnels = [
+            row
+            for row in project.sewage.elements
+            if _system(row.system) == "K2"
+            and row.kind == "roof_funnel"
+            and _section(row.section_id) == _section(pipe.section_id)
+            and _section(row.connects_to) == _section(pipe.section_id)
+            and _section(row.element_id) == _section(pipe.from_node)
+        ]
+        if len(funnels) != 1:
+            diagnostics.append(
+                f"Стояк {pipe.section_id} должен быть связан ровно с одной "
+                "строкой кровельных воронок К2."
+            )
+            continue
+        funnel = funnels[0]
+        if funnel.dn_mm is None or funnel.dn_mm <= 0 or funnel.quantity <= 0:
+            diagnostics.append(
+                f"Для воронок {funnel.element_id} нужны положительные DN и количество."
+            )
+            continue
+        symbol_kind = (
+            "roof_funnel_heated"
+            if "обогрев" in funnel.name.casefold()
+            else "roof_funnel"
+        )
+        k2_risers.append(
+            BuildingK2RiserProjectInput(
+                riser_id=pipe.section_id.strip(),
+                riser_dn_mm=int(pipe.nominal_diameter_mm or 0),
+                funnel_id=funnel.element_id.strip(),
+                funnel_dn_mm=int(funnel.dn_mm),
+                funnel_quantity=funnel.quantity,
+                funnel_symbol_kind=symbol_kind,
+                funnel_slope_per_mille=funnel.slope_per_mille,
+                elevation_start_m=pipe.elevation_start_m,
+                elevation_end_m=pipe.elevation_end_m,
+            )
+        )
+
+    k2_outlet_pipe, _, k2_outlet_diagnostics = _select_outlet_pipe(
+        project,
+        system="K2",
+    )
+    diagnostics.extend(k2_outlet_diagnostics)
+    k2_outlet: BuildingPipeProjectInput | None = None
+    if k2_outlet_pipe is not None and _validate_building_pipe(
+        k2_outlet_pipe,
+        label=f"Выпуск К2 {k2_outlet_pipe.section_id}",
+        require_slope=True,
+        diagnostics=diagnostics,
+    ):
+        k2_outlet = _building_pipe_input(k2_outlet_pipe)
+    k2_collector_pipes = [
+        row
+        for row in project.sewage.pipes
+        if _system(row.system) == "K2"
+        and row not in k2_riser_pipes
+        and row is not k2_outlet_pipe
+        and "магистраль" in row.purpose.strip().casefold()
+    ]
+    k2_collectors = tuple(
+        _building_pipe_input(row)
+        for row in k2_collector_pipes
+        if _validate_building_pipe(
+            row,
+            label=f"Магистраль К2 {row.section_id}",
+            require_slope=True,
+            diagnostics=diagnostics,
+        )
+    )
+    if len(k2_collectors) != max(0, len(k2_riser_pipes) - 1):
+        diagnostics.append(
+            "Количество подтверждённых магистралей К2 между стояками не "
+            "соответствует линейной схеме здания."
+        )
+
+    k1_transition_ids = tuple(
+        row.element_id.strip()
+        for row in project.sewage.elements
+        if _system(row.system) == "K1"
+        and row.kind == "transition"
+        and row.element_id.strip()
+    )
+    k2_transition_ids = tuple(
+        row.element_id.strip()
+        for row in project.sewage.elements
+        if _system(row.system) == "K2"
+        and row.kind == "transition"
+        and row.element_id.strip()
+    )
+    if (
+        k1_outlet is not None
+        and k1_collectors
+        and k1_collectors[-1].dn_mm != k1_outlet.dn_mm
+        and not k1_transition_ids
+    ):
+        diagnostics.append(
+            "На изменении DN магистрали/выпуска К1 не задан элемент перехода."
+        )
+    if (
+        k2_collectors
+        and k2_risers
+        and k2_risers[0].riser_dn_mm != k2_collectors[0].dn_mm
+        and not k2_transition_ids
+    ):
+        diagnostics.append(
+            "На изменении DN стояка/магистрали К2 не задан элемент перехода."
+        )
+
+    _validate_outlet_reachability(
+        system_mark="К1",
+        riser_ids=k1_ids,
+        collectors=k1_collectors,
+        outlet=k1_outlet,
+        diagnostics=diagnostics,
+    )
+    _validate_outlet_reachability(
+        system_mark="К2",
+        riser_ids=k2_ids,
+        collectors=k2_collectors,
+        outlet=k2_outlet,
+        diagnostics=diagnostics,
+    )
+    return WastewaterBuildingProjectInputs(
+        floors_above=floors_above,
+        basement_floor_elevation_m=basement_floor,
+        k1_risers=tuple(k1_risers),
+        k1_collectors=k1_collectors,
+        k1_outlet=k1_outlet,
+        k1_transition_element_ids=k1_transition_ids,
+        k2_risers=tuple(k2_risers),
+        k2_collectors=k2_collectors,
+        k2_outlet=k2_outlet,
+        k2_transition_element_ids=k2_transition_ids,
         diagnostics=tuple(dict.fromkeys(diagnostics)),
     )
