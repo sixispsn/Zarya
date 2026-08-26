@@ -39,10 +39,28 @@ class WastewaterBasementAssembly:
     first_floor_elevation_m: float
     basement_floor_elevation_m: float | None
     outlet_invert_elevation_m: float | None
+    collector_slope_per_mille: float | None
+    outlet_id: str
     wall_inner_x_mm: float
     wall_outer_x_mm: float
     lower_turn: WastewaterDraftAssembly
     draft: WastewaterDraftAssembly
+
+    @property
+    def missing_project_inputs(self) -> tuple[str, ...]:
+        """Inputs that cannot be inferred safely from the schematic."""
+        missing: list[str] = []
+        if self.basement_floor_elevation_m is None:
+            missing.append("basement_floor_elevation_m")
+        if self.outlet_invert_elevation_m is None:
+            missing.append("outlet_invert_elevation_m")
+        if self.collector_slope_per_mille is None:
+            missing.append("collector_slope_per_mille")
+        return tuple(missing)
+
+    @property
+    def project_inputs_complete(self) -> bool:
+        return not self.missing_project_inputs
 
     def validate(self) -> list[str]:
         errors = list(self.draft.validate())
@@ -52,6 +70,13 @@ class WastewaterBasementAssembly:
             errors.append("K1 basement outlet serving toilets must be at least DN100")
         if self.revision_height_above_floor_m <= 0:
             errors.append("revision height above floor must be positive")
+        if (
+            self.collector_slope_per_mille is not None
+            and self.collector_slope_per_mille <= 0
+        ):
+            errors.append("collector slope must be positive")
+        if not self.outlet_id.strip():
+            errors.append("outlet ID must not be blank")
         if self.wall_outer_x_mm <= self.wall_inner_x_mm:
             errors.append("foundation wall faces are reversed")
         if (
@@ -105,6 +130,8 @@ def build_wastewater_basement_assembly(
     first_floor_elevation_m: float = 0.0,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
+    collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
     revision_height_above_floor_m: float = 1.0,
 ) -> WastewaterBasementAssembly:
     """Build the basement path without manufacturing project elevations."""
@@ -112,6 +139,10 @@ def build_wastewater_basement_assembly(
         raise ValueError("K1 basement outlet serving toilets must be at least DN100")
     if revision_height_above_floor_m <= 0:
         raise ValueError("revision_height_above_floor_m must be positive")
+    if collector_slope_per_mille is not None and collector_slope_per_mille <= 0:
+        raise ValueError("collector_slope_per_mille must be positive")
+    if not outlet_id.strip():
+        raise ValueError("outlet_id must not be blank")
     if (
         basement_floor_elevation_m is not None
         and basement_floor_elevation_m >= first_floor_elevation_m
@@ -236,6 +267,8 @@ def build_wastewater_basement_assembly(
         first_floor_elevation_m=first_floor_elevation_m,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
+        collector_slope_per_mille=collector_slope_per_mille,
+        outlet_id=outlet_id.strip(),
         wall_inner_x_mm=wall_inner_x_mm,
         wall_outer_x_mm=wall_outer_x_mm,
         lower_turn=lower_turn,
@@ -249,6 +282,12 @@ def build_wastewater_basement_assembly(
 
 def _elevation(value: float | None) -> str:
     return "________" if value is None else f"{value:+.3f}".replace(".", ",")
+
+
+def _slope_value(per_mille: float | None) -> str:
+    if per_mille is None:
+        return "уклон не задан"
+    return f"{per_mille / 1000.0:.3f}".replace(".", ",")
 
 
 def build_wastewater_basement_control_svg(
@@ -294,6 +333,17 @@ def build_wastewater_basement_control_svg(
     outlet_x, outlet_y = xy("outlet_end")
     sleeve_in_x, sleeve_in_y = xy("sleeve_in")
     sleeve_out_x, sleeve_out_y = xy("sleeve_out")
+    slope_start_x, slope_start_y = xy("main_out")
+    slope_end_x, slope_end_y = xy("sleeve_in")
+    slope_centre_x = (slope_start_x + slope_end_x) / 2
+    slope_sign_y = min(slope_start_y, slope_end_y) - 38.0
+    slope_apex_x = slope_centre_x + 18.0
+    slope_arm_x = slope_apex_x - 10.0
+    slope_status = (
+        "confirmed"
+        if basement.collector_slope_per_mille is not None
+        else "required"
+    )
     subtitle = sheet_subtitle or (
         f"{basement.riser_id} DN{basement.dn_mm}; "
         "самотечный путь до границы внутренней системы"
@@ -349,6 +399,15 @@ def build_wastewater_basement_control_svg(
         segment_svg("collector_to_sleeve"),
         segment_svg("sleeve_segment"),
         segment_svg("outlet_segment"),
+        f'<g data-basement-slope="collector" data-placement="above" '
+        f'data-slope-status="{slope_status}" data-label-underline="false">'
+        f'<path data-slope-angle="true" d="M{slope_arm_x:.1f},{slope_sign_y-6:.1f} '
+        f'L{slope_apex_x:.1f},{slope_sign_y:.1f} '
+        f'L{slope_arm_x:.1f},{slope_sign_y+6:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="1.3"/>'
+        f'<text x="{slope_arm_x-5:.1f}" y="{slope_sign_y+3.5:.1f}" '
+        f'text-anchor="end" font-family="{FONT}" font-size="12">'
+        f'{escape(_slope_value(basement.collector_slope_per_mille))}</text></g>',
         f'<g data-basement-revision="first-floor">'
         f'{render_ugo("revision", revision_x, revision_y, scale=0.9, rotation=90.0)}'
         '</g>',
@@ -402,7 +461,8 @@ def build_wastewater_basement_control_svg(
             f'<text x="{wall_inner_x-155:.1f}" y="{sleeve_in_y-78:.1f}" text-anchor="end" '
             f'font-family="{FONT}" font-size="14">Гильза в фундаментной стене</text>',
             f'<text x="{outlet_x-12:.1f}" y="{outlet_y-30:.1f}" text-anchor="end" '
-            f'font-family="{FONT}" font-size="17" font-weight="bold">Выпуск К1-1 DN{basement.dn_mm}</text>',
+            f'font-family="{FONT}" font-size="17" font-weight="bold">Выпуск '
+            f'{escape(basement.outlet_id)} DN{basement.dn_mm}</text>',
             f'<text x="{outlet_x-12:.1f}" y="{outlet_y+38:.1f}" text-anchor="end" '
             f'font-family="{FONT}" font-size="14">отм. лотка { _elevation(basement.outlet_invert_elevation_m) }</text>',
             f'<text x="{wall_outer_x+18:.1f}" y="{first_floor_y-18:.1f}" '
@@ -424,7 +484,7 @@ def build_wastewater_basement_control_svg(
             f'<text x="{margin+35}" y="{notes_y+94:.1f}" font-family="{FONT}" font-size="14">'
             '3. Выпуск проходит сквозь гильзу и заканчивается снаружи; колодец и наружная сеть не выдуманы.</text>',
             f'<text x="{margin+35}" y="{notes_y+124:.1f}" font-family="{FONT}" font-size="14">'
-            '4. Пустые отметки должны быть заполнены исходными данными проекта до включения листа в ПД.</text>',
+            '4. Пустые отметки и уклон должны быть заполнены исходными данными проекта до включения листа в ПД.</text>',
             f'<text x="{margin+35}" y="{height-margin-24:.1f}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Контрольный лист генератора; графический язык - приложение В '
             'ГОСТ Р 21.620-2023. Не входит в комплект ПД.</text>',
@@ -442,6 +502,8 @@ def generate_wastewater_basement_control_pdf(
     first_floor_elevation_m: float = 0.0,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
+    collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
 ) -> str:
     """Write the isolated vector A3 basement approval sheet."""
     import cairosvg
@@ -452,6 +514,8 @@ def generate_wastewater_basement_control_pdf(
         first_floor_elevation_m=first_floor_elevation_m,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
+        collector_slope_per_mille=collector_slope_per_mille,
+        outlet_id=outlet_id,
     )
     svg = build_wastewater_basement_control_svg(basement)
     path = Path(output_path)

@@ -603,6 +603,10 @@ def generate_wastewater_stack_node_pdf(
     roof_kind: str = "flat_non_accessible",
     fixtures_by_floor=None,
     max_floors_per_sheet: int = 5,
+    basement_floor_elevation_m: float | None = None,
+    outlet_invert_elevation_m: float | None = None,
+    basement_collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
 ) -> str:
     """Generate the multi-page gravity K1 stack control drawing."""
     from app.pz.wastewater_stack_drafting import (
@@ -618,6 +622,10 @@ def generate_wastewater_stack_node_pdf(
         roof_kind=roof_kind,
         fixtures_by_floor=fixtures_by_floor,
         max_floors_per_sheet=max_floors_per_sheet,
+        basement_floor_elevation_m=basement_floor_elevation_m,
+        outlet_invert_elevation_m=outlet_invert_elevation_m,
+        basement_collector_slope_per_mille=basement_collector_slope_per_mille,
+        outlet_id=outlet_id,
     )
 
 
@@ -629,6 +637,8 @@ def generate_wastewater_basement_node_pdf(
     first_floor_elevation_m: float = 0.0,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
+    collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
 ) -> str:
     """Generate the isolated reusable K1 basement and outlet module."""
     from app.pz.wastewater_basement_drafting import (
@@ -642,6 +652,8 @@ def generate_wastewater_basement_node_pdf(
         first_floor_elevation_m=first_floor_elevation_m,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
+        collector_slope_per_mille=collector_slope_per_mille,
+        outlet_id=outlet_id,
     )
 
 

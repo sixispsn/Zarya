@@ -70,16 +70,32 @@ def test_project_elevations_are_blank_until_explicitly_supplied():
 
     assert basement.basement_floor_elevation_m is None
     assert basement.outlet_invert_elevation_m is None
+    assert basement.collector_slope_per_mille is None
+    assert basement.missing_project_inputs == (
+        "basement_floor_elevation_m",
+        "outlet_invert_elevation_m",
+        "collector_slope_per_mille",
+    )
+    assert not basement.project_inputs_complete
     assert "отм. пола ________" in svg
     assert "отм. лотка ________" in svg
+    assert 'data-slope-status="required"' in svg
+    assert "уклон не задан" in svg
 
     explicit = build_wastewater_basement_assembly(
         basement_floor_elevation_m=-3.2,
         outlet_invert_elevation_m=-1.75,
+        collector_slope_per_mille=20.0,
+        outlet_id="К1-7",
     )
     explicit_svg = build_wastewater_basement_control_svg(explicit)
+    assert explicit.project_inputs_complete
+    assert explicit.missing_project_inputs == ()
     assert "отм. пола -3,200" in explicit_svg
     assert "отм. лотка -1,750" in explicit_svg
+    assert 'data-slope-status="confirmed"' in explicit_svg
+    assert ">0,020</text>" in explicit_svg
+    assert "Выпуск К1-7 DN100" in explicit_svg
 
 
 def test_basement_builder_rejects_false_geometry_and_small_outlet():
@@ -87,6 +103,10 @@ def test_basement_builder_rejects_false_geometry_and_small_outlet():
         build_wastewater_basement_assembly(dn_mm=50)
     with pytest.raises(ValueError, match="below the first floor"):
         build_wastewater_basement_assembly(basement_floor_elevation_m=0.0)
+    with pytest.raises(ValueError, match="must be positive"):
+        build_wastewater_basement_assembly(collector_slope_per_mille=0.0)
+    with pytest.raises(ValueError, match="must not be blank"):
+        build_wastewater_basement_assembly(outlet_id=" ")
 
 
 def test_control_svg_contains_architecture_revision_sleeve_and_outlet():
@@ -100,6 +120,8 @@ def test_control_svg_contains_architecture_revision_sleeve_and_outlet():
         'data-basement-revision="first-floor"',
         'data-wall-sleeve="true"',
         'data-basement-segment="outlet_segment"',
+        'data-basement-slope="collector"',
+        'data-label-underline="false"',
         'data-outlet-direction="true"',
         "Выпуск К1-1 DN100",
         "наружная сеть не выдуманы",

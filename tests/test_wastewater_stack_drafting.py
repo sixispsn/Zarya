@@ -119,7 +119,13 @@ def test_stack_svgs_mark_every_floor_revisions_roof_and_page_continuations():
 
 
 def test_basement_stack_page_is_a1_and_uses_the_accepted_module():
-    stack = build_wastewater_stack_assembly(floors_above=3)
+    stack = build_wastewater_stack_assembly(
+        floors_above=3,
+        basement_floor_elevation_m=-3.2,
+        outlet_invert_elevation_m=-1.75,
+        basement_collector_slope_per_mille=20.0,
+        outlet_id="К1-7",
+    )
     svg = build_wastewater_stack_basement_page_svg(stack)
     root = ElementTree.fromstring(svg)
 
@@ -127,6 +133,11 @@ def test_basement_stack_page_is_a1_and_uses_the_accepted_module():
     assert root.get("height") == "594mm"
     assert "Параметрический стояк К1. Подвал и выпуск" in svg
     assert 'data-draft-assembly="К1-Стояк-01-Подвал-НП"' in svg
+    assert "отм. пола -3,200" in svg
+    assert "отм. лотка -1,750" in svg
+    assert 'data-slope-status="confirmed"' in svg
+    assert ">0,020</text>" in svg
+    assert "Выпуск К1-7 DN100" in svg
 
 
 def test_svg_decimal_comma_formatting_never_corrupts_numeric_coordinates():

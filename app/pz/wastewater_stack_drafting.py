@@ -196,6 +196,10 @@ def build_wastewater_stack_assembly(
     fixtures_by_floor: Mapping[int, Iterable[FloorFixtureInput]] | None = None,
     max_floors_per_sheet: int = 5,
     assembly_id: str = "К1-Стояк-01",
+    basement_floor_elevation_m: float | None = None,
+    outlet_invert_elevation_m: float | None = None,
+    basement_collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
 ) -> WastewaterStackAssembly:
     """Build one gravity riser while preserving every individual floor."""
     if floors_above < 1:
@@ -249,6 +253,10 @@ def build_wastewater_stack_assembly(
         riser_id=riser_id,
         dn_mm=riser_dn_mm,
         first_floor_elevation_m=0.0,
+        basement_floor_elevation_m=basement_floor_elevation_m,
+        outlet_invert_elevation_m=outlet_invert_elevation_m,
+        collector_slope_per_mille=basement_collector_slope_per_mille,
+        outlet_id=outlet_id,
     )
     stack = WastewaterStackAssembly(
         assembly_id=assembly_id,
@@ -556,6 +564,10 @@ def generate_wastewater_stack_control_pdf(
     roof_kind: str = "flat_non_accessible",
     fixtures_by_floor: Mapping[int, Iterable[FloorFixtureInput]] | None = None,
     max_floors_per_sheet: int = 5,
+    basement_floor_elevation_m: float | None = None,
+    outlet_invert_elevation_m: float | None = None,
+    basement_collector_slope_per_mille: float | None = None,
+    outlet_id: str = "К1-1",
 ) -> str:
     """Write all A1 pages to one vector PDF."""
     import cairosvg
@@ -569,6 +581,10 @@ def generate_wastewater_stack_control_pdf(
         roof_kind=roof_kind,
         fixtures_by_floor=fixtures_by_floor,
         max_floors_per_sheet=max_floors_per_sheet,
+        basement_floor_elevation_m=basement_floor_elevation_m,
+        outlet_invert_elevation_m=outlet_invert_elevation_m,
+        basement_collector_slope_per_mille=basement_collector_slope_per_mille,
+        outlet_id=outlet_id,
     )
     writer = PdfWriter()
     for svg in build_wastewater_stack_control_svgs(stack):
