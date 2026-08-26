@@ -37,6 +37,23 @@ def test_floor_module_is_one_connected_branch_with_toilet_last():
     )
 
 
+def test_repeated_fixture_quantity_is_one_symbol_with_a_count_label():
+    fixtures = (
+        FloorFixtureInput("К1-Мой", "sink", "Кухня", 50, 1),
+        FloorFixtureInput("К1-Ван", "bath", "Санузел", 50, 1),
+        FloorFixtureInput("К1-Ум", "washbasin", "Санузел", 50, 2),
+        FloorFixtureInput("К1-Ун", "toilet", "Санузел", 100, 2),
+    )
+    floor = build_typical_floor_assembly(fixtures=fixtures)
+    svg = render_typical_floor_assembly_svg(floor)
+
+    assert len(floor.fixtures) == 4
+    assert floor.fixtures[-1].quantity == 2
+    assert "Унитаз; DN100; 2 шт." in svg
+    assert "Умывальник; DN50; 2 шт." in svg
+    assert "Мойка; DN50; 1 шт." not in svg
+
+
 def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
     floor = build_typical_floor_assembly()
 

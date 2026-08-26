@@ -163,6 +163,11 @@ def test_stack_rejects_force_main_assumptions_and_invalid_inputs():
             floors_above=3,
             fixtures_by_floor={4: ()},
         )
+    with pytest.raises(ValueError, match="from 1 to 5"):
+        build_wastewater_stack_assembly(
+            floors_above=6,
+            max_floors_per_sheet=6,
+        )
 
 
 def test_stack_pdf_is_multipage_a1_landscape(tmp_path):

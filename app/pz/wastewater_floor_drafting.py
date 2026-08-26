@@ -88,6 +88,7 @@ class FloorFixtureInput:
     kind: str
     room_label: str
     dn_mm: int | None = None
+    quantity: int = 1
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,7 @@ class FloorFixtureDraft:
     kind: str
     room_label: str
     dn_mm: int
+    quantity: int
     trap_mode: str
     fixture_outlet_port_id: str
     junction_port_id: str
@@ -280,6 +282,8 @@ class WastewaterFloorAssembly:
             errors.append("floor module contains an unsupported fixture UGO")
 
         for fixture in self.fixtures:
+            if fixture.quantity < 1:
+                errors.append(f"{fixture.fixture_id}: quantity must be positive")
             if fixture.kind == "toilet" and fixture.dn_mm < 100:
                 errors.append(f"{fixture.fixture_id}: toilet connection must be DN100")
             if fixture.dn_mm < 50:
@@ -567,6 +571,8 @@ def build_typical_floor_assembly(
     )
     resolved: list[tuple[FloorFixtureInput, int]] = []
     for row in ordered_inputs:
+        if row.quantity < 1:
+            raise ValueError(f"{row.fixture_id}: fixture quantity must be positive")
         dn = row.dn_mm or _FIXTURE_DEFAULT_DN[row.kind]
         if dn < 50:
             raise ValueError(f"{row.fixture_id}: fixture connection must be at least DN50")
@@ -879,6 +885,7 @@ def build_typical_floor_assembly(
                 kind=source.kind,
                 room_label=source.room_label,
                 dn_mm=dn,
+                quantity=source.quantity,
                 trap_mode=mode,
                 fixture_outlet_port_id=fixture_outlet_id,
                 junction_port_id=junction_id,
@@ -1194,6 +1201,7 @@ def render_typical_floor_assembly_svg(
         body.append("</g>")
 
         fx, fy = outlet
+        quantity_label = f"; {fixture.quantity} шт." if fixture.quantity > 1 else ""
         body.extend(
             (
                 f'<text x="{fx:.1f}" y="{fy-68:.1f}" text-anchor="middle" '
@@ -1201,7 +1209,8 @@ def render_typical_floor_assembly_svg(
                 f'{escape(fixture.fixture_id)}</text>',
                 f'<text x="{fx:.1f}" y="{fy-54:.1f}" text-anchor="middle" '
                 f'font-family="{FONT}" font-size="8.5">'
-                f'{escape(_FIXTURE_LABEL[fixture.kind])}; DN{fixture.dn_mm}</text>',
+                f'{escape(_FIXTURE_LABEL[fixture.kind])}; DN{fixture.dn_mm}'
+                f'{quantity_label}</text>',
             )
         )
 

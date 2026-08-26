@@ -194,6 +194,8 @@ def build_wastewater_stack_assembly(
     riser_dn_mm: int = 100,
     roof_kind: str = "flat_non_accessible",
     fixtures_by_floor: Mapping[int, Iterable[FloorFixtureInput]] | None = None,
+    floor_slope_dn50: float = 0.03,
+    floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
     assembly_id: str = "К1-Стояк-01",
     basement_floor_elevation_m: float | None = None,
@@ -211,8 +213,10 @@ def build_wastewater_stack_assembly(
         raise ValueError("K1 riser serving toilets must be at least DN100")
     if roof_kind not in _ROOF_VENT_HEIGHT_M:
         raise ValueError("unsupported roof_kind")
-    if max_floors_per_sheet < 1:
-        raise ValueError("max_floors_per_sheet must be positive")
+    if not 1 <= max_floors_per_sheet <= 5:
+        raise ValueError("max_floors_per_sheet must be from 1 to 5")
+    if floor_slope_dn50 <= 0 or floor_slope_dn100 <= 0:
+        raise ValueError("floor branch slopes must be positive")
 
     fixture_map = dict(fixtures_by_floor or {})
     unknown_floors = set(fixture_map) - set(range(1, floors_above + 1))
@@ -228,6 +232,8 @@ def build_wastewater_stack_assembly(
             floor_no=floor_no,
             floor_elevation_m=(floor_no - 1) * floor_height_m,
             riser_id=riser_id,
+            slope_dn50=floor_slope_dn50,
+            slope_dn100=floor_slope_dn100,
             junction_spacing_mm=180.0,
         )
         for floor_no in range(1, floors_above + 1)
@@ -565,6 +571,8 @@ def generate_wastewater_stack_control_pdf(
     riser_dn_mm: int = 100,
     roof_kind: str = "flat_non_accessible",
     fixtures_by_floor: Mapping[int, Iterable[FloorFixtureInput]] | None = None,
+    floor_slope_dn50: float = 0.03,
+    floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
@@ -583,6 +591,8 @@ def generate_wastewater_stack_control_pdf(
         riser_dn_mm=riser_dn_mm,
         roof_kind=roof_kind,
         fixtures_by_floor=fixtures_by_floor,
+        floor_slope_dn50=floor_slope_dn50,
+        floor_slope_dn100=floor_slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,

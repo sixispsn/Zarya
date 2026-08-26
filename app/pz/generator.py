@@ -602,6 +602,8 @@ def generate_wastewater_stack_node_pdf(
     riser_dn_mm: int = 100,
     roof_kind: str = "flat_non_accessible",
     fixtures_by_floor=None,
+    floor_slope_dn50: float = 0.03,
+    floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
@@ -622,6 +624,8 @@ def generate_wastewater_stack_node_pdf(
         riser_dn_mm=riser_dn_mm,
         roof_kind=roof_kind,
         fixtures_by_floor=fixtures_by_floor,
+        floor_slope_dn50=floor_slope_dn50,
+        floor_slope_dn100=floor_slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
@@ -635,24 +639,21 @@ def generate_wastewater_stack_node_pdf_from_project(
     output_path: str,
     project: Project,
     *,
-    floors_above: int | None = None,
-    floor_height_m: float = 3.0,
     riser_id: str = "К1-Ст1",
-    riser_dn_mm: int = 100,
-    roof_kind: str = "flat_non_accessible",
-    fixtures_by_floor=None,
+    floor_height_m: float,
+    roof_kind: str,
     max_floors_per_sheet: int = 5,
 ) -> str:
-    """Generate the control stack with basement values resolved from Project.
+    """Generate one control stack entirely from confirmed project registries.
 
-    Missing or ambiguous registry data stop this project-bound export with a
-    diagnostic.  The lower-level control generator can still render blanks.
+    Floor height and roof case remain explicit arguments because the current
+    Project model has no exact per-floor elevations or roof accessibility.
     """
     from app.pz.wastewater_project_inputs import (
-        resolve_wastewater_basement_project_inputs,
+        resolve_wastewater_stack_project_inputs,
     )
 
-    inputs = resolve_wastewater_basement_project_inputs(project)
+    inputs = resolve_wastewater_stack_project_inputs(project, riser_id=riser_id)
     if not inputs.complete:
         detail = "; ".join(inputs.diagnostics) or ", ".join(
             inputs.missing_project_inputs
@@ -662,21 +663,22 @@ def generate_wastewater_stack_node_pdf_from_project(
         )
     return generate_wastewater_stack_node_pdf(
         output_path,
-        floors_above=(
-            project.building.floors_above
-            if floors_above is None else floors_above
-        ),
+        floors_above=inputs.floors_above,
         floor_height_m=floor_height_m,
-        riser_id=riser_id,
-        riser_dn_mm=riser_dn_mm,
+        riser_id=inputs.riser_id,
+        riser_dn_mm=inputs.riser_dn_mm,
         roof_kind=roof_kind,
-        fixtures_by_floor=fixtures_by_floor,
+        fixtures_by_floor=inputs.fixtures_by_floor,
+        floor_slope_dn50=inputs.slope_dn50,
+        floor_slope_dn100=inputs.slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
-        basement_floor_elevation_m=inputs.basement_floor_elevation_m,
-        outlet_invert_elevation_m=inputs.outlet_invert_elevation_m,
-        basement_collector_slope_per_mille=inputs.collector_slope_per_mille,
-        outlet_id=inputs.outlet_id,
-        outlet_dn_mm=inputs.outlet_dn_mm,
+        basement_floor_elevation_m=inputs.basement.basement_floor_elevation_m,
+        outlet_invert_elevation_m=inputs.basement.outlet_invert_elevation_m,
+        basement_collector_slope_per_mille=(
+            inputs.basement.collector_slope_per_mille
+        ),
+        outlet_id=inputs.basement.outlet_id,
+        outlet_dn_mm=inputs.basement.outlet_dn_mm,
     )
 
 def generate_wastewater_basement_node_pdf(
