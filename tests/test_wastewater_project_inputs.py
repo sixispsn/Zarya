@@ -188,12 +188,14 @@ def test_stack_pdf_from_project_uses_registry_floors_fixtures_and_basement(tmp_p
     )
 
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 5
+    assert len(pages) == 2
     floor_text = "".join(page.extract_text() for page in pages[:-1])
     compact_floor_text = "".join(floor_text.split())
-    assert compact_floor_text.count("К1-Мой1") == 16
-    assert compact_floor_text.count("К1-Ун1") == 16
+    assert compact_floor_text.count("К1-Мой1") == 3
+    assert compact_floor_text.count("К1-Ун1") == 3
     assert "Унитаз;DN100;2шт." in compact_floor_text
+    assert "этажи3-15-типовые,непоказаны" in compact_floor_text
+    assert "К1⌀100" in compact_floor_text
     basement_text = pages[-1].extract_text()
     compact_text = "".join(basement_text.split())
     assert "ВыпускК1-Вып1DN150" in compact_text

@@ -1,10 +1,13 @@
 """Multi-storey composer for the accepted parametric K1 floor module.
 
-Every floor is built as its own :class:`WastewaterFloorAssembly`; repeated
-storeys are never collapsed into an ellipsis.  The gravity riser is continued
-through the accepted basement turn and building outlet.  A force main
-downstream of a sewage pumping unit is a different hydraulic regime and is
-intentionally not represented as a calculated part of this assembly.
+Every floor remains a separate :class:`WastewaterFloorAssembly` in the
+semantic model.  When all floor modules are graphically identical, the
+control drawing follows appendix В of GOST R 21.620-2023 and shows the upper
+floor plus floors 2 and 1 with a labelled break for the repeated storeys.
+Any floor difference disables that compression so project data are never
+hidden.  A force main downstream of a sewage pumping unit is a different
+hydraulic regime and is intentionally not represented as a calculated part
+of this assembly.
 """
 from __future__ import annotations
 
@@ -82,6 +85,7 @@ class WastewaterStackAssembly:
     riser_dn_mm: int
     roof_kind: str
     vent_height_above_roof_m: float
+    collapse_typical_floors: bool
     floors: tuple[WastewaterFloorAssembly, ...]
     revisions: tuple[StackRevisionDraft, ...]
     pages: tuple[WastewaterStackPage, ...]
@@ -97,6 +101,14 @@ class WastewaterStackAssembly:
     @property
     def revision_floors(self) -> tuple[int, ...]:
         return tuple(row.floor_no for row in self.revisions)
+
+    @property
+    def displayed_floor_numbers(self) -> tuple[int, ...]:
+        return tuple(floor for page in self.pages for floor in page.floor_numbers)
+
+    @property
+    def collapsed_floor_ranges(self) -> tuple[tuple[int, int], ...]:
+        return _collapsed_floor_ranges(self.displayed_floor_numbers)
 
     @property
     def basement_page_no(self) -> int:
@@ -135,9 +147,17 @@ class WastewaterStackAssembly:
             errors.append("revision floors do not satisfy SP 30 spacing")
         if any(row.height_above_floor_m <= 0 for row in self.revisions):
             errors.append("revision height above floor must be positive")
-        page_floors = [floor for page in self.pages for floor in page.floor_numbers]
-        if page_floors != list(range(self.floors_above, 0, -1)):
-            errors.append("pages must show every floor once, from top to bottom")
+        page_floors = tuple(
+            floor for page in self.pages for floor in page.floor_numbers
+        )
+        expected_page_floors = _display_floor_numbers(
+            self.floors,
+            collapse_typical_floors=self.collapse_typical_floors,
+        )
+        if page_floors != expected_page_floors:
+            errors.append(
+                "pages do not match the safe characteristic-floor selection"
+            )
         if not self.pages or not self.pages[0].show_roof:
             errors.append("the first page must contain the roof and vent extension")
         if any(page.show_roof for page in self.pages[1:]):
@@ -186,6 +206,65 @@ def _revision_floors(floors_above: int) -> tuple[int, ...]:
     return tuple(sorted(floors))
 
 
+def _floor_repeat_signature(floor: WastewaterFloorAssembly) -> tuple[object, ...]:
+    """Return the graphic/topology fields that must match before compression."""
+    return (
+        floor.system,
+        floor.riser_id,
+        tuple(
+            (
+                row.fixture_id,
+                row.kind,
+                row.room_label,
+                row.dn_mm,
+                row.quantity,
+                row.trap_mode,
+            )
+            for row in floor.fixtures
+        ),
+        tuple(
+            (
+                row.start_port_id,
+                row.end_port_id,
+                row.dn_mm,
+                row.role,
+                row.carries_flow,
+            )
+            for row in floor.segments
+        ),
+        tuple((row.kind, row.dn_mm) for row in floor.fittings),
+        floor.slope_by_dn,
+    )
+
+
+def _display_floor_numbers(
+    floors: tuple[WastewaterFloorAssembly, ...],
+    *,
+    collapse_typical_floors: bool,
+) -> tuple[int, ...]:
+    """Select characteristic floors without discarding semantic assemblies."""
+    descending = tuple(sorted((row.floor_no for row in floors), reverse=True))
+    if not collapse_typical_floors or len(descending) < 4:
+        return descending
+    if len({_floor_repeat_signature(row) for row in floors}) != 1:
+        return descending
+    return (descending[0], 2, 1)
+
+
+def _collapsed_floor_ranges(
+    displayed_floor_numbers: tuple[int, ...],
+) -> tuple[tuple[int, int], ...]:
+    """Return inclusive omitted ranges from a descending display sequence."""
+    return tuple(
+        (lower + 1, upper - 1)
+        for upper, lower in zip(
+            displayed_floor_numbers,
+            displayed_floor_numbers[1:],
+        )
+        if upper - lower > 1
+    )
+
+
 def build_wastewater_stack_assembly(
     *,
     floors_above: int,
@@ -197,6 +276,7 @@ def build_wastewater_stack_assembly(
     floor_slope_dn50: float = 0.03,
     floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
+    collapse_typical_floors: bool = True,
     assembly_id: str = "К1-Стояк-01",
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
@@ -204,7 +284,7 @@ def build_wastewater_stack_assembly(
     outlet_id: str = "К1-1",
     outlet_dn_mm: int | None = None,
 ) -> WastewaterStackAssembly:
-    """Build one gravity riser while preserving every individual floor."""
+    """Build one gravity riser while preserving every floor in the model."""
     if floors_above < 1:
         raise ValueError("floors_above must be positive")
     if floor_height_m <= 0:
@@ -238,7 +318,12 @@ def build_wastewater_stack_assembly(
         )
         for floor_no in range(1, floors_above + 1)
     )
-    descending = list(range(floors_above, 0, -1))
+    descending = list(
+        _display_floor_numbers(
+            floor_assemblies,
+            collapse_typical_floors=collapse_typical_floors,
+        )
+    )
     chunks = tuple(
         tuple(descending[index : index + max_floors_per_sheet])
         for index in range(0, len(descending), max_floors_per_sheet)
@@ -276,6 +361,7 @@ def build_wastewater_stack_assembly(
         riser_dn_mm=riser_dn_mm,
         roof_kind=roof_kind,
         vent_height_above_roof_m=_ROOF_VENT_HEIGHT_M[roof_kind],
+        collapse_typical_floors=collapse_typical_floors,
         floors=floor_assemblies,
         revisions=tuple(
             StackRevisionDraft(floor_no=row) for row in _revision_floors(floors_above)
@@ -303,10 +389,82 @@ def _page_floor_origins(
     floor_scale: float,
 ) -> dict[int, float]:
     band = (252.0 - 5.0) * floor_scale
-    return {
-        floor_no: start_y + index * band
-        for index, floor_no in enumerate(page.floor_numbers)
-    }
+    break_gap = 150.0
+    origins: dict[int, float] = {}
+    cursor = start_y
+    previous_floor: int | None = None
+    for floor_no in page.floor_numbers:
+        if previous_floor is not None:
+            cursor += band
+            if previous_floor - floor_no > 1:
+                cursor += break_gap
+        origins[floor_no] = cursor
+        previous_floor = floor_no
+    return origins
+
+
+def _system_mark(system: str) -> str:
+    return {"K1": "К1", "K2": "К2", "K3": "К3"}.get(system, system)
+
+
+def _collapsed_riser_break_svg(
+    stack: WastewaterStackAssembly,
+    *,
+    upper_floor_no: int,
+    lower_floor_no: int,
+    upper_origin_y: float,
+    lower_origin_y: float,
+    origin_x: float,
+    scale: float,
+) -> str:
+    """Draw a labelled break in the riser for an omitted typical-floor range."""
+    upper_floor = stack.floor(upper_floor_no)
+    riser_x = origin_x + upper_floor.port("riser_join").point.x_mm * scale
+    upper_y = upper_origin_y + upper_floor.port("riser_bottom").point.y_mm * scale
+    lower_y = (
+        lower_origin_y
+        + stack.floor(lower_floor_no).port("riser_top").point.y_mm * scale
+    )
+    centre_y = (upper_y + lower_y) / 2
+    label_half_height = 52.0
+    omitted_from = lower_floor_no + 1
+    omitted_to = upper_floor_no - 1
+    pipe_label = f"{_system_mark(stack.system)} ⌀{stack.riser_dn_mm}"
+    omitted_label = (
+        f"{omitted_from} этаж - типовой, не показан"
+        if omitted_from == omitted_to
+        else f"этажи {omitted_from}-{omitted_to} - типовые, не показаны"
+    )
+    return "".join(
+        (
+            f'<g data-collapsed-floor-range="{omitted_from}-{omitted_to}" '
+            f'data-inline-pipe-label="{escape(pipe_label)}">',
+            f'<line x1="{riser_x:.1f}" y1="{upper_y:.1f}" '
+            f'x2="{riser_x:.1f}" y2="{centre_y-label_half_height:.1f}" '
+            f'stroke="{BLACK}" stroke-width="4"/>',
+            f'<line x1="{riser_x:.1f}" y1="{centre_y+label_half_height:.1f}" '
+            f'x2="{riser_x:.1f}" y2="{lower_y:.1f}" '
+            f'stroke="{BLACK}" stroke-width="4"/>',
+            f'<path data-riser-break="upper" '
+            f'd="M{riser_x-11:.1f},{centre_y-label_half_height-8:.1f} '
+            f'L{riser_x+11:.1f},{centre_y-label_half_height+8:.1f}" '
+            f'stroke="{BLACK}" stroke-width="2" fill="none"/>',
+            f'<path data-riser-break="lower" '
+            f'd="M{riser_x-11:.1f},{centre_y+label_half_height-8:.1f} '
+            f'L{riser_x+11:.1f},{centre_y+label_half_height+8:.1f}" '
+            f'stroke="{BLACK}" stroke-width="2" fill="none"/>',
+            f'<rect x="{riser_x-13:.1f}" y="{centre_y-label_half_height:.1f}" '
+            f'width="26" height="{2*label_half_height:.1f}" fill="white"/>',
+            f'<text x="{riser_x:.1f}" y="{centre_y+5:.1f}" '
+            f'text-anchor="middle" font-family="{FONT}" font-size="15" '
+            f'transform="rotate(-90 {riser_x:.1f} {centre_y:.1f})">'
+            f'{escape(pipe_label)}</text>',
+            f'<text x="{riser_x-52:.1f}" y="{centre_y+5:.1f}" '
+            f'text-anchor="end" font-family="{FONT}" font-size="14">'
+            f'{escape(omitted_label)}</text>',
+            '</g>',
+        )
+    )
 
 
 def _revision_svg(
@@ -376,7 +534,7 @@ def build_wastewater_stack_page_svg(
         f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
         f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+38}" y="{margin+48}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Параметрический стояк К1. Каждый этаж показан отдельно</text>',
+        'font-size="30" font-weight="bold">Принципиальная схема К1. Характерные этажи</text>',
         f'<text x="{margin+38}" y="{margin+82}" font-family="{FONT}" '
         f'font-size="16" fill="{GRAY}">{escape(stack.riser_id)} DN{stack.riser_dn_mm}; '
         f'лист {page.page_no} из {total_pages}; режим - самотечный</text>',
@@ -418,6 +576,24 @@ def build_wastewater_stack_page_svg(
                     show_dimension=floor_no == 1,
                 )
             )
+
+    for upper_floor_no, lower_floor_no in zip(
+        page.floor_numbers,
+        page.floor_numbers[1:],
+    ):
+        if upper_floor_no - lower_floor_no <= 1:
+            continue
+        body.append(
+            _collapsed_riser_break_svg(
+                stack,
+                upper_floor_no=upper_floor_no,
+                lower_floor_no=lower_floor_no,
+                upper_origin_y=origins[upper_floor_no],
+                lower_origin_y=origins[lower_floor_no],
+                origin_x=origin_x,
+                scale=floor_scale,
+            )
+        )
 
     top_floor = stack.floor(page.floor_numbers[0])
     riser_x = origin_x + top_floor.port("riser_join").point.x_mm * floor_scale
@@ -488,35 +664,38 @@ def build_wastewater_stack_page_svg(
             f'font-size="15">Стояк: {escape(stack.riser_id)} DN{stack.riser_dn_mm}</text>',
             f'<text x="{panel_x+35}" y="{margin+295}" font-family="{FONT}" '
             f'font-size="15">Кровля: {escape(_ROOF_LABELS[stack.roof_kind])}</text>',
-            f'<text x="{panel_x+35}" y="{margin+340}" font-family="{FONT}" '
+            f'<text x="{panel_x+35}" y="{margin+325}" font-family="{FONT}" '
+            f'font-size="15">Показаны этажи: '
+            f'{", ".join(map(str, stack.displayed_floor_numbers))}</text>',
+            f'<text x="{panel_x+35}" y="{margin+365}" font-family="{FONT}" '
             'font-size="18" font-weight="bold">Ревизии</text>',
-            f'<text x="{panel_x+35}" y="{margin+374}" font-family="{FONT}" '
+            f'<text x="{panel_x+35}" y="{margin+399}" font-family="{FONT}" '
             f'font-size="15">Этажи: {", ".join(map(str, stack.revision_floors))}</text>',
-            f'<text x="{panel_x+35}" y="{margin+405}" font-family="{FONT}" '
-            'font-size="13">Нижний и верхний этажи;</text>',
             f'<text x="{panel_x+35}" y="{margin+430}" font-family="{FONT}" '
-            'font-size="13">при 5 этажах и более - не реже</text>',
+            'font-size="13">Нижний и верхний этажи;</text>',
             f'<text x="{panel_x+35}" y="{margin+455}" font-family="{FONT}" '
+            'font-size="13">при 5 этажах и более - не реже</text>',
+            f'<text x="{panel_x+35}" y="{margin+480}" font-family="{FONT}" '
             'font-size="13">чем через три этажа.</text>',
-            f'<text x="{panel_x+35}" y="{margin+500}" font-family="{FONT}" '
+            f'<text x="{panel_x+35}" y="{margin+525}" font-family="{FONT}" '
             'font-size="18" font-weight="bold">Нормативная трассировка</text>',
-            f'<text x="{panel_x+35}" y="{margin+534}" font-family="{FONT}" '
-            'font-size="13">СП 30.13330.2020:</text>',
             f'<text x="{panel_x+35}" y="{margin+559}" font-family="{FONT}" '
-            'font-size="13">18.18 - вытяжная часть над кровлей;</text>',
+            'font-size="13">СП 30.13330.2020:</text>',
             f'<text x="{panel_x+35}" y="{margin+584}" font-family="{FONT}" '
-            'font-size="13">18.19 - DN вытяжной части;</text>',
+            'font-size="13">18.18 - вытяжная часть над кровлей;</text>',
             f'<text x="{panel_x+35}" y="{margin+609}" font-family="{FONT}" '
+            'font-size="13">18.19 - DN вытяжной части;</text>',
+            f'<text x="{panel_x+35}" y="{margin+634}" font-family="{FONT}" '
             'font-size="13">18.26 - ревизии и прочистки.</text>',
-            f'<line x1="{panel_x+35}" y1="{margin+655}" '
-            f'x2="{width-margin-35}" y2="{margin+655}" stroke="#777"/>',
-            f'<text x="{panel_x+35}" y="{margin+695}" font-family="{FONT}" '
+            f'<line x1="{panel_x+35}" y1="{margin+680}" '
+            f'x2="{width-margin-35}" y2="{margin+680}" stroke="#777"/>',
+            f'<text x="{panel_x+35}" y="{margin+720}" font-family="{FONT}" '
             'font-size="18" font-weight="bold">Граница расчёта</text>',
-            f'<text x="{panel_x+35}" y="{margin+730}" font-family="{FONT}" '
-            'font-size="13">Этот лист: самотечная К1 и вентиляция.</text>',
             f'<text x="{panel_x+35}" y="{margin+755}" font-family="{FONT}" '
-            'font-size="13">Напорная линия после КНС сюда не входит.</text>',
+            'font-size="13">Этот лист: самотечная К1 и вентиляция.</text>',
             f'<text x="{panel_x+35}" y="{margin+780}" font-family="{FONT}" '
+            'font-size="13">Напорная линия после КНС сюда не входит.</text>',
+            f'<text x="{panel_x+35}" y="{margin+805}" font-family="{FONT}" '
             'font-size="13">Q/H КНС без расчёта не подтверждаются.</text>',
             f'<text x="{margin+28}" y="{height-margin-27}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Контрольный лист генератора; '
@@ -547,7 +726,7 @@ def build_wastewater_stack_basement_page_svg(
         stack.basement,
         page_width_mm=841,
         page_height_mm=594,
-        sheet_title="Параметрический стояк К1. Подвал и выпуск",
+        sheet_title="Принципиальная схема К1. Подвал и выпуск",
         sheet_subtitle=(
             f"{stack.riser_id} DN{stack.riser_dn_mm}; лист "
             f"{stack.basement_page_no} из {stack.total_sheet_count}; "
@@ -574,6 +753,7 @@ def generate_wastewater_stack_control_pdf(
     floor_slope_dn50: float = 0.03,
     floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
+    collapse_typical_floors: bool = True,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
     basement_collector_slope_per_mille: float | None = None,
@@ -594,6 +774,7 @@ def generate_wastewater_stack_control_pdf(
         floor_slope_dn50=floor_slope_dn50,
         floor_slope_dn100=floor_slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
+        collapse_typical_floors=collapse_typical_floors,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         basement_collector_slope_per_mille=basement_collector_slope_per_mille,

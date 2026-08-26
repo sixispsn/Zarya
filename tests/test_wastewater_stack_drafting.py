@@ -12,21 +12,31 @@ from app.pz.wastewater_stack_drafting import (
 )
 
 
-def test_stack_builds_every_floor_without_collapsing_repeated_storeys():
+def test_stack_keeps_every_floor_but_draws_characteristic_typical_storeys():
     stack = build_wastewater_stack_assembly(floors_above=9)
 
     assert stack.validate() == []
     assert [row.floor_no for row in stack.floors] == list(range(1, 10))
-    assert [floor for page in stack.pages for floor in page.floor_numbers] == list(
-        range(9, 0, -1)
+    assert stack.displayed_floor_numbers == (9, 2, 1)
+    assert stack.collapsed_floor_ranges == ((3, 8),)
+    assert [page.floor_numbers for page in stack.pages] == [(9, 2, 1)]
+    assert stack.flow_regime == "gravity"
+    assert stack.basement_page_no == 2
+    assert stack.total_sheet_count == 2
+
+
+def test_explicit_full_mode_draws_every_floor():
+    stack = build_wastewater_stack_assembly(
+        floors_above=9,
+        collapse_typical_floors=False,
     )
+
+    assert stack.displayed_floor_numbers == tuple(range(9, 0, -1))
+    assert stack.collapsed_floor_ranges == ()
     assert [page.floor_numbers for page in stack.pages] == [
         (9, 8, 7, 6, 5),
         (4, 3, 2, 1),
     ]
-    assert stack.flow_regime == "gravity"
-    assert stack.basement_page_no == 3
-    assert stack.total_sheet_count == 3
 
 
 def test_floor_one_connects_semantically_to_the_basement_inlet():
@@ -95,26 +105,30 @@ def test_custom_floor_inputs_remain_local_to_the_selected_floor():
         "К1-Ун-3",
     ]
     assert len(stack.floor(2).fixtures) == 4
+    assert stack.displayed_floor_numbers == (4, 3, 2, 1)
+    assert stack.collapsed_floor_ranges == ()
 
 
 def test_stack_svgs_mark_every_floor_revisions_roof_and_page_continuations():
     stack = build_wastewater_stack_assembly(floors_above=9)
     pages = build_wastewater_stack_control_svgs(stack)
 
-    assert len(pages) == 3
+    assert len(pages) == 2
     combined = "".join(pages)
-    assert combined.count('data-floor-assembly="') == 9
-    for floor in range(1, 10):
+    assert combined.count('data-floor-assembly="') == 3
+    for floor in (9, 2, 1):
         assert combined.count(f'data-stack-floor-label="{floor}"') == 1
-    for floor in stack.revision_floors:
+    for floor in (9, 1):
         assert combined.count(f'data-stack-revision-floor="{floor}"') == 1
+    assert 'data-collapsed-floor-range="3-8"' in pages[0]
+    assert 'data-inline-pipe-label="К1 ⌀100"' in pages[0]
+    assert "этажи 3-8 - типовые, не показаны" in pages[0]
     assert pages[0].count('data-roof="flat_non_accessible"') == 1
     assert 'продолжение на листе 2' in pages[0]
-    assert 'продолжение с листа 1' in pages[1]
-    assert 'продолжение на листе 3' in pages[1]
-    assert 'data-stack-basement-continuation="from-sheet-2"' in pages[2]
-    assert 'data-basement-segment="outlet_segment"' in pages[2]
-    assert "Выпуск К1-1 DN100" in pages[2]
+    assert 'data-stack-basement-continuation="from-sheet-1"' in pages[1]
+    assert 'data-basement-segment="outlet_segment"' in pages[1]
+    assert 'data-inline-pipe-label="К1 ⌀100"' in pages[1]
+    assert "Выпуск К1-1 DN100" in pages[1]
     assert "Напорная линия после КНС сюда не входит" in combined
 
 
@@ -131,7 +145,7 @@ def test_basement_stack_page_is_a1_and_uses_the_accepted_module():
 
     assert root.get("width") == "841mm"
     assert root.get("height") == "594mm"
-    assert "Параметрический стояк К1. Подвал и выпуск" in svg
+    assert "Принципиальная схема К1. Подвал и выпуск" in svg
     assert 'data-draft-assembly="К1-Стояк-01-Подвал-НП"' in svg
     assert "отм. пола -3,200" in svg
     assert "отм. лотка -1,750" in svg
@@ -178,7 +192,7 @@ def test_stack_pdf_is_multipage_a1_landscape(tmp_path):
         max_floors_per_sheet=5,
     )
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 3
+    assert len(pages) == 2
     for page in pages:
         width_mm = float(page.mediabox.width) * 25.4 / 72
         height_mm = float(page.mediabox.height) * 25.4 / 72

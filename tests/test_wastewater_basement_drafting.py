@@ -126,6 +126,7 @@ def test_outlet_dn_increase_is_explicit_and_drawn_as_unfilled_transition():
         "diameter_transition"
     )
     assert 'data-basement-diameter-transition="true"' in svg
+    assert 'data-inline-pipe-label="К1 ⌀150"' in svg
     assert 'data-upstream-dn="100"' in svg
     assert 'data-downstream-dn="150"' in svg
     assert "Переход DN100x150" in svg

@@ -605,6 +605,7 @@ def generate_wastewater_stack_node_pdf(
     floor_slope_dn50: float = 0.03,
     floor_slope_dn100: float = 0.02,
     max_floors_per_sheet: int = 5,
+    collapse_typical_floors: bool = True,
     basement_floor_elevation_m: float | None = None,
     outlet_invert_elevation_m: float | None = None,
     basement_collector_slope_per_mille: float | None = None,
@@ -627,6 +628,7 @@ def generate_wastewater_stack_node_pdf(
         floor_slope_dn50=floor_slope_dn50,
         floor_slope_dn100=floor_slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
+        collapse_typical_floors=collapse_typical_floors,
         basement_floor_elevation_m=basement_floor_elevation_m,
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         basement_collector_slope_per_mille=basement_collector_slope_per_mille,
@@ -643,6 +645,7 @@ def generate_wastewater_stack_node_pdf_from_project(
     floor_height_m: float,
     roof_kind: str,
     max_floors_per_sheet: int = 5,
+    collapse_typical_floors: bool = True,
 ) -> str:
     """Generate one control stack entirely from confirmed project registries.
 
@@ -672,6 +675,7 @@ def generate_wastewater_stack_node_pdf_from_project(
         floor_slope_dn50=inputs.slope_dn50,
         floor_slope_dn100=inputs.slope_dn100,
         max_floors_per_sheet=max_floors_per_sheet,
+        collapse_typical_floors=collapse_typical_floors,
         basement_floor_elevation_m=inputs.basement.basement_floor_elevation_m,
         outlet_invert_elevation_m=inputs.basement.outlet_invert_elevation_m,
         basement_collector_slope_per_mille=(

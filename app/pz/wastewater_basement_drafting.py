@@ -378,6 +378,10 @@ def build_wastewater_basement_control_svg(
     slope_start_x, slope_start_y = xy("main_out")
     slope_end_x, slope_end_y = xy("sleeve_in")
     transition_x, transition_y = xy("collector_mid")
+    outlet_label_x = (sleeve_out_x + outlet_x) / 2
+    inline_pipe_label = (
+        f'{basement.system.replace("K", "К")} ⌀{basement.outlet_dn_mm}'
+    )
     slope_centre_x = (slope_start_x + slope_end_x) / 2
     slope_sign_y = min(slope_start_y, slope_end_y) - 38.0
     slope_apex_x = slope_centre_x + 18.0
@@ -442,6 +446,13 @@ def build_wastewater_basement_control_svg(
         segment_svg("collector_to_sleeve"),
         segment_svg("sleeve_segment"),
         segment_svg("outlet_segment"),
+        f'<g data-inline-pipe-label="{escape(inline_pipe_label)}" '
+        'data-pipe-role="building-outlet">'
+        f'<rect x="{outlet_label_x-48:.1f}" y="{outlet_y-13:.1f}" '
+        'width="96" height="22" fill="white"/>'
+        f'<text x="{outlet_label_x:.1f}" y="{outlet_y+4:.1f}" '
+        f'text-anchor="middle" font-family="{FONT}" font-size="14">'
+        f'{escape(inline_pipe_label)}</text></g>',
         f'<g data-basement-slope="collector" data-placement="above" '
         f'data-slope-status="{slope_status}" data-label-underline="false">'
         f'<path data-slope-angle="true" d="M{slope_arm_x:.1f},{slope_sign_y-6:.1f} '
