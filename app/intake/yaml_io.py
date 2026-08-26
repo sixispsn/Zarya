@@ -569,6 +569,10 @@ def load_request(text: str) -> IOS2Request:
             if sewage_s.get("transient_duration_seconds") is not None else None
         ),
         sewage_outlets_count=int(sewage_s.get("outlets_count", 0)),
+        wastewater_basement_floor_elevation_m=(
+            float(sewage_s["basement_floor_elevation_m"])
+            if sewage_s.get("basement_floor_elevation_m") is not None else None
+        ),
         wastewater_design_assignment_ref=str(
             sewage_s.get("design_assignment_ref", "")
         ),
@@ -946,6 +950,9 @@ def dump_request(req: IOS2Request) -> str:
             "survey_ref": req.wastewater_survey_ref,
             "service_life_years": req.wastewater_service_life_years,
             "overhaul_period_years": req.wastewater_overhaul_period_years,
+            "basement_floor_elevation_m": (
+                req.wastewater_basement_floor_elevation_m
+            ),
             "disposal_mode": req.wastewater_disposal_mode,
             "tu_org": req.wastewater_tu_org,
             "tu_number": req.wastewater_tu_number,

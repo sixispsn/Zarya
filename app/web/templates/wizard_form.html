@@ -122,6 +122,7 @@
     <div class="row">
       <label>q₀s прибора, л/с<input name="sewage_max_fixture_lps" value="{{ prefill.sewage_max_fixture_lps if prefill else 1.6 }}"></label>
       <label>Выпусков К1, шт.<input name="sewage_outlets_count" value="{{ prefill.sewage_outlets_count if prefill else 0 }}"></label>
+      <label><span class="field-caption">Отметка чистого пола подвала, м <span class="required-lamp" data-completeness-for="wastewater_basement_floor_elevation_m" title="Нужна для принципиальной схемы К1"></span></span><input name="wastewater_basement_floor_elevation_m" value="{{ prefill.wastewater_basement_floor_elevation_m if prefill and prefill.wastewater_basement_floor_elevation_m is not none else '' }}" data-wastewater-completeness="basement-floor" placeholder="Например, -3,200"></label>
     </div>
     <details class="field-help"><summary>Исходные данные ПЗ по ГОСТ Р 21.620-2023</summary>
       <div class="row">
@@ -170,8 +171,8 @@
       <td><label class="check-label compact-check"><input type="checkbox" name="sewage_riser{{ i + 1 }}_toilet"{% if not r or r.has_toilet %} checked{% endif %}>есть</label></td>
       <td><input name="sewage_riser{{ i + 1 }}_height" value="{{ r.working_height_m if r and r.working_height_m is not none else '' }}"></td>
     </tr>{% endfor %}</table></div>
-    <p class="technical-label">Трубы К1/К2/К3 · только фактически посчитанные длины</p>
-    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Абс. нач., м</th><th>Абс. кон., м</th><th>Изоляция</th></tr>
+    <p class="technical-label">Трубы К1/К2/К3 · только фактически посчитанные длины <span class="required-lamp" data-wastewater-outlet-registry-lamp title="Для схемы К1 нужен один однозначный выпуск с уклоном и отметкой лотка"></span></p>
+    <div class="table-wrap"><table class="grid"><tr><th>Система</th><th>Участок</th><th>Назначение</th><th>Помещение</th><th>От узла</th><th>К узлу</th><th>Материал</th><th>Стандарт</th><th>DN</th><th>Øнар, мм</th><th>стенка, мм</th><th>L, м</th><th>i, ‰</th><th>h/d</th><th>Отм. нач., м</th><th>Отм. кон., м</th><th>Абс. нач., м</th><th>Абс. кон., м</th><th>Изоляция</th></tr>
     {% for i in range(12) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}
     <tr>
       <td><select name="sewer_pipe{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
@@ -182,13 +183,14 @@
       <td><input name="sewer_pipe{{ i + 1 }}_to" value="{{ r.to_node if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_material" value="{{ r.material if r else '' }}" placeholder="ПП"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_standard" value="{{ r.standard if r else '' }}" placeholder="ГОСТ / ТУ"></td>
+      <td><span class="required-lamp" data-outlet-completeness-lamp="dn" title="Номинальный диаметр выпуска нужен для схемы К1" hidden></span><input name="sewer_pipe{{ i + 1 }}_nominal" value="{{ r.nominal_diameter_mm if r and r.nominal_diameter_mm is not none else '' }}" data-outlet-completeness-value="dn"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_outer" value="{{ r.outer_diameter_mm if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_wall" value="{{ r.wall_thickness_mm if r else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_length" value="{{ r.length_m if r else '' }}"></td>
-      <td><input name="sewer_pipe{{ i + 1 }}_slope" value="{{ r.slope_per_mille if r and r.slope_per_mille is not none else '' }}"></td>
+      <td><span class="required-lamp" data-outlet-completeness-lamp="slope" title="Уклон выпуска нужен для схемы К1" hidden></span><input name="sewer_pipe{{ i + 1 }}_slope" value="{{ r.slope_per_mille if r and r.slope_per_mille is not none else '' }}" data-outlet-completeness-value="slope"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_fill" value="{{ r.fill_ratio if r and r.fill_ratio is not none else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_elev_start" value="{{ r.elevation_start_m if r and r.elevation_start_m is not none else '' }}"></td>
-      <td><input name="sewer_pipe{{ i + 1 }}_elev_end" value="{{ r.elevation_end_m if r and r.elevation_end_m is not none else '' }}"></td>
+      <td><span class="required-lamp" data-outlet-completeness-lamp="invert" title="Отметка лотка выпуска нужна для схемы К1" hidden></span><input name="sewer_pipe{{ i + 1 }}_elev_end" value="{{ r.elevation_end_m if r and r.elevation_end_m is not none else '' }}" data-outlet-completeness-value="invert"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_abs_elev_start" value="{{ r.absolute_elevation_start_m if r and r.absolute_elevation_start_m is not none else '' }}"></td>
       <td><input name="sewer_pipe{{ i + 1 }}_abs_elev_end" value="{{ r.absolute_elevation_end_m if r and r.absolute_elevation_end_m is not none else '' }}"></td>
       <td><label class="check-label compact-check"><input type="checkbox" name="sewer_pipe{{ i + 1 }}_insulated"{% if r and r.insulated %} checked{% endif %}>да</label></td>

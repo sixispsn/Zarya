@@ -89,6 +89,8 @@ storm:
 sewage:
   max_fixture_lps: 1.6
   outlets_count: 1
+  # Явная учебная отметка чистого пола подвала; генератор её не вычисляет.
+  basement_floor_elevation_m: -3.200
   design_assignment_ref: Учебное задание на проектирование, раздел 6
   survey_ref: Учебный отчёт инженерных изысканий ИГИ-2026, том 2
   service_life_years: 50

@@ -706,6 +706,9 @@ class SewageDesign:
     transient_duration_seconds: Optional[float] = None
     transient_assessment: Optional[object] = None
     outlets_count: int = 0
+    # Явная относительная отметка чистого пола подвала. Она не выводится из
+    # этажности или отметок труб: это самостоятельная проектная привязка.
+    basement_floor_elevation_m: Optional[float] = None
     result: Optional[object] = None
     hydraulic_assessment: Optional[object] = None
     # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.

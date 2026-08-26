@@ -35,6 +35,7 @@ class WastewaterBasementAssembly:
     system: str
     riser_id: str
     dn_mm: int
+    outlet_dn_mm: int
     revision_height_above_floor_m: float
     first_floor_elevation_m: float
     basement_floor_elevation_m: float | None
@@ -56,6 +57,8 @@ class WastewaterBasementAssembly:
             missing.append("outlet_invert_elevation_m")
         if self.collector_slope_per_mille is None:
             missing.append("collector_slope_per_mille")
+        if not self.outlet_id.strip():
+            missing.append("outlet_id")
         return tuple(missing)
 
     @property
@@ -68,6 +71,8 @@ class WastewaterBasementAssembly:
             errors.append("basement control module currently supports K1 only")
         if self.dn_mm < 100:
             errors.append("K1 basement outlet serving toilets must be at least DN100")
+        if self.outlet_dn_mm < self.dn_mm:
+            errors.append("outlet DN must not decrease in the direction of flow")
         if self.revision_height_above_floor_m <= 0:
             errors.append("revision height above floor must be positive")
         if (
@@ -75,8 +80,6 @@ class WastewaterBasementAssembly:
             and self.collector_slope_per_mille <= 0
         ):
             errors.append("collector slope must be positive")
-        if not self.outlet_id.strip():
-            errors.append("outlet ID must not be blank")
         if self.wall_outer_x_mm <= self.wall_inner_x_mm:
             errors.append("foundation wall faces are reversed")
         if (
@@ -132,6 +135,7 @@ def build_wastewater_basement_assembly(
     outlet_invert_elevation_m: float | None = None,
     collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
     revision_height_above_floor_m: float = 1.0,
 ) -> WastewaterBasementAssembly:
     """Build the basement path without manufacturing project elevations."""
@@ -141,8 +145,9 @@ def build_wastewater_basement_assembly(
         raise ValueError("revision_height_above_floor_m must be positive")
     if collector_slope_per_mille is not None and collector_slope_per_mille <= 0:
         raise ValueError("collector_slope_per_mille must be positive")
-    if not outlet_id.strip():
-        raise ValueError("outlet_id must not be blank")
+    resolved_outlet_dn_mm = dn_mm if outlet_dn_mm is None else outlet_dn_mm
+    if resolved_outlet_dn_mm < dn_mm:
+        raise ValueError("outlet DN must not decrease in the direction of flow")
     if (
         basement_floor_elevation_m is not None
         and basement_floor_elevation_m >= first_floor_elevation_m
@@ -192,23 +197,36 @@ def build_wastewater_basement_assembly(
             "collector_to_sleeve",
             "collector_mid",
             "sleeve_in",
-            dn_mm,
+            resolved_outlet_dn_mm,
             "basement_collector",
         ),
         DraftPipeSegment(
             "sleeve_segment",
             "sleeve_in",
             "sleeve_out",
-            dn_mm,
+            resolved_outlet_dn_mm,
             "wall_sleeve_crossing",
         ),
         DraftPipeSegment(
             "outlet_segment",
             "sleeve_out",
             "outlet_end",
-            dn_mm,
+            resolved_outlet_dn_mm,
             "building_outlet",
         ),
+    )
+    transition_fittings = (
+        (
+            DraftFitting(
+                "outlet_diameter_transition",
+                "diameter_transition",
+                DraftPoint(185.0, 80.0),
+                resolved_outlet_dn_mm,
+                ("collector_main", "collector_to_sleeve"),
+            ),
+        )
+        if resolved_outlet_dn_mm != dn_mm
+        else ()
     )
     fittings = (
         DraftFitting(
@@ -219,6 +237,7 @@ def build_wastewater_basement_assembly(
             ("riser_above_revision", "riser_to_lower_turn"),
         ),
         *lower_turn.fittings,
+        *transition_fittings,
     )
     flow_segment_ids = (
         "riser_above_revision",
@@ -263,6 +282,7 @@ def build_wastewater_basement_assembly(
         system="K1",
         riser_id=riser_id,
         dn_mm=dn_mm,
+        outlet_dn_mm=resolved_outlet_dn_mm,
         revision_height_above_floor_m=revision_height_above_floor_m,
         first_floor_elevation_m=first_floor_elevation_m,
         basement_floor_elevation_m=basement_floor_elevation_m,
@@ -288,6 +308,28 @@ def _slope_value(per_mille: float | None) -> str:
     if per_mille is None:
         return "уклон не задан"
     return f"{per_mille / 1000.0:.3f}".replace(".", ",")
+
+
+def _outlet_id(value: str) -> str:
+    return value if value else "________"
+
+
+def _diameter_transition_svg(
+    x: float,
+    y: float,
+    *,
+    upstream_dn_mm: int,
+    downstream_dn_mm: int,
+) -> str:
+    """Unfilled triangle at the exact point where the diameter increases."""
+    return (
+        f'<g data-basement-diameter-transition="true" '
+        f'data-upstream-dn="{upstream_dn_mm}" '
+        f'data-downstream-dn="{downstream_dn_mm}">'
+        f'<path d="M{x:.1f},{y:.1f} L{x+18:.1f},{y-9:.1f} '
+        f'L{x+18:.1f},{y+9:.1f} Z" fill="white" stroke="{BLACK}" '
+        'stroke-width="1.5"/></g>'
+    )
 
 
 def build_wastewater_basement_control_svg(
@@ -335,6 +377,7 @@ def build_wastewater_basement_control_svg(
     sleeve_out_x, sleeve_out_y = xy("sleeve_out")
     slope_start_x, slope_start_y = xy("main_out")
     slope_end_x, slope_end_y = xy("sleeve_in")
+    transition_x, transition_y = xy("collector_mid")
     slope_centre_x = (slope_start_x + slope_end_x) / 2
     slope_sign_y = min(slope_start_y, slope_end_y) - 38.0
     slope_apex_x = slope_centre_x + 18.0
@@ -415,6 +458,21 @@ def build_wastewater_basement_control_svg(
         f'font-family="{FONT}" font-size="15" font-weight="bold">Ревизия DN{basement.dn_mm}</text>',
     ]
 
+    if basement.outlet_dn_mm != basement.dn_mm:
+        body.extend(
+            (
+                _diameter_transition_svg(
+                    transition_x,
+                    transition_y,
+                    upstream_dn_mm=basement.dn_mm,
+                    downstream_dn_mm=basement.outlet_dn_mm,
+                ),
+                f'<text x="{transition_x:.1f}" y="{transition_y+38:.1f}" '
+                f'font-family="{FONT}" font-size="13">Переход '
+                f'DN{basement.dn_mm}x{basement.outlet_dn_mm}</text>',
+            )
+        )
+
     if continuation_from_sheet is not None:
         connection_x, connection_y = xy("first_floor_connection")
         body.extend(
@@ -462,7 +520,7 @@ def build_wastewater_basement_control_svg(
             f'font-family="{FONT}" font-size="14">Гильза в фундаментной стене</text>',
             f'<text x="{outlet_x-12:.1f}" y="{outlet_y-30:.1f}" text-anchor="end" '
             f'font-family="{FONT}" font-size="17" font-weight="bold">Выпуск '
-            f'{escape(basement.outlet_id)} DN{basement.dn_mm}</text>',
+            f'{escape(_outlet_id(basement.outlet_id))} DN{basement.outlet_dn_mm}</text>',
             f'<text x="{outlet_x-12:.1f}" y="{outlet_y+38:.1f}" text-anchor="end" '
             f'font-family="{FONT}" font-size="14">отм. лотка { _elevation(basement.outlet_invert_elevation_m) }</text>',
             f'<text x="{wall_outer_x+18:.1f}" y="{first_floor_y-18:.1f}" '
@@ -504,6 +562,7 @@ def generate_wastewater_basement_control_pdf(
     outlet_invert_elevation_m: float | None = None,
     collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
 ) -> str:
     """Write the isolated vector A3 basement approval sheet."""
     import cairosvg
@@ -516,6 +575,7 @@ def generate_wastewater_basement_control_pdf(
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         collector_slope_per_mille=collector_slope_per_mille,
         outlet_id=outlet_id,
+        outlet_dn_mm=outlet_dn_mm,
     )
     svg = build_wastewater_basement_control_svg(basement)
     path = Path(output_path)

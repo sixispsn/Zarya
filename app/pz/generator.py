@@ -607,6 +607,7 @@ def generate_wastewater_stack_node_pdf(
     outlet_invert_elevation_m: float | None = None,
     basement_collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
 ) -> str:
     """Generate the multi-page gravity K1 stack control drawing."""
     from app.pz.wastewater_stack_drafting import (
@@ -626,8 +627,57 @@ def generate_wastewater_stack_node_pdf(
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         basement_collector_slope_per_mille=basement_collector_slope_per_mille,
         outlet_id=outlet_id,
+        outlet_dn_mm=outlet_dn_mm,
     )
 
+
+def generate_wastewater_stack_node_pdf_from_project(
+    output_path: str,
+    project: Project,
+    *,
+    floors_above: int | None = None,
+    floor_height_m: float = 3.0,
+    riser_id: str = "К1-Ст1",
+    riser_dn_mm: int = 100,
+    roof_kind: str = "flat_non_accessible",
+    fixtures_by_floor=None,
+    max_floors_per_sheet: int = 5,
+) -> str:
+    """Generate the control stack with basement values resolved from Project.
+
+    Missing or ambiguous registry data stop this project-bound export with a
+    diagnostic.  The lower-level control generator can still render blanks.
+    """
+    from app.pz.wastewater_project_inputs import (
+        resolve_wastewater_basement_project_inputs,
+    )
+
+    inputs = resolve_wastewater_basement_project_inputs(project)
+    if not inputs.complete:
+        detail = "; ".join(inputs.diagnostics) or ", ".join(
+            inputs.missing_project_inputs
+        )
+        raise ValueError(
+            "project data are insufficient for the K1 basement sheet: " + detail
+        )
+    return generate_wastewater_stack_node_pdf(
+        output_path,
+        floors_above=(
+            project.building.floors_above
+            if floors_above is None else floors_above
+        ),
+        floor_height_m=floor_height_m,
+        riser_id=riser_id,
+        riser_dn_mm=riser_dn_mm,
+        roof_kind=roof_kind,
+        fixtures_by_floor=fixtures_by_floor,
+        max_floors_per_sheet=max_floors_per_sheet,
+        basement_floor_elevation_m=inputs.basement_floor_elevation_m,
+        outlet_invert_elevation_m=inputs.outlet_invert_elevation_m,
+        basement_collector_slope_per_mille=inputs.collector_slope_per_mille,
+        outlet_id=inputs.outlet_id,
+        outlet_dn_mm=inputs.outlet_dn_mm,
+    )
 
 def generate_wastewater_basement_node_pdf(
     output_path: str,
@@ -639,6 +689,7 @@ def generate_wastewater_basement_node_pdf(
     outlet_invert_elevation_m: float | None = None,
     collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
 ) -> str:
     """Generate the isolated reusable K1 basement and outlet module."""
     from app.pz.wastewater_basement_drafting import (
@@ -654,6 +705,7 @@ def generate_wastewater_basement_node_pdf(
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         collector_slope_per_mille=collector_slope_per_mille,
         outlet_id=outlet_id,
+        outlet_dn_mm=outlet_dn_mm,
     )
 
 

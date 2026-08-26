@@ -313,6 +313,10 @@ async def wizard_design(request: Request):
                 outer_diameter_mm=ff(f"sewer_pipe{i}_outer"),
                 wall_thickness_mm=ff(f"sewer_pipe{i}_wall"),
                 length_m=ff(f"sewer_pipe{i}_length"),
+                nominal_diameter_mm=(
+                    fi(f"sewer_pipe{i}_nominal")
+                    if fv(f"sewer_pipe{i}_nominal") else None
+                ),
                 slope_per_mille=(
                     ff(f"sewer_pipe{i}_slope")
                     if fv(f"sewer_pipe{i}_slope") else None
@@ -545,6 +549,10 @@ async def wizard_design(request: Request):
             if fv("sewer_transient_duration_seconds") else None
         ),
         sewage_outlets_count=fi("sewage_outlets_count"),
+        wastewater_basement_floor_elevation_m=(
+            ff("wastewater_basement_floor_elevation_m")
+            if fv("wastewater_basement_floor_elevation_m") else None
+        ),
         wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
         wastewater_survey_ref=fv("wastewater_survey_ref"),
         wastewater_service_life_years=(

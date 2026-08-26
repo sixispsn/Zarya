@@ -105,8 +105,34 @@ def test_basement_builder_rejects_false_geometry_and_small_outlet():
         build_wastewater_basement_assembly(basement_floor_elevation_m=0.0)
     with pytest.raises(ValueError, match="must be positive"):
         build_wastewater_basement_assembly(collector_slope_per_mille=0.0)
-    with pytest.raises(ValueError, match="must not be blank"):
-        build_wastewater_basement_assembly(outlet_id=" ")
+
+
+def test_blank_outlet_mark_stays_visible_as_missing_project_data():
+    basement = build_wastewater_basement_assembly(outlet_id=" ")
+    svg = build_wastewater_basement_control_svg(basement)
+
+    assert "outlet_id" in basement.missing_project_inputs
+    assert "Выпуск ________ DN100" in svg
+
+
+def test_outlet_dn_increase_is_explicit_and_drawn_as_unfilled_transition():
+    basement = build_wastewater_basement_assembly(outlet_dn_mm=150)
+    svg = build_wastewater_basement_control_svg(basement)
+
+    assert basement.draft.segment("collector_main").dn_mm == 100
+    assert basement.draft.segment("collector_to_sleeve").dn_mm == 150
+    assert basement.draft.segment("outlet_segment").dn_mm == 150
+    assert basement.draft.fitting("outlet_diameter_transition").kind == (
+        "diameter_transition"
+    )
+    assert 'data-basement-diameter-transition="true"' in svg
+    assert 'data-upstream-dn="100"' in svg
+    assert 'data-downstream-dn="150"' in svg
+    assert "Переход DN100x150" in svg
+    assert "Выпуск К1-1 DN150" in svg
+
+    with pytest.raises(ValueError, match="must not decrease"):
+        build_wastewater_basement_assembly(dn_mm=150, outlet_dn_mm=100)
 
 
 def test_control_svg_contains_architecture_revision_sleeve_and_outlet():

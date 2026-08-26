@@ -439,6 +439,7 @@ class IOS2Request:
     sewer_transient_step_seconds: Optional[float] = None
     sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
+    wastewater_basement_floor_elevation_m: Optional[float] = None
     wastewater_design_assignment_ref: str = ""
     wastewater_survey_ref: str = ""
     wastewater_service_life_years: Optional[int] = None

@@ -64,6 +64,7 @@ def test_builder_maps_sp54_118_253_inputs_without_changing_calculations():
         storm_roof_area_m2=1200,
         catering_type="raw",
         catering_seats=200,
+        wastewater_basement_floor_elevation_m=-3.2,
         consumers=[
             ConsumerGroupRequest("residential_full_bath", 500, "Жильё"),
             ConsumerGroupRequest("office", 100, "Офисы"),
@@ -78,6 +79,7 @@ def test_builder_maps_sp54_118_253_inputs_without_changing_calculations():
     assert project.storm.system_kind == "internal"
     assert project.storm.roof_area_m2 == 1200
     assert project.grease_trap.required
+    assert project.sewage.basement_floor_elevation_m == -3.2
 
 
 def test_riser_at_unknown_node():

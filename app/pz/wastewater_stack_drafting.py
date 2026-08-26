@@ -200,6 +200,7 @@ def build_wastewater_stack_assembly(
     outlet_invert_elevation_m: float | None = None,
     basement_collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
 ) -> WastewaterStackAssembly:
     """Build one gravity riser while preserving every individual floor."""
     if floors_above < 1:
@@ -257,6 +258,7 @@ def build_wastewater_stack_assembly(
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         collector_slope_per_mille=basement_collector_slope_per_mille,
         outlet_id=outlet_id,
+        outlet_dn_mm=outlet_dn_mm,
     )
     stack = WastewaterStackAssembly(
         assembly_id=assembly_id,
@@ -568,6 +570,7 @@ def generate_wastewater_stack_control_pdf(
     outlet_invert_elevation_m: float | None = None,
     basement_collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
+    outlet_dn_mm: int | None = None,
 ) -> str:
     """Write all A1 pages to one vector PDF."""
     import cairosvg
@@ -585,6 +588,7 @@ def generate_wastewater_stack_control_pdf(
         outlet_invert_elevation_m=outlet_invert_elevation_m,
         basement_collector_slope_per_mille=basement_collector_slope_per_mille,
         outlet_id=outlet_id,
+        outlet_dn_mm=outlet_dn_mm,
     )
     writer = PdfWriter()
     for svg in build_wastewater_stack_control_svgs(stack):

@@ -157,6 +157,131 @@ document.addEventListener("DOMContentLoaded", () => {
   totalAreaControl?.addEventListener("input", syncRequiredFields);
   syncRequiredFields();
 
+  // Готовность принципиальной схемы К1 не блокирует формирование ПЗ. Если
+  // проектные отметки или уклон отсутствуют, генератор оставляет их пустыми.
+  const basementFloorControl = document.querySelector(
+    '[name="wastewater_basement_floor_elevation_m"]'
+  );
+  const basementFloorLamp = document.querySelector(
+    '[data-completeness-for="wastewater_basement_floor_elevation_m"]'
+  );
+  const outletRegistryLamp = document.querySelector(
+    "[data-wastewater-outlet-registry-lamp]"
+  );
+  const finiteNumber = (control) => {
+    if (!control || !control.value.trim()) return false;
+    return Number.isFinite(
+      Number.parseFloat(control.value.trim().replace(",", "."))
+    );
+  };
+  const positiveFiniteNumber = (control) =>
+    finiteNumber(control)
+    && Number.parseFloat(control.value.trim().replace(",", ".")) > 0;
+  const setCompletenessLamp = (lamp, complete, title) => {
+    if (!lamp) return;
+    lamp.hidden = false;
+    lamp.classList.toggle("is-complete", complete);
+    lamp.title = title;
+  };
+  const syncWastewaterSchemeCompleteness = () => {
+    const floorComplete = finiteNumber(basementFloorControl)
+      && Number.parseFloat(
+        basementFloorControl.value.trim().replace(",", ".")
+      ) < 0;
+    setCompletenessLamp(
+      basementFloorLamp,
+      floorComplete,
+      floorComplete
+        ? "Отметка пола подвала задана"
+        : "Нужна относительная отметка чистого пола подвала ниже ±0,000"
+    );
+
+    const pipeRows = [...document.querySelectorAll(
+      'input[name^="sewer_pipe"][name$="_id"]'
+    )].map((idControl) => ({
+      row: idControl.closest("tr"),
+      idControl,
+    })).filter(({ row }) => row);
+    const linkedSections = new Set();
+    document.querySelectorAll(
+      'select[name^="sewer_element"][name$="_kind"]'
+    ).forEach((kindControl) => {
+      if (kindControl.value !== "outlet") return;
+      const prefix = kindControl.name.slice(0, -"_kind".length);
+      const sectionControl = document.querySelector(`[name="${prefix}_section"]`);
+      const section = sectionControl?.value.trim().toLocaleLowerCase("ru-RU");
+      if (section) linkedSections.add(section);
+    });
+
+    let outletRows = [];
+    if (linkedSections.size) {
+      outletRows = pipeRows.filter(({ idControl }) =>
+        linkedSections.has(idControl.value.trim().toLocaleLowerCase("ru-RU"))
+      );
+    } else {
+      outletRows = pipeRows.filter(({ row }) => {
+        const purpose = row.querySelector('[name$="_purpose"]')?.value || "";
+        return purpose.toLocaleLowerCase("ru-RU").includes("выпуск");
+      });
+    }
+
+    pipeRows.forEach(({ row }) => {
+      row.querySelectorAll("[data-outlet-completeness-lamp]").forEach((lamp) => {
+        lamp.hidden = true;
+        lamp.classList.remove("is-complete");
+      });
+    });
+
+    const unambiguous = linkedSections.size <= 1 && outletRows.length === 1;
+    let outletComplete = false;
+    outletRows.forEach(({ row }) => {
+      const slope = row.querySelector('[data-outlet-completeness-value="slope"]');
+      const invert = row.querySelector('[data-outlet-completeness-value="invert"]');
+      const dn = row.querySelector('[data-outlet-completeness-value="dn"]');
+      const slopeComplete = unambiguous && positiveFiniteNumber(slope);
+      const invertComplete = unambiguous && finiteNumber(invert);
+      const dnComplete = unambiguous && positiveFiniteNumber(dn);
+      setCompletenessLamp(
+        row.querySelector('[data-outlet-completeness-lamp="dn"]'),
+        dnComplete,
+        dnComplete ? "Номинальный диаметр выпуска задан" : "Задайте DN выпуска"
+      );
+      setCompletenessLamp(
+        row.querySelector('[data-outlet-completeness-lamp="slope"]'),
+        slopeComplete,
+        slopeComplete ? "Уклон выпуска задан" : "Задайте положительный уклон выпуска"
+      );
+      setCompletenessLamp(
+        row.querySelector('[data-outlet-completeness-lamp="invert"]'),
+        invertComplete,
+        invertComplete ? "Отметка лотка выпуска задана" : "Задайте относительную отметку конца выпуска"
+      );
+      outletComplete = dnComplete && slopeComplete && invertComplete;
+    });
+
+    const registryComplete = unambiguous && outletComplete;
+    const registryTitle = registryComplete
+      ? "Выпуск К1 однозначно определён; уклон и отметка лотка заданы"
+      : linkedSections.size > 1 || outletRows.length > 1
+        ? "Несколько выпусков К1: свяжите лист стояка с одним участком"
+        : outletRows.length === 0
+          ? "Добавьте элемент типа «выпуск» с участком или единственную трубу с назначением «выпуск»"
+          : "Для выпуска К1 заполните DN, уклон и относительную отметку конца";
+    setCompletenessLamp(outletRegistryLamp, registryComplete, registryTitle);
+    outletRegistryLamp?.closest(".technical-label")?.setAttribute(
+      "data-wastewater-outlet-status",
+      registryComplete ? "complete" : "missing"
+    );
+  };
+  document.querySelectorAll(
+    '[name="wastewater_basement_floor_elevation_m"], '
+    + '[name^="sewer_pipe"], [name^="sewer_element"]'
+  ).forEach((control) => {
+    control.addEventListener("input", syncWastewaterSchemeCompleteness);
+    control.addEventListener("change", syncWastewaterSchemeCompleteness);
+  });
+  syncWastewaterSchemeCompleteness();
+
   const links = [...document.querySelectorAll(".stepnav a[href^='#']")];
   const sections = links
     .map((link) => document.querySelector(link.getAttribute("href")))

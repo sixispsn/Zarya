@@ -100,6 +100,7 @@ def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
     assert 'name="sewer_manhole1_level1" value="146.6"' in html
     assert 'name="sewer_internal_node1_id" value="К1-Ст1"' in html
     assert 'name="sewer_internal_node2_upstream" value="К1-М1"' in html
+    assert 'name="wastewater_basement_floor_elevation_m" value="-3.2"' in html
 
 
 def test_form_template_has_collapsed_wastewater_element_registry():
@@ -114,6 +115,12 @@ def test_form_template_has_collapsed_wastewater_element_registry():
     assert 'name="sewer_safety8_fixture"' in html
     assert 'name="sewer_manhole3_id"' in html
     assert 'name="sewer_internal_node4_id"' in html
+    assert 'name="wastewater_basement_floor_elevation_m"' in html
+    assert 'data-wastewater-outlet-registry-lamp' in html
+    assert 'data-outlet-completeness-lamp="slope"' in html
+    assert 'data-outlet-completeness-lamp="invert"' in html
+    assert 'data-outlet-completeness-lamp="dn"' in html
+    assert 'name="sewer_pipe1_nominal"' in html
     assert html.count('<details class="input-section"') == 5
     assert html.count('<details class="input-section" open') == 1
     assert 'data-design-form novalidate' in html

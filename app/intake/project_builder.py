@@ -286,6 +286,9 @@ def build_project(req: IOS2Request) -> Project:
     p.sewage.transient_step_seconds = req.sewer_transient_step_seconds
     p.sewage.transient_duration_seconds = req.sewer_transient_duration_seconds
     p.sewage.outlets_count = req.sewage_outlets_count
+    p.sewage.basement_floor_elevation_m = (
+        req.wastewater_basement_floor_elevation_m
+    )
     p.sewage.design_assignment_ref = req.wastewater_design_assignment_ref
     p.sewage.survey_ref = req.wastewater_survey_ref
     p.sewage.service_life_years = req.wastewater_service_life_years
