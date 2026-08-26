@@ -22,7 +22,7 @@ from app.pz.wastewater_basement_drafting import (
     build_wastewater_basement_assembly,
     build_wastewater_basement_control_svg,
 )
-from app.pz.wastewater_drafting import BLACK, FONT, GRAY
+from app.pz.wastewater_drafting import BLACK, FONT, GRAY, render_inline_pipe_label
 from app.pz.wastewater_floor_drafting import (
     FloorFixtureInput,
     WastewaterFloorAssembly,
@@ -616,6 +616,15 @@ def build_wastewater_stack_page_svg(
                 f'<line data-vent-extension="true" x1="{riser_x:.1f}" '
                 f'y1="{top_y:.1f}" x2="{riser_x:.1f}" y2="{vent_top_y:.1f}" '
                 f'stroke="{BLACK}" stroke-width="4"/>',
+                render_inline_pipe_label(
+                    line_id="roof-vent-riser",
+                    label=f"{_system_mark(stack.system)} ⌀{stack.riser_dn_mm}",
+                    start=(riser_x, top_y),
+                    end=(riser_x, vent_top_y),
+                    position=0.52,
+                    font_size=8.5,
+                    padding=2.0,
+                ),
                 f'<line x1="{riser_x-8:.1f}" y1="{vent_top_y:.1f}" '
                 f'x2="{riser_x+8:.1f}" y2="{vent_top_y:.1f}" '
                 f'stroke="{BLACK}" stroke-width="2"/>',

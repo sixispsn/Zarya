@@ -15,12 +15,62 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
-from math import acos, degrees, hypot
+from math import acos, atan2, degrees, hypot
 from pathlib import Path
 BLACK = "#000"
 GRAY = "#555"
 SERVICE = "#7650b8"
 FONT = "osifont"
+
+
+def render_inline_pipe_label(
+    *,
+    line_id: str,
+    label: str,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    position: float = 0.5,
+    font_size: float = 10.0,
+    padding: float = 4.0,
+) -> str:
+    """Mask a pipe centreline and place its system/DN mark in the gap.
+
+    The text follows the pipe axis and stays readable from the bottom or the
+    right.  This is the reusable graphic primitive used for GOST-style marks
+    such as ``К1 ⌀100`` and ``К2 ⌀150``.
+    """
+    if not 0.0 < position < 1.0:
+        raise ValueError("inline pipe label position must be between 0 and 1")
+    x1, y1 = start
+    x2, y2 = end
+    if hypot(x2 - x1, y2 - y1) <= 1e-9:
+        raise ValueError("inline pipe label needs a non-zero pipe line")
+    centre_x = x1 + (x2 - x1) * position
+    centre_y = y1 + (y2 - y1) * position
+    angle = degrees(atan2(y2 - y1, x2 - x1))
+    if angle > 90.0:
+        angle -= 180.0
+    elif angle <= -90.0:
+        angle += 180.0
+    text_width = max(font_size * 2.6, len(label) * font_size * 0.56)
+    mask_width = text_width + 2.0 * padding
+    mask_height = font_size * 1.55
+    return "".join(
+        (
+            f'<g data-inline-pipe-label="{escape(label)}" '
+            f'data-pipe-line-id="{escape(line_id)}" '
+            f'transform="translate({centre_x:.1f} {centre_y:.1f}) '
+            f'rotate({angle:.2f})">',
+            f'<rect data-pipe-label-mask="{escape(line_id)}" '
+            f'x="{-mask_width/2:.1f}" y="{-mask_height/2:.1f}" '
+            f'width="{mask_width:.1f}" height="{mask_height:.1f}" '
+            'fill="white"/>',
+            f'<text x="0" y="{font_size*0.34:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="{font_size:g}">'
+            f'{escape(label)}</text>',
+            '</g>',
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -320,6 +370,7 @@ def render_lower_turn_assembly_svg(
     assembly: WastewaterDraftAssembly,
     *,
     diagnostics: bool = False,
+    pipe_labels: bool = True,
     x: float = 0.0,
     y: float = 0.0,
     scale: float = 5.0,
@@ -409,10 +460,33 @@ def render_lower_turn_assembly_svg(
 
     system = _system_mark(assembly.system)
     dn = assembly.segment("main").dn_mm
+    riser_start = xy("riser_in")
+    riser_end = xy("elbow_45")
+    main_start = xy("wye_45")
+    main_end = xy("main_out")
     body.extend((
-        f'<text x="{x-16:.1f}" y="{y+80:.1f}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="16" font-weight="bold">'
-        f'Ст.{system} DN{dn}</text>',
+        *(
+            (
+                render_inline_pipe_label(
+                    line_id=f"{assembly.assembly_id}:riser",
+                    label=f"{system} ⌀{dn}",
+                    start=riser_start,
+                    end=riser_end,
+                    position=0.42,
+                    font_size=11.5,
+                ),
+                render_inline_pipe_label(
+                    line_id=f"{assembly.assembly_id}:main",
+                    label=f"{system} ⌀{dn}",
+                    start=main_start,
+                    end=main_end,
+                    position=0.72,
+                    font_size=11.5,
+                ),
+            )
+            if pipe_labels
+            else ()
+        ),
         f'<text x="{(elbow_x+wye_x)/2:.1f}" y="{wye_y+72:.1f}" text-anchor="middle" '
         f'font-family="{FONT}" font-size="14">Отвод 45° DN{dn}</text>',
         f'<text x="{wye_x+45:.1f}" y="{wye_y-38:.1f}" text-anchor="start" '

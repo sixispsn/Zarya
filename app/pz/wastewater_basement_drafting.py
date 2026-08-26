@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+from xml.etree import ElementTree
 
 from app.pz.wastewater_drafting import (
     BLACK,
@@ -22,6 +23,7 @@ from app.pz.wastewater_drafting import (
     DraftServicePath,
     WastewaterDraftAssembly,
     build_lower_turn_cleanout_assembly,
+    render_inline_pipe_label,
     render_lower_turn_assembly_svg,
 )
 from app.pz.wastewater_ugo import render_ugo
@@ -332,6 +334,43 @@ def _diameter_transition_svg(
     )
 
 
+def audit_basement_pipe_labels(
+    basement: WastewaterBasementAssembly,
+    svg: str,
+) -> tuple[str, ...]:
+    """Require one system/DN mark on every independent basement pipe line."""
+    try:
+        root = ElementTree.fromstring(svg)
+    except ElementTree.ParseError as exc:
+        return (f"invalid basement SVG: {exc}",)
+    system_mark = basement.system.replace("K", "К")
+    expected = {
+        "basement-riser": f"{system_mark} ⌀{basement.dn_mm}",
+        "basement-collector-before-transition": (
+            f"{system_mark} ⌀{basement.dn_mm}"
+        ),
+        "basement-collector-after-transition": (
+            f"{system_mark} ⌀{basement.outlet_dn_mm}"
+        ),
+        "building-outlet": f"{system_mark} ⌀{basement.outlet_dn_mm}",
+    }
+    actual = {
+        row.get("data-pipe-line-id"): row.get("data-inline-pipe-label")
+        for row in root.iter()
+        if row.get("data-pipe-line-id")
+    }
+    errors: list[str] = []
+    for line_id, expected_label in expected.items():
+        actual_label = actual.get(line_id)
+        if actual_label is None:
+            errors.append(f"{line_id}: missing pipe label {expected_label}")
+        elif actual_label != expected_label:
+            errors.append(
+                f"{line_id}: expected {expected_label}, got {actual_label}"
+            )
+    return tuple(errors)
+
+
 def build_wastewater_basement_control_svg(
     basement: WastewaterBasementAssembly,
     *,
@@ -378,10 +417,7 @@ def build_wastewater_basement_control_svg(
     slope_start_x, slope_start_y = xy("main_out")
     slope_end_x, slope_end_y = xy("sleeve_in")
     transition_x, transition_y = xy("collector_mid")
-    outlet_label_x = (sleeve_out_x + outlet_x) / 2
-    inline_pipe_label = (
-        f'{basement.system.replace("K", "К")} ⌀{basement.outlet_dn_mm}'
-    )
+    system_mark = basement.system.replace("K", "К")
     slope_centre_x = (slope_start_x + slope_end_x) / 2
     slope_sign_y = min(slope_start_y, slope_end_y) - 38.0
     slope_apex_x = slope_centre_x + 18.0
@@ -438,6 +474,7 @@ def build_wastewater_basement_control_svg(
         render_lower_turn_assembly_svg(
             basement.lower_turn,
             diagnostics=False,
+            pipe_labels=False,
             x=origin_x,
             y=origin_y,
             scale=scale,
@@ -446,13 +483,38 @@ def build_wastewater_basement_control_svg(
         segment_svg("collector_to_sleeve"),
         segment_svg("sleeve_segment"),
         segment_svg("outlet_segment"),
-        f'<g data-inline-pipe-label="{escape(inline_pipe_label)}" '
-        'data-pipe-role="building-outlet">'
-        f'<rect x="{outlet_label_x-48:.1f}" y="{outlet_y-13:.1f}" '
-        'width="96" height="22" fill="white"/>'
-        f'<text x="{outlet_label_x:.1f}" y="{outlet_y+4:.1f}" '
-        f'text-anchor="middle" font-family="{FONT}" font-size="14">'
-        f'{escape(inline_pipe_label)}</text></g>',
+        render_inline_pipe_label(
+            line_id="basement-riser",
+            label=f"{system_mark} ⌀{basement.dn_mm}",
+            start=xy("revision_point"),
+            end=xy("riser_in"),
+            position=0.52,
+            font_size=12.5,
+        ),
+        render_inline_pipe_label(
+            line_id="basement-collector-before-transition",
+            label=f"{system_mark} ⌀{basement.dn_mm}",
+            start=xy("main_out"),
+            end=xy("collector_mid"),
+            position=0.58,
+            font_size=12.5,
+        ),
+        render_inline_pipe_label(
+            line_id="basement-collector-after-transition",
+            label=f"{system_mark} ⌀{basement.outlet_dn_mm}",
+            start=xy("collector_mid"),
+            end=xy("sleeve_in"),
+            position=0.52,
+            font_size=12.5,
+        ),
+        render_inline_pipe_label(
+            line_id="building-outlet",
+            label=f"{system_mark} ⌀{basement.outlet_dn_mm}",
+            start=(sleeve_out_x, sleeve_out_y),
+            end=(outlet_x, outlet_y),
+            position=0.54,
+            font_size=14.0,
+        ),
         f'<g data-basement-slope="collector" data-placement="above" '
         f'data-slope-status="{slope_status}" data-label-underline="false">'
         f'<path data-slope-angle="true" d="M{slope_arm_x:.1f},{slope_sign_y-6:.1f} '
@@ -560,7 +622,13 @@ def build_wastewater_basement_control_svg(
             '</svg>',
         )
     )
-    return "".join(body)
+    svg = "".join(body)
+    label_errors = audit_basement_pipe_labels(basement, svg)
+    if label_errors:
+        raise ValueError(
+            "invalid basement pipe labeling: " + "; ".join(label_errors)
+        )
+    return svg
 
 
 def generate_wastewater_basement_control_pdf(

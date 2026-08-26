@@ -32,6 +32,7 @@ from app.pz.wastewater_drafting import (
     DraftPoint,
     DraftPort,
     DraftServicePath,
+    render_inline_pipe_label,
 )
 from app.pz.wastewater_ugo import (
     fixture_trap_mode,
@@ -605,7 +606,10 @@ def build_typical_floor_assembly(
             # Increase the collector diameter before the larger fixture joins
             # it.  In particular, a DN100 toilet must enter an already-DN100
             # main, never a DN50 run enlarged only after the toilet wye.
-            setback = min(24.0, dx * 0.4)
+            # Leave enough visible DN100 run before a toilet wye for the
+            # required inline system/DN mark.  The transition remains before
+            # the toilet and no extra fitting or pipe branch is invented.
+            setback = min(60.0, dx * 0.4)
             transition_x = junction_x[index + 1] - setback
             upstream_slope = slope_dn100 if upstream_dn >= 100 else slope_dn50
             downstream_slope = (
@@ -1209,7 +1213,8 @@ def render_typical_floor_assembly_svg(
                 f'{escape(fixture.fixture_id)}</text>',
                 f'<text x="{fx:.1f}" y="{fy-54:.1f}" text-anchor="middle" '
                 f'font-family="{FONT}" font-size="8.5">'
-                f'{escape(_FIXTURE_LABEL[fixture.kind])}; DN{fixture.dn_mm}'
+                f'{escape(_FIXTURE_LABEL[fixture.kind])}; '
+                f'{_system_mark(assembly.system)} ⌀{fixture.dn_mm}'
                 f'{quantity_label}</text>',
             )
         )
@@ -1357,7 +1362,8 @@ def render_typical_floor_assembly_svg(
             f'<text x="{cap_x-108:.1f}" y="{cap_y-42:.1f}" text-anchor="start" '
             f'font-family="{FONT}" font-size="11" font-weight="bold">Прочистка</text>',
             f'<text x="{cap_x-108:.1f}" y="{cap_y-27:.1f}" text-anchor="start" '
-            f'font-family="{FONT}" font-size="9">DN{assembly.fixtures[0].dn_mm}</text>',
+            f'font-family="{FONT}" font-size="9">'
+            f'{_system_mark(assembly.system)} ⌀{assembly.fixtures[0].dn_mm}</text>',
         )
     )
 
@@ -1366,18 +1372,17 @@ def render_typical_floor_assembly_svg(
         last = assembly.segment(annotation.last_segment_id)
         start = assembly.port(first.start_port_id).point
         end = assembly.port(last.end_port_id).point
-        mx, my = xy(
-            DraftPoint(
-                (start.x_mm + end.x_mm) / 2,
-                (start.y_mm + end.y_mm) / 2,
-            )
-        )
         body.append(
-            f'<text data-branch-label="DN{annotation.dn_mm}" '
-            f'x="{mx:.1f}" y="{my+22:.1f}" text-anchor="middle" '
-            f'font-family="{FONT}" font-size="9.5">'
-            f'{_system_mark(assembly.system)}-М{group_index} '
-            f'DN{annotation.dn_mm}</text>'
+            render_inline_pipe_label(
+                line_id=f"floor-branch-{group_index}",
+                label=(
+                    f"{_system_mark(assembly.system)} ⌀{annotation.dn_mm}"
+                ),
+                start=xy(start),
+                end=xy(end),
+                position=0.35 if annotation.dn_mm >= 100 else 0.56,
+                font_size=9.5,
+            )
         )
         body.append(
             _slope_sign_svg(annotation, start, end, xy=xy)
@@ -1395,6 +1400,19 @@ def render_typical_floor_assembly_svg(
         )
 
     riser_join_x, riser_join_y = xy("riser_join")
+    body.append(
+        render_inline_pipe_label(
+            line_id="floor-riser",
+            label=(
+                f"{_system_mark(assembly.system)} "
+                f"⌀{assembly.segment('riser_upper').dn_mm}"
+            ),
+            start=xy("riser_top"),
+            end=xy("riser_join"),
+            position=0.48,
+            font_size=9.5,
+        )
+    )
     collector_to_riser = assembly.segment("collector_to_riser")
     collector_start = assembly.port(collector_to_riser.start_port_id).point
     collector_end = assembly.port(collector_to_riser.end_port_id).point
@@ -1408,9 +1426,6 @@ def render_typical_floor_assembly_svg(
     )
     body.extend(
         (
-            f'<text x="{riser_join_x+12:.1f}" y="{riser_join_y-52:.1f}" '
-            f'font-family="{FONT}" font-size="10.5" font-weight="bold">'
-            f'{escape(assembly.riser_id)} DN{assembly.segment("riser_lower").dn_mm}</text>',
             f'<path data-flow-direction="collector" '
             f'd="M{flow_x-8:.1f},{flow_y-5:.1f} '
             f'L{flow_x+3:.1f},{flow_y:.1f} '
@@ -1539,6 +1554,42 @@ def audit_floor_rendering_conventions(
                     "filled_diameter_transition",
                     expected.transition_id,
                     "знак перехода диаметра должен быть незалитым треугольником",
+                )
+            )
+
+    pipe_labels = {
+        row.get("data-pipe-line-id"): row.get("data-inline-pipe-label")
+        for row in root.iter()
+        if row.get("data-pipe-line-id")
+    }
+    expected_pipe_labels = {
+        **{
+            f"floor-branch-{index}": (
+                f"{_system_mark(assembly.system)} ⌀{row.dn_mm}"
+            )
+            for index, row in enumerate(expected_slopes, start=1)
+        },
+        "floor-riser": (
+            f"{_system_mark(assembly.system)} "
+            f"⌀{assembly.segment('riser_upper').dn_mm}"
+        ),
+    }
+    for line_id, expected_label in expected_pipe_labels.items():
+        actual_label = pipe_labels.get(line_id)
+        if actual_label is None:
+            findings.append(
+                DraftingConventionFinding(
+                    "missing_pipe_line_label",
+                    line_id,
+                    f"линия не обозначена как {expected_label}",
+                )
+            )
+        elif actual_label != expected_label:
+            findings.append(
+                DraftingConventionFinding(
+                    "incorrect_pipe_line_label",
+                    line_id,
+                    f"ожидалось обозначение {expected_label}, получено {actual_label}",
                 )
             )
     return tuple(findings)

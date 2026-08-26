@@ -5,6 +5,7 @@ from pypdf import PdfReader
 
 from app.pz.generator import generate_wastewater_basement_node_pdf
 from app.pz.wastewater_basement_drafting import (
+    audit_basement_pipe_labels,
     build_wastewater_basement_assembly,
     build_wastewater_basement_control_svg,
 )
@@ -127,6 +128,14 @@ def test_outlet_dn_increase_is_explicit_and_drawn_as_unfilled_transition():
     )
     assert 'data-basement-diameter-transition="true"' in svg
     assert 'data-inline-pipe-label="К1 ⌀150"' in svg
+    for line_id in (
+        "basement-riser",
+        "basement-collector-before-transition",
+        "basement-collector-after-transition",
+        "building-outlet",
+    ):
+        assert f'data-pipe-line-id="{line_id}"' in svg
+    assert audit_basement_pipe_labels(basement, svg) == ()
     assert 'data-upstream-dn="100"' in svg
     assert 'data-downstream-dn="150"' in svg
     assert "Переход DN100x150" in svg
@@ -134,6 +143,21 @@ def test_outlet_dn_increase_is_explicit_and_drawn_as_unfilled_transition():
 
     with pytest.raises(ValueError, match="must not decrease"):
         build_wastewater_basement_assembly(dn_mm=150, outlet_dn_mm=100)
+
+
+def test_basement_label_audit_rejects_missing_independent_line_mark():
+    basement = build_wastewater_basement_assembly(outlet_dn_mm=150)
+    svg = build_wastewater_basement_control_svg(basement)
+    broken = svg.replace(
+        'data-pipe-line-id="building-outlet"',
+        'data-removed-pipe-line-id="building-outlet"',
+        1,
+    )
+
+    errors = audit_basement_pipe_labels(basement, broken)
+
+    assert len(errors) == 1
+    assert errors[0].startswith("building-outlet: missing pipe label")
 
 
 def test_control_svg_contains_architecture_revision_sleeve_and_outlet():

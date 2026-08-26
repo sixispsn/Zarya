@@ -193,7 +193,7 @@ def test_stack_pdf_from_project_uses_registry_floors_fixtures_and_basement(tmp_p
     compact_floor_text = "".join(floor_text.split())
     assert compact_floor_text.count("К1-Мой1") == 3
     assert compact_floor_text.count("К1-Ун1") == 3
-    assert "Унитаз;DN100;2шт." in compact_floor_text
+    assert "Унитаз;К1⌀100;2шт." in compact_floor_text
     assert "этажи3-15-типовые,непоказаны" in compact_floor_text
     assert "К1⌀100" in compact_floor_text
     basement_text = pages[-1].extract_text()

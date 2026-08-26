@@ -122,12 +122,18 @@ def test_stack_svgs_mark_every_floor_revisions_roof_and_page_continuations():
         assert combined.count(f'data-stack-revision-floor="{floor}"') == 1
     assert 'data-collapsed-floor-range="3-8"' in pages[0]
     assert 'data-inline-pipe-label="К1 ⌀100"' in pages[0]
+    assert 'data-pipe-line-id="roof-vent-riser"' in pages[0]
+    assert pages[0].count('data-pipe-line-id="floor-riser"') == 3
+    assert pages[0].count('data-pipe-line-id="floor-branch-1"') == 3
+    assert pages[0].count('data-pipe-line-id="floor-branch-2"') == 3
     assert "этажи 3-8 - типовые, не показаны" in pages[0]
     assert pages[0].count('data-roof="flat_non_accessible"') == 1
     assert 'продолжение на листе 2' in pages[0]
     assert 'data-stack-basement-continuation="from-sheet-1"' in pages[1]
     assert 'data-basement-segment="outlet_segment"' in pages[1]
     assert 'data-inline-pipe-label="К1 ⌀100"' in pages[1]
+    assert 'data-pipe-line-id="basement-riser"' in pages[1]
+    assert 'data-pipe-line-id="building-outlet"' in pages[1]
     assert "Выпуск К1-1 DN100" in pages[1]
     assert "Напорная линия после КНС сюда не входит" in combined
 

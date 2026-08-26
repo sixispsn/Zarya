@@ -49,9 +49,9 @@ def test_repeated_fixture_quantity_is_one_symbol_with_a_count_label():
 
     assert len(floor.fixtures) == 4
     assert floor.fixtures[-1].quantity == 2
-    assert "Унитаз; DN100; 2 шт." in svg
-    assert "Умывальник; DN50; 2 шт." in svg
-    assert "Мойка; DN50; 1 шт." not in svg
+    assert "Унитаз; К1 ⌀100; 2 шт." in svg
+    assert "Умывальник; К1 ⌀50; 2 шт." in svg
+    assert "Мойка; К1 ⌀50; 1 шт." not in svg
 
 
 def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
@@ -268,6 +268,13 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert 'data-carries-flow="false"' in normative
     assert 'data-service-path="floor_cleanout_cable"' not in normative
     assert 'data-service-path="floor_cleanout_cable"' in diagnostic
+    assert normative.count('data-inline-pipe-label=') == 3
+    assert normative.count('data-pipe-label-mask=') == 3
+    assert 'data-pipe-line-id="floor-branch-1"' in normative
+    assert 'data-pipe-line-id="floor-branch-2"' in normative
+    assert 'data-pipe-line-id="floor-riser"' in normative
+    assert 'data-inline-pipe-label="К1 ⌀50"' in normative
+    assert 'data-inline-pipe-label="К1 ⌀100"' in normative
     assert audit_floor_rendering_conventions(floor, normative) == ()
 
 
@@ -309,6 +316,21 @@ def test_graphic_convention_audit_rejects_legacy_i_and_missing_open_triangle():
         "legacy_slope_notation",
         "missing_diameter_transition",
     }
+
+
+def test_graphic_convention_audit_rejects_an_unlabelled_pipe_line():
+    floor = build_typical_floor_assembly()
+    normative = render_typical_floor_assembly_svg(floor, diagnostics=False)
+    broken = normative.replace(
+        'data-pipe-line-id="floor-branch-1"',
+        'data-removed-pipe-line-id="floor-branch-1"',
+        1,
+    )
+
+    findings = audit_floor_rendering_conventions(floor, broken)
+
+    assert {row.code for row in findings} == {"missing_pipe_line_label"}
+    assert findings[0].element_id == "floor-branch-1"
 
 
 def test_riser_fitting_ticks_and_label_do_not_collide_with_direct_joint():

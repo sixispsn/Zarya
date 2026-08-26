@@ -92,6 +92,10 @@ def test_vector_fragment_contains_physical_parts_and_optional_cable_path():
         assert marker in normative
     assert 'data-service-path="cleanout_cable"' not in normative
     assert 'data-service-path="cleanout_cable"' in diagnostic
+    assert normative.count('data-inline-pipe-label="К1 ⌀100"') == 2
+    assert 'data-pipe-line-id="К1-Узел-НП1:riser"' in normative
+    assert 'data-pipe-line-id="К1-Узел-НП1:main"' in normative
+    assert normative.count('data-pipe-label-mask=') == 2
     assert "маршрут троса:" in diagnostic
     assert "доступ - тройник - магистраль" in diagnostic
 
