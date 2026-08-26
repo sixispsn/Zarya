@@ -489,6 +489,25 @@ def generate_wastewater_scheme_pdf(
     return output_path
 
 
+def generate_architecture_section_node_pdf(
+    registry_path: str,
+    output_path: str,
+) -> str:
+    """Собрать контрольный архитектурный разрез из строгого реестра планов.
+
+    Функция намеренно не принимает только этажность: помещения, шахты,
+    противопожарные преграды, отметки и линия разреза должны быть подтверждены
+    в нормализованном реестре АР.
+    """
+    from app.pz.architecture_section_engine import (
+        generate_architecture_section_control_pdf,
+        load_architecture_plan_registry,
+    )
+
+    registry = load_architecture_plan_registry(registry_path)
+    return generate_architecture_section_control_pdf(output_path, registry)
+
+
 def generate_wastewater_diagnostic_pdf(
     project: Project,
     output_path: str,
