@@ -91,6 +91,25 @@ class ArchitectureImportStore:
             raise ValueError("invalid architecture confirmations")
         return value
 
+    def save_wastewater_binding(self, import_id: str, value: dict) -> None:
+        directory = self._directory(import_id)
+        self.metadata(import_id)
+        target = directory / "wastewater_binding.json"
+        target.write_text(
+            json.dumps(value, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        target.chmod(0o600)
+
+    def load_wastewater_binding(self, import_id: str) -> dict:
+        target = self._directory(import_id) / "wastewater_binding.json"
+        if not target.is_file():
+            return {}
+        value = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("invalid architecture wastewater binding")
+        return value
+
     def delete(self, import_id: str) -> None:
         directory = self._directory(import_id)
         if directory.exists():

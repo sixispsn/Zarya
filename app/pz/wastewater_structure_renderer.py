@@ -7,8 +7,14 @@ from html import escape
 
 from app.pz.project import Project
 from app.pz.wastewater_layout import (
+    PointMm,
     WastewaterSchemeLayout,
     audit_wastewater_layout,
+)
+from app.pz.wastewater_ugo import (
+    fixture_trap_mode,
+    get_ugo_connection_anchor,
+    render_ugo,
 )
 
 
@@ -167,6 +173,95 @@ def build_wastewater_structure_svg(
                 2.5,
                 "middle",
             )
+
+    if scope == WastewaterStructureScope.FULL_FLOOR_STACK:
+        for space in layout.spaces:
+            rect(
+                space.frame.x,
+                space.frame.y,
+                space.frame.width,
+                space.frame.height,
+                0.3,
+                "white" if space.kind != "shaft" else "#f3f3f3",
+            )
+            text(
+                space.frame.x + space.frame.width / 2,
+                space.frame.y + 6.0,
+                space.label,
+                2.1,
+                "middle",
+            )
+
+        pipes = {row.section_id: row for row in project.sewage.pipes}
+        for route in layout.routes:
+            G.append(
+                f'<g data-bound-section="{escape(route.section_id, quote=True)}" '
+                f'data-bound-system="{escape(route.system, quote=True)}">'
+            )
+            polyline(route.points, 0.7)
+            pipe = pipes[route.section_id]
+            middle = route.points[len(route.points) // 2]
+            dn = pipe.nominal_diameter_mm or round(pipe.outer_diameter_mm)
+            mark = f"{route.system} Ø{dn:g}"
+            if pipe.slope_per_mille is not None:
+                mark += f" ∠{pipe.slope_per_mille:g}‰"
+            text(middle.x, middle.y - 3.2, mark, 2.2, "middle")
+            G.append("</g>")
+
+        elements = {row.element_id: row for row in project.sewage.elements}
+        for placement in layout.elements:
+            element = elements[placement.element_id]
+            connection = placement.point
+            route = next(
+                (
+                    row
+                    for row in layout.routes
+                    if connection in row.points
+                    and row.system == element.system
+                ),
+                None,
+            )
+            downstream_x = route.points[-1].x if route is not None else connection.x
+            side = 1 if downstream_x >= connection.x else -1
+            fixture_scale = 0.13
+            trap_scale = 0.08
+            trap_svg = ""
+            fixture_outlet = connection
+            if fixture_trap_mode(element.kind) == "external":
+                trap_center = PointMm(
+                    connection.x - side * 23.0 * trap_scale,
+                    connection.y - 20.0 * trap_scale,
+                )
+                fixture_outlet = PointMm(
+                    trap_center.x - side * 14.0 * trap_scale,
+                    trap_center.y - 20.0 * trap_scale,
+                )
+                trap_svg = render_ugo(
+                    "trap",
+                    trap_center.x,
+                    trap_center.y,
+                    scale=trap_scale,
+                    mirror_x=side < 0,
+                )
+            try:
+                anchor_x, anchor_y = get_ugo_connection_anchor(element.kind)
+                symbol_x = fixture_outlet.x - anchor_x * fixture_scale
+                symbol_y = fixture_outlet.y - anchor_y * fixture_scale
+            except KeyError:
+                symbol_x, symbol_y = fixture_outlet.x, fixture_outlet.y
+            G.append(
+                f'<g data-bound-element="{escape(element.element_id, quote=True)}">'
+                f'{render_ugo(element.kind, symbol_x, symbol_y, scale=fixture_scale)}'
+                f'{trap_svg}'
+            )
+            text(
+                symbol_x,
+                symbol_y - 7.0,
+                element.element_id,
+                1.9,
+                "middle",
+            )
+            G.append("</g>")
 
     if scope == WastewaterStructureScope.BASEMENT_K1_MAIN:
         pipes = {row.section_id: row for row in project.sewage.pipes}

@@ -550,9 +550,21 @@ def load_architecture_plan_registry(path: str | Path) -> ArchitecturePlanRegistr
 
 def architecture_section_to_wastewater_layout(
     model: ArchitectureSectionModel,
+    *,
+    required_floor_numbers: Iterable[int] = (),
 ) -> WastewaterSchemeLayout:
     """Convert the verified section into the existing K1/K2 overlay model."""
-    displayed = model.displayed_floor_numbers
+    known_floors = {row.floor for row in model.floors}
+    required = {int(row) for row in required_floor_numbers}
+    unknown = sorted(required - known_floors)
+    if unknown:
+        raise ValueError(
+            "required layout floors are absent from architecture: "
+            + ", ".join(map(str, unknown))
+        )
+    displayed = tuple(
+        sorted(set(model.displayed_floor_numbers) | required, reverse=True)
+    )
     x0, x1 = 80.0, 680.0
     top_y = 75.0
     room_height = 62.0

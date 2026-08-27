@@ -508,6 +508,35 @@ def generate_architecture_section_node_pdf(
     return generate_architecture_section_control_pdf(output_path, registry)
 
 
+def generate_bound_architecture_wastewater_pdf(
+    project: Project,
+    architecture,
+    binding,
+    output_path: str,
+) -> str:
+    """Собрать А1-разрез К1/К2 по подтверждённым координатам АР.
+
+    ``architecture`` и ``binding`` являются проверенными объектами из
+    ``app.analysis``. Инженерные рёбра, марки участков и УГО берутся из
+    ``project.sewage``; функция не создаёт отсутствующие приборы или связи.
+    """
+    from app.analysis.architecture_wastewater_binding import (
+        build_bound_wastewater_layout,
+    )
+    from app.pz.wastewater_structure_renderer import (
+        WastewaterStructureScope,
+        generate_wastewater_structure_pdf,
+    )
+
+    layout = build_bound_wastewater_layout(architecture, binding, project)
+    return generate_wastewater_structure_pdf(
+        project,
+        layout,
+        output_path,
+        scope=WastewaterStructureScope.FULL_FLOOR_STACK,
+    )
+
+
 def generate_wastewater_diagnostic_pdf(
     project: Project,
     output_path: str,

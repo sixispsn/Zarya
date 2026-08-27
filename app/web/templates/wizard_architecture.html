@@ -143,6 +143,63 @@
   </section>
   {% endif %}
 
+  {% if confirmed_model and wastewater_binding %}
+  <section class="architecture-engineering">
+    <div class="analysis-section-head"><div><p class="eyebrow">ENGINEERING BINDING / 03</p><h2>Привязка К1/К2 к помещениям</h2></div><span>{{ wastewater_binding.risers|length }} стояков · {{ wastewater_binding.receivers|length }} приборов</span></div>
+    <p class="architecture-engineering-intro">Здесь нет распознавания «санузел = комплект приборов». Каждая строка подтверждает конкретный элемент реестра, его помещение, отметку подключения и стояк.</p>
+
+    {% if wastewater_binding_issues %}<div class="architecture-binding-issues" role="status">{% for issue in wastewater_binding_issues %}<p data-severity="{{ issue.severity }}"><span>{{ issue.severity == 'error' and '!' or '·' }}</span>{{ issue.message }}</p>{% endfor %}</div>{% endif %}
+
+    <div class="architecture-binding-summary">
+      <article><span>01</span><strong>Стояки в шахтах</strong><small>Положение задаётся отдельно на каждом этаже. Смещение требует явного подтверждения.</small></article>
+      <article><span>02</span><strong>Приёмники стоков</strong><small>Координата должна попадать внутрь выбранного помещения; унитаз — не менее DN100.</small></article>
+      <article><span>03</span><strong>Инженерный граф</strong><small>Связи приборов и участков берутся только из реестра проекта К1/К2.</small></article>
+    </div>
+
+    <div class="architecture-binding-editors">
+      <details class="card architecture-binding-editor"><summary><span>＋</span> Добавить или изменить положение стояка</summary>
+        <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/riser">
+          <div class="architecture-binding-grid">
+            <label>ID размещения<input name="placement_id" required placeholder="R-K1-1-F1"></label>
+            <label>Обозначение стояка<input name="riser_id" required placeholder="К1-Ст1"></label>
+            <label>Система<select name="system"><option value="K1">К1</option><option value="K2">К2</option><option value="K3">К3</option></select></label>
+            <label>DN<input name="dn_mm" inputmode="numeric" required placeholder="100"></label>
+            <label class="architecture-binding-wide">Шахта<select name="shaft_ref" required><option value="">Выберите подтверждённую шахту</option>{% for floor in confirmed_model.floors %}{% for cell in floor.cells if cell.kind == 'shaft' %}<option value="{{ floor.floor }}::{{ cell.room_id }}">{{ floor.floor }} этаж · №{{ cell.number }} {{ cell.name }} · {{ '%.3f'|format(cell.start_m)|replace('.',',') }}–{{ '%.3f'|format(cell.end_m)|replace('.',',') }} м</option>{% endfor %}{% endfor %}</select></label>
+            <label>Координата от начала разреза, м<input name="station_m" inputmode="decimal" required placeholder="11,250"></label>
+            <label class="architecture-binding-check"><input type="checkbox" name="offset_from_below_confirmed" value="yes"><span>Смещение от этажа ниже подтверждено</span></label>
+            <label class="architecture-binding-wide">Основание<input name="source_ref" required placeholder="АР, лист 4, оси 3–4; подтверждено проектировщиком"></label>
+          </div>
+          <button class="button-primary" type="submit">Сохранить положение стояка</button>
+        </form>
+      </details>
+
+      <details class="card architecture-binding-editor"><summary><span>＋</span> Добавить или изменить приёмник стоков</summary>
+        <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/receiver">
+          <div class="architecture-binding-grid">
+            <label>ID размещения<input name="placement_id" required placeholder="P-WC-F1-01"></label>
+            <label>ID элемента проекта<input name="element_id" required placeholder="К1-Ун1"></label>
+            <label>Вид<select name="kind">{% for definition in receiver_definitions %}<option value="{{ definition.kind }}">{{ definition.label }}</option>{% endfor %}</select></label>
+            <label>Система<select name="system"><option value="K1">К1</option><option value="K2">К2</option></select></label>
+            <label class="architecture-binding-wide">Помещение<select name="room_ref" required><option value="">Выберите помещение</option>{% for floor in confirmed_model.floors %}{% for cell in floor.cells if cell.kind != 'shaft' %}<option value="{{ floor.floor }}::{{ cell.room_id }}">{{ floor.floor }} этаж · №{{ cell.number }} {{ cell.name }} · {{ '%.3f'|format(cell.start_m)|replace('.',',') }}–{{ '%.3f'|format(cell.end_m)|replace('.',',') }} м</option>{% endfor %}{% endfor %}</select></label>
+            <label>Координата от начала разреза, м<input name="station_m" inputmode="decimal" required placeholder="8,750"></label>
+            <label>Высота подключения от пола, м<input name="connection_height_m" inputmode="decimal" required placeholder="0,150"></label>
+            <label>Количество<input name="quantity" inputmode="numeric" required value="1"></label>
+            <label>DN<input name="dn_mm" inputmode="numeric" required placeholder="100"></label>
+            <label>Стояк<select name="riser_id" required><option value="">Выберите стояк</option>{% for riser in wastewater_binding.risers %}<option value="{{ riser.riser_id }}">{{ riser.riser_id }} · {{ riser.floor }} этаж · {{ riser.system }}</option>{% endfor %}</select></label>
+            <label class="architecture-binding-wide">Основание<input name="source_ref" required placeholder="АР, лист 4, помещение 102; подтверждено проектировщиком"></label>
+          </div>
+          <button class="button-primary" type="submit">Сохранить приёмник</button>
+        </form>
+      </details>
+    </div>
+
+    {% if wastewater_binding.risers or wastewater_binding.receivers %}<div class="architecture-binding-register">
+      {% for row in wastewater_binding.risers %}<article><span class="system-tag">{{ row.system }}</span><div><strong>{{ row.riser_id }} · {{ row.floor }} этаж</strong><small>{{ row.shaft_cell_id }} · {{ '%.3f'|format(row.station_m)|replace('.',',') }} м · DN{{ row.dn_mm }}</small></div><form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/delete"><input type="hidden" name="placement_id" value="{{ row.placement_id }}"><button class="delete-button" type="submit">Удалить</button></form></article>{% endfor %}
+      {% for row in wastewater_binding.receivers %}<article><span class="system-tag">{{ row.system }}</span><div><strong>{{ row.element_id }} · {{ row.floor }} этаж</strong><small>{{ row.room_cell_id }} · {{ row.kind }} · {{ '%.3f'|format(row.station_m)|replace('.',',') }} м · DN{{ row.dn_mm }} → {{ row.riser_id }}</small></div><form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/delete"><input type="hidden" name="placement_id" value="{{ row.placement_id }}"><button class="delete-button" type="submit">Удалить</button></form></article>{% endfor %}
+    </div>{% endif %}
+  </section>
+  {% endif %}
+
   <details class="architecture-survey-compact"><summary>Диагностика всех страниц · {{ survey.vector_page_count }} из {{ survey.page_count }} векторных</summary><div class="architecture-page-list">{% for page in survey.pages %}<article class="architecture-page" data-kind="{{ page.kind }}"><div><span class="analysis-list-code">ЛИСТ {{ page.page_number }}</span><strong>{{ kind_labels[page.kind] }}</strong></div><dl><div><dt>Линии</dt><dd>{{ page.vector_lines|length }}</dd></div><div><dt>Текст</dt><dd>{{ page.texts|length }}</dd></div><div><dt>Изображения</dt><dd>{{ page.image_count }}</dd></div><div><dt>Размер</dt><dd>{{ page.width_pt|round|int }} × {{ page.height_pt|round|int }} pt</dd></div></dl></article>{% endfor %}</div></details>
   {% endif %}
 </main></body></html>

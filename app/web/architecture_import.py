@@ -25,6 +25,15 @@ from app.analysis.architecture_confirmation import (
     find_cut_intersection_candidates,
 )
 from app.analysis.architecture_import_store import ArchitectureImportStore
+from app.analysis.architecture_wastewater_binding import (
+    RECEIVER_DEFINITIONS,
+    ConfirmedArchitectureWastewaterBinding,
+    ConfirmedReceiverPlacement,
+    ConfirmedRiserFloorPlacement,
+    architecture_wastewater_binding_from_mapping,
+    architecture_wastewater_binding_to_mapping,
+    audit_architecture_wastewater_binding,
+)
 from app.analysis.architecture_pdf import (
     MAX_ARCHITECTURE_PDF_BYTES,
     ArchitecturePdfError,
@@ -53,6 +62,9 @@ def _context(**values):
         "intervals": (),
         "cell_values": (),
         "confirmed_model": None,
+        "wastewater_binding": None,
+        "wastewater_binding_issues": (),
+        "receiver_definitions": tuple(RECEIVER_DEFINITIONS.values()),
         "kind_labels": {
             "vector": "Векторный план",
             "vector_sparse": "Недостаточно векторов",
@@ -93,6 +105,8 @@ def _workspace_context(
     intervals=(),
     cell_values=(),
     confirmed_model=None,
+    wastewater_binding=None,
+    wastewater_binding_issues=(),
 ):
     survey = _STORE.survey(import_id)
     page = _initial_page(survey, requested_page)
@@ -132,6 +146,7 @@ def _workspace_context(
                     preview_svg=Markup(build_pdf_plan_preview_svg(page)),
                     form_values=form_values,
                     confirmed_model=confirmed_model,
+                    **_wastewater_binding_context(import_id),
                 )
             scale = active_floor.scale
             cut = active_floor.cut
@@ -170,6 +185,12 @@ def _workspace_context(
                 "cut_bx": str(cut.end.x_pt),
                 "cut_by": str(cut.end.y_pt),
             }
+    if confirmed_model is not None and wastewater_binding is None:
+        binding_context = _wastewater_binding_context(import_id)
+        wastewater_binding = binding_context["wastewater_binding"]
+        wastewater_binding_issues = binding_context[
+            "wastewater_binding_issues"
+        ]
     return _context(
         errors=errors or [],
         survey=survey,
@@ -187,7 +208,36 @@ def _workspace_context(
         intervals=intervals,
         cell_values=cell_values,
         confirmed_model=confirmed_model,
+        wastewater_binding=wastewater_binding,
+        wastewater_binding_issues=wastewater_binding_issues,
     )
+
+
+def _wastewater_binding_context(import_id: str) -> dict:
+    saved_architecture = _STORE.load_confirmations(import_id)
+    if not saved_architecture.get("floors"):
+        return {
+            "wastewater_binding": None,
+            "wastewater_binding_issues": (),
+        }
+    architecture = confirmed_architecture_section_from_mapping(saved_architecture)
+    saved_binding = _STORE.load_wastewater_binding(import_id)
+    binding = (
+        architecture_wastewater_binding_from_mapping(saved_binding)
+        if saved_binding
+        else ConfirmedArchitectureWastewaterBinding(
+            plan_id=architecture.plan_id,
+            cut_id=architecture.cut_id,
+            architecture_source_sha256=architecture.source_sha256,
+        )
+    )
+    return {
+        "wastewater_binding": binding,
+        "wastewater_binding_issues": audit_architecture_wastewater_binding(
+            architecture,
+            binding,
+        ),
+    }
 
 
 def _number(form, name: str) -> float:
@@ -198,6 +248,58 @@ def _number(form, name: str) -> float:
         return float(raw)
     except ValueError as exc:
         raise ValueError(f"Поле {name} должно быть числом.") from exc
+
+
+def _integer(form, name: str) -> int:
+    value = _number(form, name)
+    if not value.is_integer():
+        raise ValueError(f"Поле {name} должно быть целым числом.")
+    return int(value)
+
+
+def _cell_reference(form, name: str) -> tuple[int, str]:
+    raw = str(form.get(name, "")).strip()
+    try:
+        floor_raw, cell_id = raw.split("::", 1)
+        floor = int(floor_raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"Не выбрана архитектурная ячейка для поля {name}.") from exc
+    if not cell_id.strip():
+        raise ValueError(f"Не выбрана архитектурная ячейка для поля {name}.")
+    return floor, cell_id.strip()
+
+
+def _load_architecture_and_binding(import_id: str):
+    saved = _STORE.load_confirmations(import_id)
+    if not saved.get("floors"):
+        raise ValueError("Сначала подтвердите архитектурный разрез.")
+    architecture = confirmed_architecture_section_from_mapping(saved)
+    binding_data = _STORE.load_wastewater_binding(import_id)
+    binding = (
+        architecture_wastewater_binding_from_mapping(binding_data)
+        if binding_data
+        else ConfirmedArchitectureWastewaterBinding(
+            plan_id=architecture.plan_id,
+            cut_id=architecture.cut_id,
+            architecture_source_sha256=architecture.source_sha256,
+        )
+    )
+    return architecture, binding
+
+
+def _binding_error_context(import_id: str, message: str):
+    architecture, binding = _load_architecture_and_binding(import_id)
+    model = build_confirmed_architecture_section(architecture)
+    return _workspace_context(
+        import_id,
+        errors=[message],
+        confirmed_model=model,
+        wastewater_binding=binding,
+        wastewater_binding_issues=audit_architecture_wastewater_binding(
+            architecture,
+            binding,
+        ),
+    )
 
 
 def _confirmation_geometry(form):
@@ -537,6 +639,166 @@ async def architecture_confirm_floor(request: Request, import_id: str):
             status_code=422,
         )
     return _TPL.TemplateResponse(request, "wizard_architecture.html", context)
+
+
+@router.post(
+    "/architecture/{import_id}/wastewater/riser",
+    response_class=HTMLResponse,
+)
+async def architecture_add_wastewater_riser(request: Request, import_id: str):
+    form = await request.form()
+    try:
+        architecture, binding = _load_architecture_and_binding(import_id)
+        floor, cell_id = _cell_reference(form, "shaft_ref")
+        placement_id = str(form.get("placement_id", "")).strip()
+        row = ConfirmedRiserFloorPlacement(
+            placement_id=placement_id,
+            riser_id=str(form.get("riser_id", "")).strip(),
+            system=str(form.get("system", "")).strip(),
+            floor=floor,
+            shaft_cell_id=cell_id,
+            station_m=_number(form, "station_m"),
+            dn_mm=_integer(form, "dn_mm"),
+            source_ref=str(form.get("source_ref", "")).strip(),
+            offset_from_below_confirmed=bool(
+                form.get("offset_from_below_confirmed")
+            ),
+        )
+        risers = tuple(
+            existing
+            for existing in binding.risers
+            if existing.placement_id != placement_id
+        ) + (row,)
+        candidate = ConfirmedArchitectureWastewaterBinding(
+            plan_id=binding.plan_id,
+            cut_id=binding.cut_id,
+            architecture_source_sha256=binding.architecture_source_sha256,
+            risers=risers,
+            receivers=binding.receivers,
+        )
+        issues = audit_architecture_wastewater_binding(
+            architecture,
+            candidate,
+        )
+        errors = [issue.message for issue in issues if issue.severity == "error"]
+        if errors:
+            raise ValueError("; ".join(errors))
+        _STORE.save_wastewater_binding(
+            import_id,
+            architecture_wastewater_binding_to_mapping(candidate),
+        )
+        context = _workspace_context(import_id)
+    except (ValueError, FileNotFoundError) as exc:
+        try:
+            context = _binding_error_context(import_id, str(exc))
+        except (ValueError, FileNotFoundError):
+            return HTMLResponse("<h2>Импорт архитектуры не найден</h2>", status_code=404)
+        return _TPL.TemplateResponse(
+            request,
+            "wizard_architecture.html",
+            context,
+            status_code=422,
+        )
+    return _TPL.TemplateResponse(request, "wizard_architecture.html", context)
+
+
+@router.post(
+    "/architecture/{import_id}/wastewater/receiver",
+    response_class=HTMLResponse,
+)
+async def architecture_add_wastewater_receiver(
+    request: Request,
+    import_id: str,
+):
+    form = await request.form()
+    try:
+        architecture, binding = _load_architecture_and_binding(import_id)
+        floor, cell_id = _cell_reference(form, "room_ref")
+        placement_id = str(form.get("placement_id", "")).strip()
+        row = ConfirmedReceiverPlacement(
+            placement_id=placement_id,
+            element_id=str(form.get("element_id", "")).strip(),
+            kind=str(form.get("kind", "")).strip(),
+            system=str(form.get("system", "")).strip(),
+            floor=floor,
+            room_cell_id=cell_id,
+            station_m=_number(form, "station_m"),
+            connection_height_m=_number(form, "connection_height_m"),
+            quantity=_integer(form, "quantity"),
+            dn_mm=_integer(form, "dn_mm"),
+            riser_id=str(form.get("riser_id", "")).strip(),
+            source_ref=str(form.get("source_ref", "")).strip(),
+        )
+        receivers = tuple(
+            existing
+            for existing in binding.receivers
+            if existing.placement_id != placement_id
+        ) + (row,)
+        candidate = ConfirmedArchitectureWastewaterBinding(
+            plan_id=binding.plan_id,
+            cut_id=binding.cut_id,
+            architecture_source_sha256=binding.architecture_source_sha256,
+            risers=binding.risers,
+            receivers=receivers,
+        )
+        issues = audit_architecture_wastewater_binding(
+            architecture,
+            candidate,
+        )
+        errors = [issue.message for issue in issues if issue.severity == "error"]
+        if errors:
+            raise ValueError("; ".join(errors))
+        _STORE.save_wastewater_binding(
+            import_id,
+            architecture_wastewater_binding_to_mapping(candidate),
+        )
+        context = _workspace_context(import_id)
+    except (ValueError, FileNotFoundError) as exc:
+        try:
+            context = _binding_error_context(import_id, str(exc))
+        except (ValueError, FileNotFoundError):
+            return HTMLResponse("<h2>Импорт архитектуры не найден</h2>", status_code=404)
+        return _TPL.TemplateResponse(
+            request,
+            "wizard_architecture.html",
+            context,
+            status_code=422,
+        )
+    return _TPL.TemplateResponse(request, "wizard_architecture.html", context)
+
+
+@router.post("/architecture/{import_id}/wastewater/delete")
+async def architecture_delete_wastewater_placement(
+    request: Request,
+    import_id: str,
+):
+    form = await request.form()
+    try:
+        _architecture, binding = _load_architecture_and_binding(import_id)
+        placement_id = str(form.get("placement_id", "")).strip()
+        candidate = ConfirmedArchitectureWastewaterBinding(
+            plan_id=binding.plan_id,
+            cut_id=binding.cut_id,
+            architecture_source_sha256=binding.architecture_source_sha256,
+            risers=tuple(
+                row for row in binding.risers if row.placement_id != placement_id
+            ),
+            receivers=tuple(
+                row
+                for row in binding.receivers
+                if row.placement_id != placement_id
+            ),
+        )
+        _STORE.save_wastewater_binding(
+            import_id,
+            architecture_wastewater_binding_to_mapping(candidate),
+        )
+    except (ValueError, FileNotFoundError):
+        return HTMLResponse("<h2>Импорт архитектуры не найден</h2>", status_code=404)
+    return RedirectResponse(
+        url=f"/wizard/architecture/{import_id}",
+        status_code=303,
+    )
 
 
 @router.post("/architecture/{import_id}/delete")

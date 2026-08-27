@@ -232,7 +232,7 @@ def test_selected_boundaries_and_labeled_intervals_create_confirmed_floor(
             ("cell_name", "Коридор"), ("cell_kind", "corridor"),
             ("cell_start_pt", "270"), ("cell_end_pt", "390"),
             ("cell_id", "F1-103"), ("cell_number", "103"),
-            ("cell_name", "Санузел"), ("cell_kind", "room"),
+            ("cell_name", "Сантехническая шахта"), ("cell_kind", "shaft"),
         ]
     )
     confirmed_response = asyncio.run(
@@ -255,6 +255,52 @@ def test_selected_boundaries_and_labeled_intervals_create_confirmed_floor(
     assert "Архитектурный разрез подтверждён" in refreshed_body
     assert 'value="АР-ПДФ-01"' in refreshed_body
     assert 'value="Кухня"' in refreshed_body
+    assert "Привязка К1/К2 к помещениям" in refreshed_body
+
+    riser_request = _request(
+        f"/wizard/architecture/{import_id}/wastewater/riser",
+        "POST",
+    )
+    riser_request._form = FormData([
+        ("placement_id", "R-K1-1-F1"),
+        ("riser_id", "К1-Ст1"),
+        ("system", "K1"),
+        ("shaft_ref", "1::F1-103"),
+        ("station_m", "11"),
+        ("dn_mm", "100"),
+        ("source_ref", "АР, лист 1; подтверждено проектировщиком"),
+    ])
+    riser_response = asyncio.run(
+        web.architecture_add_wastewater_riser(riser_request, import_id)
+    )
+    assert riser_response.status_code == 200
+    assert "К1-Ст1 · 1 этаж" in riser_response.body.decode("utf-8")
+
+    receiver_request = _request(
+        f"/wizard/architecture/{import_id}/wastewater/receiver",
+        "POST",
+    )
+    receiver_request._form = FormData([
+        ("placement_id", "P-SINK-F1"),
+        ("element_id", "К1-Мой1"),
+        ("kind", "sink"),
+        ("system", "K1"),
+        ("room_ref", "1::F1-101"),
+        ("station_m", "2"),
+        ("connection_height_m", "0.5"),
+        ("quantity", "1"),
+        ("dn_mm", "50"),
+        ("riser_id", "К1-Ст1"),
+        ("source_ref", "АР, лист 1, помещение 101"),
+    ])
+    receiver_response = asyncio.run(
+        web.architecture_add_wastewater_receiver(receiver_request, import_id)
+    )
+    assert receiver_response.status_code == 200
+    assert "К1-Мой1 · 1 этаж" in receiver_response.body.decode("utf-8")
+    binding = store.load_wastewater_binding(import_id)
+    assert binding["risers"][0]["shaft_cell_id"] == "F1-103"
+    assert binding["receivers"][0]["room_cell_id"] == "F1-101"
 
 
 def test_import_store_detects_source_substitution(tmp_path):
@@ -278,6 +324,9 @@ def test_architecture_routes_template_and_navigation_are_wired():
     assert "/wizard/architecture/{import_id}/cut" in paths
     assert "/wizard/architecture/{import_id}/boundaries" in paths
     assert "/wizard/architecture/{import_id}/confirm-floor" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/riser" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/receiver" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/delete" in paths
     assert "/wizard/architecture/{import_id}/delete" in paths
     _TPL.env.get_template("wizard_architecture.html")
     for name in (

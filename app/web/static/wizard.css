@@ -637,6 +637,36 @@ table.grid .compact-check input[type="checkbox"] {
 .architecture-confirmed { display: flex; align-items: flex-start; gap: 13px; margin-top: 18px; padding: 16px 18px; border: 1px solid var(--ok); border-radius: 9px; background: var(--ok-pale); }
 .architecture-confirmed strong { color: var(--ok); font-size: 13px; }
 .architecture-confirmed p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.architecture-engineering { margin-top: 28px; }
+.architecture-engineering-intro { max-width: 860px; margin: -5px 0 14px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.architecture-binding-issues { display: grid; gap: 5px; margin-bottom: 12px; }
+.architecture-binding-issues p { display: flex; gap: 8px; align-items: baseline; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--surface); font: 9px/1.45 var(--mono); }
+.architecture-binding-issues p[data-severity="error"] { border-color: var(--danger); color: var(--danger); background: var(--danger-pale); }
+.architecture-binding-issues p[data-severity="warning"] { border-color: var(--warn); color: var(--warn); background: var(--warn-pale); }
+.architecture-binding-issues p span { font-weight: 800; }
+.architecture-binding-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.architecture-binding-summary article { position: relative; min-height: 92px; padding: 14px 14px 14px 46px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.architecture-binding-summary article > span { position: absolute; left: 14px; top: 15px; color: var(--accent-bright); font: 700 9px var(--mono); }
+.architecture-binding-summary strong, .architecture-binding-summary small { display: block; }
+.architecture-binding-summary strong { font-size: 12px; }
+.architecture-binding-summary small { margin-top: 6px; color: var(--quiet); font-size: 9px; line-height: 1.45; }
+.architecture-binding-editors { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin-top: 10px; }
+.architecture-binding-editor { padding: 0; overflow: hidden; }
+.architecture-binding-editor > summary { padding: 14px 16px; color: var(--ink); cursor: pointer; font-size: 11px; font-weight: 700; list-style: none; }
+.architecture-binding-editor > summary::-webkit-details-marker { display: none; }
+.architecture-binding-editor > summary span { margin-right: 7px; color: var(--accent-bright); }
+.architecture-binding-editor[open] > summary { border-bottom: 1px solid var(--line); background: var(--input); }
+.architecture-binding-editor form { display: grid; gap: 10px; padding: 14px; }
+.architecture-binding-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.architecture-binding-wide { grid-column: 1 / -1; }
+.architecture-binding-check { display: flex; align-items: center; gap: 8px; align-self: end; min-height: 38px; }
+.architecture-binding-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.architecture-binding-check span { color: var(--muted); font-size: 9px; line-height: 1.35; }
+.architecture-binding-register { display: grid; gap: 5px; margin-top: 10px; }
+.architecture-binding-register article { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.architecture-binding-register strong, .architecture-binding-register small { display: block; }
+.architecture-binding-register strong { font-size: 11px; }
+.architecture-binding-register small { overflow: hidden; margin-top: 3px; color: var(--quiet); font: 8px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .architecture-survey-compact { margin-top: 24px; border-top: 1px solid var(--line); }
 .architecture-survey-compact > summary { padding: 14px 0; color: var(--quiet); cursor: pointer; font: 9px var(--mono); }
 
@@ -652,6 +682,7 @@ table.grid .compact-check input[type="checkbox"] {
   .architecture-next-gate button { width: 100%; }
   .architecture-interval-table { overflow-x: auto; }
   .architecture-interval-head, .architecture-interval-row { min-width: 760px; }
+  .architecture-binding-summary, .architecture-binding-editors { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 430px) {
@@ -659,6 +690,8 @@ table.grid .compact-check input[type="checkbox"] {
   .architecture-id-fields, .architecture-floor-fields { grid-template-columns: 1fr; }
   .architecture-coordinate-grid { grid-template-columns: 1fr 1fr; }
   .architecture-candidate-list { grid-template-columns: 1fr; }
+  .architecture-binding-grid { grid-template-columns: 1fr; }
+  .architecture-binding-wide { grid-column: auto; }
 }
 
 .analysis-summary-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
