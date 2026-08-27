@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Заря - планы в принципиальный разрез</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css?v=20260826-9">
+<script defer src="/static/wizard.js?v=20260730-7"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/architecture" aria-current="page">Планы в схему</a><a href="/wizard/analyze">Анализ проекта</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+</header>
+<main class="analysis-shell architecture-shell">
+  <section class="analysis-hero">
+    <div><p class="eyebrow">PLAN TO SECTION / 01</p><h1>Планы в принципиальный разрез</h1><p>Первый проход отделяет векторный план от скана и извлекает линии и подписи. Ничто не становится помещением или проектным решением без подтверждения.</p></div>
+    <span class="analysis-mode">PDF VECTOR · LOCAL</span>
+  </section>
+
+  {% if errors %}<div class="errors" role="alert"><strong>План не принят</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+
+  <div class="analysis-layout">
+    <section class="card upload-card">
+      <div class="card-kicker"><h2>Загрузить планы АР</h2><span class="system-tag">PDF</span></div>
+      <form method="post" action="/wizard/architecture/survey" enctype="multipart/form-data" data-analysis-upload>
+        <label class="upload-zone" data-upload-zone>
+          <input type="file" name="plan_pdf" accept=".pdf,application/pdf" required data-upload-input>
+          <span class="upload-icon">＋</span>
+          <strong>Выберите PDF с планами</strong>
+          <small data-upload-label>Лучший результат даёт прямой векторный экспорт из CAD/BIM без растрирования</small>
+        </label>
+        <div class="upload-limits"><span>1 PDF</span><span>до 40 МБ</span><span>до 300 страниц</span></div>
+        <label class="analysis-consent"><input type="checkbox" name="confirm_rights" value="yes" required><span>У меня есть право загрузить план; лишние персональные данные удалены.</span></label>
+        <button class="button-primary" type="submit">Проверить план</button>
+      </form>
+      <p class="analysis-privacy">Файл обрабатывается в памяти и на этом этапе не сохраняется. Масштаб, этажи, линия разреза, помещения и преграды потребуют отдельного подтверждения.</p>
+    </section>
+
+    <aside class="analysis-steps">
+      <div><span>01</span><strong>Слой PDF</strong><p>Векторы, текст, изображения, размер и поворот листа.</p></div>
+      <div><span>02</span><strong>Калибровка</strong><p>Масштаб и контрольный размер задаёт проектировщик.</p></div>
+      <div><span>03</span><strong>Подтверждение</strong><p>Этажи, помещения, шахты, преграды и линия разреза.</p></div>
+      <div><span>04</span><strong>Схема</strong><p>Только проверенная архитектура принимает слой К1/К2.</p></div>
+    </aside>
+  </div>
+
+  {% if survey %}
+  <section class="analysis-history architecture-survey">
+    <div class="analysis-section-head"><div><p class="eyebrow">Результат первого прохода</p><h2>{{ survey.original_name }}</h2></div><span>{{ survey.vector_page_count }} / {{ survey.page_count }}</span></div>
+    <p class="architecture-hash">SHA-256 {{ survey.sha256 }}</p>
+    <div class="architecture-page-list">
+      {% for page in survey.pages %}
+      <article class="architecture-page" data-kind="{{ page.kind }}">
+        <div><span class="analysis-list-code">ЛИСТ {{ page.page_number }}</span><strong>{{ kind_labels[page.kind] }}</strong></div>
+        <dl><div><dt>Линии</dt><dd>{{ page.vector_lines|length }}</dd></div><div><dt>Текст</dt><dd>{{ page.texts|length }}</dd></div><div><dt>Изображения</dt><dd>{{ page.image_count }}</dd></div><div><dt>Размер</dt><dd>{{ page.width_pt|round|int }} × {{ page.height_pt|round|int }} pt</dd></div></dl>
+        {% if page.texts %}<p class="architecture-text-preview">{{ page.texts[:6]|map(attribute='text')|join(' · ') }}</p>{% endif %}
+        {% if page.selectable_for_vector_confirmation %}<p class="architecture-state is-ready">Можно передать в рабочее место подтверждения</p>{% else %}<p class="architecture-state">Автоматический переход заблокирован</p>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    <div class="validation-panel architecture-required" open><div class="validation-heading"><span>Обязательный следующий шаг</span><b>{{ survey.issues|length }}</b></div><ul>{% for issue in survey.issues %}<li data-level="{{ issue.severity }}"><span>Лист {{ issue.page_number }}. {{ issue.message }}</span><small>{{ issue.code }}</small></li>{% endfor %}</ul></div>
+  </section>
+  {% endif %}
+</main></body></html>

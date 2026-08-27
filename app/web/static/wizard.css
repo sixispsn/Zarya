@@ -550,6 +550,28 @@ table.grid .compact-check input[type="checkbox"] {
 .analysis-list-state.has-conflict { color: var(--danger); }
 .analysis-arrow { color: var(--accent-bright); font: 14px var(--mono); text-align: right; }
 .analysis-empty { padding: 34px 20px; border: 1px dashed var(--line); border-radius: 9px; color: var(--quiet); background: var(--input); font-size: 12px; text-align: center; }
+.architecture-hash { overflow: hidden; margin: -5px 0 14px; color: var(--quiet); font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.architecture-page-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.architecture-page { min-width: 0; padding: 15px; border: 1px solid var(--line); border-left: 2px solid var(--quiet); border-radius: 9px; background: var(--surface); }
+.architecture-page[data-kind="vector"] { border-left-color: var(--ok); }
+.architecture-page[data-kind="raster"], .architecture-page[data-kind="vector_sparse"] { border-left-color: var(--warn); }
+.architecture-page > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.architecture-page > div:first-child strong { font-size: 13px; }
+.architecture-page dl { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; overflow: hidden; margin: 13px 0 0; border: 1px solid var(--line); border-radius: 6px; background: var(--line); }
+.architecture-page dl div { min-width: 0; padding: 8px; background: var(--input); }
+.architecture-page dt { color: var(--quiet); font: 8px var(--mono); text-transform: uppercase; }
+.architecture-page dd { overflow: hidden; margin: 4px 0 0; color: var(--ink); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.architecture-text-preview { overflow: hidden; margin: 11px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.architecture-state { margin: 12px 0 0; color: var(--warn); font: 9px var(--mono); }
+.architecture-state.is-ready { color: var(--ok); }
+.architecture-required { display: block; margin-top: 12px; }
+.architecture-required .validation-heading { cursor: default; }
+.architecture-required ul { margin: 0; }
+
+@media (max-width: 760px) {
+  .architecture-page-list { grid-template-columns: 1fr; }
+  .architecture-page dl { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
 
 .analysis-summary-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .analysis-summary-grid > div { min-width: 0; padding: 17px; border-left: 1px solid var(--line); }
