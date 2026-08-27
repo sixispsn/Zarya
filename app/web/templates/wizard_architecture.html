@@ -5,8 +5,9 @@
 <title>Заря - планы в принципиальный разрез</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260826-9">
+<link rel="stylesheet" href="/static/wizard.css?v=20260827-10">
 <script defer src="/static/wizard.js?v=20260730-7"></script>
+<script defer src="/static/architecture.js?v=20260827-1"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
@@ -14,12 +15,13 @@
 </header>
 <main class="analysis-shell architecture-shell">
   <section class="analysis-hero">
-    <div><p class="eyebrow">PLAN TO SECTION / 01</p><h1>Планы в принципиальный разрез</h1><p>Первый проход отделяет векторный план от скана и извлекает линии и подписи. Ничто не становится помещением или проектным решением без подтверждения.</p></div>
-    <span class="analysis-mode">PDF VECTOR · LOCAL</span>
+    <div><p class="eyebrow">PLAN TO SECTION / 02</p><h1>Планы в принципиальный разрез</h1><p>Векторный PDF становится схемой только через калибровку, линию разреза и явное подтверждение проектировщика.</p></div>
+    <span class="analysis-mode">PDF VECTOR · CONFIRM</span>
   </section>
 
-  {% if errors %}<div class="errors" role="alert"><strong>План не принят</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if errors %}<div class="errors" role="alert"><strong>Нужно уточнение</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
 
+  {% if not survey %}
   <div class="analysis-layout">
     <section class="card upload-card">
       <div class="card-kicker"><h2>Загрузить планы АР</h2><span class="system-tag">PDF</span></div>
@@ -32,34 +34,115 @@
         </label>
         <div class="upload-limits"><span>1 PDF</span><span>до 40 МБ</span><span>до 300 страниц</span></div>
         <label class="analysis-consent"><input type="checkbox" name="confirm_rights" value="yes" required><span>У меня есть право загрузить план; лишние персональные данные удалены.</span></label>
-        <button class="button-primary" type="submit">Проверить план</button>
+        <button class="button-primary" type="submit">Открыть рабочее место</button>
       </form>
-      <p class="analysis-privacy">Файл обрабатывается в памяти и на этом этапе не сохраняется. Масштаб, этажи, линия разреза, помещения и преграды потребуют отдельного подтверждения.</p>
+      <p class="analysis-privacy">Для подтверждения файл временно сохраняется в закрытой локальной сессии. Его можно удалить кнопкой в рабочем месте.</p>
     </section>
-
     <aside class="analysis-steps">
       <div><span>01</span><strong>Слой PDF</strong><p>Векторы, текст, изображения, размер и поворот листа.</p></div>
-      <div><span>02</span><strong>Калибровка</strong><p>Масштаб и контрольный размер задаёт проектировщик.</p></div>
-      <div><span>03</span><strong>Подтверждение</strong><p>Этажи, помещения, шахты, преграды и линия разреза.</p></div>
-      <div><span>04</span><strong>Схема</strong><p>Только проверенная архитектура принимает слой К1/К2.</p></div>
+      <div><span>02</span><strong>Калибровка</strong><p>Две точки и реальный контрольный размер.</p></div>
+      <div><span>03</span><strong>Линия разреза</strong><p>Две точки на подтверждённом плане.</p></div>
+      <div><span>04</span><strong>Помещения</strong><p>Границы-кандидаты не применяются без проверки.</p></div>
     </aside>
   </div>
-
-  {% if survey %}
-  <section class="analysis-history architecture-survey">
-    <div class="analysis-section-head"><div><p class="eyebrow">Результат первого прохода</p><h2>{{ survey.original_name }}</h2></div><span>{{ survey.vector_page_count }} / {{ survey.page_count }}</span></div>
-    <p class="architecture-hash">SHA-256 {{ survey.sha256 }}</p>
-    <div class="architecture-page-list">
-      {% for page in survey.pages %}
-      <article class="architecture-page" data-kind="{{ page.kind }}">
-        <div><span class="analysis-list-code">ЛИСТ {{ page.page_number }}</span><strong>{{ kind_labels[page.kind] }}</strong></div>
-        <dl><div><dt>Линии</dt><dd>{{ page.vector_lines|length }}</dd></div><div><dt>Текст</dt><dd>{{ page.texts|length }}</dd></div><div><dt>Изображения</dt><dd>{{ page.image_count }}</dd></div><div><dt>Размер</dt><dd>{{ page.width_pt|round|int }} × {{ page.height_pt|round|int }} pt</dd></div></dl>
-        {% if page.texts %}<p class="architecture-text-preview">{{ page.texts[:6]|map(attribute='text')|join(' · ') }}</p>{% endif %}
-        {% if page.selectable_for_vector_confirmation %}<p class="architecture-state is-ready">Можно передать в рабочее место подтверждения</p>{% else %}<p class="architecture-state">Автоматический переход заблокирован</p>{% endif %}
-      </article>
-      {% endfor %}
-    </div>
-    <div class="validation-panel architecture-required" open><div class="validation-heading"><span>Обязательный следующий шаг</span><b>{{ survey.issues|length }}</b></div><ul>{% for issue in survey.issues %}<li data-level="{{ issue.severity }}"><span>Лист {{ issue.page_number }}. {{ issue.message }}</span><small>{{ issue.code }}</small></li>{% endfor %}</ul></div>
+  {% else %}
+  <section class="architecture-session-head">
+    <div><p class="eyebrow">Локальная сессия {{ import_id }}</p><h2>{{ survey.original_name }}</h2><p>SHA-256 {{ survey.sha256 }}</p></div>
+    <div class="architecture-session-actions"><a class="button-secondary" href="/wizard/architecture">Другой PDF</a><form method="post" action="/wizard/architecture/{{ import_id }}/delete"><button class="delete-button" type="submit">Удалить сессию</button></form></div>
   </section>
+
+  <section class="architecture-workbench">
+    <div class="architecture-plan-panel card">
+      <div class="card-kicker"><h2>Лист {{ selected_page.page_number }}</h2><span class="system-tag">{{ kind_labels[selected_page.kind] }}</span></div>
+      <form class="architecture-page-picker" method="get" action="/wizard/architecture/{{ import_id }}">
+        <label>Страница<select name="page">{% for page in survey.pages %}<option value="{{ page.page_number }}"{% if page.page_number == selected_page.page_number %} selected{% endif %}>{{ page.page_number }} · {{ kind_labels[page.kind] }} · {{ page.vector_lines|length }} линий</option>{% endfor %}</select></label><button class="button-secondary" type="submit">Показать</button>
+      </form>
+      <div class="architecture-plan-canvas" data-plan-canvas>{{ preview_svg }}</div>
+      <div class="architecture-plan-legend"><span data-layer="vector">PDF-векторы</span><span data-layer="calibration">Калибровка</span><span data-layer="cut">Разрез</span><span data-layer="candidate">Кандидаты</span></div>
+      {% if selected_page.texts %}<details class="field-help"><summary>Текстовый слой · {{ selected_page.texts|length }}</summary><p>{{ selected_page.texts[:24]|map(attribute='text')|join(' · ') }}</p></details>{% endif %}
+    </div>
+
+    <aside class="architecture-controls card">
+      <div class="card-kicker"><h2>Подтверждение</h2><span class="system-tag">АР</span></div>
+      {% if selected_page.selectable_for_vector_confirmation %}
+      <form method="post" action="/wizard/architecture/{{ import_id }}/cut" data-architecture-confirmation>
+        <input type="hidden" name="page_number" value="{{ selected_page.page_number }}">
+        <div class="architecture-id-fields">
+          <label>Обозначение реестра<input name="plan_id" value="{{ form_values.get('plan_id') or 'АР-' ~ import_id|upper }}"></label>
+          <label>Разрез<input name="cut_id" value="{{ form_values.get('cut_id') or '1-1' }}"></label>
+        </div>
+        <div class="architecture-floor-fields">
+          <label>Этаж<input name="floor" inputmode="numeric" value="{{ form_values.get('floor','1') }}"></label>
+          <label>Отметка, м<input name="elevation_m" inputmode="decimal" value="{{ form_values.get('elevation_m','0') }}"></label>
+          <label>Чистая высота, м<input name="clear_height_m" inputmode="decimal" value="{{ form_values.get('clear_height_m','3') }}"></label>
+        </div>
+
+        <fieldset class="architecture-pick-group"><legend><span>01</span> Калибровка</legend>
+          <p>Выберите две точки известного размера и введите его реальную длину.</p>
+          <button class="button-secondary" type="button" data-pick-mode="calibration">Выбрать две точки на плане</button>
+          <div class="architecture-coordinate-grid">
+            <label>A · X<input name="calibration_ax" inputmode="decimal" value="{{ form_values.get('calibration_ax','') }}"></label><label>A · Y<input name="calibration_ay" inputmode="decimal" value="{{ form_values.get('calibration_ay','') }}"></label>
+            <label>B · X<input name="calibration_bx" inputmode="decimal" value="{{ form_values.get('calibration_bx','') }}"></label><label>B · Y<input name="calibration_by" inputmode="decimal" value="{{ form_values.get('calibration_by','') }}"></label>
+          </div>
+          <label>Реальный размер, м<input name="calibration_distance_m" inputmode="decimal" value="{{ form_values.get('calibration_distance_m','') }}" placeholder="Например, 6,00"></label>
+        </fieldset>
+
+        <fieldset class="architecture-pick-group"><legend><span>02</span> Линия разреза</legend>
+          <p>Укажите начало и конец прямого принципиального разреза.</p>
+          <button class="button-secondary" type="button" data-pick-mode="cut">Выбрать две точки на плане</button>
+          <div class="architecture-coordinate-grid">
+            <label>A · X<input name="cut_ax" inputmode="decimal" value="{{ form_values.get('cut_ax','') }}"></label><label>A · Y<input name="cut_ay" inputmode="decimal" value="{{ form_values.get('cut_ay','') }}"></label>
+            <label>B · X<input name="cut_bx" inputmode="decimal" value="{{ form_values.get('cut_bx','') }}"></label><label>B · Y<input name="cut_by" inputmode="decimal" value="{{ form_values.get('cut_by','') }}"></label>
+          </div>
+        </fieldset>
+        <p class="architecture-pick-status" data-pick-status>Выберите инструмент и две точки.</p>
+        <button class="button-primary" type="submit">Найти пересечения</button>
+      </form>
+      {% else %}<div class="architecture-blocked"><strong>Векторный режим недоступен</strong><p>Для растрового листа потребуется отдельная калибровка изображения и ручная векторизация.</p></div>{% endif %}
+    </aside>
+  </section>
+
+  {% if candidates %}
+  <section class="architecture-candidates">
+    <div class="analysis-section-head"><div><p class="eyebrow">Результат пересечения</p><h2>Границы-кандидаты</h2></div><span>{{ candidates|length }}</span></div>
+    <p>Это пересечения PDF-линий с разрезом, а не автоматически принятые стены. Близкие линии сгруппированы.</p>
+    <form method="post" action="/wizard/architecture/{{ import_id }}/boundaries" class="architecture-boundary-form">
+      {% for key, value in form_values.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <div class="architecture-candidate-list">{% for candidate in candidates %}<label><input type="checkbox" name="boundary_station_pt" value="{{ candidate.station_pt }}"{% if candidate.station_pt in selected_stations %} checked{% endif %}><article><span>{{ loop.index }}</span><strong>{{ '%.3f'|format(candidate.station_m)|replace('.',',') }} м</strong><small>{{ candidate.contributing_lines }} линий · PDF {{ '%.2f'|format(candidate.station_pt) }} pt</small></article></label>{% endfor %}</div>
+      <div class="architecture-next-gate"><div><strong>Шлюз 03 · реальные границы</strong><p>Отметьте только линии, которые действительно разделяют помещения по разрезу. Лишние линии мебели, осей и оборудования не выбирайте.</p></div><button class="button-primary" type="submit">Построить интервалы</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if intervals %}
+  <section class="architecture-intervals">
+    <div class="analysis-section-head"><div><p class="eyebrow">Шлюз 04</p><h2>Экспликация вдоль разреза</h2></div><span>{{ intervals|length }} интервалов</span></div>
+    <p>Каждый интервал должен получить подтверждённый номер и наименование помещения. Пустая строка блокирует модель.</p>
+    <form method="post" action="/wizard/architecture/{{ import_id }}/confirm-floor">
+      {% for key, value in form_values.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <div class="architecture-interval-table">
+        <div class="architecture-interval-head"><span>Интервал</span><span>ID</span><span>№ помещения</span><span>Наименование</span><span>Тип</span></div>
+        {% for interval in intervals %}{% set cell = cell_values[loop.index0] %}
+        <div class="architecture-interval-row">
+          <input type="hidden" name="cell_start_pt" value="{{ interval.start_station_pt }}"><input type="hidden" name="cell_end_pt" value="{{ interval.end_station_pt }}">
+          <span>{{ '%.3f'|format(interval.start_m)|replace('.',',') }}-{{ '%.3f'|format(interval.end_m)|replace('.',',') }} м</span>
+          <input name="cell_id" value="{{ cell.cell_id }}" aria-label="ID интервала {{ loop.index }}">
+          <input name="cell_number" value="{{ cell.number }}" aria-label="Номер помещения интервала {{ loop.index }}" required>
+          <input name="cell_name" value="{{ cell.name }}" aria-label="Наименование помещения интервала {{ loop.index }}" required>
+          <select name="cell_kind" aria-label="Тип помещения интервала {{ loop.index }}"><option value="room"{% if cell.kind == 'room' %} selected{% endif %}>Помещение</option><option value="corridor"{% if cell.kind == 'corridor' %} selected{% endif %}>Коридор</option><option value="shaft"{% if cell.kind == 'shaft' %} selected{% endif %}>Шахта</option><option value="hall"{% if cell.kind == 'hall' %} selected{% endif %}>Холл</option><option value="technical"{% if cell.kind == 'technical' %} selected{% endif %}>Техническое</option></select>
+        </div>{% endfor %}
+      </div>
+      <button class="button-primary" type="submit">Подтвердить этаж</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if confirmed_model %}
+  <section class="architecture-confirmed">
+    <span class="verdict-light" data-state="ok"></span><div><strong>Архитектурный разрез подтверждён</strong><p>{{ confirmed_model.plan_id }} · разрез {{ confirmed_model.cut_id }} · {{ confirmed_model.floors|length }} этаж(а) · длина {{ '%.3f'|format(confirmed_model.cut_length_m)|replace('.',',') }} м. Модель сохранена и готова для привязки К1/К2.</p></div>
+  </section>
+  {% endif %}
+
+  <details class="architecture-survey-compact"><summary>Диагностика всех страниц · {{ survey.vector_page_count }} из {{ survey.page_count }} векторных</summary><div class="architecture-page-list">{% for page in survey.pages %}<article class="architecture-page" data-kind="{{ page.kind }}"><div><span class="analysis-list-code">ЛИСТ {{ page.page_number }}</span><strong>{{ kind_labels[page.kind] }}</strong></div><dl><div><dt>Линии</dt><dd>{{ page.vector_lines|length }}</dd></div><div><dt>Текст</dt><dd>{{ page.texts|length }}</dd></div><div><dt>Изображения</dt><dd>{{ page.image_count }}</dd></div><div><dt>Размер</dt><dd>{{ page.width_pt|round|int }} × {{ page.height_pt|round|int }} pt</dd></div></dl></article>{% endfor %}</div></details>
   {% endif %}
 </main></body></html>

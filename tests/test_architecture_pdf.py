@@ -11,6 +11,7 @@ from app.analysis.architecture_pdf import (
     ArchitecturePdfError,
     survey_architecture_pdf,
 )
+from app.analysis.architecture_import_store import ArchitectureImportStore
 
 
 def _vector_pdf() -> bytes:
@@ -62,6 +63,26 @@ def _request(path: str, method: str = "GET") -> Request:
     })
 
 
+def _geometry_form():
+    return [
+        ("page_number", "1"),
+        ("plan_id", "АР-ПДФ-01"),
+        ("cut_id", "1-1"),
+        ("floor", "1"),
+        ("elevation_m", "0"),
+        ("clear_height_m", "3"),
+        ("calibration_ax", "30"),
+        ("calibration_ay", "270"),
+        ("calibration_bx", "150"),
+        ("calibration_by", "270"),
+        ("calibration_distance_m", "4"),
+        ("cut_ax", "30"),
+        ("cut_ay", "180"),
+        ("cut_bx", "420"),
+        ("cut_by", "180"),
+    ]
+
+
 def test_vector_plan_yields_observed_candidates_but_requires_confirmation():
     survey = survey_architecture_pdf(
         _vector_pdf(), original_name="Планы АР.pdf"
@@ -110,9 +131,14 @@ def test_invalid_file_is_rejected(content):
         survey_architecture_pdf(content)
 
 
-def test_architecture_upload_page_surveys_vector_pdf():
+def test_architecture_upload_opens_persistent_confirmation_workspace(
+    tmp_path,
+    monkeypatch,
+):
     from app.web import architecture_import as web
 
+    store = ArchitectureImportStore(tmp_path)
+    monkeypatch.setattr(web, "_STORE", store)
     upload = UploadFile(
         filename="Планы АР.pdf",
         file=io.BytesIO(_vector_pdf()),
@@ -124,12 +150,121 @@ def test_architecture_upload_page_surveys_vector_pdf():
     ])
 
     response = asyncio.run(web.architecture_survey(request))
-    body = response.body.decode("utf-8")
-    assert response.status_code == 200
+    assert response.status_code == 303
+    import_id = response.headers["location"].rsplit("/", 1)[-1]
+    assert store.metadata(import_id)["original_name"] == "Планы АР.pdf"
+
+    result = web.architecture_workspace(
+        _request(f"/wizard/architecture/{import_id}"),
+        import_id,
+    )
+    body = result.body.decode("utf-8")
+    assert result.status_code == 200
     assert "Планы АР.pdf" in body
     assert "Векторный план" in body
-    assert "Можно передать в рабочее место подтверждения" in body
-    assert "Масштаб, этажи, линия разреза" in body
+    assert "Калибровка" in body
+    assert "Линия разреза" in body
+    assert "data-plan-preview" in body
+
+
+def test_workspace_finds_pdf_line_intersections_after_explicit_cut(
+    tmp_path,
+    monkeypatch,
+):
+    from app.web import architecture_import as web
+
+    store = ArchitectureImportStore(tmp_path)
+    monkeypatch.setattr(web, "_STORE", store)
+    import_id = store.create("Планы АР.pdf", _vector_pdf())
+    request = _request(f"/wizard/architecture/{import_id}/cut", "POST")
+    request._form = FormData(_geometry_form())
+
+    response = asyncio.run(web.architecture_cut_candidates(request, import_id))
+    body = response.body.decode("utf-8")
+    assert response.status_code == 200
+    assert "Границы-кандидаты" in body
+    assert "Шлюз 03" in body
+    assert "data-preview-cut" in body
+    assert "data-preview-candidate" in body
+
+
+def test_selected_boundaries_and_labeled_intervals_create_confirmed_floor(
+    tmp_path,
+    monkeypatch,
+):
+    from app.analysis.architecture_confirmation import (
+        confirmed_architecture_section_from_mapping,
+    )
+    from app.web import architecture_import as web
+
+    store = ArchitectureImportStore(tmp_path)
+    monkeypatch.setattr(web, "_STORE", store)
+    import_id = store.create("Планы АР.pdf", _vector_pdf())
+
+    boundaries_request = _request(
+        f"/wizard/architecture/{import_id}/boundaries",
+        "POST",
+    )
+    boundaries_request._form = FormData(
+        _geometry_form()
+        + [("boundary_station_pt", "120"), ("boundary_station_pt", "270")]
+    )
+    intervals_response = asyncio.run(
+        web.architecture_confirm_boundaries(boundaries_request, import_id)
+    )
+    intervals_body = intervals_response.body.decode("utf-8")
+    assert intervals_response.status_code == 200
+    assert "Экспликация вдоль разреза" in intervals_body
+    assert intervals_body.count('name="cell_start_pt"') == 3
+
+    confirmation_request = _request(
+        f"/wizard/architecture/{import_id}/confirm-floor",
+        "POST",
+    )
+    confirmation_request._form = FormData(
+        _geometry_form()
+        + [
+            ("cell_start_pt", "0"), ("cell_end_pt", "120"),
+            ("cell_id", "F1-101"), ("cell_number", "101"),
+            ("cell_name", "Кухня"), ("cell_kind", "room"),
+            ("cell_start_pt", "120"), ("cell_end_pt", "270"),
+            ("cell_id", "F1-102"), ("cell_number", "102"),
+            ("cell_name", "Коридор"), ("cell_kind", "corridor"),
+            ("cell_start_pt", "270"), ("cell_end_pt", "390"),
+            ("cell_id", "F1-103"), ("cell_number", "103"),
+            ("cell_name", "Санузел"), ("cell_kind", "room"),
+        ]
+    )
+    confirmed_response = asyncio.run(
+        web.architecture_confirm_floor(confirmation_request, import_id)
+    )
+    confirmed_body = confirmed_response.body.decode("utf-8")
+    assert confirmed_response.status_code == 200
+    assert "Архитектурный разрез подтверждён" in confirmed_body
+    model = confirmed_architecture_section_from_mapping(
+        store.load_confirmations(import_id)
+    )
+    assert [row.number for row in model.floors[0].cells] == ["101", "102", "103"]
+
+    refreshed = web.architecture_workspace(
+        _request(f"/wizard/architecture/{import_id}"),
+        import_id,
+    )
+    refreshed_body = refreshed.body.decode("utf-8")
+    assert refreshed.status_code == 200
+    assert "Архитектурный разрез подтверждён" in refreshed_body
+    assert 'value="АР-ПДФ-01"' in refreshed_body
+    assert 'value="Кухня"' in refreshed_body
+
+
+def test_import_store_detects_source_substitution(tmp_path):
+    store = ArchitectureImportStore(tmp_path)
+    import_id = store.create("Планы АР.pdf", _vector_pdf())
+    source = tmp_path / import_id / "source.pdf"
+    source.write_bytes(_raster_pdf())
+
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        store.survey(import_id)
 
 
 def test_architecture_routes_template_and_navigation_are_wired():
@@ -139,6 +274,11 @@ def test_architecture_routes_template_and_navigation_are_wired():
     paths = {route.path for route in app.routes}
     assert "/wizard/architecture" in paths
     assert "/wizard/architecture/survey" in paths
+    assert "/wizard/architecture/{import_id}" in paths
+    assert "/wizard/architecture/{import_id}/cut" in paths
+    assert "/wizard/architecture/{import_id}/boundaries" in paths
+    assert "/wizard/architecture/{import_id}/confirm-floor" in paths
+    assert "/wizard/architecture/{import_id}/delete" in paths
     _TPL.env.get_template("wizard_architecture.html")
     for name in (
         "wizard_form.html",
