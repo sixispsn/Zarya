@@ -4,7 +4,13 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from starlette.concurrency import run_in_threadpool
@@ -48,6 +54,7 @@ from app.pz.wastewater_layout import audit_wastewater_layout
 from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
+    generate_wastewater_structure_pdf,
 )
 
 
@@ -57,6 +64,10 @@ _TPL = Jinja2Templates(
 )
 _STORE = ArchitectureImportStore()
 _PROJECT_STORE = ProjectStore()
+_EXPORT_ROOT = os.environ.get(
+    "ZARYA_ARCHITECTURE_EXPORT_ROOT",
+    "/tmp/zarya_architecture_exports",
+)
 
 
 def _context(**values):
@@ -1028,18 +1039,7 @@ def architecture_unlink_wastewater_project(import_id: str):
 @router.get("/architecture/{import_id}/wastewater/control.svg")
 def architecture_wastewater_control_svg(import_id: str):
     try:
-        architecture, binding = _load_architecture_and_binding(import_id)
-        evaluation = _project_evaluation(import_id, architecture, binding)
-        if not evaluation["wastewater_control_ready"]:
-            messages = [
-                row.message
-                for row in evaluation["issues"]
-                if row.severity == "error"
-            ]
-            raise ValueError(
-                "; ".join(messages)
-                or "Контрольный лист ещё не прошёл обязательные проверки."
-            )
+        evaluation = _ready_wastewater_evaluation(import_id)
         svg = build_wastewater_structure_svg(
             evaluation["project"],
             evaluation["layout"],
@@ -1070,6 +1070,48 @@ def architecture_wastewater_control_svg(import_id: str):
                 f'inline; filename="architecture-{import_id}-K1-K2.svg"'
             ),
         },
+    )
+
+
+def _ready_wastewater_evaluation(import_id: str) -> dict:
+    architecture, binding = _load_architecture_and_binding(import_id)
+    evaluation = _project_evaluation(import_id, architecture, binding)
+    if not evaluation["wastewater_control_ready"]:
+        messages = [
+            row.message
+            for row in evaluation["issues"]
+            if row.severity == "error"
+        ]
+        raise ValueError(
+            "; ".join(messages)
+            or "Новая принципиальная схема ещё не прошла обязательные проверки."
+        )
+    return evaluation
+
+
+@router.get("/architecture/{import_id}/wastewater/scheme.pdf")
+def architecture_wastewater_scheme_pdf(import_id: str):
+    try:
+        evaluation = _ready_wastewater_evaluation(import_id)
+        output_dir = os.path.join(_EXPORT_ROOT, import_id)
+        os.makedirs(output_dir, mode=0o700, exist_ok=True)
+        output_path = os.path.join(output_dir, "Схема_К1_К2_новая.pdf")
+        generate_wastewater_structure_pdf(
+            evaluation["project"],
+            evaluation["layout"],
+            output_path,
+            scope=WastewaterStructureScope.FULL_FLOOR_STACK,
+        )
+        os.chmod(output_path, 0o600)
+    except FileNotFoundError:
+        return PlainTextResponse("Сессия или проект не найдены.", status_code=404)
+    except (RequestValidationError, ValueError) as exc:
+        return PlainTextResponse(str(exc), status_code=422)
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename="Схема_К1_К2_новая.pdf",
+        headers={"Cache-Control": "no-store"},
     )
 
 

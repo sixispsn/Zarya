@@ -650,6 +650,7 @@ table.grid .compact-check input[type="checkbox"] {
 .architecture-project-link-form select { width: 100%; }
 .architecture-project-link .button-primary, .architecture-project-link .button-secondary { white-space: nowrap; }
 .architecture-project-link button:disabled { opacity: .45; cursor: not-allowed; }
+.architecture-project-exports { display: flex; align-items: center; gap: 7px; }
 .architecture-project-registry { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .architecture-project-registry span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--quiet); background: var(--input); font: 8px var(--mono); }
 .architecture-binding-issues { display: grid; gap: 5px; margin-bottom: 12px; }
@@ -697,6 +698,7 @@ table.grid .compact-check input[type="checkbox"] {
   .architecture-interval-head, .architecture-interval-row { min-width: 760px; }
   .architecture-project-link { grid-template-columns: 1fr; align-items: stretch; }
   .architecture-project-link-form { align-items: stretch; flex-direction: column; }
+  .architecture-project-exports { align-items: stretch; flex-direction: column; }
   .architecture-binding-summary, .architecture-binding-editors { grid-template-columns: 1fr; }
 }
 

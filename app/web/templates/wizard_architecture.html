@@ -5,7 +5,7 @@
 <title>Заря - планы в принципиальный разрез</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/wizard.css?v=20260827-11">
+  <link rel="stylesheet" href="/static/wizard.css?v=20260827-12">
 <script defer src="/static/wizard.js?v=20260730-7"></script>
 <script defer src="/static/architecture.js?v=20260827-1"></script>
 </head><body>
@@ -152,7 +152,7 @@
       <div class="architecture-project-link-copy"><span class="verdict-light" data-state="{{ wastewater_control_ready and 'ok' or 'warning' }}"></span><div><strong>{% if linked_project %}{{ linked_project.title }}{% else %}Инженерный граф не связан{% endif %}</strong><small>{% if linked_project %}Проект {{ linked_project.project_id }} · YAML {{ linked_project.source_sha256[:12] }}{% else %}Выберите сохранённый проект: из него будут взяты только подтверждённые элементы, участки и связи К1/К2.{% endif %}</small></div></div>
       <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/project" class="architecture-project-link-form"><label>Сохранённый проект<select name="project_id" required><option value="">Выберите проект</option>{% for project in projects %}<option value="{{ project.project_id }}"{% if linked_project and project.project_id == linked_project.project_id %} selected{% endif %}>{{ project.title }} · {{ project.project_id }}</option>{% endfor %}</select></label><button class="button-secondary" type="submit"{% if not projects %} disabled{% endif %}>{{ linked_project and 'Переподтвердить' or 'Связать' }}</button></form>
       {% if linked_project %}<form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/project/delete"><button class="delete-button" type="submit">Отвязать</button></form>{% endif %}
-      {% if wastewater_control_ready %}<a class="button-primary" href="/wizard/architecture/{{ import_id }}/wastewater/control.svg" target="_blank" rel="noopener">Открыть контрольный лист SVG</a>{% endif %}
+      {% if wastewater_control_ready %}<div class="architecture-project-exports"><a class="button-primary" href="/wizard/architecture/{{ import_id }}/wastewater/scheme.pdf">Скачать новую схему PDF</a><a class="button-secondary" href="/wizard/architecture/{{ import_id }}/wastewater/control.svg" target="_blank" rel="noopener">Предпросмотр SVG</a></div>{% endif %}
     </div>
 
     {% if linked_project_registry %}<div class="architecture-project-registry"><span>{{ linked_project_registry.riser_ids|length }} стояков</span><span>{{ linked_project_registry.receivers|length }} приёмников</span><span>{{ linked_project_registry.pipe_count }} участков</span></div>

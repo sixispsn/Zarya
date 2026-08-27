@@ -354,6 +354,7 @@ def test_architecture_routes_template_and_navigation_are_wired():
     assert "/wizard/architecture/{import_id}/wastewater/project" in paths
     assert "/wizard/architecture/{import_id}/wastewater/project/delete" in paths
     assert "/wizard/architecture/{import_id}/wastewater/control.svg" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/scheme.pdf" in paths
     assert "/wizard/architecture/{import_id}/wastewater/delete" in paths
     assert "/wizard/architecture/{import_id}/delete" in paths
     _TPL.env.get_template("wizard_architecture.html")

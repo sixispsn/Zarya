@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from starlette.datastructures import FormData
+from pypdf import PdfReader
 
 from app.analysis.architecture_confirmation import (
     ConfirmedArchitectureSectionInput,
@@ -326,6 +327,7 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     project_store = ProjectStore(root=str(tmp_path / "projects"))
     monkeypatch.setattr(web, "_STORE", architecture_store)
     monkeypatch.setattr(web, "_PROJECT_STORE", project_store)
+    monkeypatch.setattr(web, "_EXPORT_ROOT", str(tmp_path / "exports"))
 
     import_id = architecture_store.create("Планы АР.pdf", _vector_pdf())
     survey = architecture_store.survey(import_id)
@@ -365,13 +367,20 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
         import_id,
     )
     body = workspace.body.decode("utf-8")
-    assert "Открыть контрольный лист SVG" in body
+    assert "Скачать новую схему PDF" in body
+    assert "Предпросмотр SVG" in body
     assert "Инженерный граф не связан" not in body
 
     control = web.architecture_wastewater_control_svg(import_id)
     assert control.status_code == 200
     assert control.media_type == "image/svg+xml"
     assert 'data-bound-section="К1-Ветв-Кух1"' in control.body.decode("utf-8")
+
+    pdf_response = web.architecture_wastewater_scheme_pdf(import_id)
+    assert pdf_response.status_code == 200
+    assert pdf_response.media_type == "application/pdf"
+    assert Path(pdf_response.path).is_file()
+    assert len(PdfReader(pdf_response.path).pages) == 1
 
     request_dto.apartments += 1
     project_store.save(request_dto, project_id=project_id)
@@ -380,5 +389,6 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
         import_id,
     ).body.decode("utf-8")
     assert "Проект изменён после подтверждения связи" in changed
-    assert "Открыть контрольный лист SVG" not in changed
+    assert "Скачать новую схему PDF" not in changed
     assert web.architecture_wastewater_control_svg(import_id).status_code == 422
+    assert web.architecture_wastewater_scheme_pdf(import_id).status_code == 422
