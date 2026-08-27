@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from hashlib import sha256
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -71,6 +72,14 @@ class ProjectStore:
             raise FileNotFoundError(f"проект {project_id} не найден")
         with open(ypath, encoding="utf-8") as f:
             return load_request(f.read())
+
+    def source_sha256(self, project_id: str) -> str:
+        """Контрольная сумма сохранённого YAML — версия намерения проекта."""
+        ypath, _ = self._paths(project_id)
+        if not os.path.isfile(ypath):
+            raise FileNotFoundError(f"проект {project_id} не найден")
+        with open(ypath, "rb") as source:
+            return sha256(source.read()).hexdigest()
 
     def delete(self, project_id: str) -> None:
         ypath, mpath = self._paths(project_id)

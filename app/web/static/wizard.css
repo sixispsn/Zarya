@@ -639,6 +639,19 @@ table.grid .compact-check input[type="checkbox"] {
 .architecture-confirmed p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
 .architecture-engineering { margin-top: 28px; }
 .architecture-engineering-intro { max-width: 860px; margin: -5px 0 14px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.architecture-project-link { display: grid; grid-template-columns: minmax(240px,1fr) minmax(280px,1fr) auto auto; align-items: end; gap: 10px; margin-bottom: 10px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.architecture-project-link[data-state="ready"] { border-color: var(--ok); background: var(--ok-pale); }
+.architecture-project-link-copy { display: flex; align-items: flex-start; gap: 12px; min-width: 0; align-self: center; }
+.architecture-project-link-copy strong, .architecture-project-link-copy small { display: block; }
+.architecture-project-link-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.architecture-project-link-copy small { margin-top: 4px; color: var(--quiet); font: 8px/1.45 var(--mono); }
+.architecture-project-link-form { display: flex; align-items: end; gap: 7px; min-width: 0; }
+.architecture-project-link-form label { flex: 1 1 auto; min-width: 0; }
+.architecture-project-link-form select { width: 100%; }
+.architecture-project-link .button-primary, .architecture-project-link .button-secondary { white-space: nowrap; }
+.architecture-project-link button:disabled { opacity: .45; cursor: not-allowed; }
+.architecture-project-registry { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.architecture-project-registry span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--quiet); background: var(--input); font: 8px var(--mono); }
 .architecture-binding-issues { display: grid; gap: 5px; margin-bottom: 12px; }
 .architecture-binding-issues p { display: flex; gap: 8px; align-items: baseline; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--surface); font: 9px/1.45 var(--mono); }
 .architecture-binding-issues p[data-severity="error"] { border-color: var(--danger); color: var(--danger); background: var(--danger-pale); }
@@ -682,6 +695,8 @@ table.grid .compact-check input[type="checkbox"] {
   .architecture-next-gate button { width: 100%; }
   .architecture-interval-table { overflow-x: auto; }
   .architecture-interval-head, .architecture-interval-row { min-width: 760px; }
+  .architecture-project-link { grid-template-columns: 1fr; align-items: stretch; }
+  .architecture-project-link-form { align-items: stretch; flex-direction: column; }
   .architecture-binding-summary, .architecture-binding-editors { grid-template-columns: 1fr; }
 }
 

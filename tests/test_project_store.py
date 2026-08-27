@@ -30,6 +30,7 @@ def test_save_and_load(store):
     pid = store.save(_req())
     assert store.exists(pid)
     assert store.load(pid) == _req()
+    assert len(store.source_sha256(pid)) == 64
 
 
 def test_list_sorted_and_titled(store):
@@ -41,10 +42,12 @@ def test_list_sorted_and_titled(store):
 
 def test_update_same_id(store):
     pid = store.save(_req())
+    before = store.source_sha256(pid)
     req = _req()
     req.floors = 20
     assert store.save(req, project_id=pid) == pid
     assert store.load(pid).floors == 20
+    assert store.source_sha256(pid) != before
 
 
 def test_delete(store):

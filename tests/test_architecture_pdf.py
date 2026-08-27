@@ -313,6 +313,31 @@ def test_import_store_detects_source_substitution(tmp_path):
         store.survey(import_id)
 
 
+def test_import_store_persists_versioned_project_link(tmp_path):
+    store = ArchitectureImportStore(tmp_path)
+    import_id = store.create("Планы АР.pdf", _vector_pdf())
+
+    store.save_project_link(
+        import_id,
+        project_id="ab12cd34ef",
+        project_source_sha256="a" * 64,
+    )
+
+    assert store.load_project_link(import_id) == {
+        "project_id": "ab12cd34ef",
+        "project_source_sha256": "a" * 64,
+    }
+    store.delete_project_link(import_id)
+    assert store.load_project_link(import_id) == {}
+
+    with pytest.raises(ValueError, match="linked project id"):
+        store.save_project_link(
+            import_id,
+            project_id="../../etc/passwd",
+            project_source_sha256="a" * 64,
+        )
+
+
 def test_architecture_routes_template_and_navigation_are_wired():
     from app.main import app
     from app.web.architecture_import import _TPL
@@ -326,6 +351,9 @@ def test_architecture_routes_template_and_navigation_are_wired():
     assert "/wizard/architecture/{import_id}/confirm-floor" in paths
     assert "/wizard/architecture/{import_id}/wastewater/riser" in paths
     assert "/wizard/architecture/{import_id}/wastewater/receiver" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/project" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/project/delete" in paths
+    assert "/wizard/architecture/{import_id}/wastewater/control.svg" in paths
     assert "/wizard/architecture/{import_id}/wastewater/delete" in paths
     assert "/wizard/architecture/{import_id}/delete" in paths
     _TPL.env.get_template("wizard_architecture.html")

@@ -5,7 +5,7 @@
 <title>Заря - планы в принципиальный разрез</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260827-10">
+  <link rel="stylesheet" href="/static/wizard.css?v=20260827-11">
 <script defer src="/static/wizard.js?v=20260730-7"></script>
 <script defer src="/static/architecture.js?v=20260827-1"></script>
 </head><body>
@@ -148,6 +148,17 @@
     <div class="analysis-section-head"><div><p class="eyebrow">ENGINEERING BINDING / 03</p><h2>Привязка К1/К2 к помещениям</h2></div><span>{{ wastewater_binding.risers|length }} стояков · {{ wastewater_binding.receivers|length }} приборов</span></div>
     <p class="architecture-engineering-intro">Здесь нет распознавания «санузел = комплект приборов». Каждая строка подтверждает конкретный элемент реестра, его помещение, отметку подключения и стояк.</p>
 
+    <div class="architecture-project-link" data-state="{{ wastewater_control_ready and 'ready' or (linked_project and 'linked' or 'empty') }}">
+      <div class="architecture-project-link-copy"><span class="verdict-light" data-state="{{ wastewater_control_ready and 'ok' or 'warning' }}"></span><div><strong>{% if linked_project %}{{ linked_project.title }}{% else %}Инженерный граф не связан{% endif %}</strong><small>{% if linked_project %}Проект {{ linked_project.project_id }} · YAML {{ linked_project.source_sha256[:12] }}{% else %}Выберите сохранённый проект: из него будут взяты только подтверждённые элементы, участки и связи К1/К2.{% endif %}</small></div></div>
+      <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/project" class="architecture-project-link-form"><label>Сохранённый проект<select name="project_id" required><option value="">Выберите проект</option>{% for project in projects %}<option value="{{ project.project_id }}"{% if linked_project and project.project_id == linked_project.project_id %} selected{% endif %}>{{ project.title }} · {{ project.project_id }}</option>{% endfor %}</select></label><button class="button-secondary" type="submit"{% if not projects %} disabled{% endif %}>{{ linked_project and 'Переподтвердить' or 'Связать' }}</button></form>
+      {% if linked_project %}<form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/project/delete"><button class="delete-button" type="submit">Отвязать</button></form>{% endif %}
+      {% if wastewater_control_ready %}<a class="button-primary" href="/wizard/architecture/{{ import_id }}/wastewater/control.svg" target="_blank" rel="noopener">Открыть контрольный лист SVG</a>{% endif %}
+    </div>
+
+    {% if linked_project_registry %}<div class="architecture-project-registry"><span>{{ linked_project_registry.riser_ids|length }} стояков</span><span>{{ linked_project_registry.receivers|length }} приёмников</span><span>{{ linked_project_registry.pipe_count }} участков</span></div>
+    <datalist id="linked-project-risers">{% for riser_id in linked_project_registry.riser_ids %}<option value="{{ riser_id }}">{% endfor %}</datalist>
+    <datalist id="linked-project-receivers">{% for row in linked_project_registry.receivers %}<option value="{{ row.element_id }}">{{ row.system }} · {{ row.kind }} · DN{{ row.dn_mm or '—' }}</option>{% endfor %}</datalist>{% endif %}
+
     {% if wastewater_binding_issues %}<div class="architecture-binding-issues" role="status">{% for issue in wastewater_binding_issues %}<p data-severity="{{ issue.severity }}"><span>{{ issue.severity == 'error' and '!' or '·' }}</span>{{ issue.message }}</p>{% endfor %}</div>{% endif %}
 
     <div class="architecture-binding-summary">
@@ -161,7 +172,7 @@
         <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/riser">
           <div class="architecture-binding-grid">
             <label>ID размещения<input name="placement_id" required placeholder="R-K1-1-F1"></label>
-            <label>Обозначение стояка<input name="riser_id" required placeholder="К1-Ст1"></label>
+            <label>Обозначение стояка<input name="riser_id"{% if linked_project_registry %} list="linked-project-risers"{% endif %} required placeholder="К1-Ст1"></label>
             <label>Система<select name="system"><option value="K1">К1</option><option value="K2">К2</option><option value="K3">К3</option></select></label>
             <label>DN<input name="dn_mm" inputmode="numeric" required placeholder="100"></label>
             <label class="architecture-binding-wide">Шахта<select name="shaft_ref" required><option value="">Выберите подтверждённую шахту</option>{% for floor in confirmed_model.floors %}{% for cell in floor.cells if cell.kind == 'shaft' %}<option value="{{ floor.floor }}::{{ cell.room_id }}">{{ floor.floor }} этаж · №{{ cell.number }} {{ cell.name }} · {{ '%.3f'|format(cell.start_m)|replace('.',',') }}–{{ '%.3f'|format(cell.end_m)|replace('.',',') }} м</option>{% endfor %}{% endfor %}</select></label>
@@ -177,7 +188,7 @@
         <form method="post" action="/wizard/architecture/{{ import_id }}/wastewater/receiver">
           <div class="architecture-binding-grid">
             <label>ID размещения<input name="placement_id" required placeholder="P-WC-F1-01"></label>
-            <label>ID элемента проекта<input name="element_id" required placeholder="К1-Ун1"></label>
+            <label>ID элемента проекта<input name="element_id"{% if linked_project_registry %} list="linked-project-receivers"{% endif %} required placeholder="К1-Ун1"></label>
             <label>Вид<select name="kind">{% for definition in receiver_definitions %}<option value="{{ definition.kind }}">{{ definition.label }}</option>{% endfor %}</select></label>
             <label>Система<select name="system"><option value="K1">К1</option><option value="K2">К2</option></select></label>
             <label class="architecture-binding-wide">Помещение<select name="room_ref" required><option value="">Выберите помещение</option>{% for floor in confirmed_model.floors %}{% for cell in floor.cells if cell.kind != 'shaft' %}<option value="{{ floor.floor }}::{{ cell.room_id }}">{{ floor.floor }} этаж · №{{ cell.number }} {{ cell.name }} · {{ '%.3f'|format(cell.start_m)|replace('.',',') }}–{{ '%.3f'|format(cell.end_m)|replace('.',',') }} м</option>{% endfor %}{% endfor %}</select></label>

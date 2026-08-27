@@ -1,4 +1,8 @@
+import asyncio
 from dataclasses import replace
+from pathlib import Path
+
+from starlette.datastructures import FormData
 
 from app.analysis.architecture_confirmation import (
     ConfirmedArchitectureSectionInput,
@@ -6,7 +10,9 @@ from app.analysis.architecture_confirmation import (
     PdfScaleConfirmation,
     PdfSectionCellConfirmation,
     PdfSectionCutConfirmation,
+    confirmed_architecture_section_to_mapping,
 )
+from app.analysis.architecture_import_store import ArchitectureImportStore
 from app.analysis.architecture_pdf import PdfPlanPoint
 from app.analysis.architecture_wastewater_binding import (
     ConfirmedArchitectureWastewaterBinding,
@@ -28,6 +34,9 @@ from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
 )
+from app.intake.project_store import ProjectStore
+from app.intake.yaml_io import load_request_file
+from tests.test_architecture_pdf import _request as _web_request, _vector_pdf
 
 
 def _architecture(*, two_floors: bool = False):
@@ -305,3 +314,71 @@ def test_binding_places_project_graph_without_inventing_rooms_or_edges():
     assert 'data-ugo="sink"' in svg
     assert svg.count('data-ugo="trap"') == 1
     assert "№102 Санузел" in svg
+
+
+def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
+    tmp_path,
+    monkeypatch,
+):
+    from app.web import architecture_import as web
+
+    architecture_store = ArchitectureImportStore(tmp_path / "architecture")
+    project_store = ProjectStore(root=str(tmp_path / "projects"))
+    monkeypatch.setattr(web, "_STORE", architecture_store)
+    monkeypatch.setattr(web, "_PROJECT_STORE", project_store)
+
+    import_id = architecture_store.create("Планы АР.pdf", _vector_pdf())
+    survey = architecture_store.survey(import_id)
+    architecture = replace(_architecture(), source_sha256=survey.sha256)
+    base_binding = _binding()
+    binding = replace(
+        base_binding,
+        architecture_source_sha256=survey.sha256,
+        receivers=(base_binding.receivers[0],),
+    )
+    architecture_store.save_confirmations(
+        import_id,
+        confirmed_architecture_section_to_mapping(architecture),
+    )
+    architecture_store.save_wastewater_binding(
+        import_id,
+        architecture_wastewater_binding_to_mapping(binding),
+    )
+    request_dto = load_request_file(str(
+        Path(__file__).parents[1] / "demo" / "demo_project.yaml"
+    ))
+    project_id = project_store.save(request_dto)
+
+    link_request = _web_request(
+        f"/wizard/architecture/{import_id}/wastewater/project",
+        "POST",
+    )
+    link_request._form = FormData([("project_id", project_id)])
+    linked = asyncio.run(
+        web.architecture_link_wastewater_project(link_request, import_id)
+    )
+
+    assert linked.status_code == 303
+    assert architecture_store.load_project_link(import_id)["project_id"] == project_id
+    workspace = web.architecture_workspace(
+        _web_request(f"/wizard/architecture/{import_id}"),
+        import_id,
+    )
+    body = workspace.body.decode("utf-8")
+    assert "Открыть контрольный лист SVG" in body
+    assert "Инженерный граф не связан" not in body
+
+    control = web.architecture_wastewater_control_svg(import_id)
+    assert control.status_code == 200
+    assert control.media_type == "image/svg+xml"
+    assert 'data-bound-section="К1-Ветв-Кух1"' in control.body.decode("utf-8")
+
+    request_dto.apartments += 1
+    project_store.save(request_dto, project_id=project_id)
+    changed = web.architecture_workspace(
+        _web_request(f"/wizard/architecture/{import_id}"),
+        import_id,
+    ).body.decode("utf-8")
+    assert "Проект изменён после подтверждения связи" in changed
+    assert "Открыть контрольный лист SVG" not in changed
+    assert web.architecture_wastewater_control_svg(import_id).status_code == 422

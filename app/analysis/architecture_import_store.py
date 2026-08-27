@@ -12,6 +12,7 @@ from app.analysis.architecture_pdf import ArchitecturePdfSurvey, survey_architec
 
 
 _ID_RE = re.compile(r"^[a-f0-9]{10}$")
+_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 
 
 class ArchitectureImportStore:
@@ -109,6 +110,57 @@ class ArchitectureImportStore:
         if not isinstance(value, dict):
             raise ValueError("invalid architecture wastewater binding")
         return value
+
+    def save_project_link(
+        self,
+        import_id: str,
+        *,
+        project_id: str,
+        project_source_sha256: str,
+    ) -> None:
+        """Зафиксировать проект и точную версию его YAML для этой сессии."""
+        if not _ID_RE.fullmatch(project_id):
+            raise ValueError("invalid linked project id")
+        if not _SHA256_RE.fullmatch(project_source_sha256):
+            raise ValueError("invalid linked project checksum")
+        directory = self._directory(import_id)
+        self.metadata(import_id)
+        target = directory / "project_link.json"
+        target.write_text(
+            json.dumps(
+                {
+                    "project_id": project_id,
+                    "project_source_sha256": project_source_sha256,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        target.chmod(0o600)
+
+    def load_project_link(self, import_id: str) -> dict[str, str]:
+        target = self._directory(import_id) / "project_link.json"
+        if not target.is_file():
+            return {}
+        value = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("invalid architecture project link")
+        project_id = str(value.get("project_id", ""))
+        checksum = str(value.get("project_source_sha256", ""))
+        if not _ID_RE.fullmatch(project_id) or not _SHA256_RE.fullmatch(checksum):
+            raise ValueError("invalid architecture project link")
+        return {
+            "project_id": project_id,
+            "project_source_sha256": checksum,
+        }
+
+    def delete_project_link(self, import_id: str) -> None:
+        directory = self._directory(import_id)
+        self.metadata(import_id)
+        target = directory / "project_link.json"
+        if target.is_file():
+            target.unlink()
 
     def delete(self, import_id: str) -> None:
         directory = self._directory(import_id)
