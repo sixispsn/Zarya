@@ -156,15 +156,16 @@ sewage:
     - {id: К1-Р2-13, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 13, room_name: сантехническая шахта 2, dn_mm: 100, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
     - {id: К1-Р2-16, system: K1, kind: revision, name: Ревизия канализационная, quantity: 1, floor_from: 16, room_name: сантехническая шахта 2, dn_mm: 100, section_id: К1-Ст2, standard: ГОСТ 32414-2013, layout_column: 2}
     # Нижние повороты К1 имеют собственный прямой доступ в магистраль:
-    # два отвода 45° + отдельный косой тройник 45° с заглушённым концом.
+    # отвод 45° + косой тройник 45°, заменяющий второй полуотвод; свободный
+    # прямой конец тройника заглушён и соосен очищаемой магистрали.
     # Ревизии первого этажа сохраняются для обслуживания стояков, но не
     # подменяют монтажный узел прочистки поворота.
     # Точки обслуживания горизонтальной магистрали не подставляются: их тип и
     # координаты должны быть подтверждены планом/аксонометрией с проверкой
     # предельных расстояний по таблице 18.1 СП 30.13330.2020.
-    - {id: К1-ОтвСт1, system: K1, kind: elbow, name: Отвод канализационный 45°, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Ст1, connects_to: К1-М1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 1}
+    - {id: К1-ОтвСт1, system: K1, kind: elbow, name: Отвод канализационный 45°, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Ст1, connects_to: К1-М1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 1}
     - {id: К1-ПрНП1, system: K1, kind: cleanout, name: Тройник канализационный косой 45° с заглушкой (прочистка), quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-М1, connects_to: К1-Ст1, type_mark: DN100; 45°, standard: ГОСТ 32414-2013, service_direction: downstream, service_fitting: wye_45, accessible: true, layout_column: 1}
-    - {id: К1-ОтвСт2, system: K1, kind: elbow, name: Отвод канализационный 45°, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Ст2, connects_to: К1-Вып1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 2}
+    - {id: К1-ОтвСт2, system: K1, kind: elbow, name: Отвод канализационный 45°, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Ст2, connects_to: К1-Вып1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 2}
     - {id: К1-ПрНП2, system: K1, kind: cleanout, name: Тройник канализационный косой 45° с заглушкой (прочистка), quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К1-Вып1, connects_to: К1-Ст2, type_mark: DN100; 45°, standard: ГОСТ 32414-2013, service_direction: downstream, service_fitting: wye_45, accessible: true, layout_column: 2}
     - {id: К1-Пер1, system: K1, kind: transition, name: Переход канализационный концентрический, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 150, section_id: К1-Вып1, connects_to: К1-Ст2, type_mark: DN100×150, standard: ГОСТ 32414-2013, layout_column: 2}
     - {id: К1-ПМ1, system: K1, kind: fire_collar, name: Муфта противопожарная, quantity: 16, floor_from: 1, floor_to: 16, room_name: перекрытия шахты 1, dn_mm: 100, section_id: К1-Ст1, type_mark: ППМ-110, standard: ТУ изготовителя, layout_column: 1}
@@ -173,10 +174,10 @@ sewage:
     - {id: К2-Вр1, system: K2, kind: roof_funnel, name: Воронка водосточная с электрообогревом, quantity: 2, floor_from: 17, room_name: кровля, dn_mm: 100, slope_per_mille: 5.0, section_id: К2-Ст1, connects_to: К2-Ст1, type_mark: по плану кровли, standard: ТУ изготовителя, layout_column: 3}
     - {id: К2-Вр2, system: K2, kind: roof_funnel, name: Воронка водосточная с электрообогревом, quantity: 2, floor_from: 17, room_name: кровля, dn_mm: 100, slope_per_mille: 5.0, section_id: К2-Ст2, connects_to: К2-Ст2, type_mark: по плану кровли, standard: ТУ изготовителя, layout_column: 4}
     # На поворотах К2 предусмотрены доступные прочистки по п. 21.10 СП 30:
-    # два отвода 45° + отдельный косой тройник 45° с заглушённым концом.
-    - {id: К2-ОтвСт1, system: K2, kind: elbow, name: Отвод канализационный 45°, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Ст1, connects_to: К2-М1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 3}
+    # отвод 45° + косой тройник с соосным заглушённым прямым концом.
+    - {id: К2-ОтвСт1, system: K2, kind: elbow, name: Отвод канализационный 45°, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Ст1, connects_to: К2-М1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 3}
     - {id: К2-ПрНП1, system: K2, kind: cleanout, name: Тройник канализационный косой 45° с заглушкой (прочистка), quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-М1, connects_to: К2-Ст1, type_mark: DN100; 45°, standard: ГОСТ 32414-2013, service_direction: downstream, service_fitting: wye_45, accessible: true, layout_column: 3}
-    - {id: К2-ОтвСт2, system: K2, kind: elbow, name: Отвод канализационный 45°, quantity: 2, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Ст2, connects_to: К2-Вып1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 4}
+    - {id: К2-ОтвСт2, system: K2, kind: elbow, name: Отвод канализационный 45°, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Ст2, connects_to: К2-Вып1, type_mark: 45°, standard: ГОСТ 32414-2013, layout_column: 4}
     - {id: К2-ПрНП2, system: K2, kind: cleanout, name: Тройник канализационный косой 45° с заглушкой (прочистка), quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 100, section_id: К2-Вып1, connects_to: К2-Ст2, type_mark: DN100; 45°, standard: ГОСТ 32414-2013, service_direction: downstream, service_fitting: wye_45, accessible: true, layout_column: 4}
     - {id: К2-Пер1, system: K2, kind: transition, name: Переход водосточный концентрический, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 150, section_id: К2-М1, connects_to: К2-Ст1, type_mark: DN100×150, standard: ГОСТ 32414-2013, layout_column: 3}
     - {id: К2-Пер2, system: K2, kind: transition, name: Переход водосточный концентрический, quantity: 1, floor_from: 0, room_name: техническое подполье, dn_mm: 150, section_id: К2-Вып1, connects_to: К2-Ст2, type_mark: DN100×150, standard: ГОСТ 32414-2013, layout_column: 4}

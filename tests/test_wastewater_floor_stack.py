@@ -111,8 +111,7 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     assert svg.count('data-lower-turn-node=') == 2
     assert svg.count('data-cleanout-source="registry"') == 2
     assert svg.count('data-draft-segment="cleanout_access"') == 2
-    assert svg.count('data-fitting="lower_elbow_45_1"') == 2
-    assert svg.count('data-fitting="lower_elbow_45_2"') == 2
+    assert svg.count('data-fitting="lower_elbow_45"') == 2
     assert svg.count('data-fitting="service_wye_45"') == 2
     assert svg.count(">Прочистка</text>") == 2
 

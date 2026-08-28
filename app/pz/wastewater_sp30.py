@@ -65,7 +65,7 @@ def _compound_bend_quantity(
     riser: SewerPipeSpec,
     connected_main_ids: set[str],
 ) -> int:
-    return sum(
+    elbows = sum(
         row.quantity
         for row in elements
         if row.system == riser.system
@@ -78,6 +78,20 @@ def _compound_bend_quantity(
             )
         )
     )
+    # Принятая пользователем геометрия логика1.pdf использует косой тройник
+    # как вторую фасонную часть поворота. Это не скрывает буквальное отличие
+    # от формулировки п. 18.4 про два отвода: оно отдельно выводится в аудите.
+    wye_substitution = any(
+        row.system == riser.system
+        and row.kind == "cleanout"
+        and row.section_id in connected_main_ids
+        and row.connects_to == riser.section_id
+        and row.service_direction in {"downstream", "both"}
+        and row.service_fitting == "wye_45"
+        and row.accessible
+        for row in elements
+    )
+    return elbows + int(wye_substitution)
 
 
 def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
@@ -95,6 +109,7 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
     floors = max(1, int(project.building.floors_above or 1))
     risers = [row for row in pipes if _is_riser(row)]
     mains = [row for row in pipes if not _is_riser(row)]
+    wye_substitution_risers: list[str] = []
 
     for riser in risers:
         connected_mains = [
@@ -110,6 +125,15 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
             row for row in elements
             if _services_turn(row, riser, connected_main_ids)
         ]
+        if any(
+            row.kind == "cleanout"
+            and row.service_fitting == "wye_45"
+            and row.section_id in connected_main_ids
+            and row.connects_to == riser.section_id
+            and row.accessible
+            for row in turn_service
+        ):
+            wye_substitution_risers.append(riser.section_id)
         if riser.system == "K2" and not turn_service:
             result.errors.append(
                 f"{riser.section_id}: на повороте стояка К2 нет ревизии/прочистки "
@@ -157,6 +181,14 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
                 "фасонными частями; одиночный отвод 87,5° запрещён "
                 "(СП 30.13330.2020, п. 18.4)"
             )
+
+    if wye_substitution_risers:
+        result.warnings.append(
+            "Узлы " + ", ".join(wye_substitution_risers)
+            + ": по логика1.pdf косой тройник заменяет второй полуотвод; "
+            "буквальный п. 18.4 СП 30.13330.2020 называет два отвода 45°. "
+            "Монтажное решение требует подтверждения проектировщиком."
+        )
 
     result.notes.extend((
         "СП 30.13330.2020, п. 18.30: расстояния между ревизиями/прочистками "

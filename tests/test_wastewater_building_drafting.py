@@ -53,6 +53,14 @@ def test_building_resolver_keeps_two_independent_k1_stacks_and_exact_k2():
         (1, 4, 7, 10, 13, 16),
     ]
     assert [row.riser_id for row in result.k2_risers] == ["К2-Ст1", "К2-Ст2"]
+    assert [row.lower_cleanout_element_ids for row in result.k1_risers] == [
+        ("К1-ПрНП1",),
+        ("К1-ПрНП2",),
+    ]
+    assert [row.lower_cleanout_element_ids for row in result.k2_risers] == [
+        ("К2-ПрНП1",),
+        ("К2-ПрНП2",),
+    ]
     assert [row.funnel_quantity for row in result.k2_risers] == [2, 2]
     assert all(
         row.funnel_symbol_kind == "roof_funnel_heated"
@@ -112,11 +120,14 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
         assert f'data-pipe-line-id="{line_id}"' in basement_svg
     assert 'data-building-transition="К1-Пер1"' in basement_svg
     assert 'data-building-transition="К2-Пер1"' in basement_svg
-    assert basement_svg.count('data-fitting-boundary="К1-Ст') == 4
-    assert basement_svg.count('data-topology-status="fitting-not-declared"') == 2
+    assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
+    assert basement_svg.count('data-fitting="service_wye_45"') == 4
     assert 'data-building-revision="K2' not in basement_svg
-    assert 'data-basement-cleanout=' not in basement_svg
-    assert "Ревизии и прочистки К2 не показаны" in basement_svg
+    assert basement_svg.count('data-basement-cleanout=') == 4
+    assert basement_svg.count('data-cleanout-axis="collinear"') == 4
+    for element_id in ("К1-ПрНП1", "К1-ПрНП2", "К2-ПрНП1", "К2-ПрНП2"):
+        assert f'data-basement-cleanout="{element_id}"' in basement_svg
+    assert "соосен очищаемой горизонтальной магистрали" in basement_svg
     assert "за грань здания" in basement_svg
     assert "0,010" in basement_svg
     assert basement_svg.count("0,008") >= 2

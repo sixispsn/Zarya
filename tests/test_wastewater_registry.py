@@ -87,8 +87,7 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert result.svg.count('data-lower-turn-node=') == 4
     assert result.svg.count('data-cleanout-source="registry"') == 4
     assert result.svg.count('data-draft-segment="cleanout_access"') == 4
-    assert result.svg.count('data-fitting="lower_elbow_45_1"') == 4
-    assert result.svg.count('data-fitting="lower_elbow_45_2"') == 4
+    assert result.svg.count('data-fitting="lower_elbow_45"') == 4
     assert result.svg.count('data-fitting="service_wye_45"') == 4
     assert result.svg.count('data-fitting="cleanout_cap_fitting"') == 4
     assert result.svg.count('data-accessible-capped-end="true"') == 4
@@ -102,7 +101,7 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 4
-    assert result.svg.count(">2 отвода 45°</text>") == 4
+    assert result.svg.count(">Отвод 45°</text>") == 4
     assert result.svg.count('data-lower-connection="elbow-wye-cleanout"') == 4
     assert "СП 30: ревизии и повороты проверены" in result.svg
     assert "К2-Вр1" in result.svg

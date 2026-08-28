@@ -18,11 +18,10 @@ def test_lower_turn_is_a_connected_gravity_assembly():
     node = build_lower_turn_cleanout_assembly(system="K1", dn_mm=100)
 
     assert node.validate() == []
-    assert node.flow_segment_ids == ("riser", "diagonal", "turn_out", "main")
+    assert node.flow_segment_ids == ("riser", "diagonal", "main")
     assert [node.segment(row).role for row in node.flow_segment_ids] == [
         "riser",
         "diagonal",
-        "horizontal_turn_out",
         "main",
     ]
     for upstream, downstream in zip(
@@ -34,16 +33,16 @@ def test_lower_turn_is_a_connected_gravity_assembly():
         )
 
 
-def test_service_wye_follows_two_elbows_and_has_a_capped_end():
+def test_service_wye_replaces_second_half_elbow_and_has_a_capped_end():
     node = build_lower_turn_cleanout_assembly()
     wye = node.fitting("service_wye_45")
     cap = node.port("cleanout_cap")
 
     assert wye.kind == "wye_45_cleanout"
-    assert wye.replaces_kind == ""
-    assert len([row for row in node.fittings if row.kind == "elbow_45"]) == 2
+    assert wye.replaces_kind == "elbow_45"
+    assert len([row for row in node.fittings if row.kind == "elbow_45"]) == 1
     assert set(wye.connected_segment_ids) == {
-        "turn_out",
+        "diagonal",
         "main",
         "cleanout_access",
     }
@@ -51,7 +50,7 @@ def test_service_wye_follows_two_elbows_and_has_a_capped_end():
     assert cap.accessible
 
 
-def test_cleanout_enters_downstream_main_through_a_45_degree_wye():
+def test_cleanout_axis_is_collinear_with_downstream_main():
     node = build_lower_turn_cleanout_assembly()
     access = node.segment("cleanout_access")
     main = node.segment("main")
@@ -64,7 +63,7 @@ def test_cleanout_enters_downstream_main_through_a_45_degree_wye():
 
     dot = ax * mx + ay * my
     angle = degrees(acos(dot / (hypot(ax, ay) * hypot(mx, my))))
-    assert isclose(angle, 45.0, abs_tol=1e-9)
+    assert isclose(angle, 0.0, abs_tol=1e-9)
     assert dot > 0
     assert node.service_path.point_ids == (
         "cleanout_cap",
@@ -160,11 +159,9 @@ def test_vector_fragment_contains_physical_parts_and_optional_cable_path():
     for marker in (
         'data-draft-segment="riser"',
         'data-draft-segment="diagonal"',
-        'data-draft-segment="turn_out"',
         'data-draft-segment="main"',
         'data-draft-segment="cleanout_access"',
-        'data-fitting="lower_elbow_45_1"',
-        'data-fitting="lower_elbow_45_2"',
+        'data-fitting="lower_elbow_45"',
         'data-fitting="service_wye_45"',
         'data-fitting="cleanout_cap_fitting"',
         ">Прочистка</text>",

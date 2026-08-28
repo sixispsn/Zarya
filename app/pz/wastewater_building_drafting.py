@@ -2,8 +2,9 @@
 
 The drawing composes the accepted K1 floor modules on one architectural
 storey grid and adds only the K2 topology explicitly declared by the project
-register.  It intentionally does not invent K2 revisions, cleanouts, fitting
-arrangements, floor coordinates or external sewer runs.
+register.  It does not invent K2 revisions, fitting arrangements, floor
+coordinates or external sewer runs; lower-turn cleanouts are rendered only
+from explicit registry positions and use the canonical ``логика1.pdf`` node.
 """
 from __future__ import annotations
 
@@ -18,7 +19,9 @@ from app.pz.wastewater_drafting import (
     BLACK,
     FONT,
     GRAY,
+    build_lower_turn_cleanout_assembly,
     render_inline_pipe_label,
+    render_lower_turn_assembly_svg,
 )
 from app.pz.wastewater_floor_drafting import render_typical_floor_assembly_svg
 from app.pz.wastewater_project_inputs import (
@@ -617,15 +620,14 @@ def build_wastewater_building_basement_svg(
         'font-size="12">наружная грань здания</text>',
     ]
 
-    k1_turn_ends = ((750.0, 900.0), (1170.0, 940.0))
+    k1_turn_ends: list[tuple[float, float]] = []
     for index, riser in enumerate(inputs.k1_risers):
         x = k1_xs[index]
-        turn_start = (x, 790.0 + index * 20.0)
-        mid = (
-            x + (50.0 if index == 0 else -35.0),
-            turn_start[1] + 55.0,
-        )
-        end = k1_turn_ends[index]
+        main_y = 900.0 + index * 40.0
+        scale = 2.0
+        turn_origin_y = main_y - 76.0 * scale
+        end = (x + 38.0 * scale, main_y)
+        k1_turn_ends.append(end)
         riser_id = riser.stack.riser_id
         dn = int(riser.stack.riser_dn_mm or 0)
         body.append(
@@ -634,39 +636,38 @@ def build_wastewater_building_basement_svg(
                 system="K1",
                 dn_mm=dn,
                 start=(x, first_floor_y),
-                end=turn_start,
+                end=(x, turn_origin_y),
                 position=0.55,
             )
         )
-        body.extend(
-            (
-                f'<line data-lower-turn="{escape(riser_id)}-elbow-1" '
-                f'x1="{turn_start[0]:.1f}" y1="{turn_start[1]:.1f}" '
-                f'x2="{mid[0]:.1f}" y2="{mid[1]:.1f}" stroke="{BLACK}" '
-                'stroke-width="4"/>',
-                _fitting_boundary(
-                    fitting_id=f"{riser_id}-elbow-45-1",
-                    start=turn_start,
-                    end=mid,
-                    position=0.68,
-                ),
-                f'<line data-lower-turn="{escape(riser_id)}-elbow-2" '
-                f'x1="{mid[0]:.1f}" y1="{mid[1]:.1f}" '
-                f'x2="{end[0]:.1f}" y2="{end[1]:.1f}" stroke="{BLACK}" '
-                'stroke-width="4"/>',
-                _fitting_boundary(
-                    fitting_id=f"{riser_id}-elbow-45-2",
-                    start=mid,
-                    end=end,
-                    position=0.34,
-                ),
-                f'<text x="{x+18:.1f}" y="{turn_start[1]-20:.1f}" '
-                f'font-family="{FONT}" font-size="12">2 отвода 45°; '
-                f'{escape(riser.lower_elbow_element_ids[0])}</text>',
+        node = build_lower_turn_cleanout_assembly(
+            assembly_id=f"{riser_id}-Узел-НП",
+            system="K1",
+            dn_mm=dn,
+        )
+        body.append(
+            f'<g data-basement-cleanout="{escape(riser.lower_cleanout_element_ids[0])}" '
+            f'data-cleanout-axis="collinear">'
+            + render_lower_turn_assembly_svg(
+                node,
+                pipe_labels=False,
+                annotations=False,
+                flow_direction=False,
+                visible_segment_ids=("riser", "diagonal", "cleanout_access"),
+                x=x,
+                y=turn_origin_y,
+                scale=scale,
+                pipe_width=4.0,
             )
+            + '</g>'
+        )
+        body.append(
+            f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
+            f'font-family="{FONT}" font-size="12">Прочистка '
+            f'{escape(riser.lower_cleanout_element_ids[0])}; соосно магистрали</text>'
         )
 
-    k1_collector_start, k1_collector_end = k1_turn_ends
+    k1_collector_start, k1_collector_end = tuple(k1_turn_ends)
     body.append(
         _line_with_label(
             line_id=k1_collector.section_id,
@@ -727,32 +728,52 @@ def build_wastewater_building_basement_svg(
         f'DN{k1_outlet.dn_mm} за грань здания</text>'
     )
 
-    k2_join_1 = (1830.0, 1200.0)
-    k2_join_2 = (2160.0, 1240.0)
+    k2_joins: list[tuple[float, float]] = []
     for index, riser in enumerate(inputs.k2_risers):
         x = k2_xs[index]
-        end = k2_join_1 if index == 0 else k2_join_2
+        main_y = 1200.0 + index * 40.0
+        scale = 2.0
+        turn_origin_y = main_y - 76.0 * scale
+        end = (x + 38.0 * scale, main_y)
+        k2_joins.append(end)
         body.append(
             _line_with_label(
                 line_id=f"{riser.riser_id}-basement-riser",
                 system="K2",
                 dn_mm=riser.riser_dn_mm,
                 start=(x, first_floor_y),
-                end=(x, end[1] - 65.0),
+                end=(x, turn_origin_y),
                 position=0.53,
             )
         )
-        body.append(
-            f'<line data-topology-only-node="{escape(riser.riser_id)}" '
-            f'x1="{x:.1f}" y1="{end[1]-65.0:.1f}" x2="{end[0]:.1f}" '
-            f'y2="{end[1]:.1f}" stroke="{BLACK}" stroke-width="4"/>'
+        node = build_lower_turn_cleanout_assembly(
+            assembly_id=f"{riser.riser_id}-Узел-НП",
+            system="K2",
+            dn_mm=riser.riser_dn_mm,
         )
         body.append(
-            f'<circle data-topology-status="fitting-not-declared" '
-            f'cx="{end[0]:.1f}" cy="{end[1]:.1f}" r="9" fill="white" '
-            f'stroke="{BLACK}" stroke-width="1.5" stroke-dasharray="4 3"/>'
+            f'<g data-basement-cleanout="{escape(riser.lower_cleanout_element_ids[0])}" '
+            f'data-cleanout-axis="collinear">'
+            + render_lower_turn_assembly_svg(
+                node,
+                pipe_labels=False,
+                annotations=False,
+                flow_direction=False,
+                visible_segment_ids=("riser", "diagonal", "cleanout_access"),
+                x=x,
+                y=turn_origin_y,
+                scale=scale,
+                pipe_width=4.0,
+            )
+            + '</g>'
+        )
+        body.append(
+            f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
+            f'font-family="{FONT}" font-size="12">Прочистка '
+            f'{escape(riser.lower_cleanout_element_ids[0])}; соосно магистрали</text>'
         )
 
+    k2_join_1, k2_join_2 = tuple(k2_joins)
     body.append(
         _line_with_label(
             line_id=k2_collector.section_id,
@@ -818,11 +839,11 @@ def build_wastewater_building_basement_svg(
             f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
             'font-size="14" font-weight="bold">Граница детализации</text>',
             f'<text x="{margin+58}" y="1745" font-family="{FONT}" '
-            'font-size="12">К1: два нижних поворота показаны по явным строкам реестра — по 2 отвода 45°.</text>',
+            'font-size="12">К1: отвод 45° и косой тройник с соосным заглушённым концом — по логика1.pdf.</text>',
             f'<text x="{margin+58}" y="1770" font-family="{FONT}" '
-            'font-size="12">К2: пунктирные окружности — подтверждённые топологические узлы без выдуманной конфигурации фасонных частей.</text>',
+            'font-size="12">К2: прочистки показаны тем же узлом по явным строкам реестра.</text>',
             f'<text x="{margin+58}" y="1795" font-family="{FONT}" '
-            'font-size="12">Ревизии и прочистки К2 не показаны: соответствующие элементы отсутствуют в реестре проекта.</text>',
+            'font-size="12">Заглушённый конец каждой прочистки соосен очищаемой горизонтальной магистрали.</text>',
             f'<text x="{margin+38}" y="{height-margin-24}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Графический язык — приложение В '
             'ГОСТ Р 21.620-2023; выпуск заканчивается за наружной гранью здания.</text>',
@@ -887,8 +908,24 @@ def audit_wastewater_building_svgs(
         revision_id = row.get("data-building-revision", "")
         if revision_id.startswith("К2"):
             findings.append("sheet 1: undeclared K2 revision was drawn")
-    if any(row.get("data-basement-cleanout") for row in basement_root.iter()):
-        findings.append("sheet 2: undeclared basement cleanout was drawn")
+    cleanout_ids = {
+        row.get("data-basement-cleanout")
+        for row in basement_root.iter()
+        if row.get("data-basement-cleanout")
+    }
+    expected_cleanout_ids = {
+        element_id
+        for row in (
+            assembly.project_inputs.k1_risers
+            + assembly.project_inputs.k2_risers
+        )
+        for element_id in row.lower_cleanout_element_ids
+    }
+    if cleanout_ids != expected_cleanout_ids:
+        findings.append("sheet 2: lower-turn cleanouts differ from project registry")
+    for row in basement_root.iter():
+        if row.get("data-basement-cleanout") and row.get("data-cleanout-axis") != "collinear":
+            findings.append("sheet 2: lower-turn cleanout is not collinear with main")
 
     basement_line_ids = {
         row.get("data-building-pipe-line")

@@ -118,6 +118,7 @@ class BuildingK1RiserProjectInput:
     stack: WastewaterStackProjectInputs
     revision_floors: tuple[int, ...]
     lower_elbow_element_ids: tuple[str, ...]
+    lower_cleanout_element_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,8 @@ class BuildingK2RiserProjectInput:
     funnel_slope_per_mille: float | None
     elevation_start_m: float | None
     elevation_end_m: float | None
+    lower_elbow_element_ids: tuple[str, ...]
+    lower_cleanout_element_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -723,20 +726,37 @@ def resolve_wastewater_building_project_inputs(
             if _system(row.system) == "K1"
             and row.kind == "elbow"
             and _section(row.section_id) == _section(pipe.section_id)
-            and row.quantity == 2
+            and row.quantity == 1
             and "45" in row.type_mark
             and row.element_id.strip()
         )
         if len(lower_elbows) != 1:
             diagnostics.append(
                 f"Для нижнего поворота {pipe.section_id} нужна одна строка "
-                "реестра с двумя отводами 45°."
+                "реестра с одним отводом 45°."
+            )
+        lower_cleanouts = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K1"
+            and row.kind == "cleanout"
+            and _section(row.connects_to) == _section(pipe.section_id)
+            and row.service_direction in {"downstream", "both"}
+            and row.service_fitting == "wye_45"
+            and row.accessible
+            and row.element_id.strip()
+        )
+        if len(lower_cleanouts) != 1:
+            diagnostics.append(
+                f"Для нижнего поворота {pipe.section_id} нужна одна прочистка "
+                "с соосным заглушённым концом косого тройника."
             )
         k1_risers.append(
             BuildingK1RiserProjectInput(
                 stack=stack,
                 revision_floors=tuple(revisions),
                 lower_elbow_element_ids=lower_elbows,
+                lower_cleanout_element_ids=lower_cleanouts,
             )
         )
 
@@ -826,6 +846,37 @@ def resolve_wastewater_building_project_inputs(
             if "обогрев" in funnel.name.casefold()
             else "roof_funnel"
         )
+        lower_elbows = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K2"
+            and row.kind == "elbow"
+            and _section(row.section_id) == _section(pipe.section_id)
+            and row.quantity == 1
+            and "45" in row.type_mark
+            and row.element_id.strip()
+        )
+        lower_cleanouts = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K2"
+            and row.kind == "cleanout"
+            and _section(row.connects_to) == _section(pipe.section_id)
+            and row.service_direction in {"downstream", "both"}
+            and row.service_fitting == "wye_45"
+            and row.accessible
+            and row.element_id.strip()
+        )
+        if len(lower_elbows) != 1:
+            diagnostics.append(
+                f"Для нижнего поворота {pipe.section_id} нужна одна строка "
+                "реестра с одним отводом 45°."
+            )
+        if len(lower_cleanouts) != 1:
+            diagnostics.append(
+                f"Для нижнего поворота {pipe.section_id} нужна одна прочистка "
+                "с соосным заглушённым концом косого тройника."
+            )
         k2_risers.append(
             BuildingK2RiserProjectInput(
                 riser_id=pipe.section_id.strip(),
@@ -837,6 +888,8 @@ def resolve_wastewater_building_project_inputs(
                 funnel_slope_per_mille=funnel.slope_per_mille,
                 elevation_start_m=pipe.elevation_start_m,
                 elevation_end_m=pipe.elevation_end_m,
+                lower_elbow_element_ids=lower_elbows,
+                lower_cleanout_element_ids=lower_cleanouts,
             )
         )
 

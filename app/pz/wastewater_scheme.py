@@ -135,7 +135,9 @@ def build_wastewater_scheme(
             + escape(" ".join(risk_ids), quote=True)
             + '" data-obstruction-access="confirmed"'
         )
-    warnings = list(dict.fromkeys(audit.errors + audit.warnings))
+    warnings = list(dict.fromkeys(
+        audit.errors + audit.warnings + sp30_audit.errors + sp30_audit.warnings
+    ))
     warnings.extend(diagnostic.errors)
     warnings.extend(diagnostic.warnings)
     warnings = list(dict.fromkeys(warnings))
@@ -791,15 +793,13 @@ def build_wastewater_scheme(
         draw_floor_branches(1, y_tech, y_zero)
 
     main_y = {"K1": 1490.0, "K3": 1560.0, "K2": 1640.0}
-    # Узел присоединения магистрали расположен после составного нижнего
-    # поворота. Смещение образует две смены направления по 45°, а не один
-    # графический отвод 87,5° (СП 30.13330.2020, п. 18.4).
-    lower_bend_dx = 70.0
-    # Canonical node coordinates in wastewater_drafting.py: the service wye
-    # is at (70, 76).  One shared scale keeps all full-sheet lower turns
-    # geometrically identical to the validated installation assembly.
-    lower_turn_scale = lower_bend_dx / 70.0
-    lower_turn_dy = 76.0 * lower_turn_scale
+    # Геометрия узла принята непосредственно из логика1.pdf: один отвод 45°
+    # подаёт сток в ответвление косого тройника, а заглушённый прямой конец
+    # тройника соосен выходящей магистрали. Канонические координаты фитинга:
+    # wye=(38, 76); при scale=1 схема не искажает этот узел.
+    lower_turn_scale = 1.0
+    lower_bend_dx = 38.0
+    lower_turn_dy = 76.0
     main_connection_x = {
         riser_id: x + lower_bend_dx for riser_id, x in riser_x.items()
     }
@@ -810,7 +810,7 @@ def build_wastewater_scheme(
         main_axis_y: float,
         pipe_width: float = 2.6,
     ):
-        """Render the canonical lower turn: two elbows + 45° wye cleanout.
+        """Render the logic1 lower turn with a collinear cleanout end.
 
         The service access is a structural part of the generated installation
         node.  It is therefore not allowed to disappear merely because a
@@ -871,7 +871,7 @@ def build_wastewater_scheme(
             annotations=False,
             flow_direction=False,
             visible_segment_ids=(
-                "riser", "diagonal", "turn_out", "cleanout_access"
+                "riser", "diagonal", "cleanout_access"
             ),
             x=riser_axis,
             y=origin_y,
@@ -1351,8 +1351,8 @@ def build_wastewater_scheme(
                 pipe_width=2.6,
             )
 
-    # Два отвода 45° образуют переход со стояка в горизонталь по п. 18.4
-    # СП 30; косой тройник с заглушкой установлен далее отдельным узлом.
+    # Адресная выноска показывает один отвод 45°; второй полуотвод в принятой
+    # пользователем геометрии заменён косым тройником с прямым доступом.
     for row in elements if full_scope else []:
         if row.kind != "elbow":
             continue

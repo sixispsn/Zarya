@@ -18,7 +18,9 @@ def test_demo_preserves_revision_schedule_and_confirms_all_lower_turn_access():
     result = audit_wastewater_sp30(_project())
     assert result.ready
     assert result.errors == []
-    assert result.warnings == []
+    assert len(result.warnings) == 1
+    assert "логика1.pdf" in result.warnings[0]
+    assert "п. 18.4" in result.warnings[0]
     assert result.revision_floors["К1-Ст1"] == [1, 4, 7, 10, 13, 16]
     assert result.revision_floors["К1-Ст2"] == [1, 4, 7, 10, 13, 16]
     assert any("18.30" in row for row in result.notes)
@@ -63,10 +65,9 @@ def test_k2_turn_access_can_be_confirmed_by_revisions_without_wye_cleanouts():
 
 def test_single_unconfirmed_lower_bend_is_rejected():
     project = deepcopy(_project())
-    elbow = next(
+    project.sewage.elements = [
         row for row in project.sewage.elements
-        if row.kind == "elbow" and row.section_id == "К1-Ст1"
-    )
-    elbow.quantity = 1
+        if row.element_id != "К1-ПрНП1"
+    ]
     result = audit_wastewater_sp30(project)
     assert any("К1-Ст1" in row and "18.4" in row for row in result.errors)
