@@ -95,7 +95,11 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     svg = build_wastewater_structure_svg(
         project, layout, scope=WastewaterStructureScope.BASEMENT_K1_MAIN,
     )
-    assert "К1-М1 DN100; Ø110×3,4 i=10‰" in svg
+    assert 'data-repeated-pipe-labels="К1-М1"' in svg
+    assert 'data-inline-pipe-label="К1 ⌀100"' in svg
+    assert 'data-slope-angle="true"' in svg
+    assert "К1-М1; отн." in svg
+    assert "i=" not in svg
     assert "К1-Вып1" not in svg
     assert "К2-М1" not in svg
     assert ">16 этаж</text>" in svg

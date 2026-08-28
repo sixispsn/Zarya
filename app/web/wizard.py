@@ -49,6 +49,7 @@ from app.pz.impact import (
     impact_form_context,
 )
 from app.pz.proof import build_proof_graph
+from app.pz.wastewater_topology import build_wastewater_topology
 from app.pz.defense import (
     build_defense_payload,
     generate_expert_response_pdf,
@@ -119,6 +120,11 @@ def _form_context(**values):
 
 def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
     """Единый каталог фактически выпущенных PDF для результата и Defense."""
+    wastewater_topology = build_wastewater_topology(bundle.project)
+    incomplete_wastewater_documents = {
+        "wastewater_package_pdf",
+        "wastewater_scheme_pdf",
+    }
     groups = {
         key: {
             "key": key,
@@ -138,6 +144,22 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
             "group": group,
             "label": label,
             "name": os.path.basename(path),
+            "state": (
+                "incomplete"
+                if (
+                    attribute in incomplete_wastewater_documents
+                    and not wastewater_topology.ready
+                )
+                else "ready"
+            ),
+            "state_note": (
+                "Каркас: нужны стояки, ветви, магистрали и выпуски К1/К2/К3"
+                if (
+                    attribute in incomplete_wastewater_documents
+                    and not wastewater_topology.ready
+                )
+                else ""
+            ),
         }
         documents.append(document)
         groups[group]["documents"].append(document)
@@ -806,6 +828,7 @@ def wizard_result(request: Request, run_id: str):
     pdfs, document_groups = _bundle_documents(b)
     f = b.project.fire
     p = b.project
+    wastewater_topology = build_wastewater_topology(p)
     from app.pz.rules import project_governing_head
     head = project_governing_head(
         p, fallback_h_vod_m=cold_meter_loss(p.meters),
@@ -863,6 +886,19 @@ def wizard_result(request: Request, run_id: str):
                 p.sewage.result.checked_risers if p.sewage.result else 0
             ),
             "outlets_count": p.sewage.outlets_count,
+            "scheme_ready": wastewater_topology.ready,
+            "scheme_missing": (
+                wastewater_topology.errors
+                if wastewater_topology.errors
+                else (
+                    [
+                        "Не заполнена направленная топология: стояки, "
+                        "этажные ветви с приборами, подвальные магистрали "
+                        "и выпуски."
+                    ]
+                    if not wastewater_topology.ready else []
+                )
+            ),
         },
         "storm": {
             "required": p.storm.system_kind == "internal",

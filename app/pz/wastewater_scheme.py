@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.section_scaffold import build_section_scaffold
+from app.pz.wastewater_drafting import render_repeated_inline_pipe_labels
 from app.pz.wastewater_registry import audit_wastewater_registry
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
@@ -38,6 +39,15 @@ FLOW_BLUE = "#1877d2"
 SEDIMENT_BROWN = "#9a5b2f"
 SERVICE_PURPLE = "#7650b8"
 DIAGNOSTIC_RED = "#c62828"
+
+# Это графический шаг на листе А1, а не расчётная длина трубы. Марки на
+# коротких этажных ветвях нужны чаще; на стояках и подвальных магистралях
+# сохраняется более спокойный ритм. Фасонные части разрывают доступный интервал.
+PIPE_LABEL_REPEAT_MM = {
+    "branch": 45.0,
+    "riser": 67.5,
+    "main": 72.0,
+}
 
 
 @dataclass
@@ -254,31 +264,35 @@ def build_wastewater_scheme(
             )
         G.append('</g></g>')
 
-    def pipe_mark(pipe: SewerPipeSpec) -> str:
-        nominal = (
-            f"DN{pipe.nominal_diameter_mm}; "
-            if pipe.nominal_diameter_mm is not None else ""
-        )
-        value = (
-            f"{pipe.section_id} {nominal}Ø{pipe.outer_diameter_mm:g}×"
-            f"{pipe.wall_thickness_mm:g}"
-        )
-        if pipe.slope_per_mille is not None:
-            value += f" i={pipe.slope_per_mille:g}‰"
-        return value.replace(".", ",")
-
-    def branch_mark(pipe: SewerPipeSpec) -> str:
-        """Compact mark for a branch already identified in the room heading."""
-        nominal = (
-            f"DN{pipe.nominal_diameter_mm}; "
-            if pipe.nominal_diameter_mm is not None else ""
-        )
-        value = (
-            f"{nominal}Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
-        )
-        if pipe.slope_per_mille is not None:
-            value += f"; i={pipe.slope_per_mille:g}‰"
-        return value.replace(".", ",")
+    def branch_slope_marker(
+        *,
+        marker_id: str,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        slope_per_mille: float,
+        position: float = 0.76,
+    ) -> str:
+        """Open-angle slope sign above a branch, without legacy ``i=``."""
+        direction = 1 if end[0] >= start[0] else -1
+        x = start[0] + (end[0] - start[0]) * position
+        y = start[1] + (end[1] - start[1]) * position - 13.0
+        apex_x = x + 7.0 * direction
+        arm_x = apex_x - 5.0 * direction
+        text_x = arm_x - 3.0 * direction
+        anchor = "end" if direction > 0 else "start"
+        value = _fmt(slope_per_mille / 1000.0, 3)
+        return "".join((
+            f'<g data-slope-marker="{escape(marker_id)}" '
+            f'data-slope-value="{value}" data-slope-angle="true" '
+            'data-label-underline="false">',
+            f'<path d="M{arm_x:.1f},{y-4:.1f} L{apex_x:.1f},{y:.1f} '
+            f'L{arm_x:.1f},{y+4:.1f}" fill="none" stroke="{BLACK}" '
+            'stroke-width="1"/>',
+            f'<text x="{text_x:.1f}" y="{y+2.5:.1f}" '
+            f'text-anchor="{anchor}" font-family="{FONT}" '
+            f'font-size="5.8">{value}</text>',
+            '</g>',
+        ))
 
     scaffold = build_section_scaffold(project)
     top_floor = scaffold.floors
@@ -589,6 +603,13 @@ def build_wastewater_scheme(
         # всегда получает минимум DN100. Один общий штрих DN100 от умывальника
         # до стояка скрывал бы реальную монтажную логику.
         running_dn = 0
+        slope_marked_dn: set[int] = set()
+        slope_by_dn = {
+            row.pipe.nominal_diameter_mm: row.pipe.slope_per_mille
+            for row in active_branches
+            if row.pipe.nominal_diameter_mm is not None
+            and row.pipe.slope_per_mille is not None
+        }
         for index, placement in enumerate(placements):
             running_dn = max(running_dn, placement.element.dn_mm or 0)
             segment_start_x = placement.join_x
@@ -605,6 +626,55 @@ def build_wastewater_scheme(
                 f'L{segment_end_x:.1f},{segment_end_y:.1f}" fill="none" '
                 f'stroke="{BLACK}" stroke-width="2.2"/>'
             )
+            if running_dn > 0:
+                label_id = (
+                    f"{branch_group_id}-floor-{floor}-dn-{running_dn}-"
+                    f"segment-{index}"
+                )
+                room_boundaries = sorted({
+                    boundary
+                    for slot in scaffold.room_slots
+                    for boundary in (slot.x0, slot.x1)
+                    if min(segment_start_x, segment_end_x)
+                    < boundary
+                    < max(segment_start_x, segment_end_x)
+                })
+                protected_points = [
+                    (boundary, trunk_y_at(boundary))
+                    for boundary in room_boundaries
+                ]
+                if index + 1 == len(placements):
+                    branch_arrow_x = (placements[-1].join_x + riser_axis) / 2
+                    protected_points.append(
+                        (branch_arrow_x, trunk_y_at(branch_arrow_x))
+                    )
+                inline_labels = render_repeated_inline_pipe_labels(
+                    line_id=label_id,
+                    label=f"{_system_mark(active_branches[0].pipe.system)} ⌀{running_dn}",
+                    start=(segment_start_x, segment_start_y),
+                    end=(segment_end_x, segment_end_y),
+                    max_spacing=PIPE_LABEL_REPEAT_MM["branch"] * PXMM,
+                    font_size=6.2,
+                    padding=2.0,
+                    end_clearance=4.0,
+                    fitting_points=tuple(protected_points),
+                    fitting_clearance=6.0,
+                )
+                if inline_labels:
+                    G.append(inline_labels)
+                slope = slope_by_dn.get(running_dn)
+                if (
+                    inline_labels
+                    and slope is not None
+                    and running_dn not in slope_marked_dn
+                ):
+                    G.append(branch_slope_marker(
+                        marker_id=label_id,
+                        start=(segment_start_x, segment_start_y),
+                        end=(segment_end_x, segment_end_y),
+                        slope_per_mille=slope,
+                    ))
+                    slope_marked_dn.add(running_dn)
             if diagnostics:
                 G.append(
                     f'<path class="ww-flow" data-flow-branch="{escape(branch_group_id)}" '
@@ -619,22 +689,6 @@ def build_wastewater_scheme(
             trunk_y_at(arrow_x),
             "right" if side > 0 else "left",
             0.5,
-        )
-        branch_pipes = sorted(
-            (row.pipe for row in active_branches),
-            key=lambda row: (
-                row.nominal_diameter_mm if row.nominal_diameter_mm is not None else 0,
-                row.section_id,
-            ),
-        )
-        pipe_marks = "; ".join(dict.fromkeys(branch_mark(row) for row in branch_pipes))
-        text(
-            (trunk_start_x + riser_axis) / 2,
-            trunk_y_at((trunk_start_x + riser_axis) / 2) - 15,
-            pipe_marks,
-            6.5,
-            "middle",
-            color=GRAY,
         )
         G.append('</g>')
 
@@ -799,6 +853,50 @@ def build_wastewater_scheme(
         target_y = main_y.get(pipe.system, 1490.0)
         start_y = roof_y if pipe.system == "K2" else roof_y - 30
         line(x, start_y, x, target_y - lower_bend_dx, 2.6)
+        if pipe.nominal_diameter_mm is not None:
+            riser_fittings: List[Tuple[float, float]] = []
+            if branches_by_riser.get(riser_id):
+                for band in bands:
+                    if any(
+                        row.floor_from <= band.floor <= row.floor_to
+                        for row in branches_by_riser[riser_id]
+                    ):
+                        riser_fittings.append((x, band.room_bottom_y - 17.0))
+                if any(
+                    row.floor_from <= 1 <= row.floor_to
+                    for row in branches_by_riser[riser_id]
+                ):
+                    riser_fittings.append((x, y_zero - 17.0))
+            for element in elements:
+                if element.section_id != riser_id:
+                    continue
+                if element.kind == "revision":
+                    if element.floor_from == 1:
+                        fitting_y = y_zero - min(78.0, (y_zero - y_tech) / 3.0)
+                    else:
+                        band = next(
+                            (
+                                row for row in bands
+                                if row.floor == element.floor_from
+                            ),
+                            None,
+                        )
+                        if band is None:
+                            continue
+                        fitting_y = band.bottom_y - 45.0
+                    riser_fittings.append((x, fitting_y))
+            G.append(render_repeated_inline_pipe_labels(
+                line_id=f"{riser_id}-riser",
+                label=f"{_system_mark(pipe.system)} ⌀{pipe.nominal_diameter_mm}",
+                start=(x, start_y),
+                end=(x, target_y - lower_bend_dx),
+                max_spacing=PIPE_LABEL_REPEAT_MM["riser"] * PXMM,
+                font_size=8.3,
+                padding=2.5,
+                end_clearance=8.0,
+                fitting_points=tuple(riser_fittings),
+                fitting_clearance=16.0,
+            ))
         draw_lower_bend(riser_id, x, target_y)
         label = f"Ст.{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}".replace(".", ",")
         label_y = 610.0 if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2 else 650.0
@@ -832,9 +930,9 @@ def build_wastewater_scheme(
             G.append(render_ugo(symbol_kind, sx, sy, scale=0.72))
             line(sx, sy + 17, sx, roof_y + 25, 1.8)
             line(sx, roof_y + 25, x, roof_y + 36, 1.8)
-        text(x, roof_y + 55,
+        text(x + 50, roof_y - 25,
              f"{row.element_id}; {row.quantity} шт.; DN{row.dn_mm or '—'}",
-             7.5, "middle", "bold")
+             7.5, "start", "bold")
 
     def draw_revision_height_dimension(
         element_id: str,
@@ -893,8 +991,6 @@ def build_wastewater_scheme(
             text(x + 15, sy + 3, "R", 7.1)
             if row.floor_from == 1:
                 draw_revision_height_dimension(row.element_id, x, y_zero, sy)
-            if row.element_id in risk_ids_by_element:
-                text(x + 15, sy + 14, "доступ к зоне риска", 5.8, color=GRAY)
         elif row.kind == "fire_collar":
             shown = [1] + visible_floors
             for floor in shown:
@@ -966,16 +1062,75 @@ def build_wastewater_scheme(
         for pipe in rows:
             x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
             line(x1, y, x2, y, 2.8)
+            label_fittings: List[Tuple[float, float]] = [
+                ((x1 + x2) / 2.0, y),  # filled flow-direction triangle
+            ]
             if min(x1, x2) < building_x2 < max(x1, x2):
+                label_fittings.append((building_x2, y))
                 G.append(
                     f'<g data-building-outlet-crossing="{escape(pipe.section_id)}">'
                 )
                 line(building_x2 - 4, y - 10, building_x2 - 4, y + 10, 1.4)
                 line(building_x2 + 4, y - 10, building_x2 + 4, y + 10, 1.4)
                 G.append('</g>')
+            for element in elements:
+                if element.section_id != pipe.section_id:
+                    continue
+                if (
+                    element.service_chainage_m is not None
+                    and pipe.calculation_length_m is not None
+                    and pipe.calculation_length_m > 0
+                ):
+                    ratio = max(
+                        0.0,
+                        min(
+                            1.0,
+                            element.service_chainage_m
+                            / pipe.calculation_length_m,
+                        ),
+                    )
+                    label_fittings.append((x1 + (x2 - x1) * ratio, y))
+                elif element.kind == "transition":
+                    direction = 1 if x2 >= x1 else -1
+                    transition_x = x1 + direction * min(
+                        42.0,
+                        abs(x2 - x1) * 0.18,
+                    )
+                    label_fittings.append((transition_x, y))
+                elif element.kind == "cleanout" and not element.connects_to:
+                    # This is the actual fallback position used by the
+                    # cleanout renderer below, so the label must avoid it.
+                    label_fittings.append(((x1 + x2) / 2.0, y))
             arrow((x1 + x2) / 2, y, "right" if x2 >= x1 else "left", 0.62)
-            text((x1 + x2) / 2, y - 13, pipe_mark(pipe), 8.5, "middle", "bold")
-            relative = f"отн. {_fmt(pipe.elevation_start_m, 2)} / {_fmt(pipe.elevation_end_m, 2)}"
+            if pipe.nominal_diameter_mm is not None:
+                G.append(render_repeated_inline_pipe_labels(
+                    line_id=pipe.section_id,
+                    label=(
+                        f"{_system_mark(pipe.system)} "
+                        f"⌀{pipe.nominal_diameter_mm}"
+                    ),
+                    start=(x1, y),
+                    end=(x2, y),
+                    max_spacing=PIPE_LABEL_REPEAT_MM["main"] * PXMM,
+                    font_size=8.5,
+                    padding=3.0,
+                    end_clearance=9.0,
+                    fitting_points=tuple(label_fittings),
+                    fitting_clearance=17.0,
+                ))
+            if pipe.slope_per_mille is not None:
+                G.append(branch_slope_marker(
+                    marker_id=f"{pipe.section_id}-main-slope",
+                    start=(x1, y),
+                    end=(x2, y),
+                    slope_per_mille=pipe.slope_per_mille,
+                    position=0.72,
+                ))
+            relative = (
+                f"{pipe.section_id}; отн. "
+                f"{_fmt(pipe.elevation_start_m, 2)} / "
+                f"{_fmt(pipe.elevation_end_m, 2)}"
+            )
             absolute = ""
             if pipe.absolute_elevation_start_m is not None:
                 absolute = (
@@ -1394,6 +1549,56 @@ def build_wastewater_scheme(
             )
             text(x + 15, rupture_y + 3, f"R · эт. {floors}", 7.1)
 
+    if (
+        full_scope
+        and not topology.risers
+        and not topology.branches
+        and not topology.mains
+    ):
+        G.append('<g data-incomplete-scheme-overlay="true">')
+        rect(
+            building_x1 + 360,
+            610,
+            building_x2 - building_x1 - 720,
+            250,
+            stroke=DIAGNOSTIC_RED,
+            fill="white",
+            sw=2.2,
+        )
+        cx = (building_x1 + building_x2) / 2
+        text(
+            cx,
+            665,
+            "ПРИНЦИПИАЛЬНАЯ СХЕМА НЕ СФОРМИРОВАНА",
+            17,
+            "middle",
+            "bold",
+            DIAGNOSTIC_RED,
+        )
+        text(
+            cx,
+            710,
+            "Заданы только этажность и архитектурный каркас.",
+            11,
+            "middle",
+        )
+        text(
+            cx,
+            750,
+            "Не заданы: стояки К1; ветви с приборами; подвальные магистрали; выпуски.",
+            10,
+            "middle",
+        )
+        text(
+            cx,
+            795,
+            "Заполните реестр К1 по планам/аксонометрии или используйте явно отмеченный учебный пример.",
+            9.5,
+            "middle",
+            color=GRAY,
+        )
+        G.append('</g>')
+
     if full_scope:
         # Компактная легенда и исходные данные размещаются ниже разреза, как в приложении В.
         lx, ly, lw = 200.0, 1742.0, 1240.0
@@ -1448,7 +1653,7 @@ def build_wastewater_scheme(
             ),
         ]
         for index, value in enumerate(info_rows):
-            text(info_x + 10, info_y + 44 + index * 18, _short(value, 100), 6.9)
+            text(info_x + 10, info_y + 42 + index * 14, _short(value, 100), 6.2)
         scheme_ready = topology.ready and diagnostic.ready
         status_color = BLACK if scheme_ready else "#a00"
         text(info_x + info_w - 10, info_y + info_h - 9,
@@ -1457,8 +1662,6 @@ def build_wastewater_scheme(
                  if scheme_ready else "СХЕМА ИМЕЕТ БЛОКИРУЮЩИЕ ЗАМЕЧАНИЯ"
              ),
              7.5, "end", "bold", status_color)
-        if warnings:
-            text(info_x + 10, info_y + info_h - 9, _short(warnings[0], 64), 6.2, color=status_color)
 
     # Плита основания с конструктивной штриховкой завершает разрез, как в
     # приложении В. На полном листе она сжата по высоте, чтобы не перекрывать

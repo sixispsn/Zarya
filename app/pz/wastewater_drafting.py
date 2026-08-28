@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
-from math import acos, atan2, degrees, hypot
+from math import acos, atan2, ceil, degrees, hypot
 from pathlib import Path
 BLACK = "#000"
 GRAY = "#555"
@@ -71,6 +71,142 @@ def render_inline_pipe_label(
             '</g>',
         )
     )
+
+
+def plan_repeated_inline_pipe_label_positions(
+    *,
+    label: str,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    max_spacing: float = 240.0,
+    font_size: float = 10.0,
+    padding: float = 4.0,
+    end_clearance: float = 10.0,
+    fitting_points: tuple[tuple[float, float], ...] = (),
+    fitting_clearance: float = 14.0,
+) -> tuple[float, ...]:
+    """Plan repeated system/DN marks on clear portions of one pipe line.
+
+    Positions are returned as fractions of the line length.  The text mask is
+    kept clear of both line ends and every supplied fitting point.  A fitting
+    may be a tee, cross, wye, transition, cleanout or any other node that must
+    remain graphically continuous.  Long clear intervals receive several
+    marks so that adjacent centres are no farther apart than ``max_spacing``.
+    """
+    if max_spacing <= 0:
+        raise ValueError("inline pipe label spacing must be positive")
+    if min(font_size, padding, end_clearance, fitting_clearance) < 0:
+        raise ValueError("inline pipe label dimensions cannot be negative")
+    x1, y1 = start
+    x2, y2 = end
+    dx, dy = x2 - x1, y2 - y1
+    length = hypot(dx, dy)
+    if length <= 1e-9:
+        raise ValueError("inline pipe label needs a non-zero pipe line")
+
+    text_width = max(font_size * 2.6, len(label) * font_size * 0.56)
+    half_mask = (text_width + 2.0 * padding) / 2.0
+    edge = half_mask + end_clearance
+    if length <= 2.0 * edge:
+        return ()
+
+    # Intervals contain admissible distances of label centres from ``start``.
+    free: list[tuple[float, float]] = [(edge, length - edge)]
+    ux, uy = dx / length, dy / length
+    fitting_zone = half_mask + fitting_clearance
+    for point_x, point_y in fitting_points:
+        offset_x, offset_y = point_x - x1, point_y - y1
+        along = offset_x * ux + offset_y * uy
+        perpendicular = abs(offset_x * uy - offset_y * ux)
+        if not 0.0 < along < length or perpendicular > fitting_clearance:
+            continue
+        blocked_start = along - fitting_zone
+        blocked_end = along + fitting_zone
+        next_free: list[tuple[float, float]] = []
+        for interval_start, interval_end in free:
+            if blocked_end <= interval_start or blocked_start >= interval_end:
+                next_free.append((interval_start, interval_end))
+                continue
+            if blocked_start > interval_start:
+                next_free.append((interval_start, blocked_start))
+            if blocked_end < interval_end:
+                next_free.append((blocked_end, interval_end))
+        free = next_free
+
+    clear_span = length - 2.0 * edge
+    desired_count = max(1, ceil(clear_span / max_spacing))
+    target_step = clear_span / desired_count
+    targets = (
+        edge + (index + 0.5) * target_step
+        for index in range(desired_count)
+    )
+    distances: list[float] = []
+    minimum_separation = 2.0 * half_mask + 2.0
+    for target in targets:
+        choices = [
+            max(interval_start, min(target, interval_end))
+            for interval_start, interval_end in free
+            if interval_end >= interval_start
+        ]
+        choices.sort(key=lambda candidate: abs(candidate - target))
+        selected = next(
+            (
+                candidate for candidate in choices
+                if all(
+                    abs(candidate - previous) >= minimum_separation
+                    for previous in distances
+                )
+            ),
+            None,
+        )
+        if selected is not None:
+            distances.append(selected)
+    distances.sort()
+    return tuple(distance / length for distance in distances)
+
+
+def render_repeated_inline_pipe_labels(
+    *,
+    line_id: str,
+    label: str,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    max_spacing: float = 240.0,
+    font_size: float = 10.0,
+    padding: float = 4.0,
+    end_clearance: float = 10.0,
+    fitting_points: tuple[tuple[float, float], ...] = (),
+    fitting_clearance: float = 14.0,
+) -> str:
+    """Break a clear pipe line periodically and repeat its system/DN mark."""
+    positions = plan_repeated_inline_pipe_label_positions(
+        label=label,
+        start=start,
+        end=end,
+        max_spacing=max_spacing,
+        font_size=font_size,
+        padding=padding,
+        end_clearance=end_clearance,
+        fitting_points=fitting_points,
+        fitting_clearance=fitting_clearance,
+    )
+    if not positions:
+        return ""
+    return "".join((
+        f'<g data-repeated-pipe-labels="{escape(line_id)}" '
+        f'data-label-count="{len(positions)}" '
+        f'data-label-max-spacing="{max_spacing:g}">',
+        *(render_inline_pipe_label(
+            line_id=line_id,
+            label=label,
+            start=start,
+            end=end,
+            position=position,
+            font_size=font_size,
+            padding=padding,
+        ) for position in positions),
+        '</g>',
+    ))
 
 
 @dataclass(frozen=True)

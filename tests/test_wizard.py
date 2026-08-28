@@ -172,6 +172,33 @@ def test_result_template_shows_key_numbers():
     assert "Что изменится?" in html
     assert 'data-impact-dialog' in html
     assert 'data-endpoint="/wizard/impact/{{ run_id }}"' in html
+    assert "sewage.scheme_ready" in html
+    assert "Схема не сформирована — выпущен только каркас" in html
+    assert "p.state == 'incomplete'" in html
+
+
+def test_incomplete_wastewater_topology_marks_scheme_documents(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.web import wizard
+
+    monkeypatch.setattr(
+        wizard,
+        "build_wastewater_topology",
+        lambda project: SimpleNamespace(ready=False),
+    )
+    bundle = SimpleNamespace(
+        project=object(),
+        wastewater_package_pdf="/tmp/Комплект_ИОС3.pdf",
+        wastewater_scheme_pdf="/tmp/Схема_К1_К2.pdf",
+    )
+
+    documents, groups = wizard._bundle_documents(bundle)
+
+    assert len(documents) == 2
+    assert all(document["state"] == "incomplete" for document in documents)
+    assert all(document["state_note"] for document in documents)
+    assert groups[0]["key"] == "ios3"
 
 
 def test_interface_presents_ios2_and_ios3_as_one_project():

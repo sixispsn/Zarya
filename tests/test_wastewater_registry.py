@@ -138,6 +138,14 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert result.svg.count('data-value-mm="1000"') == 2
     assert result.svg.count('data-lower-connection="double-45"') == 4
     assert result.svg.count('data-building-outlet-crossing=') == 2
+    for line_id in ("К1-М1", "К1-Вып1", "К2-М1", "К2-Вып1"):
+        assert f'data-repeated-pipe-labels="{line_id}"' in result.svg
+    assert 'data-inline-pipe-label="К1 ⌀100"' in result.svg
+    assert 'data-inline-pipe-label="К1 ⌀150"' in result.svg
+    assert 'data-inline-pipe-label="К2 ⌀100"' in result.svg
+    assert 'data-inline-pipe-label="К2 ⌀150"' in result.svg
+    assert 'data-label-max-spacing="' in result.svg
+    assert "i=" not in result.svg
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg
 
@@ -148,3 +156,23 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     height_mm = float(page.mediabox.height) * 25.4 / 72
     assert width_mm == pytest.approx(841.0, abs=0.02)
     assert height_mm == pytest.approx(594.0, abs=0.02)
+
+
+def test_empty_topology_is_a_blocking_architectural_scaffold_not_a_scheme():
+    request = _request()
+    request.sewage_risers = []
+    request.sewer_pipes = []
+    request.sewer_elements = []
+    request.sewer_discharge_events = []
+    request.sewer_fixture_safety_inputs = []
+    request.sewer_first_manholes = []
+    request.sewer_internal_nodes = []
+    request.sewage_outlets_count = 0
+
+    result = generate_wastewater_scheme_result(build_project(request))
+
+    assert 'data-incomplete-scheme-overlay="true"' in result.svg
+    assert "ПРИНЦИПИАЛЬНАЯ СХЕМА НЕ СФОРМИРОВАНА" in result.svg
+    assert "Заданы только этажность и архитектурный каркас" in result.svg
+    assert 'data-gravity-branch=' not in result.svg
+    assert 'data-repeated-pipe-labels=' not in result.svg

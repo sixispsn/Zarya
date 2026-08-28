@@ -7,7 +7,9 @@ from app.pz.generator import generate_wastewater_lower_turn_node_pdf
 from app.pz.wastewater_drafting import (
     build_lower_turn_cleanout_assembly,
     build_lower_turn_control_sheet_svg,
+    plan_repeated_inline_pipe_label_positions,
     render_lower_turn_assembly_svg,
+    render_repeated_inline_pipe_labels,
 )
 
 
@@ -72,6 +74,60 @@ def test_builder_rejects_unknown_system_and_bad_dn():
         build_lower_turn_cleanout_assembly(system="X")
     with pytest.raises(ValueError, match="dn_mm must be positive"):
         build_lower_turn_cleanout_assembly(dn_mm=0)
+
+
+def test_repeated_line_marks_keep_clear_of_fittings_and_support_k1_k2_k3():
+    positions = plan_repeated_inline_pipe_label_positions(
+        label="К1 ⌀100",
+        start=(0.0, 0.0),
+        end=(1000.0, 0.0),
+        max_spacing=240.0,
+        fitting_points=((500.0, 0.0),),
+        fitting_clearance=20.0,
+    )
+
+    assert len(positions) == 4
+    assert all(abs(position - 0.5) > 0.06 for position in positions)
+    assert positions == tuple(sorted(positions))
+
+    for system in ("К1", "К2", "К3"):
+        svg = render_repeated_inline_pipe_labels(
+            line_id=f"{system}-М1",
+            label=f"{system} ⌀100",
+            start=(0.0, 0.0),
+            end=(1000.0, 0.0),
+            max_spacing=240.0,
+            fitting_points=((500.0, 0.0),),
+            fitting_clearance=20.0,
+        )
+        assert f'data-repeated-pipe-labels="{system}-М1"' in svg
+        assert f'data-inline-pipe-label="{system} ⌀100"' in svg
+        assert svg.count('data-pipe-label-mask=') == 4
+
+
+def test_repeated_line_mark_is_omitted_when_clear_run_is_too_short():
+    assert render_repeated_inline_pipe_labels(
+        line_id="К1-Короткий",
+        label="К1 ⌀100",
+        start=(0.0, 0.0),
+        end=(35.0, 0.0),
+    ) == ""
+
+
+def test_one_fitting_does_not_multiply_marks_on_a_short_line():
+    positions = plan_repeated_inline_pipe_label_positions(
+        label="К1 ⌀100",
+        start=(0.0, 0.0),
+        end=(135.0, 0.0),
+        max_spacing=240.0,
+        font_size=6.2,
+        padding=2.0,
+        end_clearance=4.0,
+        fitting_points=((65.0, 0.0),),
+        fitting_clearance=6.0,
+    )
+
+    assert len(positions) <= 1
 
 
 def test_vector_fragment_contains_physical_parts_and_optional_cable_path():

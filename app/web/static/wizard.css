@@ -330,6 +330,10 @@ table.grid .compact-check input[type="checkbox"] {
 .metric.proof-trigger:focus-visible { z-index: 2; outline: 2px solid var(--accent); outline-offset: -2px; }
 .equipment { margin-top: 14px; padding: 12px 13px; border: 1px solid var(--line); border-left: 2px solid var(--cyan); border-radius: 7px; color: var(--muted); background: var(--input); font-size: 12px; }
 .equipment strong { display: block; color: var(--ink); font-size: 13px; }
+.equipment.is-incomplete { border-color: color-mix(in srgb, var(--danger) 48%, var(--line)); border-left-color: var(--danger); color: var(--ink-soft); background: var(--danger-pale); }
+.equipment.is-incomplete strong { color: var(--danger); }
+.equipment.is-incomplete a { display: inline-block; margin-top: 6px; margin-right: 10px; color: var(--danger); font-weight: 700; text-decoration: none; }
+.equipment.is-incomplete a:hover { text-decoration: underline; }
 .equipment-proof { width: 100%; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
 .equipment-proof span { display: block; margin-top: 5px; color: var(--accent-bright); font: 700 9px var(--mono); letter-spacing: .02em; text-transform: uppercase; }
 .equipment-proof:hover { border-color: var(--accent); background: var(--surface-hover); }
@@ -477,6 +481,11 @@ table.grid .compact-check input[type="checkbox"] {
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(185px,1fr)); overflow: hidden; }
 .doc-link { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: center; min-height: 62px; padding: 11px; border-right: 1px solid var(--line); color: var(--ink-soft); text-decoration: none; font-size: 13px; font-weight: 650; }
 .doc-link::before { content: "PDF"; color: var(--accent-bright); font: 700 9px var(--mono); }
+.doc-link > span { min-width: 0; }
+.doc-link small { display: block; margin-top: 4px; color: var(--quiet); font-size: 9px; font-weight: 500; line-height: 1.35; }
+.doc-link.is-incomplete { color: var(--warn); background: color-mix(in srgb, var(--warn-pale) 70%, transparent); }
+.doc-link.is-incomplete::before { content: "! PDF"; color: var(--warn); }
+.doc-link.is-incomplete small { color: var(--warn); }
 .doc-link:hover { color: var(--ink); background: var(--surface-hover); }
 .log { margin: 0; padding: 0; list-style: none; }
 .log li { position: relative; margin: 8px 0; padding-left: 20px; color: var(--muted); font: 11px/1.5 var(--mono); }

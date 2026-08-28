@@ -5,8 +5,8 @@
 <title>Заря — комплект ИОС2 + ИОС3 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260730-7">
-<script defer src="/static/wizard.js?v=20260730-7"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260828-1">
+<script defer src="/static/wizard.js?v=20260828-1"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
@@ -61,7 +61,11 @@
         <div class="metric"><b>Таблично проверено</b><strong>{{ sewage.checked_count }}</strong><small>по приложению К</small></div>
         <div class="metric"><b>Выпусков</b><strong>{{ sewage.outlets_count or '—' }}</strong><small>шт. · только явные данные</small></div>
       </div>
-      <div class="equipment"><strong>Без фиктивной гидравлики</strong>Общий расход не делится между стояками; горизонтальная сеть и выпуски рассчитываются по аксонометрии стадии Р.</div>
+      {% if sewage.scheme_ready %}
+      <div class="equipment"><strong>Топология схемы подтверждена</strong>Линии К1/К2/К3 маркируются в разрывах через графический шаг; зоны тройников, крестовин и других фасонных частей остаются свободными.</div>
+      {% else %}
+      <div class="equipment is-incomplete"><strong>Схема не сформирована — выпущен только каркас</strong>{{ sewage.scheme_missing[0] }} {% if project_id %}<a href="/wizard/open/{{ project_id }}">Заполнить реестр проекта →</a>{% endif %} <a href="/wizard?example=1">Посмотреть заполненный учебный пример →</a></div>
+      {% endif %}
     </section>
 
     <section class="card">
@@ -137,7 +141,7 @@
         <section class="doc-group" data-discipline="{{ group.key }}">
           <header class="doc-group-head"><span>{{ group.code }}</span><div><strong>{{ group.label }}</strong><small>{{ group.description }}</small></div><b>{{ group.documents|length }}</b></header>
           <div class="doc-grid">
-            {% for p in group.documents %}<a class="doc-link" href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank">{{ p.label }}</a>{% endfor %}
+            {% for p in group.documents %}<a class="doc-link{% if p.state == 'incomplete' %} is-incomplete{% endif %}" href="/wizard/file/{{ run_id }}/{{ p.name }}" target="_blank"><span>{{ p.label }}{% if p.state_note %}<small>{{ p.state_note }}</small>{% endif %}</span></a>{% endfor %}
           </div>
         </section>
         {% endfor %}
