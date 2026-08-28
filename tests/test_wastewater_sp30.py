@@ -14,11 +14,10 @@ def _project():
     return build_project(load_request_file(str(DEMO)))
 
 
-def test_demo_preserves_revision_schedule_but_reports_unconfirmed_k2_access():
+def test_demo_preserves_revision_schedule_and_confirms_all_lower_turn_access():
     result = audit_wastewater_sp30(_project())
-    assert not result.ready
-    assert any("К2-Ст1" in row and "21.8" in row for row in result.errors)
-    assert any("К2-Ст2" in row and "21.8" in row for row in result.errors)
+    assert result.ready
+    assert result.errors == []
     assert result.warnings == []
     assert result.revision_floors["К1-Ст1"] == [1, 4, 7, 10, 13, 16]
     assert result.revision_floors["К1-Ст2"] == [1, 4, 7, 10, 13, 16]
@@ -41,6 +40,10 @@ def test_revision_gap_over_three_floors_is_rejected():
 
 def test_k2_turn_access_can_be_confirmed_by_revisions_without_wye_cleanouts():
     project = deepcopy(_project())
+    project.sewage.elements = [
+        row for row in project.sewage.elements
+        if not (row.system == "K2" and row.kind == "cleanout")
+    ]
     for index in (1, 2):
         project.sewage.elements.append(SewerElementSpec(
             element_id=f"К2-Р{index}-1",

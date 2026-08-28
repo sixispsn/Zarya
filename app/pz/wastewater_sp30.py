@@ -87,7 +87,7 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
     - 18.4: переход К1 из стояка в горизонталь не одним отводом 87,5°;
     - 18.26: нижний/верхний этажи и шаг ревизий не более трёх этажей;
     - 18.26: обслуживаемость поворотов К1;
-    - 21.8: обслуживание внутренних водостоков с учётом раздела 18.
+    - 21.10: на поворотах внутренних водостоков нужна ревизия/прочистка.
     """
     result = WastewaterSP30Audit()
     elements = list(project.sewage.elements or [])
@@ -113,7 +113,7 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
         if riser.system == "K2" and not turn_service:
             result.errors.append(
                 f"{riser.section_id}: на повороте стояка К2 нет ревизии/прочистки "
-                "(СП 30.13330.2020, п. 21.8 с учётом раздела 18)"
+                "(СП 30.13330.2020, п. 21.10)"
             )
         elif riser.system == "K1" and not turn_service:
             result.warnings.append(

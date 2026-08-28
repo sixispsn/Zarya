@@ -272,7 +272,10 @@ def _turn_service_check(
     )
     if candidates:
         preferred = next(
-            (row for row in candidates if row.kind == "revision"),
+            # Direct access at the turn is the deterministic first choice;
+            # a lower-floor revision remains a valid alternative when a
+            # project explicitly omits the separate wye cleanout.
+            (row for row in candidates if row.kind == "cleanout"),
             candidates[0],
         )
         return TurnServiceCheck(
@@ -297,7 +300,7 @@ def _turn_service_check(
         status="fail",
         note=(
             "нет подтверждённого пути обслуживания: тип и положение ревизии "
-            "или прочистки определить по п. 18.26, а для К2 также по п. 21.8 "
+            "или прочистки определить по п. 18.26, а для К2 также по п. 21.10 "
             "СП 30.13330.2020 с привязкой по плану/аксонометрии"
         ),
     )

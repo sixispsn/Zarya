@@ -3,9 +3,9 @@
 The calculation topology answers where sewage flows.  This module adds a
 separate installation graph: real pipe segments, fitting ports and service
 paths that can later be laid out on a GOST drawing.  The first supported
-assembly is the lower riser turn discussed in ``логика1.pdf``: one 45-degree
-elbow followed by a 45-degree wye that replaces the second elbow.  The unused
-straight end of the wye is capped and becomes the cleanout access.
+assembly is the lower riser turn discussed in ``логика1.pdf`` and reconciled
+with SP 30.13330.2020, 18.4: two 45-degree elbows form the turn, followed by a
+45-degree wye whose unused branch is capped as the cleanout access.
 
 No project element registry is reconstructed here.  The builder produces a
 deterministic *proposed assembly* from explicit parameters.  A project may
@@ -404,9 +404,10 @@ class WastewaterDraftAssembly:
                     f"{', '.join(sorted(missing))}"
                 )
 
-        # At the cleanout wye the capped straight end must look directly into
-        # the downstream main.  This is the engineering rule that the old SVG
-        # did not model and therefore could not verify.
+        # The capped branch of the service wye must enter the downstream main
+        # at no more than 45 degrees.  The wye is installed after the two
+        # mandatory 45-degree elbows of the lower riser turn (SP 30, 18.4),
+        # so it no longer substitutes either elbow.
         try:
             access_segment = next(
                 row for row in self.segments if row.role == "cleanout_access"
@@ -418,11 +419,12 @@ class WastewaterDraftAssembly:
             downstream_end = self.port(downstream.end_port_id).point
             ax, ay = access_start.vector_to(access_end)
             dx, dy = downstream_start.vector_to(downstream_end)
-            cross = ax * dy - ay * dx
-            dot = ax * dx + ay * dy
-            if abs(cross) > 1e-6 or dot <= 0:
+            length = hypot(ax, ay) * hypot(dx, dy)
+            cosine = (ax * dx + ay * dy) / length if length > 1e-12 else -1.0
+            approach_angle = degrees(acos(max(-1.0, min(1.0, cosine))))
+            if approach_angle > 45.0 + 1e-6:
                 errors.append(
-                    "cleanout axis must be collinear with downstream main"
+                    "cleanout approach angle to downstream main exceeds 45 degrees"
                 )
         except StopIteration:
             errors.append("assembly needs one cleanout access and one main segment")
@@ -448,10 +450,10 @@ def build_lower_turn_cleanout_assembly(
 ) -> WastewaterDraftAssembly:
     """Build the first parametric installation node of the sewer generator.
 
-    Flow moves from the vertical riser through a 45-degree elbow into a
-    diagonal leg.  A 45-degree wye replaces the second elbow: its branch
-    receives the diagonal leg, its straight run becomes the downstream main,
-    and the unused upstream run is capped as a cleanout.
+    Flow moves from the vertical riser through two 45-degree elbows into a
+    horizontal leg, as required by SP 30.13330.2020, 18.4.  A separate
+    45-degree wye then adds an accessible capped branch for cleaning the
+    downstream main without substituting either elbow.
     """
     if system not in {"K1", "K2", "K3"}:
         raise ValueError("system must be K1, K2 or K3")
@@ -460,19 +462,26 @@ def build_lower_turn_cleanout_assembly(
 
     inlet = DraftPoint(0.0, 0.0)
     elbow = DraftPoint(0.0, 38.0)
-    wye = DraftPoint(38.0, 76.0)
-    outlet = DraftPoint(112.0, 76.0)
-    cleanout_cap = DraftPoint(12.0, 76.0)
+    second_elbow = DraftPoint(38.0, 76.0)
+    wye = DraftPoint(70.0, 76.0)
+    outlet = DraftPoint(144.0, 76.0)
+    cleanout_cap = DraftPoint(48.0, 54.0)
     ports = (
         DraftPort("riser_in", inlet, "hydraulic_inlet"),
         DraftPort("elbow_45", elbow, "flow_joint"),
+        DraftPort("elbow_45_2", second_elbow, "flow_joint"),
         DraftPort("wye_45", wye, "flow_and_service_joint"),
         DraftPort("main_out", outlet, "hydraulic_outlet"),
         DraftPort("cleanout_cap", cleanout_cap, "service_access", accessible=True),
     )
     segments = (
         DraftPipeSegment("riser", "riser_in", "elbow_45", dn_mm, "riser"),
-        DraftPipeSegment("diagonal", "elbow_45", "wye_45", dn_mm, "diagonal"),
+        DraftPipeSegment(
+            "diagonal", "elbow_45", "elbow_45_2", dn_mm, "diagonal"
+        ),
+        DraftPipeSegment(
+            "turn_out", "elbow_45_2", "wye_45", dn_mm, "horizontal_turn_out"
+        ),
         DraftPipeSegment("main", "wye_45", "main_out", dn_mm, "main"),
         DraftPipeSegment(
             "cleanout_access",
@@ -485,19 +494,25 @@ def build_lower_turn_cleanout_assembly(
     )
     fittings = (
         DraftFitting(
-            "lower_elbow_45",
+            "lower_elbow_45_1",
             "elbow_45",
             elbow,
             dn_mm,
             ("riser", "diagonal"),
         ),
         DraftFitting(
+            "lower_elbow_45_2",
+            "elbow_45",
+            second_elbow,
+            dn_mm,
+            ("diagonal", "turn_out"),
+        ),
+        DraftFitting(
             "service_wye_45",
             "wye_45_cleanout",
             wye,
             dn_mm,
-            ("diagonal", "main", "cleanout_access"),
-            replaces_kind="elbow_45",
+            ("turn_out", "main", "cleanout_access"),
         ),
         DraftFitting(
             "cleanout_cap_fitting",
@@ -513,7 +528,7 @@ def build_lower_turn_cleanout_assembly(
         ports=ports,
         segments=segments,
         fittings=fittings,
-        flow_segment_ids=("riser", "diagonal", "main"),
+        flow_segment_ids=("riser", "diagonal", "turn_out", "main"),
         service_path=DraftServicePath(
             "cleanout_cable",
             "cleanout_cap",
@@ -527,8 +542,8 @@ def build_lower_turn_cleanout_assembly(
         raise ValueError("invalid lower turn assembly: " + "; ".join(errors))
 
     # Explicit geometry guard: both changes of direction are 45 degrees.
-    first_change = 180.0 - _angle_degrees(inlet, elbow, wye)
-    second_change = 180.0 - _angle_degrees(elbow, wye, outlet)
+    first_change = 180.0 - _angle_degrees(inlet, elbow, second_elbow)
+    second_change = 180.0 - _angle_degrees(elbow, second_elbow, wye)
     if abs(first_change - 45.0) > 1e-6 or abs(second_change - 45.0) > 1e-6:
         raise ValueError("lower turn geometry must contain two 45-degree changes")
     return assembly
@@ -543,9 +558,13 @@ def render_lower_turn_assembly_svg(
     *,
     diagnostics: bool = False,
     pipe_labels: bool = True,
+    annotations: bool = True,
+    flow_direction: bool = True,
+    visible_segment_ids: tuple[str, ...] | None = None,
     x: float = 0.0,
     y: float = 0.0,
     scale: float = 5.0,
+    pipe_width: float = 3.0,
 ) -> str:
     """Render one semantic assembly without inventing extra pipework."""
     errors = assembly.validate()
@@ -568,33 +587,46 @@ def render_lower_turn_assembly_svg(
 
     body: list[str] = [
         f'<g data-draft-assembly="{escape(assembly.assembly_id)}" '
-        f'data-system="{escape(assembly.system)}">'
+        f'data-system="{escape(assembly.system)}" '
+        'data-lower-connection="elbow-wye-cleanout" '
+        'data-accessible-capped-end="true">'
     ]
     for segment in assembly.segments:
+        if visible_segment_ids is not None and segment.segment_id not in visible_segment_ids:
+            continue
         body.append(
             f'<g data-draft-segment="{escape(segment.segment_id)}" '
             f'data-role="{escape(segment.role)}" '
             f'data-dn="{segment.dn_mm}" '
             f'data-carries-flow="{str(segment.carries_flow).lower()}">'
-            f'{line(segment.start_port_id, segment.end_port_id)}</g>'
+            f'{line(segment.start_port_id, segment.end_port_id, pipe_width)}</g>'
         )
 
     # Fitting limits: small perpendicular strokes at the physical ends of each
     # manufactured fitting.  They are deliberately short to avoid the false
     # large X that appeared in the former full-sheet renderer.
     elbow_x, elbow_y = xy("elbow_45")
+    elbow_2_x, elbow_2_y = xy("elbow_45_2")
     wye_x, wye_y = xy("wye_45")
     cap_x, cap_y = xy("cleanout_cap")
     tick = 6.0
     diagonal_offset = 11.0
     body.extend((
-        f'<path data-fitting="lower_elbow_45" '
+        f'<path data-fitting="lower_elbow_45_1" '
         f'd="M{elbow_x-tick:.1f},{elbow_y-10:.1f} '
         f'H{elbow_x+tick:.1f} '
         f'M{elbow_x+diagonal_offset-tick:.1f},'
         f'{elbow_y+diagonal_offset+tick:.1f} '
         f'L{elbow_x+diagonal_offset+tick:.1f},'
         f'{elbow_y+diagonal_offset-tick:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="2.2"/>',
+        f'<path data-fitting="lower_elbow_45_2" '
+        f'd="M{elbow_2_x-diagonal_offset-tick:.1f},'
+        f'{elbow_2_y-diagonal_offset+tick:.1f} '
+        f'L{elbow_2_x-diagonal_offset+tick:.1f},'
+        f'{elbow_2_y-diagonal_offset-tick:.1f} '
+        f'M{elbow_2_x+10:.1f},{elbow_2_y-tick:.1f} '
+        f'V{elbow_2_y+tick:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="2.2"/>',
         f'<path data-fitting="service_wye_45" '
         f'd="M{wye_x-diagonal_offset-tick:.1f},'
@@ -605,19 +637,22 @@ def render_lower_turn_assembly_svg(
         f'V{wye_y+tick:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="2.2"/>',
         f'<path data-fitting="cleanout_cap_fitting" '
-        f'd="M{cap_x-5:.1f},{cap_y-12:.1f} V{cap_y+12:.1f} '
-        f'M{cap_x+1:.1f},{cap_y-12:.1f} V{cap_y+12:.1f}" '
+        f'd="M{cap_x-tick:.1f},{cap_y+tick:.1f} '
+        f'L{cap_x+tick:.1f},{cap_y-tick:.1f} '
+        f'M{cap_x-tick+3.2:.1f},{cap_y+tick+3.2:.1f} '
+        f'L{cap_x+tick+3.2:.1f},{cap_y-tick+3.2:.1f}" '
         f'fill="none" stroke="{BLACK}" stroke-width="2.4"/>',
     ))
 
     # Flow direction is a filled triangle in the pipe, per the adopted UGO.
-    flow_x = (wye_x + xy("main_out")[0]) / 2
-    body.append(
-        f'<path data-flow-direction="downstream" '
-        f'd="M{flow_x-10:.1f},{wye_y-7:.1f} '
-        f'L{flow_x+2:.1f},{wye_y:.1f} L{flow_x-10:.1f},{wye_y+7:.1f} Z" '
-        f'fill="{BLACK}"/>'
-    )
+    if flow_direction:
+        flow_x = (wye_x + xy("main_out")[0]) / 2
+        body.append(
+            f'<path data-flow-direction="downstream" '
+            f'd="M{flow_x-10:.1f},{wye_y-7:.1f} '
+            f'L{flow_x+2:.1f},{wye_y:.1f} L{flow_x-10:.1f},{wye_y+7:.1f} Z" '
+            f'fill="{BLACK}"/>'
+        )
     if diagnostics:
         service_points = [xy(port_id) for port_id in assembly.service_path.point_ids]
         path_d = " ".join(
@@ -659,16 +694,22 @@ def render_lower_turn_assembly_svg(
             if pipe_labels
             else ()
         ),
-        f'<text x="{(elbow_x+wye_x)/2:.1f}" y="{wye_y+72:.1f}" text-anchor="middle" '
-        f'font-family="{FONT}" font-size="14">Отвод 45° DN{dn}</text>',
-        f'<text x="{wye_x+45:.1f}" y="{wye_y-38:.1f}" text-anchor="start" '
-        f'font-family="{FONT}" font-size="14">Косой тройник 45° DN{dn}</text>',
-        f'<path d="M{cap_x:.1f},{cap_y:.1f} L{cap_x-42:.1f},{cap_y-48:.1f} '
-        f'H{cap_x-180:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.3"/>',
-        f'<text x="{cap_x-50:.1f}" y="{cap_y-56:.1f}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="15" font-weight="bold">Прочистка</text>',
-        f'<text x="{cap_x-50:.1f}" y="{cap_y-34:.1f}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="11.5">заглушённый конец; DN{dn}</text>',
+        *(
+            (
+                f'<text x="{(elbow_x+elbow_2_x)/2:.1f}" y="{wye_y+72:.1f}" text-anchor="middle" '
+                f'font-family="{FONT}" font-size="14">2 отвода 45° DN{dn}</text>',
+                f'<text x="{wye_x+45:.1f}" y="{wye_y-38:.1f}" text-anchor="start" '
+                f'font-family="{FONT}" font-size="14">Косой тройник 45° DN{dn}</text>',
+                f'<path d="M{cap_x:.1f},{cap_y:.1f} L{cap_x+42:.1f},{cap_y-48:.1f} '
+                f'H{cap_x+180:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.3"/>',
+                f'<text x="{cap_x+50:.1f}" y="{cap_y-56:.1f}" text-anchor="start" '
+                f'font-family="{FONT}" font-size="15" font-weight="bold">Прочистка</text>',
+                f'<text x="{cap_x+50:.1f}" y="{cap_y-34:.1f}" text-anchor="start" '
+                f'font-family="{FONT}" font-size="11.5">заглушённый конец; DN{dn}</text>',
+            )
+            if annotations
+            else ()
+        ),
     ))
     if diagnostics:
         body.extend((
@@ -708,10 +749,20 @@ def build_lower_turn_control_sheet_svg(
         f'<text x="{width/2+24:.1f}" y="{margin+104}" font-family="{FONT}" '
         'font-size="16" font-weight="bold">Контроль достижимости</text>',
         render_lower_turn_assembly_svg(
-            assembly, diagnostics=False, x=210, y=165, scale=2.7
+            assembly,
+            diagnostics=False,
+            pipe_labels=False,
+            x=150,
+            y=170,
+            scale=1.9,
         ),
         render_lower_turn_assembly_svg(
-            assembly, diagnostics=True, x=745, y=165, scale=2.7
+            assembly,
+            diagnostics=True,
+            pipe_labels=False,
+            x=670,
+            y=170,
+            scale=1.9,
         ),
     ]
     notes_y = height - margin - 70
@@ -719,11 +770,11 @@ def build_lower_turn_control_sheet_svg(
         f'<line x1="{margin}" y1="{notes_y-28}" x2="{width-margin}" '
         f'y2="{notes_y-28}" stroke="{BLACK}" stroke-width="1.2"/>',
         f'<text x="{margin+16}" y="{notes_y}" font-family="{FONT}" '
-        'font-size="12">1. Косой тройник заменяет второй отвод 45°; '
-        'его свободный прямой конец заглушён и доступен для обслуживания.</text>',
+        'font-size="12">1. Нижний поворот выполнен двумя отводами 45°; '
+        'косой тройник с заглушкой установлен далее отдельным узлом.</text>',
         f'<text x="{margin+16}" y="{notes_y+20}" font-family="{FONT}" '
-        'font-size="12">2. Ось доступа соосна выходящей магистрали; '
-        'трос проходит через тройник без встречного поворота.</text>',
+        'font-size="12">2. Доступ присоединён косым тройником под 45°; '
+        'трос входит в магистраль по направлению стока.</text>',
         f'<text x="{margin+16}" y="{notes_y+40}" font-family="{FONT}" '
         f'font-size="12">3. Фиолетовый маршрут является диагностическим слоем '
         'и не выводится на нормативный лист.</text>',

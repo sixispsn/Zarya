@@ -15,11 +15,11 @@ def _project():
     return build_project(load_request_file(str(DEMO)))
 
 
-def test_demo_resolves_flow_but_does_not_invent_service_access():
+def test_demo_resolves_flow_and_keeps_explicit_lower_turn_access():
     result = assess_wastewater_diagnostics(_project())
     assert not result.ready
     assert any("К1-М1" in row and "0–52 м" in row for row in result.errors)
-    assert any("К2-М1" in row and "нет подтверждённых" in row for row in result.errors)
+    assert any("К2-М1" in row and "достижимость" in row for row in result.errors)
     assert result.resolved_flows_lps == {"К1-М1": 2.758, "К1-Вып1": 5.516}
     assert {row.status for row in result.hydraulics} == {"verified"}
     assert {row.status for row in result.diameter_checks} == {"verified"}
@@ -29,7 +29,7 @@ def test_demo_resolves_flow_but_does_not_invent_service_access():
     ]
     assert sanitary_segments == [50, 50, 100]
     assert {row.status for row in result.network_diameter_checks} == {"verified"}
-    assert {row.status for row in result.turn_checks} == {"verified", "fail"}
+    assert {row.status for row in result.turn_checks} == {"verified"}
     assert {row.status for row in result.linear_service_checks} == {
         "verified", "fail",
     }
@@ -76,10 +76,18 @@ def test_dn_increase_requires_explicit_transition_and_never_reduces_downstream()
 
 def test_linear_service_gap_and_wrong_cleanout_direction_are_blocking():
     project = deepcopy(_project())
+    project.sewage.elements = [
+        row for row in project.sewage.elements
+        if row.element_id != "К2-ПрНП1"
+    ]
     result = assess_wastewater_diagnostics(project)
     assert any("К1-М1" in row and "достижимость" in row for row in result.errors)
 
     project = deepcopy(_project())
+    project.sewage.elements = [
+        row for row in project.sewage.elements
+        if row.element_id != "К2-ПрНП1"
+    ]
     project.sewage.elements.append(SewerElementSpec(
         element_id="К2-Проверка-доступа",
         system="K2",
@@ -111,9 +119,9 @@ def test_diagnostic_svg_contains_flow_sediment_and_real_cable_reach():
     assert 'data-diagnostic-layer="true"' in result.svg
     assert result.svg.count('class="ww-flow"') > 10
     assert 'data-sediment-zone="turn:К1-Ст1"' in result.svg
-    assert 'data-service-path="К1-Р1-1"' in result.svg
+    assert 'data-service-path="К1-ПрНП1"' in result.svg
     assert 'data-service-linear=' not in result.svg
-    assert 'data-ugo="cleanout"' not in result.svg
+    assert result.svg.count('data-draft-segment="cleanout_access"') == 4
     assert 'data-segment-dn="50"' in result.svg
     assert 'data-segment-dn="100"' in result.svg
     assert (

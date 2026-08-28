@@ -95,6 +95,7 @@ class WastewaterBasementAssembly:
             "riser_to_lower_turn",
             "riser",
             "diagonal",
+            "turn_out",
             "main",
             "collector_main",
             "collector_to_sleeve",
@@ -122,8 +123,13 @@ class WastewaterBasementAssembly:
             for row in self.draft.segments
         ):
             errors.append("external sewer elements are outside this module")
-        if self.lower_turn.fitting("service_wye_45").replaces_kind != "elbow_45":
-            errors.append("lower turn lost its accepted cleanout wye")
+        lower_elbows = [
+            row for row in self.lower_turn.fittings if row.kind == "elbow_45"
+        ]
+        if len(lower_elbows) != 2:
+            errors.append("lower turn must keep two 45-degree elbows")
+        if self.lower_turn.fitting("service_wye_45").replaces_kind:
+            errors.append("service wye must not replace a mandatory lower elbow")
         return errors
 
 

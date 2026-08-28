@@ -13,7 +13,11 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.section_scaffold import build_section_scaffold
-from app.pz.wastewater_drafting import render_repeated_inline_pipe_labels
+from app.pz.wastewater_drafting import (
+    build_lower_turn_cleanout_assembly,
+    render_lower_turn_assembly_svg,
+    render_repeated_inline_pipe_labels,
+)
 from app.pz.wastewater_registry import audit_wastewater_registry
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
@@ -790,7 +794,12 @@ def build_wastewater_scheme(
     # Узел присоединения магистрали расположен после составного нижнего
     # поворота. Смещение образует две смены направления по 45°, а не один
     # графический отвод 87,5° (СП 30.13330.2020, п. 18.4).
-    lower_bend_dx = 34.0
+    lower_bend_dx = 70.0
+    # Canonical node coordinates in wastewater_drafting.py: the service wye
+    # is at (70, 76).  One shared scale keeps all full-sheet lower turns
+    # geometrically identical to the validated installation assembly.
+    lower_turn_scale = lower_bend_dx / 70.0
+    lower_turn_dy = 76.0 * lower_turn_scale
     main_connection_x = {
         riser_id: x + lower_bend_dx for riser_id, x in riser_x.items()
     }
@@ -801,48 +810,99 @@ def build_wastewater_scheme(
         main_axis_y: float,
         pipe_width: float = 2.6,
     ):
-        """Vertical-to-horizontal transition made by two 45-degree elbows."""
-        start_y = main_axis_y - lower_bend_dx
-        end_x = riser_axis + lower_bend_dx
-        radius = 5.0
-        G.append(
-            f'<path data-lower-connection="double-45" '
-            f'data-connection-owner="{escape(owner_id)}" '
-            f'd="M{riser_axis:.1f},{start_y:.1f} '
-            f'Q{riser_axis:.1f},{start_y+radius:.1f} '
-            f'{riser_axis+radius:.1f},{start_y+radius:.1f} '
-            f'L{end_x-radius:.1f},{main_axis_y-radius:.1f} '
-            f'Q{end_x:.1f},{main_axis_y-radius:.1f} '
-            f'{end_x:.1f},{main_axis_y:.1f}" fill="none" '
-            f'stroke="{BLACK}" stroke-width="{pipe_width:g}"/>'
-        )
+        """Render the canonical lower turn: two elbows + 45° wye cleanout.
 
-    def draw_lower_bend_boundaries(
-        owner_id: str,
-        riser_axis: float,
-        main_axis_y: float,
-        pipe_width: float = 2.6,
-    ):
-        """Three fitting limits for a vertical-double-45-horizontal bend."""
-        bend_start_y = main_axis_y - lower_bend_dx
-        bend_mid_x = riser_axis + lower_bend_dx / 2
-        bend_mid_y = main_axis_y - lower_bend_dx / 2
-        bend_end_x = riser_axis + lower_bend_dx
-        # Короткие границы фасонных частей читаются как два полуотвода и не
-        # превращают весь узел в крупный X-образный знак.
-        boundary_half = 4.5
-        G.append(
-            f'<path data-fitting-boundaries="double-45" '
-            f'data-boundary-owner="{escape(owner_id)}" '
-            f'data-fitting-boundary-count="3" '
-            f'd="M{riser_axis-boundary_half:.1f},{bend_start_y:.1f} '
-            f'L{riser_axis+boundary_half:.1f},{bend_start_y:.1f} '
-            f'M{bend_mid_x-boundary_half:.1f},{bend_mid_y+boundary_half:.1f} '
-            f'L{bend_mid_x+boundary_half:.1f},{bend_mid_y-boundary_half:.1f} '
-            f'M{bend_end_x:.1f},{main_axis_y-boundary_half:.1f} '
-            f'L{bend_end_x:.1f},{main_axis_y+boundary_half:.1f}" '
-            f'fill="none" stroke="{BLACK}" stroke-width="{pipe_width:g}"/>'
+        The service access is a structural part of the generated installation
+        node.  It is therefore not allowed to disappear merely because a
+        duplicate decorative ``cleanout`` row is absent from an imported
+        element registry.
+        """
+        riser = topology.risers.get(owner_id)
+        if riser is None or riser.nominal_diameter_mm is None:
+            warnings.append(
+                f"{owner_id}: нижний поворот с прочисткой не сформирован - не задан DN стояка"
+            )
+            return
+        outgoing = next(
+            (
+                row for row in topology.mains
+                if row.system == riser.system and row.from_node == owner_id
+            ),
+            None,
         )
+        explicit_cleanout = next(
+            (
+                row for row in elements
+                if outgoing is not None
+                and row.kind == "cleanout"
+                and row.system == riser.system
+                and row.section_id == outgoing.section_id
+                and row.connects_to == owner_id
+                and row.service_direction in {"downstream", "both"}
+                and row.service_fitting == "wye_45"
+                and row.accessible
+            ),
+            None,
+        )
+        cleanout_id = (
+            explicit_cleanout.element_id
+            if explicit_cleanout is not None
+            else f"{owner_id}-ПрНП"
+        )
+        assembly = build_lower_turn_cleanout_assembly(
+            assembly_id=f"{owner_id}-Узел-НП",
+            system=riser.system,
+            dn_mm=riser.nominal_diameter_mm,
+        )
+        scale = lower_turn_scale
+        origin_y = main_axis_y - lower_turn_dy
+        cleanout_source = (
+            "registry" if explicit_cleanout is not None else "generator-invariant"
+        )
+        if explicit_cleanout is None:
+            warnings.append(
+                f"{owner_id}: обязательная прочистка нижнего поворота показана "
+                "генератором, но не внесена в реестр элементов; подтвердите "
+                "позицию и доступность для спецификации"
+            )
+        lower_turn_svg = render_lower_turn_assembly_svg(
+            assembly,
+            pipe_labels=False,
+            annotations=False,
+            flow_direction=False,
+            visible_segment_ids=(
+                "riser", "diagonal", "turn_out", "cleanout_access"
+            ),
+            x=riser_axis,
+            y=origin_y,
+            scale=scale,
+            pipe_width=pipe_width,
+        )
+        G.append(
+            f'<g data-lower-turn-node="{escape(owner_id)}" '
+            f'data-cleanout-element-id="{escape(cleanout_id)}" '
+            f'data-cleanout-source="{cleanout_source}">'
+            f'{lower_turn_svg}'
+            '</g>'
+        )
+        cleanout_cap = assembly.port("cleanout_cap").point
+        cap_x = riser_axis + cleanout_cap.x_mm * scale
+        cap_y = origin_y + cleanout_cap.y_mm * scale
+        G.append(
+            f'<g data-cleanout-callout="{escape(cleanout_id)}" '
+            f'data-cleanout-owner="{escape(owner_id)}">'
+        )
+        two_line_callout(
+            cap_x,
+            cap_y,
+            "Прочистка",
+            f"DN{riser.nominal_diameter_mm}",
+            side=-1,
+            shelf_y=main_axis_y - 55.0,
+            shelf_width=82.0,
+            note="косой тройник 45° с заглушкой",
+        )
+        G.append('</g>')
     # Стояки проходят по общим шахтам; нижний поворот привязан к своей магистрали.
     for riser_id, pipe in topology.risers.items():
         x = riser_x.get(riser_id)
@@ -861,7 +921,8 @@ def build_wastewater_scheme(
             if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2
             else 650.0
         )
-        line(x, start_y, x, target_y - lower_bend_dx, 2.6)
+        lower_turn_inlet_y = target_y - lower_turn_dy
+        line(x, start_y, x, lower_turn_inlet_y, 2.6)
         if pipe.nominal_diameter_mm is not None:
             riser_fittings: List[Tuple[float, float]] = []
             if branches_by_riser.get(riser_id):
@@ -908,7 +969,7 @@ def build_wastewater_scheme(
                 line_id=f"{riser_id}-riser",
                 label=f"{_system_mark(pipe.system)} ⌀{pipe.nominal_diameter_mm}",
                 start=(x, start_y),
-                end=(x, target_y - lower_bend_dx),
+                end=(x, lower_turn_inlet_y),
                 max_spacing=PIPE_LABEL_REPEAT_MM["riser"] * PXMM,
                 font_size=8.3,
                 padding=2.5,
@@ -1083,10 +1144,9 @@ def build_wastewater_scheme(
                     continue
                 riser_axis = riser_x.get(node, x - lower_bend_dx)
                 line(riser_axis, y_ground_bottom, riser_axis,
-                     y - lower_bend_dx, 2.6)
+                     y - lower_turn_dy, 2.6)
                 draw_lower_bend(node, riser_axis, y)
-                draw_lower_bend_boundaries(node, riser_axis, y)
-        text(min(node_x.get(row.from_node, 1000) for row in rows) - 30,
+        text(min(node_x.get(row.from_node, 1000) for row in rows) - 70,
              y + 5, _system_mark(system), 13, "end", "bold")
         for pipe in rows:
             x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
@@ -1204,6 +1264,14 @@ def build_wastewater_scheme(
     for row in elements if full_scope else []:
         if row.kind != "cleanout":
             continue
+        if (
+            row.service_fitting == "wye_45"
+            and row.connects_to in topology.risers
+            and row.service_direction in {"downstream", "both"}
+        ):
+            # Already rendered as a structural port of the canonical lower
+            # turn node.  Drawing the generic UGO again would duplicate it.
+            continue
         main_pipe = next(
             (p for p in topology.mains if p.section_id == row.section_id),
             None,
@@ -1283,17 +1351,8 @@ def build_wastewater_scheme(
                 pipe_width=2.6,
             )
 
-    # Границы фасонных частей относятся к уже показанной геометрии поворота,
-    # а не к наличию отдельной позиции отводов в спецификации. Поэтому они
-    # обязательны у каждого нижнего поворота К1/К2/К3 на полном листе.
-    for riser_id, pipe in topology.risers.items() if full_scope else []:
-        sx = riser_x.get(riser_id)
-        sy = main_y.get(pipe.system)
-        if sx is not None and sy is not None:
-            draw_lower_bend_boundaries(riser_id, sx, sy)
-
-    # Два отвода по 45° у нижнего поворота уже образуют геометрию трубопровода;
-    # адресная выноска связывает её с подтверждённым элементом проекта.
+    # Два отвода 45° образуют переход со стояка в горизонталь по п. 18.4
+    # СП 30; косой тройник с заглушкой установлен далее отдельным узлом.
     for row in elements if full_scope else []:
         if row.kind != "elbow":
             continue

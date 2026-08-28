@@ -20,6 +20,7 @@ def test_basement_path_is_continuous_from_riser_to_outside_wall():
         "riser_to_lower_turn",
         "riser",
         "diagonal",
+        "turn_out",
         "main",
         "collector_main",
         "collector_to_sleeve",
@@ -46,7 +47,10 @@ def test_cleanout_services_the_whole_downstream_internal_path():
         "sleeve_segment",
         "outlet_segment",
     )
-    assert basement.lower_turn.fitting("service_wye_45").replaces_kind == "elbow_45"
+    assert basement.lower_turn.fitting("service_wye_45").replaces_kind == ""
+    assert len(
+        [row for row in basement.lower_turn.fittings if row.kind == "elbow_45"]
+    ) == 2
 
 
 def test_sleeve_crosses_wall_and_outlet_finishes_outside():

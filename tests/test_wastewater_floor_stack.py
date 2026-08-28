@@ -108,9 +108,13 @@ def test_basement_k1_main_uses_real_registry_topology_and_pipe_mark():
     assert "отм. по АР" in svg
     assert "ZARYA-DEMO-001-ИОС3.СК" in svg
     assert "к К1-Ст2" not in svg
-    assert svg.count('data-fitting-boundaries="double-45"') == 2
-    assert 'data-boundary-owner="К1-Ст1"' in svg
-    assert 'data-boundary-owner="К1-Ст2"' in svg
+    assert svg.count('data-lower-turn-node=') == 2
+    assert svg.count('data-cleanout-source="registry"') == 2
+    assert svg.count('data-draft-segment="cleanout_access"') == 2
+    assert svg.count('data-fitting="lower_elbow_45_1"') == 2
+    assert svg.count('data-fitting="lower_elbow_45_2"') == 2
+    assert svg.count('data-fitting="service_wye_45"') == 2
+    assert svg.count(">Прочистка</text>") == 2
 
 
 def test_floor_stack_pdf_is_a1(tmp_path):
