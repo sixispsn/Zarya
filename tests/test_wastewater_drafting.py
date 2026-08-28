@@ -8,6 +8,7 @@ from app.pz.wastewater_drafting import (
     build_lower_turn_cleanout_assembly,
     build_lower_turn_control_sheet_svg,
     plan_repeated_inline_pipe_label_positions,
+    render_inline_pipe_label,
     render_lower_turn_assembly_svg,
     render_repeated_inline_pipe_labels,
 )
@@ -103,6 +104,23 @@ def test_repeated_line_marks_keep_clear_of_fittings_and_support_k1_k2_k3():
         assert f'data-repeated-pipe-labels="{system}-М1"' in svg
         assert f'data-inline-pipe-label="{system} ⌀100"' in svg
         assert svg.count('data-pipe-label-mask=') == 4
+
+
+def test_inline_diameter_mark_is_vector_and_does_not_depend_on_font_glyph():
+    svg = render_inline_pipe_label(
+        line_id="К1-М1",
+        label="К1 ⌀100",
+        start=(0.0, 0.0),
+        end=(200.0, 0.0),
+    )
+
+    assert 'data-inline-pipe-label="К1 ⌀100"' in svg
+    assert svg.count('data-vector-diameter-sign="true"') == 1
+    assert '<circle ' in svg
+    assert '<line ' in svg
+    # The symbol remains in metadata for auditing, but is not emitted as a
+    # font-dependent text node that macOS Preview can replace with a square.
+    assert '>⌀' not in svg
 
 
 def test_repeated_line_mark_is_omitted_when_clear_run_is_too_short():

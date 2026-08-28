@@ -852,6 +852,15 @@ def build_wastewater_scheme(
             continue
         target_y = main_y.get(pipe.system, 1490.0)
         start_y = roof_y if pipe.system == "K2" else roof_y - 30
+        technical_label = (
+            f"Ст.{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}"
+            .replace(".", ",")
+        )
+        technical_label_y = (
+            610.0
+            if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2
+            else 650.0
+        )
         line(x, start_y, x, target_y - lower_bend_dx, 2.6)
         if pipe.nominal_diameter_mm is not None:
             riser_fittings: List[Tuple[float, float]] = []
@@ -885,6 +894,16 @@ def build_wastewater_scheme(
                             continue
                         fitting_y = band.bottom_y - 45.0
                     riser_fittings.append((x, fitting_y))
+            # The one-off pipe/material mark is also an occupied drafting
+            # zone.  Repeated system/DN labels must not be planned across it.
+            # Several points describe the vertical text extent because the
+            # generic label planner deliberately only knows point obstacles.
+            technical_half_span = max(36.0, len(technical_label) * 9.0 * 0.28)
+            technical_obstacle_step = 28.0
+            obstacle_y = technical_label_y - technical_half_span
+            while obstacle_y <= technical_label_y + technical_half_span:
+                riser_fittings.append((x, obstacle_y))
+                obstacle_y += technical_obstacle_step
             G.append(render_repeated_inline_pipe_labels(
                 line_id=f"{riser_id}-riser",
                 label=f"{_system_mark(pipe.system)} ⌀{pipe.nominal_diameter_mm}",
@@ -898,10 +917,20 @@ def build_wastewater_scheme(
                 fitting_clearance=16.0,
             ))
         draw_lower_bend(riser_id, x, target_y)
-        label = f"Ст.{riser_id} Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}".replace(".", ",")
-        label_y = 610.0 if x < (scaffold.shaft_left_x + scaffold.shaft_right_x) / 2 else 650.0
-        text(x + (13 if pipe.system != "K2" else -13), label_y,
-             label, 9, "middle", "bold", rotate=-90)
+        G.append(
+            f'<g data-riser-technical-label="{escape(riser_id)}" '
+            f'data-label-clearance="true">'
+        )
+        text(
+            x + (13 if pipe.system != "K2" else -13),
+            technical_label_y,
+            technical_label,
+            9,
+            "middle",
+            "bold",
+            rotate=-90,
+        )
+        G.append('</g>')
         for band in bands:
             arrow(x, band.bottom_y - 10, "down", 0.52)
         arrow(x, y_zero - 10, "down", 0.52)
@@ -1515,12 +1544,13 @@ def build_wastewater_scheme(
     # Графический разрыв повторяющихся этажей выполняется после трубопроводов.
     if rupture_y is not None:
         gap = 24.0
+        rupture_marker_xs = (building_x1 + 520, building_x2 - 520)
         G.append(
             f'<rect x="{building_x1-5:.1f}" y="{rupture_y-gap/2:.1f}" '
             f'width="{building_x2-building_x1+10:.1f}" height="{gap:.1f}" fill="white"/>'
         )
         for yy in (rupture_y - gap / 2, rupture_y + gap / 2):
-            for z in (building_x1 + 520, building_x2 - 520):
+            for z in rupture_marker_xs:
                 line(z - 9, yy, z - 3, yy - 12, 0.9)
                 line(z - 3, yy - 12, z + 3, yy + 12, 0.9)
                 line(z + 3, yy + 12, z + 9, yy, 0.9)
@@ -1547,7 +1577,62 @@ def build_wastewater_scheme(
                 f'{risk_attributes(rows[0].element_id)}>'
                 f'{render_ugo("revision", x, rupture_y, scale=0.64, rotation=90)}</g>'
             )
-            text(x + 15, rupture_y + 3, f"R · эт. {floors}", 7.1)
+            revision_label = f"R · эт. {floors}"
+            label_width = max(44.0, len(revision_label) * 7.1 * 0.56)
+            label_padding = 4.0
+            obstacles = [
+                marker_x for marker_x in rupture_marker_xs
+            ] + [
+                other_x for other_id, other_x in riser_x.items()
+                if other_id != section_id
+            ]
+
+            def label_clearance(side: int) -> tuple[float, float, float]:
+                text_x = x + side * 18.0
+                if side > 0:
+                    left = text_x - label_padding
+                    right = text_x + label_width + label_padding
+                else:
+                    left = text_x - label_width - label_padding
+                    right = text_x + label_padding
+                if left < building_x1 + 8 or right > building_x2 - 8:
+                    return -1000.0, left, right
+                distances = [
+                    min(abs(obstacle - left), abs(obstacle - right))
+                    if not left <= obstacle <= right else -1.0
+                    for obstacle in obstacles
+                ]
+                return min(distances, default=999.0), left, right
+
+            preferred_side = -1 if x > (building_x1 + building_x2) / 2 else 1
+            candidates = {
+                side: label_clearance(side)
+                for side in (-1, 1)
+            }
+            side = max(
+                candidates,
+                key=lambda candidate: (
+                    candidates[candidate][0],
+                    candidate == preferred_side,
+                ),
+            )
+            _, label_left, label_right = candidates[side]
+            label_x = x + side * 18.0
+            label_anchor = "start" if side > 0 else "end"
+            G.append(
+                f'<g data-rupture-revision-label="{escape(section_id)}" '
+                f'data-label-side="{"right" if side > 0 else "left"}">'
+                f'<rect x="{label_left:.1f}" y="{rupture_y-8.5:.1f}" '
+                f'width="{label_right-label_left:.1f}" height="13.5" fill="white"/>'
+            )
+            text(
+                label_x,
+                rupture_y + 3,
+                revision_label,
+                7.1,
+                label_anchor,
+            )
+            G.append('</g>')
 
     if (
         full_scope

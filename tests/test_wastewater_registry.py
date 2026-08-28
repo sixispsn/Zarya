@@ -145,6 +145,17 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-inline-pipe-label="К2 ⌀100"' in result.svg
     assert 'data-inline-pipe-label="К2 ⌀150"' in result.svg
     assert 'data-label-max-spacing="' in result.svg
+    assert result.svg.count('data-vector-diameter-sign="true"') == result.svg.count(
+        'data-inline-pipe-label='
+    )
+    assert result.svg.count('data-riser-technical-label=') == 4
+    assert result.svg.count('data-label-clearance="true"') == 4
+    assert 'data-rupture-revision-label="К1-Ст1"' in result.svg
+    assert 'data-rupture-revision-label="К1-Ст2"' in result.svg
+    assert result.svg.count('data-rupture-revision-label=') == 2
+    assert result.svg.count('data-label-side="left"') + result.svg.count(
+        'data-label-side="right"'
+    ) == 2
     assert "i=" not in result.svg
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg

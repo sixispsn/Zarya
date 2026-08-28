@@ -55,6 +55,44 @@ def render_inline_pipe_label(
     text_width = max(font_size * 2.6, len(label) * font_size * 0.56)
     mask_width = text_width + 2.0 * padding
     mask_height = font_size * 1.55
+    label_parts = label.split("⌀", 1)
+    if len(label_parts) == 2:
+        # ``osifont`` embedded by CairoSVG does not contain U+2300.  A text
+        # fallback therefore turns the diameter mark into an empty square in
+        # macOS Preview.  Draw the sign as vector geometry so it remains
+        # identical in SVG, browser preview and the exported PDF.
+        prefix = label_parts[0].rstrip()
+        suffix = label_parts[1].lstrip()
+        prefix_width = len(prefix) * font_size * 0.56
+        suffix_width = len(suffix) * font_size * 0.56
+        sign_width = font_size * 0.82
+        gap = font_size * 0.16
+        content_width = prefix_width + suffix_width + sign_width + 2.0 * gap
+        cursor = -content_width / 2.0
+        baseline = font_size * 0.34
+        sign_cx = cursor + prefix_width + gap + sign_width / 2.0
+        sign_cy = -font_size * 0.08
+        sign_radius = font_size * 0.29
+        sign_slash = font_size * 0.39
+        visible_label = "".join((
+            f'<text x="{cursor:.2f}" y="{baseline:.1f}" text-anchor="start" '
+            f'font-family="{FONT}" font-size="{font_size:g}">{escape(prefix)}</text>',
+            f'<g data-vector-diameter-sign="true" aria-label="diameter">'
+            f'<circle cx="{sign_cx:.2f}" cy="{sign_cy:.2f}" r="{sign_radius:.2f}" '
+            f'fill="none" stroke="{BLACK}" stroke-width="{font_size*0.085:.2f}"/>'
+            f'<line x1="{sign_cx-sign_slash:.2f}" y1="{sign_cy+sign_slash:.2f}" '
+            f'x2="{sign_cx+sign_slash:.2f}" y2="{sign_cy-sign_slash:.2f}" '
+            f'stroke="{BLACK}" stroke-width="{font_size*0.085:.2f}"/></g>',
+            f'<text x="{sign_cx+sign_width/2.0+gap:.2f}" y="{baseline:.1f}" '
+            f'text-anchor="start" font-family="{FONT}" font-size="{font_size:g}">'
+            f'{escape(suffix)}</text>',
+        ))
+    else:
+        visible_label = (
+            f'<text x="0" y="{font_size*0.34:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="{font_size:g}">'
+            f'{escape(label)}</text>'
+        )
     return "".join(
         (
             f'<g data-inline-pipe-label="{escape(label)}" '
@@ -65,9 +103,7 @@ def render_inline_pipe_label(
             f'x="{-mask_width/2:.1f}" y="{-mask_height/2:.1f}" '
             f'width="{mask_width:.1f}" height="{mask_height:.1f}" '
             'fill="white"/>',
-            f'<text x="0" y="{font_size*0.34:.1f}" text-anchor="middle" '
-            f'font-family="{FONT}" font-size="{font_size:g}">'
-            f'{escape(label)}</text>',
+            visible_label,
             '</g>',
         )
     )
