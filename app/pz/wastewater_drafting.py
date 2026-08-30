@@ -3,9 +3,10 @@
 The calculation topology answers where sewage flows.  This module adds a
 separate installation graph: real pipe segments, fitting ports and service
 paths that can later be laid out on a GOST drawing.  The first supported
-assembly is the lower riser turn shown in ``логика1.pdf``: one 45-degree elbow
-feeds the branch of a 45-degree wye, whose unused straight end is capped and
-kept collinear with the downstream main as the cleanout access.
+assemblies are the two lower-riser nodes required by the directed network:
+the terminal node shown in ``логика1.pdf`` has a capped cleanout end,
+while a through node keeps the incoming horizontal main open and joins the
+riser through the 45-degree branch of a wye.
 
 No project element registry is reconstructed here.  The builder produces a
 deterministic *proposed assembly* from explicit parameters.  A project may
@@ -305,7 +306,7 @@ class WastewaterDraftAssembly:
     segments: tuple[DraftPipeSegment, ...]
     fittings: tuple[DraftFitting, ...]
     flow_segment_ids: tuple[str, ...]
-    service_path: DraftServicePath
+    service_path: DraftServicePath | None = None
 
     def port(self, port_id: str) -> DraftPort:
         try:
@@ -381,37 +382,39 @@ class WastewaterDraftAssembly:
                 errors.append(f"{segment.segment_id}: gravity path rises")
 
         path = self.service_path
-        try:
-            access = self.port(path.access_port_id)
-            target = self.fitting(path.target_fitting_id)
-        except KeyError as exc:
-            errors.append(str(exc))
-        else:
-            if not access.accessible:
-                errors.append(f"{path.access_port_id}: cleanout access is not accessible")
-            if not path.point_ids or path.point_ids[0] != path.access_port_id:
-                errors.append(f"{path.path_id}: cable path must start at cleanout cap")
-            if target.point not in [
-                self.port(port_id).point
-                for port_id in path.point_ids
-                if port_id in known_ports
-            ]:
-                errors.append(f"{path.path_id}: cable path misses target fitting")
-            missing = set(path.serviced_segment_ids) - known_segments
-            if missing:
-                errors.append(
-                    f"{path.path_id}: unknown serviced segments "
-                    f"{', '.join(sorted(missing))}"
-                )
+        if path is not None:
+            try:
+                access = self.port(path.access_port_id)
+                target = self.fitting(path.target_fitting_id)
+            except KeyError as exc:
+                errors.append(str(exc))
+            else:
+                if not access.accessible:
+                    errors.append(f"{path.access_port_id}: cleanout access is not accessible")
+                if not path.point_ids or path.point_ids[0] != path.access_port_id:
+                    errors.append(f"{path.path_id}: cable path must start at cleanout cap")
+                if target.point not in [
+                    self.port(port_id).point
+                    for port_id in path.point_ids
+                    if port_id in known_ports
+                ]:
+                    errors.append(f"{path.path_id}: cable path misses target fitting")
+                missing = set(path.serviced_segment_ids) - known_segments
+                if missing:
+                    errors.append(
+                        f"{path.path_id}: unknown serviced segments "
+                        f"{', '.join(sorted(missing))}"
+                    )
 
         # The capped straight end of the service wye must look directly into
         # the downstream main.  This is the defining geometry from logic1.pdf:
         # the cleaning cable has a straight path and the sewage enters through
         # the 45-degree branch.
+        cleanout_segments = [
+            row for row in self.segments if row.role == "cleanout_access"
+        ]
         try:
-            access_segment = next(
-                row for row in self.segments if row.role == "cleanout_access"
-            )
+            access_segment = next(iter(cleanout_segments))
             downstream = next(row for row in self.segments if row.role == "main")
             access_start = self.port(access_segment.start_port_id).point
             access_end = self.port(access_segment.end_port_id).point
@@ -426,7 +429,10 @@ class WastewaterDraftAssembly:
                     "cleanout axis must be collinear with downstream main"
                 )
         except StopIteration:
-            errors.append("assembly needs one cleanout access and one main segment")
+            if path is not None:
+                errors.append("assembly needs one cleanout access and one main segment")
+        if path is None and cleanout_segments:
+            errors.append("through junction must not contain a capped cleanout access")
 
         return errors
 
@@ -535,6 +541,69 @@ def build_lower_turn_cleanout_assembly(
     return assembly
 
 
+def build_lower_turn_through_junction_assembly(
+    *,
+    assembly_id: str = "К1-Узел-НП-Проточный",
+    system: str = "K1",
+    dn_mm: int = 100,
+) -> WastewaterDraftAssembly:
+    """Build a lower turn at a node with an incoming horizontal main.
+
+    The incoming main cannot be capped: sewage already arrives through it.
+    The riser flow enters the open main through the branch of a 45-degree wye.
+    """
+    if system not in {"K1", "K2", "K3"}:
+        raise ValueError("system must be K1, K2 or K3")
+    if dn_mm <= 0:
+        raise ValueError("dn_mm must be positive")
+
+    inlet = DraftPoint(0.0, 0.0)
+    elbow = DraftPoint(0.0, 38.0)
+    wye = DraftPoint(38.0, 76.0)
+    main_in = DraftPoint(12.0, 76.0)
+    main_out = DraftPoint(112.0, 76.0)
+    assembly = WastewaterDraftAssembly(
+        assembly_id=assembly_id,
+        system=system,
+        ports=(
+            DraftPort("riser_in", inlet, "hydraulic_inlet"),
+            DraftPort("elbow_45", elbow, "flow_joint"),
+            DraftPort("wye_45", wye, "flow_merge_joint"),
+            DraftPort("main_in", main_in, "hydraulic_inlet"),
+            DraftPort("main_out", main_out, "hydraulic_outlet"),
+        ),
+        segments=(
+            DraftPipeSegment("riser", "riser_in", "elbow_45", dn_mm, "riser"),
+            DraftPipeSegment("diagonal", "elbow_45", "wye_45", dn_mm, "diagonal"),
+            DraftPipeSegment("incoming_main", "main_in", "wye_45", dn_mm, "incoming_main"),
+            DraftPipeSegment("main", "wye_45", "main_out", dn_mm, "main"),
+        ),
+        fittings=(
+            DraftFitting(
+                "lower_elbow_45",
+                "elbow_45",
+                elbow,
+                dn_mm,
+                ("riser", "diagonal"),
+            ),
+            DraftFitting(
+                "through_wye_45",
+                "wye_45_through",
+                wye,
+                dn_mm,
+                ("incoming_main", "diagonal", "main"),
+                replaces_kind="elbow_45",
+            ),
+        ),
+        flow_segment_ids=("riser", "diagonal", "main"),
+        service_path=None,
+    )
+    errors = assembly.validate()
+    if errors:
+        raise ValueError("invalid through lower turn assembly: " + "; ".join(errors))
+    return assembly
+
+
 def _system_mark(system: str) -> str:
     return {"K1": "К1", "K2": "К2", "K3": "К3"}.get(system, system)
 
@@ -571,11 +640,15 @@ def render_lower_turn_assembly_svg(
             f'stroke-width="{width:g}"{dash_attr}/>'
         )
 
+    has_cleanout = assembly.service_path is not None
+    connection_kind = (
+        "elbow-wye-cleanout" if has_cleanout else "elbow-wye-through"
+    )
     body: list[str] = [
         f'<g data-draft-assembly="{escape(assembly.assembly_id)}" '
         f'data-system="{escape(assembly.system)}" '
-        'data-lower-connection="elbow-wye-cleanout" '
-        'data-accessible-capped-end="true">'
+        f'data-lower-connection="{connection_kind}" '
+        f'data-accessible-capped-end="{str(has_cleanout).lower()}">'
     ]
     for segment in assembly.segments:
         if visible_segment_ids is not None and segment.segment_id not in visible_segment_ids:
@@ -593,10 +666,9 @@ def render_lower_turn_assembly_svg(
     # large X that appeared in the former full-sheet renderer.
     elbow_x, elbow_y = xy("elbow_45")
     wye_x, wye_y = xy("wye_45")
-    cap_x, cap_y = xy("cleanout_cap")
     tick = 6.0
     diagonal_offset = 11.0
-    body.extend((
+    body.append(
         f'<path data-fitting="lower_elbow_45" '
         f'd="M{elbow_x-tick:.1f},{elbow_y-10:.1f} '
         f'H{elbow_x+tick:.1f} '
@@ -604,22 +676,43 @@ def render_lower_turn_assembly_svg(
         f'{elbow_y+diagonal_offset+tick:.1f} '
         f'L{elbow_x+diagonal_offset+tick:.1f},'
         f'{elbow_y+diagonal_offset-tick:.1f}" fill="none" '
-        f'stroke="{BLACK}" stroke-width="2.2"/>',
-        f'<path data-fitting="service_wye_45" '
-        f'd="M{wye_x-diagonal_offset-tick:.1f},'
-        f'{wye_y-diagonal_offset+tick:.1f} '
-        f'L{wye_x-diagonal_offset+tick:.1f},'
-        f'{wye_y-diagonal_offset-tick:.1f} '
-        f'M{wye_x+10:.1f},{wye_y-tick:.1f} '
-        f'V{wye_y+tick:.1f}" fill="none" '
-        f'stroke="{BLACK}" stroke-width="2.2"/>',
-        f'<path data-fitting="cleanout_cap_fitting" '
-        f'd="M{cap_x-tick:.1f},{cap_y+tick:.1f} '
-        f'L{cap_x+tick:.1f},{cap_y-tick:.1f} '
-        f'M{cap_x-tick+3.2:.1f},{cap_y+tick+3.2:.1f} '
-        f'L{cap_x+tick+3.2:.1f},{cap_y-tick+3.2:.1f}" '
-        f'fill="none" stroke="{BLACK}" stroke-width="2.4"/>',
-    ))
+        f'stroke="{BLACK}" stroke-width="2.2"/>'
+    )
+    if has_cleanout:
+        cap_x, cap_y = xy("cleanout_cap")
+        body.extend((
+            f'<path data-fitting="service_wye_45" '
+            f'd="M{wye_x-diagonal_offset-tick:.1f},'
+            f'{wye_y-diagonal_offset+tick:.1f} '
+            f'L{wye_x-diagonal_offset+tick:.1f},'
+            f'{wye_y-diagonal_offset-tick:.1f} '
+            f'M{wye_x+10:.1f},{wye_y-tick:.1f} '
+            f'V{wye_y+tick:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="2.2"/>',
+            # The cap is perpendicular to its horizontal access axis.  The
+            # former hard-coded diagonal slashes falsely looked like another
+            # 45-degree branch.
+            f'<path data-fitting="cleanout_cap_fitting" '
+            f'data-cap-orientation="perpendicular" '
+            f'd="M{cap_x:.1f},{cap_y-tick:.1f} '
+            f'V{cap_y+tick:.1f} '
+            f'M{cap_x+3.2:.1f},{cap_y-tick:.1f} '
+            f'V{cap_y+tick:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="2.4"/>',
+        ))
+    else:
+        body.append(
+            f'<path data-fitting="through_wye_45" '
+            f'd="M{wye_x-diagonal_offset-tick:.1f},'
+            f'{wye_y-diagonal_offset+tick:.1f} '
+            f'L{wye_x-diagonal_offset+tick:.1f},'
+            f'{wye_y-diagonal_offset-tick:.1f} '
+            f'M{wye_x-10:.1f},{wye_y-tick:.1f} '
+            f'V{wye_y+tick:.1f} '
+            f'M{wye_x+10:.1f},{wye_y-tick:.1f} '
+            f'V{wye_y+tick:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="2.2"/>'
+        )
 
     # Flow direction is a filled triangle in the pipe, per the adopted UGO.
     if flow_direction:
@@ -630,7 +723,7 @@ def render_lower_turn_assembly_svg(
             f'L{flow_x+2:.1f},{wye_y:.1f} L{flow_x-10:.1f},{wye_y+7:.1f} Z" '
             f'fill="{BLACK}"/>'
         )
-    if diagnostics:
+    if diagnostics and assembly.service_path is not None:
         service_points = [xy(port_id) for port_id in assembly.service_path.point_ids]
         path_d = " ".join(
             ("M" if index == 0 else "L") + f"{px:.1f},{py:.1f}"
@@ -648,6 +741,23 @@ def render_lower_turn_assembly_svg(
     riser_end = xy("elbow_45")
     main_start = xy("wye_45")
     main_end = xy("main_out")
+    annotation_rows: tuple[str, ...] = ()
+    if annotations:
+        annotation_rows = (
+            f'<text x="{(elbow_x+wye_x)/2:.1f}" y="{wye_y+72:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="14">Отвод 45° DN{dn}</text>',
+            f'<text x="{wye_x+45:.1f}" y="{wye_y-38:.1f}" text-anchor="start" '
+            f'font-family="{FONT}" font-size="14">Косой тройник 45° DN{dn}</text>',
+        )
+        if has_cleanout:
+            annotation_rows += (
+                f'<path d="M{cap_x:.1f},{cap_y:.1f} L{cap_x-42:.1f},{cap_y-48:.1f} '
+                f'H{cap_x-180:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.3"/>',
+                f'<text x="{cap_x-50:.1f}" y="{cap_y-56:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="15" font-weight="bold">Прочистка</text>',
+                f'<text x="{cap_x-50:.1f}" y="{cap_y-34:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="11.5">заглушённый конец; DN{dn}</text>',
+            )
     body.extend((
         *(
             (
@@ -671,24 +781,9 @@ def render_lower_turn_assembly_svg(
             if pipe_labels
             else ()
         ),
-        *(
-            (
-                f'<text x="{(elbow_x+wye_x)/2:.1f}" y="{wye_y+72:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="14">Отвод 45° DN{dn}</text>',
-                f'<text x="{wye_x+45:.1f}" y="{wye_y-38:.1f}" text-anchor="start" '
-                f'font-family="{FONT}" font-size="14">Косой тройник 45° DN{dn}</text>',
-                f'<path d="M{cap_x:.1f},{cap_y:.1f} L{cap_x-42:.1f},{cap_y-48:.1f} '
-                f'H{cap_x-180:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.3"/>',
-                f'<text x="{cap_x-50:.1f}" y="{cap_y-56:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="15" font-weight="bold">Прочистка</text>',
-                f'<text x="{cap_x-50:.1f}" y="{cap_y-34:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="11.5">заглушённый конец; DN{dn}</text>',
-            )
-            if annotations
-            else ()
-        ),
+        *annotation_rows,
     ))
-    if diagnostics:
+    if diagnostics and assembly.service_path is not None:
         body.extend((
             f'<text x="{wye_x+40:.1f}" y="{wye_y+42:.1f}" text-anchor="start" '
             f'font-family="{FONT}" font-size="11.5" fill="{SERVICE}">'

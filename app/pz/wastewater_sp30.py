@@ -83,12 +83,18 @@ def _compound_bend_quantity(
     # от формулировки п. 18.4 про два отвода: оно отдельно выводится в аудите.
     wye_substitution = any(
         row.system == riser.system
-        and row.kind == "cleanout"
+        and row.kind in {"cleanout", "tee"}
         and row.section_id in connected_main_ids
         and row.connects_to == riser.section_id
-        and row.service_direction in {"downstream", "both"}
-        and row.service_fitting == "wye_45"
-        and row.accessible
+        and "45" in row.type_mark
+        and (
+            row.kind == "tee"
+            or (
+                row.service_direction in {"downstream", "both"}
+                and row.service_fitting == "wye_45"
+                and row.accessible
+            )
+        )
         for row in elements
     )
     return elbows + int(wye_substitution)
@@ -108,7 +114,14 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
     pipes = list(project.sewage.pipes or [])
     floors = max(1, int(project.building.floors_above or 1))
     risers = [row for row in pipes if _is_riser(row)]
-    mains = [row for row in pipes if not _is_riser(row)]
+    mains = [
+        row for row in pipes
+        if not _is_riser(row)
+        and any(
+            mark in (row.purpose or "").strip().casefold()
+            for mark in ("магистраль", "выпуск")
+        )
+    ]
     wye_substitution_risers: list[str] = []
 
     for riser in risers:
@@ -118,20 +131,37 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
             and riser.section_id in {row.from_node, row.to_node}
         ]
         connected_main_ids = {row.section_id for row in connected_mains}
+        incoming_mains = [
+            row for row in connected_mains if row.to_node == riser.section_id
+        ]
+        invalid_through_cleanouts = [
+            row for row in elements
+            if row.system == riser.system
+            and row.kind == "cleanout"
+            and row.connects_to == riser.section_id
+            and row.service_fitting == "wye_45"
+            and incoming_mains
+        ]
+        for cleanout in invalid_through_cleanouts:
+            result.errors.append(
+                f"{cleanout.element_id}: заглушённая прочистка недопустима в "
+                f"проточном узле {riser.section_id}; входящая магистраль "
+                f"{incoming_mains[0].section_id}: заглушка перекрыла бы поток"
+            )
         if not connected_mains:
             continue
 
         turn_service = [
             row for row in elements
             if _services_turn(row, riser, connected_main_ids)
+            and row not in invalid_through_cleanouts
         ]
         if any(
-            row.kind == "cleanout"
-            and row.service_fitting == "wye_45"
+            row.kind in {"cleanout", "tee"}
+            and "45" in row.type_mark
             and row.section_id in connected_main_ids
             and row.connects_to == riser.section_id
-            and row.accessible
-            for row in turn_service
+            for row in elements
         ):
             wye_substitution_risers.append(riser.section_id)
         if riser.system == "K2" and not turn_service:

@@ -15,6 +15,7 @@ from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.section_scaffold import build_section_scaffold
 from app.pz.wastewater_drafting import (
     build_lower_turn_cleanout_assembly,
+    build_lower_turn_through_junction_assembly,
     render_lower_turn_assembly_svg,
     render_repeated_inline_pipe_labels,
 )
@@ -810,12 +811,11 @@ def build_wastewater_scheme(
         main_axis_y: float,
         pipe_width: float = 2.6,
     ):
-        """Render the logic1 lower turn with a collinear cleanout end.
+        """Render a terminal cleanout or an open through junction.
 
-        The service access is a structural part of the generated installation
-        node.  It is therefore not allowed to disappear merely because a
-        duplicate decorative ``cleanout`` row is absent from an imported
-        element registry.
+        A capped cleanout end is only possible when no horizontal main enters
+        the node.  If an incoming main already occupies that axis, the riser
+        must join it through an open wye and the cap is forbidden.
         """
         riser = topology.risers.get(owner_id)
         if riser is None or riser.nominal_diameter_mm is None:
@@ -823,13 +823,20 @@ def build_wastewater_scheme(
                 f"{owner_id}: нижний поворот с прочисткой не сформирован - не задан DN стояка"
             )
             return
-        outgoing = next(
-            (
-                row for row in topology.mains
-                if row.system == riser.system and row.from_node == owner_id
-            ),
-            None,
-        )
+        incoming_rows = [
+            row for row in topology.mains
+            if row.system == riser.system and row.to_node == owner_id
+        ]
+        outgoing_rows = [
+            row for row in topology.mains
+            if row.system == riser.system and row.from_node == owner_id
+        ]
+        outgoing = outgoing_rows[0] if len(outgoing_rows) == 1 else None
+        if len(incoming_rows) > 1 or len(outgoing_rows) != 1:
+            warnings.append(
+                f"{owner_id}: нижний узел требует однозначных входящей и "
+                "выходящей магистралей; проверьте граф from_node/to_node"
+            )
         explicit_cleanout = next(
             (
                 row for row in elements
@@ -844,6 +851,63 @@ def build_wastewater_scheme(
             ),
             None,
         )
+        is_through_junction = bool(incoming_rows)
+        through_wye = next(
+            (
+                row for row in elements
+                if outgoing is not None
+                and row.kind == "tee"
+                and row.system == riser.system
+                and row.section_id == outgoing.section_id
+                and row.connects_to == owner_id
+                and "45" in row.type_mark
+            ),
+            None,
+        )
+        if is_through_junction:
+            if explicit_cleanout is not None:
+                warnings.append(
+                    f"{explicit_cleanout.element_id}: прочистка отклонена - "
+                    f"в узел {owner_id} уже входит горизонтальная магистраль "
+                    f"{incoming_rows[0].section_id}; заглушка перекрыла бы поток"
+                )
+            if through_wye is None:
+                warnings.append(
+                    f"{owner_id}: проточный косой тройник 45° не внесён в "
+                    "реестр элементов"
+                )
+            assembly = build_lower_turn_through_junction_assembly(
+                assembly_id=f"{owner_id}-Узел-НП-Проточный",
+                system=riser.system,
+                dn_mm=riser.nominal_diameter_mm,
+            )
+            origin_y = main_axis_y - lower_turn_dy
+            lower_turn_svg = render_lower_turn_assembly_svg(
+                assembly,
+                pipe_labels=False,
+                annotations=False,
+                flow_direction=False,
+                visible_segment_ids=("riser", "diagonal"),
+                x=riser_axis,
+                y=origin_y,
+                scale=lower_turn_scale,
+                pipe_width=pipe_width,
+            )
+            junction_id = (
+                through_wye.element_id
+                if through_wye is not None
+                else f"{owner_id}-Тройник-НП"
+            )
+            junction_source = "registry" if through_wye is not None else "missing"
+            G.append(
+                f'<g data-lower-turn-node="{escape(owner_id)}" '
+                'data-lower-node-kind="through-junction" '
+                f'data-junction-element-id="{escape(junction_id)}" '
+                f'data-junction-source="{junction_source}">'
+                f'{lower_turn_svg}</g>'
+            )
+            return
+
         cleanout_id = (
             explicit_cleanout.element_id
             if explicit_cleanout is not None
@@ -880,6 +944,7 @@ def build_wastewater_scheme(
         )
         G.append(
             f'<g data-lower-turn-node="{escape(owner_id)}" '
+            'data-lower-node-kind="terminal-cleanout" '
             f'data-cleanout-element-id="{escape(cleanout_id)}" '
             f'data-cleanout-source="{cleanout_source}">'
             f'{lower_turn_svg}'
@@ -941,7 +1006,9 @@ def build_wastewater_scheme(
                 if element.section_id != riser_id:
                     continue
                 if element.kind == "revision":
-                    if element.floor_from == 1:
+                    if element.floor_from == 0:
+                        fitting_y = target_y - lower_turn_dy - 34.0
+                    elif element.floor_from == 1:
                         fitting_y = y_zero - min(78.0, (y_zero - y_tech) / 3.0)
                     else:
                         band = next(
@@ -1063,7 +1130,9 @@ def build_wastewater_scheme(
         if x is None:
             continue
         if row.kind == "revision":
-            if row.floor_from == 1:
+            if row.floor_from == 0:
+                sy = main_y.get(row.system, 1490.0) - lower_turn_dy - 34.0
+            elif row.floor_from == 1:
                 # На первом этаже показываем нормативную размерную привязку,
                 # а не произвольный графический отступ от линии пола.
                 sy = y_zero - min(78.0, (y_zero - y_tech) / 3.0)

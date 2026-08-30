@@ -119,6 +119,7 @@ class BuildingK1RiserProjectInput:
     revision_floors: tuple[int, ...]
     lower_elbow_element_ids: tuple[str, ...]
     lower_cleanout_element_ids: tuple[str, ...]
+    lower_junction_element_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,8 @@ class BuildingK2RiserProjectInput:
     elevation_end_m: float | None
     lower_elbow_element_ids: tuple[str, ...]
     lower_cleanout_element_ids: tuple[str, ...]
+    lower_junction_element_ids: tuple[str, ...]
+    lower_revision_element_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -183,6 +186,11 @@ def _is_riser_pipe(pipe: SewerPipeSpec) -> bool:
         and "магистраль" not in purpose
         and "выпуск" not in purpose
     )
+
+
+def _is_horizontal_building_edge(pipe: SewerPipeSpec) -> bool:
+    purpose = pipe.purpose.strip().casefold()
+    return "магистраль" in purpose or "выпуск" in purpose
 
 
 def _select_outlet_pipe(
@@ -735,6 +743,12 @@ def resolve_wastewater_building_project_inputs(
                 f"Для нижнего поворота {pipe.section_id} нужна одна строка "
                 "реестра с одним отводом 45°."
             )
+        incoming_edges = [
+            row for row in project.sewage.pipes
+            if _system(row.system) == "K1"
+            and _is_horizontal_building_edge(row)
+            and _section(row.to_node) == _section(pipe.section_id)
+        ]
         lower_cleanouts = tuple(
             row.element_id.strip()
             for row in project.sewage.elements
@@ -746,10 +760,30 @@ def resolve_wastewater_building_project_inputs(
             and row.accessible
             and row.element_id.strip()
         )
-        if len(lower_cleanouts) != 1:
+        lower_junctions = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K1"
+            and row.kind == "tee"
+            and _section(row.connects_to) == _section(pipe.section_id)
+            and "45" in row.type_mark
+            and row.element_id.strip()
+        )
+        if incoming_edges:
+            if lower_cleanouts:
+                diagnostics.append(
+                    f"Стояк {pipe.section_id}: прочистка с заглушкой недопустима - "
+                    f"в узел входит магистраль {incoming_edges[0].section_id}."
+                )
+            if len(lower_junctions) != 1:
+                diagnostics.append(
+                    f"Для проточного узла {pipe.section_id} нужен один "
+                    "косой тройник 45° без заглушки."
+                )
+        elif len(lower_cleanouts) != 1:
             diagnostics.append(
-                f"Для нижнего поворота {pipe.section_id} нужна одна прочистка "
-                "с соосным заглушённым концом косого тройника."
+                f"Для начального нижнего поворота {pipe.section_id} "
+                "нужна одна прочистка с соосным заглушённым концом."
             )
         k1_risers.append(
             BuildingK1RiserProjectInput(
@@ -757,6 +791,7 @@ def resolve_wastewater_building_project_inputs(
                 revision_floors=tuple(revisions),
                 lower_elbow_element_ids=lower_elbows,
                 lower_cleanout_element_ids=lower_cleanouts,
+                lower_junction_element_ids=lower_junctions,
             )
         )
 
@@ -867,15 +902,58 @@ def resolve_wastewater_building_project_inputs(
             and row.accessible
             and row.element_id.strip()
         )
+        lower_junctions = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K2"
+            and row.kind == "tee"
+            and _section(row.connects_to) == _section(pipe.section_id)
+            and "45" in row.type_mark
+            and row.element_id.strip()
+        )
+        incoming_edges = [
+            row for row in project.sewage.pipes
+            if _system(row.system) == "K2"
+            and _is_horizontal_building_edge(row)
+            and _section(row.to_node) == _section(pipe.section_id)
+        ]
+        lower_revisions = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K2"
+            and row.kind == "revision"
+            and _section(row.section_id) == _section(pipe.section_id)
+            and row.floor_from <= 1
+            and row.service_direction in {"downstream", "both"}
+            and row.service_fitting == "revision_opening"
+            and row.accessible
+            and row.element_id.strip()
+        )
         if len(lower_elbows) != 1:
             diagnostics.append(
                 f"Для нижнего поворота {pipe.section_id} нужна одна строка "
                 "реестра с одним отводом 45°."
             )
-        if len(lower_cleanouts) != 1:
+        if incoming_edges:
+            if lower_cleanouts:
+                diagnostics.append(
+                    f"Стояк {pipe.section_id}: прочистка с заглушкой недопустима - "
+                    f"в узел входит магистраль {incoming_edges[0].section_id}."
+                )
+            if len(lower_junctions) != 1:
+                diagnostics.append(
+                    f"Для проточного узла {pipe.section_id} нужен один "
+                    "косой тройник 45° без заглушки."
+                )
+            if len(lower_revisions) != 1:
+                diagnostics.append(
+                    f"Для проточного нижнего поворота {pipe.section_id} "
+                    "нужна одна доступная ревизия на стояке."
+                )
+        elif len(lower_cleanouts) != 1:
             diagnostics.append(
-                f"Для нижнего поворота {pipe.section_id} нужна одна прочистка "
-                "с соосным заглушённым концом косого тройника."
+                f"Для начального нижнего поворота {pipe.section_id} "
+                "нужна одна прочистка с соосным заглушённым концом."
             )
         k2_risers.append(
             BuildingK2RiserProjectInput(
@@ -890,6 +968,8 @@ def resolve_wastewater_building_project_inputs(
                 elevation_end_m=pipe.elevation_end_m,
                 lower_elbow_element_ids=lower_elbows,
                 lower_cleanout_element_ids=lower_cleanouts,
+                lower_junction_element_ids=lower_junctions,
+                lower_revision_element_ids=lower_revisions,
             )
         )
 

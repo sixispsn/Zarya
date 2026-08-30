@@ -7,6 +7,7 @@ from app.pz.generator import generate_wastewater_lower_turn_node_pdf
 from app.pz.wastewater_drafting import (
     build_lower_turn_cleanout_assembly,
     build_lower_turn_control_sheet_svg,
+    build_lower_turn_through_junction_assembly,
     plan_repeated_inline_pipe_label_positions,
     render_inline_pipe_label,
     render_lower_turn_assembly_svg,
@@ -71,6 +72,21 @@ def test_cleanout_axis_is_collinear_with_downstream_main():
         "main_out",
     )
     assert node.service_path.serviced_segment_ids == ("main",)
+
+
+def test_through_junction_keeps_incoming_main_open_and_has_no_cleanout():
+    node = build_lower_turn_through_junction_assembly(system="K1", dn_mm=100)
+    svg = render_lower_turn_assembly_svg(node, annotations=False)
+
+    assert node.validate() == []
+    assert node.service_path is None
+    assert node.fitting("through_wye_45").kind == "wye_45_through"
+    assert {row.role for row in node.segments} >= {"incoming_main", "main"}
+    assert not any(row.role == "cleanout_access" for row in node.segments)
+    assert 'data-lower-connection="elbow-wye-through"' in svg
+    assert 'data-fitting="through_wye_45"' in svg
+    assert 'data-fitting="cleanout_cap_fitting"' not in svg
+    assert ">Прочистка</text>" not in svg
 
 
 def test_builder_rejects_unknown_system_and_bad_dn():
@@ -175,6 +191,7 @@ def test_vector_fragment_contains_physical_parts_and_optional_cable_path():
     assert normative.count('data-pipe-label-mask=') == 2
     assert "маршрут троса:" in diagnostic
     assert "доступ - тройник - магистраль" in diagnostic
+    assert 'data-cap-orientation="perpendicular"' in normative
 
 
 def test_control_sheet_is_a4_landscape_vector_pdf(tmp_path):

@@ -71,3 +71,29 @@ def test_single_unconfirmed_lower_bend_is_rejected():
     ]
     result = audit_wastewater_sp30(project)
     assert any("К1-Ст1" in row and "18.4" in row for row in result.errors)
+
+
+def test_capped_cleanout_is_rejected_when_an_incoming_main_occupies_the_axis():
+    project = deepcopy(_project())
+    project.sewage.elements.append(SewerElementSpec(
+        element_id="К1-Ошибочная-Прочистка-Ст2",
+        system="K1",
+        kind="cleanout",
+        name="Недопустимая заглушённая прочистка",
+        floor_from=0,
+        dn_mm=100,
+        section_id="К1-Вып1",
+        connects_to="К1-Ст2",
+        type_mark="DN100; 45°",
+        service_direction="downstream",
+        service_fitting="wye_45",
+        accessible=True,
+    ))
+
+    result = audit_wastewater_sp30(project)
+
+    assert any(
+        "К1-Ошибочная-Прочистка-Ст2" in row
+        and "перекрыла бы поток" in row
+        for row in result.errors
+    )

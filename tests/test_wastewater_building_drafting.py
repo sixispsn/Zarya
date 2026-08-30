@@ -55,11 +55,19 @@ def test_building_resolver_keeps_two_independent_k1_stacks_and_exact_k2():
     assert [row.riser_id for row in result.k2_risers] == ["К2-Ст1", "К2-Ст2"]
     assert [row.lower_cleanout_element_ids for row in result.k1_risers] == [
         ("К1-ПрНП1",),
-        ("К1-ПрНП2",),
+        (),
     ]
     assert [row.lower_cleanout_element_ids for row in result.k2_risers] == [
         ("К2-ПрНП1",),
-        ("К2-ПрНП2",),
+        (),
+    ]
+    assert [row.lower_junction_element_ids for row in result.k1_risers] == [
+        (),
+        ("К1-ТрСт2",),
+    ]
+    assert [row.lower_junction_element_ids for row in result.k2_risers] == [
+        (),
+        ("К2-ТрСт2",),
     ]
     assert [row.funnel_quantity for row in result.k2_risers] == [2, 2]
     assert all(
@@ -121,13 +129,20 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert 'data-building-transition="К1-Пер1"' in basement_svg
     assert 'data-building-transition="К2-Пер1"' in basement_svg
     assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
-    assert basement_svg.count('data-fitting="service_wye_45"') == 4
+    assert basement_svg.count('data-fitting="service_wye_45"') == 2
+    assert basement_svg.count('data-fitting="through_wye_45"') == 2
     assert 'data-building-revision="K2' not in basement_svg
-    assert basement_svg.count('data-basement-cleanout=') == 4
-    assert basement_svg.count('data-cleanout-axis="collinear"') == 4
-    for element_id in ("К1-ПрНП1", "К1-ПрНП2", "К2-ПрНП1", "К2-ПрНП2"):
+    assert basement_svg.count('data-basement-cleanout=') == 2
+    assert basement_svg.count('data-cleanout-axis="collinear"') == 2
+    assert basement_svg.count('data-basement-through-junction=') == 2
+    assert basement_svg.count('data-through-axis="open"') == 2
+    assert basement_svg.count('data-fitting="cleanout_cap_fitting"') == 2
+    for element_id in ("К1-ПрНП1", "К2-ПрНП1"):
         assert f'data-basement-cleanout="{element_id}"' in basement_svg
-    assert "соосен очищаемой горизонтальной магистрали" in basement_svg
+    for element_id in ("К1-ТрСт2", "К2-ТрСт2"):
+        assert f'data-basement-through-junction="{element_id}"' in basement_svg
+    assert 'data-basement-revision="К2-Р2-ТП"' in basement_svg
+    assert "проточный косой тройник без заглушки" in basement_svg
     assert "за грань здания" in basement_svg
     assert "0,010" in basement_svg
     assert basement_svg.count("0,008") >= 2

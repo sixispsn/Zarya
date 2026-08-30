@@ -25,7 +25,7 @@ def _request():
 def test_demo_element_registry_is_valid_and_roundtrips():
     request = _request()
     assert request.validate() == []
-    assert len(request.sewer_elements) == 37
+    assert len(request.sewer_elements) == 38
 
     loaded = load_request(dump_request(request))
     assert loaded.sewer_elements == request.sewer_elements
@@ -33,8 +33,8 @@ def test_demo_element_registry_is_valid_and_roundtrips():
     audit = audit_wastewater_registry(build_project(request))
     assert audit.ready
     assert audit.errors == []
-    assert audit.element_count == 37
-    assert audit.spec_position_count == 37
+    assert audit.element_count == 38
+    assert audit.spec_position_count == 38
 
 
 def test_registry_validation_rejects_duplicate_and_unknown_section():
@@ -73,7 +73,7 @@ def test_registry_drives_spec_without_duplicate_funnel_or_outlet():
     assert revisions[0].qty == 12
     assert "К1-Р1-7" in revisions[0].note
     assert len(lower_turn_cleanouts) == 2
-    assert sum(row.qty for row in lower_turn_cleanouts) == 4
+    assert sum(row.qty for row in lower_turn_cleanouts) == 2
 
 
 def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
@@ -85,14 +85,16 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "R · эт. 4, 7, 10, 13" in result.svg
     assert 'data-element-id="К1-ПрМ1-10"' not in result.svg
     assert result.svg.count('data-lower-turn-node=') == 4
-    assert result.svg.count('data-cleanout-source="registry"') == 4
-    assert result.svg.count('data-draft-segment="cleanout_access"') == 4
+    assert result.svg.count('data-cleanout-source="registry"') == 2
+    assert result.svg.count('data-draft-segment="cleanout_access"') == 2
     assert result.svg.count('data-fitting="lower_elbow_45"') == 4
-    assert result.svg.count('data-fitting="service_wye_45"') == 4
-    assert result.svg.count('data-fitting="cleanout_cap_fitting"') == 4
-    assert result.svg.count('data-accessible-capped-end="true"') == 4
-    assert result.svg.count('data-cleanout-callout=') == 4
-    assert result.svg.count(">Прочистка</text>") == 4
+    assert result.svg.count('data-fitting="service_wye_45"') == 2
+    assert result.svg.count('data-fitting="through_wye_45"') == 2
+    assert result.svg.count('data-fitting="cleanout_cap_fitting"') == 2
+    assert result.svg.count('data-accessible-capped-end="true"') == 2
+    assert result.svg.count('data-accessible-capped-end="false"') == 2
+    assert result.svg.count('data-cleanout-callout=') == 2
+    assert result.svg.count(">Прочистка</text>") == 2
     assert "Риск засора: зон 8; доступ подтверждён 5/8" in result.svg
     assert "СХЕМА ИМЕЕТ БЛОКИРУЮЩИЕ ЗАМЕЧАНИЯ" in result.svg
     assert 'data-element-id="К1-Пер1"' in result.svg
@@ -102,7 +104,9 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 4
     assert result.svg.count(">Отвод 45°</text>") == 4
-    assert result.svg.count('data-lower-connection="elbow-wye-cleanout"') == 4
+    assert result.svg.count('data-lower-connection="elbow-wye-cleanout"') == 2
+    assert result.svg.count('data-lower-connection="elbow-wye-through"') == 2
+    assert result.svg.count('data-lower-node-kind="through-junction"') == 2
     assert "СП 30: ревизии и повороты проверены" in result.svg
     assert "К2-Вр1" in result.svg
     assert "К2-Вр2" in result.svg
@@ -176,24 +180,25 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert height_mm == pytest.approx(594.0, abs=0.02)
 
 
-def test_lower_turn_cleanout_is_never_silently_dropped_from_the_drawing():
+def test_terminal_cleanout_is_not_silently_dropped_but_through_nodes_stay_open():
     project = deepcopy(build_project(_request()))
     project.sewage.elements = [
         row for row in project.sewage.elements
         if not (
             row.kind == "cleanout"
             and row.service_fitting == "wye_45"
-            and row.connects_to in {"К1-Ст1", "К1-Ст2", "К2-Ст1", "К2-Ст2"}
+            and row.connects_to in {"К1-Ст1", "К2-Ст1"}
         )
     ]
 
     result = generate_wastewater_scheme_result(project)
 
     assert result.svg.count('data-lower-turn-node=') == 4
-    assert result.svg.count('data-cleanout-source="generator-invariant"') == 4
-    assert result.svg.count('data-draft-segment="cleanout_access"') == 4
-    assert result.svg.count(">Прочистка</text>") == 4
-    assert sum("не внесена в реестр" in row for row in result.warnings) == 4
+    assert result.svg.count('data-cleanout-source="generator-invariant"') == 2
+    assert result.svg.count('data-draft-segment="cleanout_access"') == 2
+    assert result.svg.count('data-lower-node-kind="through-junction"') == 2
+    assert result.svg.count(">Прочистка</text>") == 2
+    assert sum("не внесена в реестр" in row for row in result.warnings) == 2
 
 
 def test_empty_topology_is_a_blocking_architectural_scaffold_not_a_scheme():

@@ -3,8 +3,9 @@
 The drawing composes the accepted K1 floor modules on one architectural
 storey grid and adds only the K2 topology explicitly declared by the project
 register.  It does not invent K2 revisions, fitting arrangements, floor
-coordinates or external sewer runs; lower-turn cleanouts are rendered only
-from explicit registry positions and use the canonical ``логика1.pdf`` node.
+coordinates or external sewer runs.  Lower nodes are selected by graph
+topology: a capped cleanout is allowed only at a terminal start, while an
+incoming horizontal main forces an open through junction.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from app.pz.wastewater_drafting import (
     FONT,
     GRAY,
     build_lower_turn_cleanout_assembly,
+    build_lower_turn_through_junction_assembly,
     render_inline_pipe_label,
     render_lower_turn_assembly_svg,
 )
@@ -640,32 +642,57 @@ def build_wastewater_building_basement_svg(
                 position=0.55,
             )
         )
-        node = build_lower_turn_cleanout_assembly(
-            assembly_id=f"{riser_id}-Узел-НП",
-            system="K1",
-            dn_mm=dn,
-        )
-        body.append(
-            f'<g data-basement-cleanout="{escape(riser.lower_cleanout_element_ids[0])}" '
-            f'data-cleanout-axis="collinear">'
-            + render_lower_turn_assembly_svg(
-                node,
-                pipe_labels=False,
-                annotations=False,
-                flow_direction=False,
-                visible_segment_ids=("riser", "diagonal", "cleanout_access"),
-                x=x,
-                y=turn_origin_y,
-                scale=scale,
-                pipe_width=4.0,
+        if riser.lower_cleanout_element_ids:
+            cleanout_id = riser.lower_cleanout_element_ids[0]
+            node = build_lower_turn_cleanout_assembly(
+                assembly_id=f"{riser_id}-Узел-НП",
+                system="K1",
+                dn_mm=dn,
             )
-            + '</g>'
-        )
-        body.append(
-            f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
-            f'font-family="{FONT}" font-size="12">Прочистка '
-            f'{escape(riser.lower_cleanout_element_ids[0])}; соосно магистрали</text>'
-        )
+            body.append(
+                f'<g data-basement-cleanout="{escape(cleanout_id)}" '
+                f'data-cleanout-axis="collinear">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal", "cleanout_access"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
+            body.append(
+                f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="12">Прочистка '
+                f'{escape(cleanout_id)}; соосно магистрали</text>'
+            )
+        else:
+            junction_id = riser.lower_junction_element_ids[0]
+            node = build_lower_turn_through_junction_assembly(
+                assembly_id=f"{riser_id}-Узел-НП-Проточный",
+                system="K1",
+                dn_mm=dn,
+            )
+            body.append(
+                f'<g data-basement-through-junction="{escape(junction_id)}" '
+                'data-through-axis="open">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
 
     k1_collector_start, k1_collector_end = tuple(k1_turn_ends)
     body.append(
@@ -746,32 +773,66 @@ def build_wastewater_building_basement_svg(
                 position=0.53,
             )
         )
-        node = build_lower_turn_cleanout_assembly(
-            assembly_id=f"{riser.riser_id}-Узел-НП",
-            system="K2",
-            dn_mm=riser.riser_dn_mm,
-        )
-        body.append(
-            f'<g data-basement-cleanout="{escape(riser.lower_cleanout_element_ids[0])}" '
-            f'data-cleanout-axis="collinear">'
-            + render_lower_turn_assembly_svg(
-                node,
-                pipe_labels=False,
-                annotations=False,
-                flow_direction=False,
-                visible_segment_ids=("riser", "diagonal", "cleanout_access"),
-                x=x,
-                y=turn_origin_y,
-                scale=scale,
-                pipe_width=4.0,
+        if riser.lower_cleanout_element_ids:
+            cleanout_id = riser.lower_cleanout_element_ids[0]
+            node = build_lower_turn_cleanout_assembly(
+                assembly_id=f"{riser.riser_id}-Узел-НП",
+                system="K2",
+                dn_mm=riser.riser_dn_mm,
             )
-            + '</g>'
-        )
-        body.append(
-            f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
-            f'font-family="{FONT}" font-size="12">Прочистка '
-            f'{escape(riser.lower_cleanout_element_ids[0])}; соосно магистрали</text>'
-        )
+            body.append(
+                f'<g data-basement-cleanout="{escape(cleanout_id)}" '
+                f'data-cleanout-axis="collinear">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal", "cleanout_access"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
+            body.append(
+                f'<text x="{x-10:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="12">Прочистка '
+                f'{escape(cleanout_id)}; соосно магистрали</text>'
+            )
+        else:
+            junction_id = riser.lower_junction_element_ids[0]
+            node = build_lower_turn_through_junction_assembly(
+                assembly_id=f"{riser.riser_id}-Узел-НП-Проточный",
+                system="K2",
+                dn_mm=riser.riser_dn_mm,
+            )
+            body.append(
+                f'<g data-basement-through-junction="{escape(junction_id)}" '
+                'data-through-axis="open">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
+            if riser.lower_revision_element_ids:
+                revision_id = riser.lower_revision_element_ids[0]
+                revision_y = turn_origin_y - 52.0
+                body.append(
+                    f'<g data-basement-revision="{escape(revision_id)}">'
+                    f'{render_ugo("revision", x, revision_y, scale=0.8, rotation=90)}'
+                    f'<text x="{x+22:.1f}" y="{revision_y+4:.1f}" '
+                    f'font-family="{FONT}" font-size="12">R</text></g>'
+                )
 
     k2_join_1, k2_join_2 = tuple(k2_joins)
     body.append(
@@ -839,11 +900,11 @@ def build_wastewater_building_basement_svg(
             f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
             'font-size="14" font-weight="bold">Граница детализации</text>',
             f'<text x="{margin+58}" y="1745" font-family="{FONT}" '
-            'font-size="12">К1: отвод 45° и косой тройник с соосным заглушённым концом — по логика1.pdf.</text>',
+            'font-size="12">Начальный узел: косой тройник с соосным заглушённым концом - по логика1.pdf.</text>',
             f'<text x="{margin+58}" y="1770" font-family="{FONT}" '
-            'font-size="12">К2: прочистки показаны тем же узлом по явным строкам реестра.</text>',
+            'font-size="12">Промежуточный узел: проточный косой тройник без заглушки; ось магистрали открыта.</text>',
             f'<text x="{margin+58}" y="1795" font-family="{FONT}" '
-            'font-size="12">Заглушённый конец каждой прочистки соосен очищаемой горизонтальной магистрали.</text>',
+            'font-size="12">Доступ к промежуточному повороту К2 обеспечивает отдельная доступная ревизия.</text>',
             f'<text x="{margin+38}" y="{height-margin-24}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Графический язык — приложение В '
             'ГОСТ Р 21.620-2023; выпуск заканчивается за наружной гранью здания.</text>',
@@ -926,6 +987,27 @@ def audit_wastewater_building_svgs(
     for row in basement_root.iter():
         if row.get("data-basement-cleanout") and row.get("data-cleanout-axis") != "collinear":
             findings.append("sheet 2: lower-turn cleanout is not collinear with main")
+    junction_ids = {
+        row.get("data-basement-through-junction")
+        for row in basement_root.iter()
+        if row.get("data-basement-through-junction")
+    }
+    expected_junction_ids = {
+        element_id
+        for row in (
+            assembly.project_inputs.k1_risers
+            + assembly.project_inputs.k2_risers
+        )
+        for element_id in row.lower_junction_element_ids
+    }
+    if junction_ids != expected_junction_ids:
+        findings.append("sheet 2: through junctions differ from project registry")
+    for row in basement_root.iter():
+        if (
+            row.get("data-basement-through-junction")
+            and row.get("data-through-axis") != "open"
+        ):
+            findings.append("sheet 2: through junction was incorrectly capped")
 
     basement_line_ids = {
         row.get("data-building-pipe-line")

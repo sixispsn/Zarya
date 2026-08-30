@@ -121,7 +121,7 @@ def test_diagnostic_svg_contains_flow_sediment_and_real_cable_reach():
     assert 'data-sediment-zone="turn:К1-Ст1"' in result.svg
     assert 'data-service-path="К1-ПрНП1"' in result.svg
     assert 'data-service-linear=' not in result.svg
-    assert result.svg.count('data-draft-segment="cleanout_access"') == 4
+    assert result.svg.count('data-draft-segment="cleanout_access"') == 2
     assert 'data-segment-dn="50"' in result.svg
     assert 'data-segment-dn="100"' in result.svg
     assert (
