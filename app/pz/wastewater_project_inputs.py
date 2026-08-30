@@ -123,6 +123,15 @@ class BuildingK1RiserProjectInput:
 
 
 @dataclass(frozen=True)
+class BuildingK2RevisionProjectInput:
+    """Одна явно заданная ревизия К2 с этажом и высотной отметкой."""
+
+    element_id: str
+    floor_no: int
+    elevation_m: float
+
+
+@dataclass(frozen=True)
 class BuildingK2RiserProjectInput:
     """One K2 riser linked to one declared roof-funnel register row."""
 
@@ -139,6 +148,7 @@ class BuildingK2RiserProjectInput:
     lower_cleanout_element_ids: tuple[str, ...]
     lower_junction_element_ids: tuple[str, ...]
     lower_revision_element_ids: tuple[str, ...]
+    revisions: tuple[BuildingK2RevisionProjectInput, ...]
 
 
 @dataclass(frozen=True)
@@ -929,6 +939,26 @@ def resolve_wastewater_building_project_inputs(
             and row.accessible
             and row.element_id.strip()
         )
+        revision_rows = tuple(
+            BuildingK2RevisionProjectInput(
+                element_id=row.element_id.strip(),
+                floor_no=row.floor_from,
+                elevation_m=float(row.elevation_m),
+            )
+            for row in sorted(
+                (
+                    element for element in project.sewage.elements
+                    if _system(element.system) == "K2"
+                    and element.kind == "revision"
+                    and _section(element.section_id) == _section(pipe.section_id)
+                    and element.accessible
+                    and element.service_fitting == "revision_opening"
+                    and element.element_id.strip()
+                    and element.elevation_m is not None
+                ),
+                key=lambda element: (element.elevation_m, element.element_id),
+            )
+        )
         if len(lower_elbows) != 1:
             diagnostics.append(
                 f"Для нижнего поворота {pipe.section_id} нужна одна строка "
@@ -970,6 +1000,7 @@ def resolve_wastewater_building_project_inputs(
                 lower_cleanout_element_ids=lower_cleanouts,
                 lower_junction_element_ids=lower_junctions,
                 lower_revision_element_ids=lower_revisions,
+                revisions=revision_rows,
             )
         )
 

@@ -235,7 +235,7 @@
 <table class="data calc-table pipe-calc">
   <thead><tr><th>Система / участок</th><th>Назначение</th><th>Материал, стандарт</th><th>DN</th><th>Øнар × стенка, мм</th><th>Øвн, мм</th><th>L спец. / расч., м</th></tr></thead>
   <tbody>{% for p in sewage.pipes %}
-    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}</td><td>{{ p.nominal_diameter_mm or "—" }}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }} / {{ p.calculation_length_m|num(2) }}</td></tr>
+    <tr><td>{{ p.system }} / {{ p.section_id }}</td><td>{{ p.purpose or "—" }}</td><td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}{% if p.pressure_rated is sameas true %}; напорная{% if p.pressure_class_bar is not none %} PN{{ p.pressure_class_bar|compact(1) }}{% endif %}{% elif p.pressure_rated is sameas false %}; безнапорная{% endif %}</td><td>{{ p.nominal_diameter_mm or "—" }}</td><td>{{ p.outer_diameter_mm|compact(1) }} × {{ p.wall_thickness_mm|compact(1) }}</td><td>{{ p.inner_diameter_mm|compact(1) }}</td><td>{{ p.length_m|num(2) }} / {{ p.calculation_length_m|num(2) }}</td></tr>
   {% endfor %}</tbody>
 </table>
 {% endif %}

@@ -19,7 +19,7 @@ def test_demo_resolves_flow_and_keeps_explicit_lower_turn_access():
     result = assess_wastewater_diagnostics(_project())
     assert not result.ready
     assert any("К1-М1" in row and "0–52 м" in row for row in result.errors)
-    assert any("К2-М1" in row and "достижимость" in row for row in result.errors)
+    assert not any("К2-М1" in row and "достижимость" in row for row in result.errors)
     assert result.resolved_flows_lps == {"К1-М1": 2.758, "К1-Вып1": 5.516}
     assert {row.status for row in result.hydraulics} == {"verified"}
     assert {row.status for row in result.diameter_checks} == {"verified"}
@@ -30,9 +30,10 @@ def test_demo_resolves_flow_and_keeps_explicit_lower_turn_access():
     assert sanitary_segments == [50, 50, 100]
     assert {row.status for row in result.network_diameter_checks} == {"verified"}
     assert {row.status for row in result.turn_checks} == {"verified"}
-    assert {row.status for row in result.linear_service_checks} == {
-        "verified", "fail",
-    }
+    assert [
+        row.status for row in result.linear_service_checks
+        if row.section_id == "К2-М1"
+    ] == ["verified"]
     assert {row.status for row in result.ventilation_checks} == {"verified"}
     risks = {row.zone_id: row for row in result.risk_zones}
     main_risk = risks["transient:К1-М1"]
@@ -78,7 +79,7 @@ def test_linear_service_gap_and_wrong_cleanout_direction_are_blocking():
     project = deepcopy(_project())
     project.sewage.elements = [
         row for row in project.sewage.elements
-        if row.element_id != "К2-ПрНП1"
+        if row.element_id not in {"К2-ПрНП1", "К2-Р1-Н"}
     ]
     result = assess_wastewater_diagnostics(project)
     assert any("К1-М1" in row and "достижимость" in row for row in result.errors)
@@ -86,7 +87,7 @@ def test_linear_service_gap_and_wrong_cleanout_direction_are_blocking():
     project = deepcopy(_project())
     project.sewage.elements = [
         row for row in project.sewage.elements
-        if row.element_id != "К2-ПрНП1"
+        if row.element_id not in {"К2-ПрНП1", "К2-Р1-Н"}
     ]
     project.sewage.elements.append(SewerElementSpec(
         element_id="К2-Проверка-доступа",

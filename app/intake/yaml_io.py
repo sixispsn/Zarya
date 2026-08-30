@@ -312,6 +312,14 @@ def load_request(text: str) -> IOS2Request:
                 if x.get("absolute_elevation_end_m") is not None else None
             ),
             insulated=bool(x.get("insulated", False)),
+            pressure_rated=(
+                bool(x["pressure_rated"])
+                if x.get("pressure_rated") is not None else None
+            ),
+            pressure_class_bar=(
+                float(x["pressure_class_bar"])
+                if x.get("pressure_class_bar") is not None else None
+            ),
         )
         for x in (sewage_s.get("pipes") or [])
         if isinstance(x, dict)
@@ -858,6 +866,10 @@ def dump_request(req: IOS2Request) -> str:
                 **({"absolute_elevation_end_m": x.absolute_elevation_end_m}
                    if x.absolute_elevation_end_m is not None else {}),
                 "insulated": x.insulated,
+                **({"pressure_rated": x.pressure_rated}
+                   if x.pressure_rated is not None else {}),
+                **({"pressure_class_bar": x.pressure_class_bar}
+                   if x.pressure_class_bar is not None else {}),
             } for x in req.sewer_pipes],
             "elements": [{
                 "id": x.element_id,

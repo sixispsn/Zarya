@@ -950,6 +950,12 @@ def build_specification(project: Project) -> Specification:
                 type_mark=(
                     f"Ø{pipe.outer_diameter_mm:g}×{pipe.wall_thickness_mm:g}; "
                     f"dвн={pipe.inner_diameter_mm:g} мм"
+                    + (
+                        f"; PN{pipe.pressure_class_bar:g}"
+                        if pipe.pressure_rated is True
+                        and pipe.pressure_class_bar is not None
+                        else ""
+                    )
                 ).replace(".", ","),
                 code=pipe.standard,
                 manufacturer="по проекту",

@@ -287,6 +287,11 @@ class SewerPipeRequest:
     absolute_elevation_start_m: Optional[float] = None
     absolute_elevation_end_m: Optional[float] = None
     insulated: bool = False
+    # Для К2 выше 10 м СП 30.13330.2020, пп. 21.13–21.14 требуют
+    # напорные трубы, рассчитанные на гидростатическое давление при засоре.
+    # Признак и класс давления задаются явно, а не выводятся из названия ГОСТ.
+    pressure_rated: Optional[bool] = None
+    pressure_class_bar: Optional[float] = None
 
     @property
     def inner_diameter_mm(self) -> float:
@@ -743,6 +748,18 @@ class IOS2Request:
                 p.append(f"sewer_pipes[{i}].slope_per_mille не может быть отрицательным")
             if pipe.fill_ratio is not None and not 0 <= pipe.fill_ratio <= 1:
                 p.append(f"sewer_pipes[{i}].fill_ratio должен быть от 0 до 1")
+            if (
+                pipe.pressure_class_bar is not None
+                and pipe.pressure_class_bar <= 0
+            ):
+                p.append(
+                    f"sewer_pipes[{i}].pressure_class_bar должен быть > 0"
+                )
+            if pipe.pressure_class_bar is not None and pipe.pressure_rated is not True:
+                p.append(
+                    f"sewer_pipes[{i}].pressure_class_bar допустим только "
+                    "для явно напорной трубы"
+                )
             if ((pipe.elevation_start_m is None)
                     != (pipe.elevation_end_m is None)):
                 p.append(

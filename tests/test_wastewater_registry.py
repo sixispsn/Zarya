@@ -25,7 +25,7 @@ def _request():
 def test_demo_element_registry_is_valid_and_roundtrips():
     request = _request()
     assert request.validate() == []
-    assert len(request.sewer_elements) == 38
+    assert len(request.sewer_elements) == 41
 
     loaded = load_request(dump_request(request))
     assert loaded.sewer_elements == request.sewer_elements
@@ -33,8 +33,8 @@ def test_demo_element_registry_is_valid_and_roundtrips():
     audit = audit_wastewater_registry(build_project(request))
     assert audit.ready
     assert audit.errors == []
-    assert audit.element_count == 38
-    assert audit.spec_position_count == 38
+    assert audit.element_count == 41
+    assert audit.spec_position_count == 41
 
 
 def test_registry_validation_rejects_duplicate_and_unknown_section():
@@ -60,7 +60,9 @@ def test_registry_drives_spec_without_duplicate_funnel_or_outlet():
     revisions = [row for row in rows if row.name == "Ревизия канализационная"]
     lower_turn_cleanouts = [
         row for row in rows
-        if "тройник канализационный косой 45° с заглушкой" in row.name.lower()
+        if "тройник" in row.name.lower()
+        and "заглушк" in row.name.lower()
+        and "прочистка" in row.name.lower()
     ]
 
     assert len(funnels) == 1
@@ -95,7 +97,7 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert result.svg.count('data-accessible-capped-end="false"') == 2
     assert result.svg.count('data-cleanout-callout=') == 2
     assert result.svg.count(">Прочистка</text>") == 2
-    assert "Риск засора: зон 8; доступ подтверждён 5/8" in result.svg
+    assert "Риск засора: зон 7; доступ подтверждён 5/7" in result.svg
     assert "СХЕМА ИМЕЕТ БЛОКИРУЮЩИЕ ЗАМЕЧАНИЯ" in result.svg
     assert 'data-element-id="К1-Пер1"' in result.svg
     assert 'data-element-id="К2-Пер1"' in result.svg
@@ -103,7 +105,8 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 4
-    assert result.svg.count(">Отвод 45°</text>") == 4
+    assert result.svg.count(">Отвод 45°</text>") == 2
+    assert result.svg.count(">Отвод DN100; 45°; PN10</text>") == 2
     assert result.svg.count('data-lower-connection="elbow-wye-cleanout"') == 2
     assert result.svg.count('data-lower-connection="elbow-wye-through"') == 2
     assert result.svg.count('data-lower-node-kind="through-junction"') == 2
@@ -146,8 +149,8 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "ДАННЫЕ И УКАЗАНИЯ К СХЕМЕ" in result.svg
     assert "Выпуск К1 Ø160" in result.svg
     assert "Абс. отм. 146,450 (-0,820)" in result.svg
-    assert result.svg.count('data-gost-dimension="revision-height"') == 2
-    assert result.svg.count('data-value-mm="1000"') == 2
+    assert result.svg.count('data-gost-dimension="revision-height"') == 4
+    assert result.svg.count('data-value-mm="1000"') == 4
     assert result.svg.count('data-building-outlet-crossing=') == 2
     for line_id in ("К1-М1", "К1-Вып1", "К2-М1", "К2-Вып1"):
         assert f'data-repeated-pipe-labels="{line_id}"' in result.svg
@@ -163,10 +166,10 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert result.svg.count('data-label-clearance="true"') == 4
     assert 'data-rupture-revision-label="К1-Ст1"' in result.svg
     assert 'data-rupture-revision-label="К1-Ст2"' in result.svg
-    assert result.svg.count('data-rupture-revision-label=') == 2
+    assert result.svg.count('data-rupture-revision-label=') == 4
     assert result.svg.count('data-label-side="left"') + result.svg.count(
         'data-label-side="right"'
-    ) == 2
+    ) == 4
     assert "i=" not in result.svg
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg

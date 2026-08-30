@@ -597,6 +597,8 @@ class SewerPipeSpec:
     absolute_elevation_start_m: Optional[float] = None
     absolute_elevation_end_m: Optional[float] = None
     insulated: bool = False
+    pressure_rated: Optional[bool] = None
+    pressure_class_bar: Optional[float] = None
 
     @property
     def inner_diameter_mm(self) -> float:

@@ -209,10 +209,12 @@ def _revision_svg(
     x: float,
     slab_y: float,
     dimension: bool,
+    element_id: str = "",
 ) -> str:
     revision_y = slab_y - 82.0
+    revision_key = element_id or f"{riser_id}-{floor_no}"
     body = [
-        f'<g data-building-revision="{escape(riser_id)}-{floor_no}">',
+        f'<g data-building-revision="{escape(revision_key)}">',
         render_ugo("revision", x, revision_y, scale=0.72, rotation=90.0),
         f'<text x="{x+23:.1f}" y="{revision_y-10:.1f}" '
         f'font-family="{FONT}" font-size="10" font-weight="bold">Р</text>',
@@ -442,6 +444,43 @@ def build_wastewater_building_floors_svg(
                 font_size=14,
             )
         )
+        for revision in riser.revisions:
+            if revision.floor_no <= 1:
+                # Ревизия нижнего этажа показана у доступного нижнего узла
+                # на листе подвала, чтобы не дублировать один элемент.
+                continue
+            if revision.floor_no in origins:
+                body.append(
+                    _revision_svg(
+                        riser_id=riser.riser_id,
+                        floor_no=revision.floor_no,
+                        x=x,
+                        slab_y=origins[revision.floor_no] + 228.0,
+                        dimension=False,
+                        element_id=revision.element_id,
+                    )
+                )
+                continue
+            omitted_range = next((
+                (upper, lower)
+                for upper, lower in zip(floors, floors[1:])
+                if lower < revision.floor_no < upper
+            ), None)
+            if omitted_range is None:
+                continue
+            upper, lower = omitted_range
+            upper_bottom = origins[upper] + 252.0
+            lower_top = origins[lower] + 5.0
+            revision_y = (upper_bottom + lower_top) / 2 - 66.0
+            body.extend((
+                f'<g data-building-revision="{escape(revision.element_id)}" '
+                f'data-revision-on-break="true">',
+                render_ugo("revision", x, revision_y, scale=0.72, rotation=90.0),
+                f'<text x="{x+24:.1f}" y="{revision_y-7:.1f}" '
+                f'font-family="{FONT}" font-size="11" font-weight="bold">Р · '
+                f'эт. {revision.floor_no}; отм. {_fmt(revision.elevation_m)}</text>',
+                '</g>',
+            ))
         body.append(
             f'<text x="{x+20:.1f}" y="{bottom_y-12:.1f}" '
             f'font-family="{FONT}" font-size="13">{escape(riser.riser_id)}; '
@@ -824,15 +863,15 @@ def build_wastewater_building_basement_svg(
                 )
                 + '</g>'
             )
-            if riser.lower_revision_element_ids:
-                revision_id = riser.lower_revision_element_ids[0]
-                revision_y = turn_origin_y - 52.0
-                body.append(
-                    f'<g data-basement-revision="{escape(revision_id)}">'
-                    f'{render_ugo("revision", x, revision_y, scale=0.8, rotation=90)}'
-                    f'<text x="{x+22:.1f}" y="{revision_y+4:.1f}" '
-                    f'font-family="{FONT}" font-size="12">R</text></g>'
-                )
+        if riser.lower_revision_element_ids:
+            revision_id = riser.lower_revision_element_ids[0]
+            revision_y = turn_origin_y - 52.0
+            body.append(
+                f'<g data-basement-revision="{escape(revision_id)}">'
+                f'{render_ugo("revision", x, revision_y, scale=0.8, rotation=90)}'
+                f'<text x="{x+22:.1f}" y="{revision_y+4:.1f}" '
+                f'font-family="{FONT}" font-size="12">Р</text></g>'
+            )
 
     k2_join_1, k2_join_2 = tuple(k2_joins)
     body.append(
@@ -965,10 +1004,31 @@ def audit_wastewater_building_svgs(
             if expected not in floor_assembly_ids:
                 findings.append(f"sheet 1: missing floor assembly {expected}")
 
-    for row in floors_root.iter():
-        revision_id = row.get("data-building-revision", "")
-        if revision_id.startswith("К2"):
-            findings.append("sheet 1: undeclared K2 revision was drawn")
+    drawn_k2_upper_revisions = {
+        row.get("data-building-revision")
+        for row in floors_root.iter()
+        if row.get("data-building-revision", "").startswith("К2")
+    }
+    expected_k2_upper_revisions = {
+        revision.element_id
+        for riser in assembly.project_inputs.k2_risers
+        for revision in riser.revisions
+        if revision.floor_no > 1
+    }
+    if drawn_k2_upper_revisions != expected_k2_upper_revisions:
+        findings.append("sheet 1: K2 revisions differ from project registry")
+    drawn_k2_lower_revisions = {
+        row.get("data-basement-revision")
+        for row in basement_root.iter()
+        if row.get("data-basement-revision", "").startswith("К2")
+    }
+    expected_k2_lower_revisions = {
+        element_id
+        for riser in assembly.project_inputs.k2_risers
+        for element_id in riser.lower_revision_element_ids
+    }
+    if drawn_k2_lower_revisions != expected_k2_lower_revisions:
+        findings.append("sheet 2: lower K2 revisions differ from project registry")
     cleanout_ids = {
         row.get("data-basement-cleanout")
         for row in basement_root.iter()

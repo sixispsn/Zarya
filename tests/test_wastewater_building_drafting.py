@@ -53,6 +53,14 @@ def test_building_resolver_keeps_two_independent_k1_stacks_and_exact_k2():
         (1, 4, 7, 10, 13, 16),
     ]
     assert [row.riser_id for row in result.k2_risers] == ["К2-Ст1", "К2-Ст2"]
+    assert [
+        tuple((revision.element_id, revision.floor_no, revision.elevation_m)
+              for revision in row.revisions)
+        for row in result.k2_risers
+    ] == [
+        (("К2-Р1-Н", 1, 0.8), ("К2-Р1-40", 14, 39.8)),
+        (("К2-Р2-Н", 1, 0.8), ("К2-Р2-40", 14, 39.8)),
+    ]
     assert [row.lower_cleanout_element_ids for row in result.k1_risers] == [
         ("К1-ПрНП1",),
         (),
@@ -99,7 +107,7 @@ def test_building_resolver_blocks_unlinked_k2_funnel_and_missing_transition():
     assert any("перехода" in row for row in result.diagnostics)
 
 
-def test_combined_floors_sheet_uses_shared_grid_and_no_fictional_k2_service():
+def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
     floors_svg, _ = build_wastewater_building_svgs(_demo_assembly())
     root = ElementTree.fromstring(floors_svg)
 
@@ -112,7 +120,10 @@ def test_combined_floors_sheet_uses_shared_grid_and_no_fictional_k2_service():
     assert floors_svg.count('data-ugo="roof_funnel_heated"') == 2
     assert "К2-Вр1" in floors_svg and "2 шт.; DN100" in floors_svg
     assert floors_svg.count('data-building-revision="К1-') == 4
-    assert 'data-building-revision="К2-' not in floors_svg
+    assert 'data-building-revision="К2-Р1-40"' in floors_svg
+    assert 'data-building-revision="К2-Р2-40"' in floors_svg
+    assert floors_svg.count('data-revision-on-break="true"') == 2
+    assert "эт. 14; отм. 39,800" in floors_svg
     assert "К2 ⌀100" in floors_svg
     assert "К2 не соединяется с К1" in floors_svg
 
@@ -141,7 +152,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
         assert f'data-basement-cleanout="{element_id}"' in basement_svg
     for element_id in ("К1-ТрСт2", "К2-ТрСт2"):
         assert f'data-basement-through-junction="{element_id}"' in basement_svg
-    assert 'data-basement-revision="К2-Р2-ТП"' in basement_svg
+    assert 'data-basement-revision="К2-Р1-Н"' in basement_svg
+    assert 'data-basement-revision="К2-Р2-Н"' in basement_svg
     assert "проточный косой тройник без заглушки" in basement_svg
     assert "за грань здания" in basement_svg
     assert "0,010" in basement_svg

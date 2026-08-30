@@ -83,7 +83,7 @@
     <tr>
       <td>{{ p.system }} / {{ p.section_id }}<br>{{ p.purpose }}</td>
       <td>{{ p.room or "" }}{% if p.from_node or p.to_node %}<br>{{ p.from_node }} → {{ p.to_node }}{% endif %}</td>
-      <td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}{% if p.insulated %}<br>теплоизолирован{% endif %}</td>
+      <td>{{ p.material }}{% if p.standard %}; {{ p.standard }}{% endif %}{% if p.pressure_rated is sameas true %}<br>напорная{% if p.pressure_class_bar is not none %}; PN{{ p.pressure_class_bar|compact(1) }}{% endif %}{% elif p.pressure_rated is sameas false %}<br>безнапорная{% endif %}{% if p.insulated %}<br>теплоизолирован{% endif %}</td>
       <td>{{ p.nominal_diameter_mm or "—" }}; {{ p.outer_diameter_mm|compact(1) }}×{{ p.wall_thickness_mm|compact(1) }}; {{ p.inner_diameter_mm|compact(1) }}</td>
       <td>{{ p.length_m|num(2) }} / {{ p.calculation_length_m|num(2) }}</td>
       <td>{% if p.slope_per_mille is not none %}{{ p.slope_per_mille|num(1) }}{% endif %}</td>
