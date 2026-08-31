@@ -120,8 +120,13 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
     assert floors_svg.count('data-ugo="roof_funnel_heated"') == 2
     assert "К2-Вр1" in floors_svg and "2 шт.; DN100" in floors_svg
     assert floors_svg.count('data-building-revision="К1-') == 4
+    assert 'data-building-revision="К2-Р1-Н"' in floors_svg
+    assert 'data-building-revision="К2-Р2-Н"' in floors_svg
     assert 'data-building-revision="К2-Р1-40"' in floors_svg
     assert 'data-building-revision="К2-Р2-40"' in floors_svg
+    assert floors_svg.count('data-floor-reference="clean-floor"') == 8
+    assert floors_svg.count('data-height-above-floor-mm="800"') == 4
+    assert floors_svg.count('data-height-above-floor-mm="1000"') == 4
     assert floors_svg.count('data-revision-on-break="true"') == 2
     assert "эт. 14; отм. 39,800" in floors_svg
     assert "К2 ⌀100" in floors_svg
@@ -156,8 +161,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
         assert f'data-basement-cleanout="{element_id}"' in basement_svg
     for element_id in ("К1-ТрСт2", "К2-ТрСт2"):
         assert f'data-basement-through-junction="{element_id}"' in basement_svg
-    assert 'data-basement-revision="К2-Р1-Н"' in basement_svg
-    assert 'data-basement-revision="К2-Р2-Н"' in basement_svg
+    assert 'data-basement-revision="К2-Р1-Н"' not in basement_svg
+    assert 'data-basement-revision="К2-Р2-Н"' not in basement_svg
     assert "проточный косой тройник без заглушки" in basement_svg
     assert "за грань здания" in basement_svg
     assert "0,010" in basement_svg

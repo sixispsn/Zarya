@@ -26,6 +26,11 @@ from app.pz.wastewater_drafting import (
     render_inline_pipe_label,
     render_lower_turn_assembly_svg,
 )
+from app.pz.wastewater_revision_placement import (
+    REVISION_PLACEMENT_RULE_ID,
+    REVISION_PREFERRED_HEIGHT_ABOVE_FLOOR_M,
+    resolve_riser_revision_placement,
+)
 from app.pz.wastewater_ugo import render_ugo
 
 
@@ -75,8 +80,17 @@ class WastewaterBasementAssembly:
             errors.append("K1 basement outlet serving toilets must be at least DN100")
         if self.outlet_dn_mm < self.dn_mm:
             errors.append("outlet DN must not decrease in the direction of flow")
-        if self.revision_height_above_floor_m <= 0:
-            errors.append("revision height above floor must be positive")
+        try:
+            resolve_riser_revision_placement(
+                floor_height_m=(
+                    self.first_floor_elevation_m - self.basement_floor_elevation_m
+                    if self.basement_floor_elevation_m is not None
+                    else 3.0
+                ),
+                requested_height_m=self.revision_height_above_floor_m,
+            )
+        except ValueError as exc:
+            errors.append(f"invalid revision placement ({exc})")
         if (
             self.collector_slope_per_mille is not None
             and self.collector_slope_per_mille <= 0
@@ -138,24 +152,29 @@ def build_wastewater_basement_assembly(
     collector_slope_per_mille: float | None = None,
     outlet_id: str = "К1-1",
     outlet_dn_mm: int | None = None,
-    revision_height_above_floor_m: float = 1.0,
+    revision_height_above_floor_m: float = REVISION_PREFERRED_HEIGHT_ABOVE_FLOOR_M,
 ) -> WastewaterBasementAssembly:
     """Build the basement path without manufacturing project elevations."""
     if dn_mm < 100:
         raise ValueError("K1 basement outlet serving toilets must be at least DN100")
-    if revision_height_above_floor_m <= 0:
-        raise ValueError("revision_height_above_floor_m must be positive")
-    if collector_slope_per_mille is not None and collector_slope_per_mille <= 0:
-        raise ValueError("collector_slope_per_mille must be positive")
-    resolved_outlet_dn_mm = dn_mm if outlet_dn_mm is None else outlet_dn_mm
-    if resolved_outlet_dn_mm < dn_mm:
-        raise ValueError("outlet DN must not decrease in the direction of flow")
     if (
         basement_floor_elevation_m is not None
         and basement_floor_elevation_m >= first_floor_elevation_m
     ):
         raise ValueError("basement floor must be below the first floor")
-
+    resolve_riser_revision_placement(
+        floor_height_m=(
+            first_floor_elevation_m - basement_floor_elevation_m
+            if basement_floor_elevation_m is not None
+            else 3.0
+        ),
+        requested_height_m=revision_height_above_floor_m,
+    )
+    if collector_slope_per_mille is not None and collector_slope_per_mille <= 0:
+        raise ValueError("collector_slope_per_mille must be positive")
+    resolved_outlet_dn_mm = dn_mm if outlet_dn_mm is None else outlet_dn_mm
+    if resolved_outlet_dn_mm < dn_mm:
+        raise ValueError("outlet DN must not decrease in the direction of flow")
     lower_turn = build_lower_turn_cleanout_assembly(
         assembly_id=f"{assembly_id}-НП",
         system="K1",
@@ -524,7 +543,10 @@ def build_wastewater_basement_control_svg(
         f'<text x="{slope_arm_x-5:.1f}" y="{slope_sign_y+3.5:.1f}" '
         f'text-anchor="end" font-family="{FONT}" font-size="12">'
         f'{escape(_slope_value(basement.collector_slope_per_mille))}</text></g>',
-        f'<g data-basement-revision="first-floor">'
+        f'<g data-basement-revision="first-floor" '
+        f'data-floor-reference="clean-floor" '
+        f'data-height-above-floor-mm="{int(round(basement.revision_height_above_floor_m*1000))}" '
+        f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">'
         f'{render_ugo("revision", revision_x, revision_y, scale=0.9, rotation=90.0)}'
         '</g>',
         f'<text x="{revision_x+36:.1f}" y="{revision_y-14:.1f}" '

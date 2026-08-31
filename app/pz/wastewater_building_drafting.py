@@ -31,6 +31,11 @@ from app.pz.wastewater_project_inputs import (
     WastewaterBuildingProjectInputs,
     resolve_wastewater_building_project_inputs,
 )
+from app.pz.wastewater_revision_placement import (
+    REVISION_PLACEMENT_RULE_ID,
+    resolve_riser_revision_placement,
+    revision_y_from_clean_floor,
+)
 from app.pz.wastewater_stack_drafting import (
     WastewaterStackAssembly,
     build_wastewater_stack_assembly,
@@ -87,6 +92,21 @@ class WastewaterBuildingAssembly:
                     f"{stack.riser_id}: calculated revision floors differ from "
                     "the explicit project register"
                 )
+        for riser in self.project_inputs.k2_risers:
+            for revision in riser.revisions:
+                relative_height_m = revision.elevation_m - (
+                    revision.floor_no - 1
+                ) * self.floor_height_m
+                try:
+                    resolve_riser_revision_placement(
+                        floor_height_m=self.floor_height_m,
+                        requested_height_m=relative_height_m,
+                    )
+                except ValueError as exc:
+                    errors.append(
+                        f"{revision.element_id}: недоступная высота ревизии "
+                        f"{relative_height_m:.3f} м над чистым полом ({exc})"
+                    )
         return list(dict.fromkeys(errors))
 
 
@@ -208,13 +228,29 @@ def _revision_svg(
     floor_no: int,
     x: float,
     slab_y: float,
+    floor_height_m: float,
     dimension: bool,
     element_id: str = "",
+    requested_height_m: float | None = None,
 ) -> str:
-    revision_y = slab_y - 82.0
+    placement = resolve_riser_revision_placement(
+        floor_height_m=floor_height_m,
+        requested_height_m=requested_height_m,
+    )
+    revision_y = revision_y_from_clean_floor(
+        clean_floor_y=slab_y,
+        graphic_floor_height=247.0,
+        real_floor_height_m=floor_height_m,
+        placement=placement,
+    )
+    height_mm = int(round(placement.height_above_clean_floor_m * 1000))
     revision_key = element_id or f"{riser_id}-{floor_no}"
     body = [
-        f'<g data-building-revision="{escape(revision_key)}">',
+        f'<g data-building-revision="{escape(revision_key)}" '
+        f'data-floor-reference="clean-floor" '
+        f'data-height-above-floor-mm="{height_mm}" '
+        f'data-height-source="{escape(placement.source)}" '
+        f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">',
         render_ugo("revision", x, revision_y, scale=0.72, rotation=90.0),
         f'<text x="{x+23:.1f}" y="{revision_y-10:.1f}" '
         f'font-family="{FONT}" font-size="10" font-weight="bold">Р</text>',
@@ -233,7 +269,7 @@ def _revision_svg(
                 f'x2="{dim_x+8:.1f}" y2="{slab_y:.1f}" '
                 f'stroke="{BLACK}" stroke-width="1"/>',
                 f'<text x="{dim_x+12:.1f}" y="{(revision_y+slab_y)/2+4:.1f}" '
-                f'font-family="{FONT}" font-size="10">1000</text>',
+                f'font-family="{FONT}" font-size="10">{height_mm}</text>',
             )
         )
     body.append("</g>")
@@ -320,6 +356,7 @@ def build_wastewater_building_floors_svg(
                         floor_no=floor_no,
                         x=riser_x,
                         slab_y=origins[floor_no] + 228.0,
+                        floor_height_m=assembly.floor_height_m,
                         dimension=floor_no == 1,
                     )
                 )
@@ -445,10 +482,9 @@ def build_wastewater_building_floors_svg(
             )
         )
         for revision in riser.revisions:
-            if revision.floor_no <= 1:
-                # Ревизия нижнего этажа показана у доступного нижнего узла
-                # на листе подвала, чтобы не дублировать один элемент.
-                continue
+            relative_height_m = revision.elevation_m - (
+                revision.floor_no - 1
+            ) * assembly.floor_height_m
             if revision.floor_no in origins:
                 body.append(
                     _revision_svg(
@@ -456,8 +492,10 @@ def build_wastewater_building_floors_svg(
                         floor_no=revision.floor_no,
                         x=x,
                         slab_y=origins[revision.floor_no] + 228.0,
-                        dimension=False,
+                        floor_height_m=assembly.floor_height_m,
+                        dimension=revision.floor_no == 1,
                         element_id=revision.element_id,
+                        requested_height_m=relative_height_m,
                     )
                 )
                 continue
@@ -472,9 +510,18 @@ def build_wastewater_building_floors_svg(
             upper_bottom = origins[upper] + 252.0
             lower_top = origins[lower] + 5.0
             revision_y = (upper_bottom + lower_top) / 2 - 66.0
+            placement = resolve_riser_revision_placement(
+                floor_height_m=assembly.floor_height_m,
+                requested_height_m=relative_height_m,
+            )
+            height_mm = int(round(placement.height_above_clean_floor_m * 1000))
             body.extend((
                 f'<g data-building-revision="{escape(revision.element_id)}" '
-                f'data-revision-on-break="true">',
+                f'data-revision-on-break="true" '
+                f'data-floor-reference="clean-floor" '
+                f'data-height-above-floor-mm="{height_mm}" '
+                f'data-height-source="{escape(placement.source)}" '
+                f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">',
                 render_ugo("revision", x, revision_y, scale=0.72, rotation=90.0),
                 f'<text x="{x+24:.1f}" y="{revision_y-7:.1f}" '
                 f'font-family="{FONT}" font-size="11" font-weight="bold">Р · '
@@ -879,15 +926,10 @@ def build_wastewater_building_basement_svg(
                 )
                 + '</g>'
             )
-        if riser.lower_revision_element_ids:
-            revision_id = riser.lower_revision_element_ids[0]
-            revision_y = turn_origin_y - 52.0
-            body.append(
-                f'<g data-basement-revision="{escape(revision_id)}">'
-                f'{render_ugo("revision", x, revision_y, scale=0.8, rotation=90)}'
-                f'<text x="{x+22:.1f}" y="{revision_y+4:.1f}" '
-                f'font-family="{FONT}" font-size="12">Р</text></g>'
-            )
+        # Этажная ревизия не переносится к нижнему повороту. Если она задана
+        # на первом этаже, её показывает надземный лист на реальной высоте над
+        # чистым полом. Здесь остаётся только подвальная трасса и её фасонные
+        # части.
 
     k2_join_1, k2_join_2 = tuple(k2_joins)
     body.append(
@@ -1021,31 +1063,25 @@ def audit_wastewater_building_svgs(
             if expected not in floor_assembly_ids:
                 findings.append(f"sheet 1: missing floor assembly {expected}")
 
-    drawn_k2_upper_revisions = {
+    drawn_k2_floor_revisions = {
         row.get("data-building-revision")
         for row in floors_root.iter()
         if row.get("data-building-revision", "").startswith("К2")
     }
-    expected_k2_upper_revisions = {
+    expected_k2_floor_revisions = {
         revision.element_id
         for riser in assembly.project_inputs.k2_risers
         for revision in riser.revisions
-        if revision.floor_no > 1
     }
-    if drawn_k2_upper_revisions != expected_k2_upper_revisions:
+    if drawn_k2_floor_revisions != expected_k2_floor_revisions:
         findings.append("sheet 1: K2 revisions differ from project registry")
     drawn_k2_lower_revisions = {
         row.get("data-basement-revision")
         for row in basement_root.iter()
         if row.get("data-basement-revision", "").startswith("К2")
     }
-    expected_k2_lower_revisions = {
-        element_id
-        for riser in assembly.project_inputs.k2_risers
-        for element_id in riser.lower_revision_element_ids
-    }
-    if drawn_k2_lower_revisions != expected_k2_lower_revisions:
-        findings.append("sheet 2: lower K2 revisions differ from project registry")
+    if drawn_k2_lower_revisions:
+        findings.append("sheet 2: floor K2 revision was moved into the basement")
     cleanout_ids = {
         row.get("data-basement-cleanout")
         for row in basement_root.iter()

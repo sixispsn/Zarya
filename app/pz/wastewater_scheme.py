@@ -20,6 +20,11 @@ from app.pz.wastewater_drafting import (
     render_repeated_inline_pipe_labels,
 )
 from app.pz.wastewater_registry import audit_wastewater_registry
+from app.pz.wastewater_revision_placement import (
+    REVISION_PLACEMENT_RULE_ID,
+    resolve_riser_revision_placement,
+    revision_y_from_clean_floor,
+)
 from app.pz.wastewater_sp30 import audit_wastewater_sp30
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
 from app.pz.wastewater_diagnostics import (
@@ -1099,14 +1104,17 @@ def build_wastewater_scheme(
         riser_axis: float,
         floor_y: float,
         revision_y: float,
+        height_mm: int,
     ):
-        """Размерная привязка ревизии 1000 мм над полом по приложению В."""
+        """Размерная привязка ревизии по проектному правилу доступности."""
         side = 1 if riser_axis <= (building_x1 + building_x2) / 2 else -1
         dim_x = riser_axis + side * 34.0
         tick = 5.0
         G.append(
             f'<g data-gost-dimension="revision-height" '
-            f'data-element-id="{escape(element_id)}" data-value-mm="1000">'
+            f'data-element-id="{escape(element_id)}" data-value-mm="{height_mm}" '
+            f'data-floor-reference="clean-floor" '
+            f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">'
         )
         line(riser_axis, floor_y, dim_x + side * 5, floor_y, 0.8)
         line(riser_axis, revision_y, dim_x + side * 5, revision_y, 0.8)
@@ -1116,7 +1124,7 @@ def build_wastewater_scheme(
         text(
             dim_x + side * 10,
             (floor_y + revision_y) / 2 + 12,
-            "1000",
+            str(height_mm),
             7.3,
             "middle",
             rotate=-90,
@@ -1135,16 +1143,39 @@ def build_wastewater_scheme(
         if row.kind == "revision":
             if row.floor_from == 0:
                 sy = main_y.get(row.system, 1490.0) - lower_turn_dy - 34.0
+                placement = None
             elif row.floor_from == 1:
-                # На первом этаже показываем нормативную размерную привязку,
-                # а не произвольный графический отступ от линии пола.
-                sy = y_zero - min(78.0, (y_zero - y_tech) / 3.0)
+                placement = resolve_riser_revision_placement(
+                    floor_height_m=scaffold.floor_height_m,
+                )
+                sy = revision_y_from_clean_floor(
+                    clean_floor_y=y_zero,
+                    graphic_floor_height=y_zero - y_tech,
+                    real_floor_height_m=scaffold.floor_height_m,
+                    placement=placement,
+                )
             elif row.floor_from in band_by_floor:
-                sy = band_by_floor[row.floor_from].bottom_y - 45
+                placement = resolve_riser_revision_placement(
+                    floor_height_m=scaffold.floor_height_m,
+                )
+                sy = revision_y_from_clean_floor(
+                    clean_floor_y=band_by_floor[row.floor_from].bottom_y,
+                    graphic_floor_height=scaffold.floor_band_h,
+                    real_floor_height_m=scaffold.floor_height_m,
+                    placement=placement,
+                )
             else:
                 continue
+            placement_attributes = (
+                f' data-floor-reference="clean-floor"'
+                f' data-height-above-floor-mm="{int(round(placement.height_above_clean_floor_m*1000))}"'
+                f' data-height-rule="{REVISION_PLACEMENT_RULE_ID}"'
+                if placement is not None
+                else ""
+            )
             G.append(
                 f'<g data-element-id="{escape(row.element_id)}"'
+                f'{placement_attributes}'
                 f'{risk_attributes(row.element_id)}>'
                 f'{render_ugo("revision", x, sy, scale=0.64, rotation=90)}</g>'
             )
@@ -1152,7 +1183,14 @@ def build_wastewater_scheme(
             # на нормативном листе рядом со стояком остаётся компактное «R».
             text(x + 15, sy + 3, "R", 7.1)
             if row.floor_from == 1:
-                draw_revision_height_dimension(row.element_id, x, y_zero, sy)
+                assert placement is not None
+                draw_revision_height_dimension(
+                    row.element_id,
+                    x,
+                    y_zero,
+                    sy,
+                    int(round(placement.height_above_clean_floor_m * 1000)),
+                )
         elif row.kind == "fire_collar":
             shown = [1] + visible_floors
             for floor in shown:

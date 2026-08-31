@@ -30,6 +30,12 @@ from app.pz.wastewater_floor_drafting import (
     default_typical_floor_fixtures,
     render_typical_floor_assembly_svg,
 )
+from app.pz.wastewater_revision_placement import (
+    REVISION_PLACEMENT_RULE_ID,
+    REVISION_PREFERRED_HEIGHT_ABOVE_FLOOR_M,
+    resolve_riser_revision_placement,
+    revision_y_from_clean_floor,
+)
 from app.pz.wastewater_ugo import render_ugo
 
 
@@ -50,8 +56,8 @@ _ROOF_LABELS = {
 @dataclass(frozen=True)
 class StackRevisionDraft:
     floor_no: int
-    height_above_floor_m: float = 1.0
-    basis: str = "СП 30.13330.2020, 18.26"
+    height_above_floor_m: float = REVISION_PREFERRED_HEIGHT_ABOVE_FLOOR_M
+    basis: str = "проектное правило Zarya: доступная зона около 1,0 м от чистого пола"
 
 
 @dataclass(frozen=True)
@@ -145,8 +151,16 @@ class WastewaterStackAssembly:
         actual_revisions = {row.floor_no for row in self.revisions}
         if actual_revisions != expected_revisions:
             errors.append("revision floors do not satisfy SP 30 spacing")
-        if any(row.height_above_floor_m <= 0 for row in self.revisions):
-            errors.append("revision height above floor must be positive")
+        for revision in self.revisions:
+            try:
+                resolve_riser_revision_placement(
+                    floor_height_m=self.floor_height_m,
+                    requested_height_m=revision.height_above_floor_m,
+                )
+            except ValueError as exc:
+                errors.append(
+                    f"floor {revision.floor_no}: invalid revision placement ({exc})"
+                )
         page_floors = tuple(
             floor for page in self.pages for floor in page.floor_numbers
         )
@@ -479,10 +493,23 @@ def _revision_svg(
     riser_local_x = floor.port("riser_join").point.x_mm
     riser_x = origin_x + riser_local_x * scale
     slab_y = origin_y + 228.0 * scale
-    band_height = (252.0 - 5.0) * scale
-    revision_y = slab_y - band_height / stack.floor_height_m
+    revision = next(row for row in stack.revisions if row.floor_no == floor.floor_no)
+    placement = resolve_riser_revision_placement(
+        floor_height_m=stack.floor_height_m,
+        requested_height_m=revision.height_above_floor_m,
+    )
+    revision_y = revision_y_from_clean_floor(
+        clean_floor_y=slab_y,
+        graphic_floor_height=(252.0 - 5.0) * scale,
+        real_floor_height_m=stack.floor_height_m,
+        placement=placement,
+    )
+    height_mm = int(round(placement.height_above_clean_floor_m * 1000))
     body = [
-        f'<g data-stack-revision-floor="{floor.floor_no}">',
+        f'<g data-stack-revision-floor="{floor.floor_no}" '
+        f'data-floor-reference="clean-floor" '
+        f'data-height-above-floor-mm="{height_mm}" '
+        f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">',
         render_ugo("revision", riser_x, revision_y, scale=0.68, rotation=90.0),
         f'<text x="{riser_x+24:.1f}" y="{revision_y-10:.1f}" '
         f'font-family="{FONT}" font-size="10" font-weight="bold">Р</text>',
@@ -501,7 +528,7 @@ def _revision_svg(
                 f'x2="{dim_x+8:.1f}" y2="{slab_y:.1f}" '
                 f'stroke="{BLACK}" stroke-width="1"/>',
                 f'<text x="{dim_x+10:.1f}" y="{(revision_y+slab_y)/2:.1f}" '
-                f'font-family="{FONT}" font-size="9">1000</text>',
+                f'font-family="{FONT}" font-size="9">{height_mm}</text>',
             )
         )
     body.append("</g>")
