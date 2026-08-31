@@ -5,8 +5,8 @@
 <title>Заря — проектирование ИОС2 + ИОС3</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260819-8">
-<script defer src="/static/wizard.js?v=20260730-7"></script>
+<link rel="stylesheet" href="/static/wizard.css?v=20260831-1">
+<script defer src="/static/wizard.js?v=20260831-1"></script>
 </head><body>
 <header class="topbar">
   <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
@@ -30,6 +30,7 @@
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" action="/wizard/design" data-design-form novalidate>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+<script type="application/json" data-applicability-rules>{{ applicability_rules|default({})|tojson }}</script>
 <div class="required-legend"><span class="required-lamp" aria-hidden="true"></span><span>нужно заполнить</span><span class="required-lamp is-complete" aria-hidden="true"></span><span>готово</span></div>
 <details class="validation-panel" data-validation-panel{% if not advisories %} hidden{% endif %}{% if errors %} open{% endif %} aria-live="polite">
   <summary class="validation-heading"><span>Нормативный контроль</span><b data-validation-count>{{ advisories|length }}</b></summary>
@@ -66,6 +67,11 @@
   {% endfor %}
   </div>
   <button class="add-consumer" type="button" id="add-consumer">+ Добавить функциональную часть</button>
+  <button class="applicability-gate" type="button" data-applicability-open hidden>
+    <span class="applicability-beacon" aria-hidden="true"><i></i></span>
+    <span class="applicability-gate-copy"><strong data-applicability-title>Нужно уточнить технологию</strong><small data-applicability-summary>Ответьте на вопросы по функциональным частям</small></span>
+    <b data-applicability-count>0</b><span class="applicability-gate-arrow" aria-hidden="true">›</span>
+  </button>
   <details class="field-help"><summary>Как задать смешанный объект и норму расхода</summary><p><strong>Смешанный объект рассчитывается одним составом.</strong> Жильё, спорткомплекс, офисы, торговлю и общепит задавайте отдельными группами. Для современных квартир с ваннами от 1500 мм применяется 180 л/(жит.·сут); 130 л/(жит.·сут) — для жилья без таких ванн.</p></details>
 </div></details></fieldset>
 
@@ -351,12 +357,8 @@
       <label>Талые воды, м³/год<input name="storm_melt_m3_year" value="{{ prefill.storm_melt_m3_year if prefill and prefill.storm_melt_m3_year is not none else '' }}"></label>
       <label>Объём на очистку, м³<input name="storm_treatment_volume_m3" value="{{ prefill.storm_treatment_volume_m3 if prefill and prefill.storm_treatment_volume_m3 is not none else '' }}"></label>
       <label>Аккумулирующий резервуар, м³<input name="storm_storage_volume_m3" value="{{ prefill.storm_storage_volume_m3 if prefill and prefill.storm_storage_volume_m3 is not none else '' }}"></label>
-      <label>Общепит<select name="catering_type"><option value="none"{% if not prefill or prefill.catering_type == 'none' %} selected{% endif %}>нет / не задан</option><option value="semi_finished"{% if prefill and prefill.catering_type == 'semi_finished' %} selected{% endif %}>на полуфабрикатах</option><option value="raw"{% if prefill and prefill.catering_type == 'raw' %} selected{% endif %}>на сырье</option><option value="school"{% if prefill and prefill.catering_type == 'school' %} selected{% endif %}>пищеблок школы/ДОО</option></select></label>
-      <label>Мест в залах<input name="catering_seats" value="{{ prefill.catering_seats if prefill else 0 }}"></label>
-      <label>Условных блюд<input name="catering_conditional_dishes" value="{{ prefill.catering_conditional_dishes if prefill else 0 }}"></label>
-      <label class="check-label"><input type="checkbox" name="school_grease_by_assignment"{% if prefill and prefill.school_grease_by_assignment %} checked{% endif %}>Жироуловитель задан ТЗ для школы/ДОО</label>
     </div>
-    <details class="field-help"><summary>Исходные данные и граница расчёта К2</summary><p>К2 рассчитывается при заданных городе и площади кровли. Воронки, шаг, пропускная способность и стояк проверяются по заполненным значениям; расход автоматически не распределяется. Жироуловители проверяются по п. 8.7 СП 118 без назначения производительности при отсутствии задания ТХ.</p></details>
+    <details class="field-help"><summary>Исходные данные и граница расчёта К2</summary><p>К2 рассчитывается при заданных городе и площади кровли. Воронки, шаг, пропускная способность и стояк проверяются по заполненным значениям; расход автоматически не распределяется. Параметры общепита запрашиваются отдельной технологической анкетой; жироуловители проверяются по п. 8.7 СП 118 без назначения производительности при отсутствии задания ТХ.</p></details>
   </div></details>
 
   <details class="advanced-section discipline-section" data-discipline="ios2"><summary>ИОС2 · В2 · расчётная схема и источник</summary><div class="advanced-body">
@@ -380,6 +382,69 @@
     <details class="field-help"><summary>Когда нужна геометрия сети В2</summary><p>Геометрия нужна только для расстановки ПК, гидравлики и аварийных режимов. Если планов или расчётной схемы нет, оставьте таблицы пустыми: Заря выпустит решения стадии П без фиктивно точной гидравлики.</p></details>
   </div></details>
 </div></details></fieldset>
+
+<dialog class="applicability-dialog" data-applicability-dialog aria-labelledby="applicability-title">
+  <div class="applicability-shell">
+    <button class="applicability-close" type="button" data-applicability-close aria-label="Закрыть">×</button>
+    <header class="applicability-head">
+      <div class="applicability-headline"><span class="applicability-beacon is-large" aria-hidden="true"><i></i></span><div><p class="proof-overline">ZARYA / ПРОВЕРКА ПРИМЕНИМОСТИ</p><h2 id="applicability-title">Уточним технологию объекта</h2></div></div>
+      <p>Заря увидела функциональные части, для которых исходных данных недостаточно. Ответы сохраняются в проекте и определяют состав исходных данных для В1, Т3/Т4, К1 и К3 — без догадок системы.</p>
+      <div class="applicability-progress"><span data-applicability-progress>0 из 0 заполнено</span><div><i data-applicability-progress-bar></i></div></div>
+    </header>
+
+    <div class="applicability-questions">
+      <section class="applicability-question" data-applicability-question="group-showers" hidden>
+        <div class="applicability-question-index">01</div>
+        <div class="applicability-question-body">
+          <div class="applicability-question-title"><div><span>В1 · Т3/Т4 · К1</span><h3>Предусмотрены групповые душевые?</h3></div><span class="required-lamp applicability-question-lamp" aria-hidden="true"></span></div>
+          <p>Вопрос появляется для спорта, бассейна, общежития, школы, производственной части или явного упоминания душевых.</p>
+          <div class="applicability-choice" role="radiogroup" aria-label="Наличие групповых душевых">
+            <label><input type="radio" name="group_showers_answer" value="yes"{% if prefill and prefill.group_showers_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
+            <label><input type="radio" name="group_showers_answer" value="no"{% if prefill and prefill.group_showers_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
+          </div>
+          <div class="applicability-followup" data-applicability-followup="group-showers"{% if not prefill or prefill.group_showers_answer != 'yes' %} hidden{% endif %}>
+            <label><span>Количество душевых сеток, шт.</span><input type="number" min="1" step="1" name="group_showers_count" value="{{ prefill.group_showers_count if prefill and prefill.group_showers_count else '' }}" placeholder="По ТХ / ТЗ"></label>
+            <small>Количество фиксируется как исходное ТХ. Расходы считаются только по выбранным строкам таблицы А.2 СП 30 и алгоритму legacy.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="applicability-question" data-applicability-question="food-service" hidden>
+        <div class="applicability-question-index">02</div>
+        <div class="applicability-question-body">
+          <div class="applicability-question-title"><div><span>В1 · Т3 · К1 · К3</span><h3>Есть предприятие питания или пищеблок?</h3></div><span class="required-lamp applicability-question-lamp" aria-hidden="true"></span></div>
+          <p>Наличие общепита влияет на норму водопотребления, производственные стоки и проверку необходимости жироуловителя.</p>
+          <div class="applicability-choice" role="radiogroup" aria-label="Наличие предприятия питания">
+            <label><input type="radio" name="food_service_answer" value="yes"{% if prefill and prefill.food_service_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
+            <label><input type="radio" name="food_service_answer" value="no"{% if prefill and prefill.food_service_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
+          </div>
+          <div class="applicability-followup" data-applicability-followup="food-service"{% if not prefill or prefill.food_service_answer != 'yes' %} hidden{% endif %}>
+            <div class="applicability-field-grid">
+              <label><span>Тип приготовления</span><select name="catering_type"><option value="none"{% if not prefill or prefill.catering_type == 'none' %} selected{% endif %}>Выберите по ТХ</option><option value="semi_finished"{% if prefill and prefill.catering_type == 'semi_finished' %} selected{% endif %}>На полуфабрикатах</option><option value="raw"{% if prefill and prefill.catering_type == 'raw' %} selected{% endif %}>На сырье</option><option value="school"{% if prefill and prefill.catering_type == 'school' %} selected{% endif %}>Пищеблок школы / ДОО</option></select></label>
+              <label><span>Мест в залах</span><input type="number" min="0" step="1" name="catering_seats" value="{{ prefill.catering_seats if prefill else 0 }}"></label>
+              <label><span>Условных блюд</span><input type="number" min="0" step="1" name="catering_conditional_dishes" value="{{ prefill.catering_conditional_dishes if prefill else 0 }}"></label>
+            </div>
+            <label class="applicability-check"><input type="checkbox" name="school_grease_by_assignment"{% if prefill and prefill.school_grease_by_assignment %} checked{% endif %}><span>Для школы / ДОО жироуловитель прямо задан ТХ/ТЗ</span></label>
+            <div class="applicability-subquestion">
+              <div><strong>Есть жиросодержащие производственные стоки?</strong><small>Необходимость оборудования проверяется по СП 118; ответ не подменяет нормативное решение.</small></div>
+              <div class="applicability-choice is-compact" role="radiogroup" aria-label="Наличие жиросодержащих стоков">
+                <label><input type="radio" name="grease_wastewater_answer" value="yes"{% if prefill and prefill.grease_wastewater_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
+                <label><input type="radio" name="grease_wastewater_answer" value="no"{% if prefill and prefill.grease_wastewater_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
+              </div>
+            </div>
+            <label data-applicability-grease-location{% if not prefill or prefill.grease_wastewater_answer != 'yes' %} hidden{% endif %}><span>Предварительное размещение жироуловителя</span><select name="grease_trap_location"><option value="unknown"{% if not prefill or prefill.grease_trap_location == 'unknown' %} selected{% endif %}>Выберите решение</option><option value="under_sink"{% if prefill and prefill.grease_trap_location == 'under_sink' %} selected{% endif %}>Локально под мойками</option><option value="technical_room"{% if prefill and prefill.grease_trap_location == 'technical_room' %} selected{% endif %}>В техническом помещении здания</option><option value="outside_building"{% if prefill and prefill.grease_trap_location == 'outside_building' %} selected{% endif %}>За пределами здания</option><option value="stage_r"{% if prefill and prefill.grease_trap_location == 'stage_r' %} selected{% endif %}>Уточнить по ТХ и аксонометрии стадии Р</option></select></label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="applicability-foot">
+      <div><strong data-applicability-foot-title>Ответы не завершены</strong><span data-applicability-foot-note>Красная лампа останется активной</span></div>
+      <button class="button-secondary" type="button" data-applicability-later>Уточнить позже</button>
+      <button class="button-primary" type="button" data-applicability-save>Сохранить ответы</button>
+    </footer>
+  </div>
+</dialog>
 
 <div class="actions"><div class="actions-copy">{% if example_mode %}<strong>Загружен учебный пример — не проектные исходные данные</strong><span>Очистите пример перед началом реального проекта</span>{% elif prefill %}<strong>Проверьте состав объекта и происхождение исходных данных</strong><span>Один запуск сформирует документы ИОС2 и ИОС3</span>{% else %}<strong>Заполните исходные данные с красными индикаторами</strong><span>Пустые ТУ и геометрия не будут заменены демонстрационными значениями</span>{% endif %}</div><button class="button-primary" type="submit">Собрать ИОС2 + ИОС3</button></div>
 </form>

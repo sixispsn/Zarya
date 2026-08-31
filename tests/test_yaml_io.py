@@ -98,6 +98,11 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
     req.catering_seats = 200
     req.catering_conditional_dishes = 1500
     req.school_grease_by_assignment = True
+    req.group_showers_answer = "yes"
+    req.group_showers_count = 8
+    req.food_service_answer = "yes"
+    req.grease_wastewater_answer = "yes"
+    req.grease_trap_location = "technical_room"
     req.sewage_risers = [SewageRiserRequest(
         "К1-Ст1", 3.5, "pp", "ventilated", 110, 110, 87.5, True,
     )]

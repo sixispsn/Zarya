@@ -94,6 +94,7 @@ def load_request(text: str) -> IOS2Request:
     sewage_s = sect("sewage", required=False)
     storm_s = sect("storm", required=False)
     catering_s = sect("catering", required=False)
+    technology_s = sect("technology_questionnaire", required=False)
     net_s = sect("network", required=False)
     rooms_s = data.get("rooms", [])
     if rooms_s is not None and not isinstance(rooms_s, list):
@@ -712,6 +713,19 @@ def load_request(text: str) -> IOS2Request:
         school_grease_by_assignment=bool(
             catering_s.get("school_grease_by_assignment", False)
         ),
+        group_showers_answer=str(
+            technology_s.get("group_showers_answer", "unknown")
+        ),
+        group_showers_count=int(technology_s.get("group_showers_count", 0)),
+        food_service_answer=str(
+            technology_s.get("food_service_answer", "unknown")
+        ),
+        grease_wastewater_answer=str(
+            technology_s.get("grease_wastewater_answer", "unknown")
+        ),
+        grease_trap_location=str(
+            technology_s.get("grease_trap_location", "unknown")
+        ),
         zones=int(bld.get("zones", 1)),
         rooms=rooms, network=network, source_data=source_data, consumers=consumers)
 
@@ -1012,6 +1026,13 @@ def dump_request(req: IOS2Request) -> str:
             "seats": req.catering_seats,
             "conditional_dishes": req.catering_conditional_dishes,
             "school_grease_by_assignment": req.school_grease_by_assignment,
+        },
+        "technology_questionnaire": {
+            "group_showers_answer": req.group_showers_answer,
+            "group_showers_count": req.group_showers_count,
+            "food_service_answer": req.food_service_answer,
+            "grease_wastewater_answer": req.grease_wastewater_answer,
+            "grease_trap_location": req.grease_trap_location,
         },
     }
     if req.source_data is not None:

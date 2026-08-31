@@ -43,6 +43,35 @@ def test_bad_streams():
     assert any("streams" in p for p in _req(streams=3).validate())
 
 
+def test_technology_questionnaire_requires_confirmed_followups():
+    request = _req(group_showers_answer="yes", group_showers_count=0)
+    assert any("душевых сеток" in problem for problem in request.validate())
+
+    request = _req(
+        food_service_answer="yes",
+        catering_type="raw",
+        grease_wastewater_answer="yes",
+        grease_trap_location="unknown",
+    )
+    assert any("место жироуловителя" in problem for problem in request.validate())
+
+
+def test_applicable_technology_questionnaire_cannot_be_bypassed_by_yaml():
+    from app.intake.request_dto import ConsumerGroupRequest
+
+    request = _req(consumers=[
+        ConsumerGroupRequest("sport_pool", 120, "Спортивный комплекс"),
+    ])
+    assert any("групповых душевых" in problem for problem in request.validate())
+
+    request = _req(
+        consumers=[ConsumerGroupRequest("cafe_dining_in", 800, "Ресторан")],
+        food_service_answer="yes",
+        catering_type="raw",
+    )
+    assert any("жиросодержащих" in problem for problem in request.validate())
+
+
 def test_blank_document_requisites_are_allowed():
     r = _req(document=DocumentRequest(cipher="", object_name="", organization=""))
     assert r.validate() == []

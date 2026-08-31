@@ -39,6 +39,10 @@ FIRE_CATEGORIES = (
 )
 ROOF_TYPES = ("not_set", "flat", "sloped")
 CATERING_TYPES = ("none", "semi_finished", "raw", "school")
+APPLICABILITY_ANSWERS = ("unknown", "yes", "no")
+GREASE_TRAP_LOCATIONS = (
+    "unknown", "under_sink", "technical_room", "outside_building", "stage_r",
+)
 SOURCE_KINDS = ("city_main", "reservoir", "pond", "well")
 SPACE_KINDS = ("corridor", "room", "hall", "storage")
 PLACEMENT_MODES = ("one_side", "two_opposite_sides")
@@ -518,6 +522,13 @@ class IOS2Request:
     catering_seats: int = 0
     catering_conditional_dishes: int = 0
     school_grease_by_assignment: bool = False
+    # Технологическая анкета. Эти ответы управляют полнотой исходных данных,
+    # но сами по себе не заменяют строки таблицы А.2 и расчёт legacy.
+    group_showers_answer: str = "unknown"
+    group_showers_count: int = 0
+    food_service_answer: str = "unknown"
+    grease_wastewater_answer: str = "unknown"
+    grease_trap_location: str = "unknown"
 
     def validate(self) -> List[str]:
         """Первичная валидация намерения (типы/диапазоны/обязательность).
@@ -1266,6 +1277,70 @@ class IOS2Request:
             p.append(f"catering_type '{self.catering_type}' не из {CATERING_TYPES}")
         if min(self.catering_seats, self.catering_conditional_dishes) < 0:
             p.append("число мест и условных блюд не может быть отрицательным")
+        for name, value in (
+            ("group_showers_answer", self.group_showers_answer),
+            ("food_service_answer", self.food_service_answer),
+            ("grease_wastewater_answer", self.grease_wastewater_answer),
+        ):
+            if value not in APPLICABILITY_ANSWERS:
+                p.append(f"{name} '{value}' не из {APPLICABILITY_ANSWERS}")
+        if self.group_showers_count < 0:
+            p.append("group_showers_count не может быть отрицательным")
+        if self.group_showers_answer == "yes" and self.group_showers_count <= 0:
+            p.append(
+                "для групповых душевых задайте число душевых сеток больше нуля"
+            )
+        if self.food_service_answer == "yes" and self.catering_type == "none":
+            p.append("для предприятия питания задайте тип приготовления пищи")
+        if self.food_service_answer == "no" and self.catering_type != "none":
+            p.append(
+                "тип общепита задан, хотя предприятие питания отмечено как отсутствующее"
+            )
+        if self.grease_wastewater_answer == "yes" and self.food_service_answer == "no":
+            p.append(
+                "жиросодержащие стоки не могут быть подтверждены при отсутствии общепита"
+            )
+        if self.grease_trap_location not in GREASE_TRAP_LOCATIONS:
+            p.append(
+                f"grease_trap_location '{self.grease_trap_location}' не из "
+                f"{GREASE_TRAP_LOCATIONS}"
+            )
+        # Триггер только задаёт вопрос; ответ всегда принимает проектировщик.
+        # Локальный импорт сохраняет одно направление зависимости DTO → rules.
+        from app.intake.applicability import infer_applicability_scope
+        applicability = infer_applicability_scope(
+            self.consumers,
+            group_showers_answer=self.group_showers_answer,
+            food_service_answer=self.food_service_answer,
+            catering_type=self.catering_type,
+        )
+        if applicability.group_showers and self.group_showers_answer == "unknown":
+            p.append(
+                "подтвердите наличие групповых душевых по технологической анкете"
+            )
+        if (
+            applicability.food_service
+            and self.food_service_answer == "unknown"
+            and self.catering_type == "none"
+        ):
+            p.append(
+                "подтвердите наличие предприятия питания по технологической анкете"
+            )
+        if (
+            self.food_service_answer == "yes"
+            and self.grease_wastewater_answer == "unknown"
+        ):
+            p.append(
+                "подтвердите наличие жиросодержащих производственных стоков"
+            )
+        if (
+            self.grease_wastewater_answer == "yes"
+            and self.grease_trap_location == "unknown"
+        ):
+            p.append(
+                "для жиросодержащих стоков выберите место жироуловителя "
+                "либо явно укажите уточнение на стадии Р"
+            )
         seen_v1 = set()
         for i, s in enumerate(self.v1_sections):
             if not s.section_id or s.section_id in seen_v1:

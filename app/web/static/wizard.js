@@ -302,12 +302,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let runAdvisories = () => {};
+  let syncApplicability = () => ({ missing: [] });
+  let openApplicability = () => {};
   const bindControl = (control) => {
     if (control.dataset.changeBound) return;
     control.dataset.changeBound = "true";
     control.addEventListener("input", () => {
       markChanged(control);
       runAdvisories();
+      syncApplicability();
     });
   };
   document.querySelectorAll(".input-section input, .input-section select")
@@ -339,6 +342,7 @@ document.addEventListener("DOMContentLoaded", () => {
       markChanged(consumerRows);
       runAdvisories();
       syncRequiredFields();
+      syncApplicability();
     });
     updateConsumerUnit(row);
   };
@@ -360,8 +364,277 @@ document.addEventListener("DOMContentLoaded", () => {
       markChanged(row);
       runAdvisories();
       syncRequiredFields();
+      syncApplicability();
     });
   }
+
+  const applicabilityRulesNode = document.querySelector(
+    "[data-applicability-rules]"
+  );
+  let applicabilityRules = {};
+  try {
+    applicabilityRules = JSON.parse(applicabilityRulesNode?.textContent || "{}");
+  } catch (_) {
+    applicabilityRules = {};
+  }
+  const applicabilityDialog = document.querySelector(
+    "[data-applicability-dialog]"
+  );
+  const applicabilityGate = document.querySelector(
+    "[data-applicability-open]"
+  );
+  const applicabilityCount = document.querySelector(
+    "[data-applicability-count]"
+  );
+  const applicabilityTitle = document.querySelector(
+    "[data-applicability-title]"
+  );
+  const applicabilitySummary = document.querySelector(
+    "[data-applicability-summary]"
+  );
+  const applicabilityProgress = document.querySelector(
+    "[data-applicability-progress]"
+  );
+  const applicabilityProgressBar = document.querySelector(
+    "[data-applicability-progress-bar]"
+  );
+  const applicabilityFootTitle = document.querySelector(
+    "[data-applicability-foot-title]"
+  );
+  const applicabilityFootNote = document.querySelector(
+    "[data-applicability-foot-note]"
+  );
+  const questionShowers = document.querySelector(
+    '[data-applicability-question="group-showers"]'
+  );
+  const questionFood = document.querySelector(
+    '[data-applicability-question="food-service"]'
+  );
+  const followupShowers = document.querySelector(
+    '[data-applicability-followup="group-showers"]'
+  );
+  const followupFood = document.querySelector(
+    '[data-applicability-followup="food-service"]'
+  );
+  const greaseLocation = document.querySelector(
+    "[data-applicability-grease-location]"
+  );
+  const answerValue = (name) =>
+    document.querySelector(`input[name="${name}"]:checked`)?.value || "unknown";
+  const answerControl = (name, value) =>
+    document.querySelector(`input[name="${name}"][value="${value}"]`);
+  const valueControl = (name) => document.querySelector(`[name="${name}"]`);
+  const positiveIntegerValue = (name) => {
+    const value = Number.parseInt(valueControl(name)?.value || "0", 10);
+    return Number.isFinite(value) && value > 0;
+  };
+  const normaliseApplicabilityText = (value) =>
+    String(value || "").toLocaleLowerCase("ru-RU").replaceAll("ё", "е")
+      .replace(/\s+/g, " ").trim();
+  const matchesApplicabilityKeywords = (value, keywords = []) => {
+    const text = normaliseApplicabilityText(value);
+    return keywords.some((keyword) => text.includes(keyword));
+  };
+  const applicabilityScope = () => {
+    const rows = [...document.querySelectorAll("[data-consumer-row]")];
+    const codes = new Set(rows.map((row) =>
+      row.querySelector("[data-consumer-select]")?.value || ""
+    ));
+    const names = rows.map((row) =>
+      row.querySelector('input[name$="_name"]')?.value || ""
+    );
+    const showers = answerValue("group_showers_answer") === "yes"
+      || (applicabilityRules.group_showers_consumer_codes || [])
+        .some((code) => codes.has(code))
+      || names.some((name) => matchesApplicabilityKeywords(
+        name, applicabilityRules.group_showers_keywords || []
+      ));
+    const cateringType = valueControl("catering_type")?.value || "none";
+    const food = answerValue("food_service_answer") === "yes"
+      || cateringType !== "none"
+      || (applicabilityRules.food_service_consumer_codes || [])
+        .some((code) => codes.has(code))
+      || names.some((name) => matchesApplicabilityKeywords(
+        name, applicabilityRules.food_service_keywords || []
+      ));
+    return { showers, food };
+  };
+  const focusApplicabilityMissing = (missing) => {
+    const controls = {
+      group_showers_answer: answerControl("group_showers_answer", "yes"),
+      group_showers_count: valueControl("group_showers_count"),
+      food_service_answer: answerControl("food_service_answer", "yes"),
+      catering_type: valueControl("catering_type"),
+      grease_wastewater_answer: answerControl("grease_wastewater_answer", "yes"),
+      grease_trap_location: valueControl("grease_trap_location"),
+    };
+    window.setTimeout(() => controls[missing[0]]?.focus(), 80);
+  };
+
+  syncApplicability = () => {
+    if (!applicabilityGate || !applicabilityDialog) return { missing: [] };
+    const scope = applicabilityScope();
+    const showersAnswer = answerValue("group_showers_answer");
+    let foodAnswer = answerValue("food_service_answer");
+    const cateringType = valueControl("catering_type")?.value || "none";
+    if (foodAnswer === "unknown" && cateringType !== "none") {
+      const yes = answerControl("food_service_answer", "yes");
+      if (yes) yes.checked = true;
+      foodAnswer = "yes";
+    }
+    const greaseAnswer = answerValue("grease_wastewater_answer");
+    const greasePlacement = valueControl("grease_trap_location")?.value
+      || "unknown";
+    const missing = [];
+    let total = 0;
+    let completed = 0;
+
+    questionShowers.hidden = !scope.showers;
+    followupShowers.hidden = showersAnswer !== "yes";
+    if (scope.showers) {
+      total += 1;
+      if (["yes", "no"].includes(showersAnswer)) completed += 1;
+      else missing.push("group_showers_answer");
+      if (showersAnswer === "yes") {
+        total += 1;
+        if (positiveIntegerValue("group_showers_count")) completed += 1;
+        else missing.push("group_showers_count");
+      }
+      questionShowers.classList.toggle(
+        "is-complete",
+        showersAnswer === "no"
+          || (showersAnswer === "yes" && positiveIntegerValue("group_showers_count"))
+      );
+    }
+
+    questionFood.hidden = !scope.food;
+    followupFood.hidden = foodAnswer !== "yes";
+    greaseLocation.hidden = greaseAnswer !== "yes";
+    if (scope.food) {
+      total += 1;
+      if (["yes", "no"].includes(foodAnswer)) completed += 1;
+      else missing.push("food_service_answer");
+      if (foodAnswer === "yes") {
+        total += 2;
+        if (cateringType !== "none") completed += 1;
+        else missing.push("catering_type");
+        if (["yes", "no"].includes(greaseAnswer)) completed += 1;
+        else missing.push("grease_wastewater_answer");
+        if (greaseAnswer === "yes") {
+          total += 1;
+          if (greasePlacement !== "unknown") completed += 1;
+          else missing.push("grease_trap_location");
+        }
+      }
+      questionFood.classList.toggle(
+        "is-complete",
+        foodAnswer === "no"
+          || (foodAnswer === "yes" && cateringType !== "none"
+            && ["yes", "no"].includes(greaseAnswer)
+            && (greaseAnswer !== "yes" || greasePlacement !== "unknown"))
+      );
+    }
+
+    const relevant = scope.showers || scope.food;
+    applicabilityGate.hidden = !relevant;
+    applicabilityGate.classList.toggle("is-complete", relevant && !missing.length);
+    if (applicabilityCount) applicabilityCount.textContent = String(missing.length);
+    if (applicabilityTitle) {
+      applicabilityTitle.textContent = missing.length
+        ? "Нужно уточнить технологию"
+        : "Технология уточнена";
+    }
+    if (applicabilitySummary) {
+      const topics = [
+        scope.showers ? "групповые душевые" : "",
+        scope.food ? "общепит и К3" : "",
+      ].filter(Boolean).join(" · ");
+      applicabilitySummary.textContent = missing.length
+        ? `${topics} · осталось ${missing.length}`
+        : `${topics} · ответы сохранены`;
+    }
+    if (applicabilityProgress) {
+      applicabilityProgress.textContent = `${completed} из ${total} заполнено`;
+    }
+    if (applicabilityProgressBar) {
+      applicabilityProgressBar.style.width = total
+        ? `${Math.round(completed / total * 100)}%`
+        : "0%";
+    }
+    if (applicabilityFootTitle) {
+      applicabilityFootTitle.textContent = missing.length
+        ? `Осталось уточнить: ${missing.length}`
+        : "Исходные данные согласованы";
+    }
+    if (applicabilityFootNote) {
+      applicabilityFootNote.textContent = missing.length
+        ? "Красная лампа останется активной"
+        : "Ответы войдут в анкету проекта";
+    }
+    return { missing, scope, completed, total };
+  };
+
+  openApplicability = () => {
+    const state = syncApplicability();
+    if (!applicabilityDialog.open) {
+      if (typeof applicabilityDialog.showModal === "function") {
+        applicabilityDialog.showModal();
+      } else {
+        applicabilityDialog.setAttribute("open", "");
+      }
+    }
+    focusApplicabilityMissing(state.missing);
+  };
+  const closeApplicability = () => {
+    if (typeof applicabilityDialog?.close === "function") {
+      applicabilityDialog.close();
+    } else {
+      applicabilityDialog?.removeAttribute("open");
+    }
+  };
+  applicabilityGate?.addEventListener("click", openApplicability);
+  document.querySelectorAll(
+    "[data-applicability-close], [data-applicability-later]"
+  ).forEach((button) => button.addEventListener("click", closeApplicability));
+  document.querySelector("[data-applicability-save]")?.addEventListener(
+    "click", () => {
+      const state = syncApplicability();
+      if (state.missing.length) {
+        focusApplicabilityMissing(state.missing);
+        return;
+      }
+      closeApplicability();
+    }
+  );
+  applicabilityDialog?.addEventListener("click", (event) => {
+    if (event.target === applicabilityDialog) closeApplicability();
+  });
+  document.querySelectorAll(
+    "[data-applicability-dialog] input, [data-applicability-dialog] select"
+  ).forEach((control) => {
+    const update = () => {
+      if (control.name === "food_service_answer" && control.value === "no"
+          && control.checked) {
+        valueControl("catering_type").value = "none";
+        valueControl("catering_seats").value = "0";
+        valueControl("catering_conditional_dishes").value = "0";
+        const greaseNo = answerControl("grease_wastewater_answer", "no");
+        if (greaseNo) greaseNo.checked = true;
+        valueControl("grease_trap_location").value = "unknown";
+        const schoolAssignment = valueControl("school_grease_by_assignment");
+        if (schoolAssignment) schoolAssignment.checked = false;
+      }
+      if (control.name === "grease_wastewater_answer" && control.value === "no"
+          && control.checked) {
+        valueControl("grease_trap_location").value = "unknown";
+      }
+      markChanged(control);
+      syncApplicability();
+    };
+    control.addEventListener("input", update);
+    control.addEventListener("change", update);
+  });
+  syncApplicability();
 
   const validationPanel = document.querySelector("[data-validation-panel]");
   const validationList = document.querySelector("[data-validation-list]");
@@ -712,6 +985,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         firstMissing.focus();
         firstMissing.reportValidity();
+        return;
+      }
+      const applicabilityState = syncApplicability();
+      if (applicabilityState.missing.length) {
+        event.preventDefault();
+        openApplicability();
         return;
       }
       const button = form.querySelector("button[type='submit']");

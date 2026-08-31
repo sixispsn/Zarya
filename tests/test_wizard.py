@@ -147,6 +147,13 @@ def test_form_template_has_collapsed_wastewater_element_registry():
     assert 'name="run1_from" value=""' in html
     assert 'name="available_head" value=""' in html
     assert "Загрузить учебный пример" in html
+    assert "data-applicability-open" in html
+    assert "data-applicability-dialog" in html
+    assert 'name="group_showers_answer" value="yes"' in html
+    assert 'name="food_service_answer" value="yes"' in html
+    assert 'name="grease_wastewater_answer" value="yes"' in html
+    assert 'name="grease_trap_location"' in html
+    assert "Уточним технологию объекта" in html
 
 
 def test_form_exposes_all_sp30_consumer_norms():

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.intake.request_dto import IOS2Request
+from app.intake.applicability import infer_applicability_scope
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,33 @@ def review_request(req: IOS2Request) -> list[InputAdvisory]:
             code="storm_missing_inputs",
             message="Для расчёта К2 задайте город и площадь кровли.",
             reference="СП 30.13330.2020, раздел 21",
+        ))
+
+    scope = infer_applicability_scope(
+        req.consumers,
+        group_showers_answer=req.group_showers_answer,
+        food_service_answer=req.food_service_answer,
+        catering_type=req.catering_type,
+    )
+    if scope.group_showers and req.group_showers_answer == "unknown":
+        result.append(InputAdvisory(
+            level="warning",
+            code="technology_group_showers_missing",
+            message=(
+                "Функциональный состав допускает групповые душевые. "
+                "Подтвердите их наличие и число душевых сеток по ТХ/ТЗ."
+            ),
+            reference="СП 30.13330.2020; задание ТХ/ТЗ",
+        ))
+    if scope.food_service and req.food_service_answer == "unknown":
+        result.append(InputAdvisory(
+            level="warning",
+            code="technology_food_service_missing",
+            message=(
+                "В составе объекта обнаружено предприятие питания. Уточните "
+                "тип приготовления и наличие жиросодержащих стоков."
+            ),
+            reference="СП 118.13330.2022; задание ТХ",
         ))
 
     return result

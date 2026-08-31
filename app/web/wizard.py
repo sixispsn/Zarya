@@ -38,6 +38,7 @@ from app.intake.request_dto import (
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
+from app.intake.applicability import applicability_rules_for_web
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.intake.passport_store import PassportStore
@@ -112,6 +113,7 @@ def _form_context(**values):
     return {
         "consumer_norms": _CONSUMER_NORMS,
         "storm_cities": _STORM_CITIES,
+        "applicability_rules": applicability_rules_for_web(),
         "advisories": [],
         "example_mode": False,
         **values,
@@ -722,6 +724,13 @@ async def wizard_design(request: Request):
         catering_seats=fi("catering_seats"),
         catering_conditional_dishes=fi("catering_conditional_dishes"),
         school_grease_by_assignment=bool(form.get("school_grease_by_assignment")),
+        group_showers_answer=fv("group_showers_answer", "unknown"),
+        group_showers_count=fi("group_showers_count"),
+        food_service_answer=fv("food_service_answer", "unknown"),
+        grease_wastewater_answer=fv(
+            "grease_wastewater_answer", "unknown"
+        ),
+        grease_trap_location=fv("grease_trap_location", "unknown"),
         source_data=SourceDataRequest(
             source_description=fv("source_description"),
             water_protection_note=fv("water_protection_note"),
