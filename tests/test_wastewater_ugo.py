@@ -55,6 +55,12 @@ def test_normative_sewer_symbols_keep_table_and_position_traceability():
         assert "ГОСТ 21.205-2016" in definition.basis
         assert all(fragment in definition.basis for fragment in fragments)
 
+    transition = get_ugo_definition("transition")
+    assert transition.is_normative
+    assert "ГОСТ 21.206-2012" in transition.basis
+    assert "табл. 1" in transition.basis
+    assert "поз. 8г" in transition.basis
+
 
 def test_recommended_and_project_symbols_are_not_presented_as_normative():
     assert get_ugo_definition("cleanout").status == "project"
@@ -65,6 +71,7 @@ def test_recommended_and_project_symbols_are_not_presented_as_normative():
     assert "не отдельное УГО ГОСТ 21.205-2016" in get_ugo_definition("roof_funnel_heated").basis
     assert get_ugo_definition("outlet").status == "project"
     assert not get_ugo_definition("junction").is_normative
+    assert get_ugo_definition("transition").is_normative
 
 
 def test_legend_contains_only_used_kinds_plus_flow_direction():
@@ -150,6 +157,12 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     flow = render_ugo("flow_direction", 0, 0)
     assert 'd="M-25,0 H-8 M8,0 H25"' in flow
     assert 'd="M-8,-9 L8,0 L-8,9 Z"' in flow
+
+    transition = render_ugo("transition", 0, 0)
+    assert 'data-transition-shape="open-triangle"' in transition
+    assert 'data-transition-fill="none"' in transition
+    assert 'd="M-17,-10 L17,0 L-17,10 Z"' in transition
+    assert 'fill="none"' in transition
 
     trap = render_ugo("trap", 0, 0)
     assert 'd="M-14,-20 V9 Q-14,20 -4,20 Q5,20 5,9 V-8' in trap

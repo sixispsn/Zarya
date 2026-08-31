@@ -279,23 +279,26 @@ def build_wastewater_scheme(
         slope_per_mille: float,
         position: float = 0.76,
     ) -> str:
-        """Open-angle slope sign above a branch, without legacy ``i=``."""
+        """ГОСТ-like acute slope angle above a branch, without legacy ``i=``."""
         direction = 1 if end[0] >= start[0] else -1
         x = start[0] + (end[0] - start[0]) * position
         y = start[1] + (end[1] - start[1]) * position - 13.0
         apex_x = x + 7.0 * direction
-        arm_x = apex_x - 5.0 * direction
-        text_x = arm_x - 3.0 * direction
+        heel_x = x
+        text_x = heel_x - 3.0 * direction
         anchor = "end" if direction > 0 else "start"
         value = _fmt(slope_per_mille / 1000.0, 3)
         return "".join((
             f'<g data-slope-marker="{escape(marker_id)}" '
             f'data-slope-value="{value}" data-slope-angle="true" '
+            'data-sign-shape="acute-angle" '
+            'data-lower-leg-horizontal="true" '
+            'data-lower-leg-parallel-to-text="true" '
             'data-label-underline="false">',
-            f'<path d="M{arm_x:.1f},{y-4:.1f} L{apex_x:.1f},{y:.1f} '
-            f'L{arm_x:.1f},{y+4:.1f}" fill="none" stroke="{BLACK}" '
+            f'<path d="M{heel_x:.1f},{y-5:.1f} L{apex_x:.1f},{y:.1f} '
+            f'L{heel_x:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
             'stroke-width="1"/>',
-            f'<text x="{text_x:.1f}" y="{y+2.5:.1f}" '
+            f'<text x="{text_x:.1f}" y="{y-1.0:.1f}" '
             f'text-anchor="{anchor}" font-family="{FONT}" '
             f'font-size="5.8">{value}</text>',
             '</g>',

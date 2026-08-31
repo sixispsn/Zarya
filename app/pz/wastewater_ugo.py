@@ -76,7 +76,13 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("outlet", "выпуск", "ГОСТ Р 21.620-2023, п. 5.2.2.4; раскрывается в легенде", "project", 320),
     UGOSymbolDefinition("tee", "тройник", "Фактическая конфигурация трубопровода; раскрывается в легенде", "project", 330),
     UGOSymbolDefinition("elbow", "отвод", "Фактическая конфигурация трубопровода; раскрывается в легенде", "project", 340),
-    UGOSymbolDefinition("transition", "переход", "Фактическая конфигурация трубопровода; раскрывается в легенде", "project", 350),
+    UGOSymbolDefinition(
+        "transition",
+        "переход",
+        "ГОСТ 21.206-2012, табл. 1, поз. 8г",
+        "normative",
+        350,
+    ),
     UGOSymbolDefinition("other", "иной элемент", "Проектное обозначение; наименование задаёт проектировщик", "project", 900),
 )
 
@@ -377,7 +383,18 @@ def _shape(kind: str) -> str:
     if kind == "elbow":
         return f'<path d="M-22,14 H0 Q14,14 14,0 V-18" fill="none" stroke="{s}" stroke-width="{sw}"/>'
     if kind == "transition":
-        return f'<path d="M-24,-8 L0,-3 L24,-8 M-24,8 L0,3 L24,8" fill="none" stroke="{s}" stroke-width="{sw}"/>'
+        # ГОСТ 21.206-2012, табл. 1, поз. 8г: переход на однолинейной
+        # схеме обозначается незалитым треугольным клином на оси трубы.
+        # Белая подложка только убирает проходящую под знаком линию трубы;
+        # видимый контур остаётся незалитым.
+        return (
+            '<g data-transition-shape="open-triangle" '
+            'data-transition-fill="none">'
+            f'<path d="M-17,-10 L17,0 L-17,10 Z" fill="white" '
+            'stroke="white" stroke-width="5"/>'
+            f'<path d="M-17,-10 L17,0 L-17,10 Z" fill="none" '
+            f'stroke="{s}" stroke-width="{sw}"/></g>'
+        )
     return (
         f'<circle cx="0" cy="0" r="13" fill="white" stroke="{s}" '
         f'stroke-width="{sw}"/><text x="0" y="5" text-anchor="middle" '

@@ -515,18 +515,21 @@ def _slope_sign_svg(
     y = start[1] + (end[1] - start[1]) * position - 28.0
     direction = 1 if end[0] >= start[0] else -1
     apex_x = x + 18.0 * direction
-    arm_x = apex_x - 11.0 * direction
+    heel_x = x
     value = _fmt(value_per_mille / 1000.0)
     anchor = "end" if direction > 0 else "start"
-    text_x = arm_x - 6.0 * direction
+    text_x = heel_x - 6.0 * direction
     return "".join(
         (
             f'<g data-slope-marker="{escape(marker_id)}" data-placement="above" '
-            f'data-sign-shape="open-angle" data-label-underline="false">',
-            f'<path d="M{arm_x:.1f},{y-7:.1f} L{apex_x:.1f},{y:.1f} '
-            f'L{arm_x:.1f},{y+7:.1f}" fill="none" stroke="{BLACK}" '
+            f'data-sign-shape="acute-angle" '
+            f'data-lower-leg-horizontal="true" '
+            f'data-lower-leg-parallel-to-text="true" '
+            f'data-label-underline="false">',
+            f'<path d="M{heel_x:.1f},{y-9:.1f} L{apex_x:.1f},{y:.1f} '
+            f'L{heel_x:.1f},{y:.1f}" fill="none" stroke="{BLACK}" '
             'stroke-width="1.5"/>',
-            f'<text x="{text_x:.1f}" y="{y+4:.1f}" text-anchor="{anchor}" '
+            f'<text x="{text_x:.1f}" y="{y-2:.1f}" text-anchor="{anchor}" '
             f'font-family="{FONT}" font-size="13">{value}</text>',
             "</g>",
         )
@@ -546,7 +549,9 @@ def _transition_svg(
         (
             f'<g data-building-transition="{escape(element_id)}" '
             f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}" '
-            f'data-transition-placement="{escape(placement)}">',
+            f'data-transition-placement="{escape(placement)}" '
+            f'data-transition-shape="open-triangle" '
+            f'data-transition-fill="none">',
             f'<path d="M{x-12:.1f},{y-10:.1f} L{x+12:.1f},{y:.1f} '
             f'L{x-12:.1f},{y+10:.1f} Z" fill="white" stroke="white" '
             'stroke-width="4"/>',

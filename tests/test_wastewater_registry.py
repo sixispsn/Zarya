@@ -106,6 +106,8 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-transition-node="К1-Ст2"' in result.svg
     assert 'data-transition-placement="upstream-before-junction"' in result.svg
     assert 'data-transition-placement="downstream-after-terminal-turn"' in result.svg
+    assert result.svg.count('data-transition-shape="open-triangle"') >= 2
+    assert result.svg.count('data-transition-fill="none"') >= 2
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 4
@@ -175,6 +177,9 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
         'data-label-side="right"'
     ) == 4
     assert "i=" not in result.svg
+    assert 'data-sign-shape="acute-angle"' in result.svg
+    assert 'data-lower-leg-horizontal="true"' in result.svg
+    assert 'data-lower-leg-parallel-to-text="true"' in result.svg
     assert "Техподполье" in result.svg
     assert "ГОСТ Р 21.620-2023" in result.svg
 

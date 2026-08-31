@@ -141,6 +141,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert 'data-building-transition="К2-Пер1"' in basement_svg
     assert 'data-transition-placement="upstream-before-junction"' in basement_svg
     assert 'data-transition-placement="downstream-after-terminal-turn"' in basement_svg
+    assert basement_svg.count('data-transition-shape="open-triangle"') == 2
+    assert basement_svg.count('data-transition-fill="none"') == 2
     assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
     assert basement_svg.count('data-fitting="service_wye_45"') == 2
     assert basement_svg.count('data-fitting="through_wye_45"') == 2
@@ -161,6 +163,9 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert "0,010" in basement_svg
     assert basement_svg.count("0,008") >= 2
     assert "i=" not in basement_svg and "i =" not in basement_svg
+    assert basement_svg.count('data-sign-shape="acute-angle"') == 4
+    assert basement_svg.count('data-lower-leg-horizontal="true"') == 4
+    assert basement_svg.count('data-lower-leg-parallel-to-text="true"') == 4
 
 
 def test_combined_graphic_audit_passes_for_registry_driven_demo():
