@@ -1,3 +1,4 @@
+schema_version: 1
 document:
   cipher: ZARYA-DEMO-001-ИОС2
   object_name: Учебный многоквартирный жилой дом, 16 этажей

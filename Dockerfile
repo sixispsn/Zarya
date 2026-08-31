@@ -1,10 +1,13 @@
 FROM python:3.12-slim-bookworm
 
+ARG ZARYA_BUILD_COMMIT=unknown
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     OSIFONT_PATH=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf \
-    ZARYA_PROJECTS_DIR=/data/projects
+    ZARYA_PROJECTS_DIR=/data/projects \
+    ZARYA_BUILD_COMMIT=${ZARYA_BUILD_COMMIT}
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \

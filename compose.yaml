@@ -2,12 +2,16 @@ services:
   app:
     build:
       context: .
+      args:
+        ZARYA_BUILD_COMMIT: ${ZARYA_BUILD_COMMIT:-unknown}
     restart: unless-stopped
     environment:
       ZARYA_PROJECTS_DIR: /data/projects
       ZARYA_PASSPORTS_DIR: /data/projects/_passports
       ZARYA_ARCHITECTURE_IMPORT_ROOT: /data/projects/_architecture
+      ZARYA_RELEASES_DIR: /data/projects/_releases
       ZARYA_PUBLIC_URL: https://${ZARYA_DOMAIN:-localhost}
+      ZARYA_BUILD_COMMIT: ${ZARYA_BUILD_COMMIT:-unknown}
       OSIFONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
       TZ: Europe/Moscow
     volumes:

@@ -52,6 +52,9 @@ from app.intake.request_dto import (
 )
 
 
+CURRENT_PROJECT_SCHEMA_VERSION = 1
+
+
 class YamlFormatError(ValueError):
     """Файл не является валидным YAML-проектом Зари (структурные проблемы)."""
     def __init__(self, problems: List[str]):
@@ -74,6 +77,27 @@ def load_request(text: str) -> IOS2Request:
         raise YamlFormatError([f"синтаксис YAML: {e}"])
     if not isinstance(data, dict):
         raise YamlFormatError(["корень файла должен быть словарём (mapping)"])
+
+    raw_schema_version = data.get("schema_version", 0)
+    if isinstance(raw_schema_version, bool):
+        raise YamlFormatError(["schema_version должен быть целым числом"])
+    try:
+        schema_version = int(raw_schema_version)
+    except (TypeError, ValueError):
+        raise YamlFormatError(["schema_version должен быть целым числом"])
+    if schema_version < 0:
+        raise YamlFormatError(["schema_version не может быть отрицательным"])
+    if schema_version > CURRENT_PROJECT_SCHEMA_VERSION:
+        raise YamlFormatError([
+            "проект создан более новой версией Zarya: "
+            f"schema_version={schema_version}, поддерживается "
+            f"{CURRENT_PROJECT_SCHEMA_VERSION}"
+        ])
+    # Версия 0 — все проекты, сохранённые до появления явной схемы. Между v0
+    # и v1 структура полей не менялась: миграция только фиксирует контракт.
+    if schema_version == 0:
+        data = dict(data)
+        data["schema_version"] = CURRENT_PROJECT_SCHEMA_VERSION
 
     def sect(name: str, required: bool = True) -> Dict[str, Any]:
         s = data.get(name)
@@ -742,6 +766,7 @@ def dump_request(req: IOS2Request) -> str:
     Гарантия: load_request(dump_request(x)) эквивалентен x (round-trip)."""
     d = req.document
     data: Dict[str, Any] = {
+        "schema_version": CURRENT_PROJECT_SCHEMA_VERSION,
         "document": {
             "cipher": d.cipher, "object_name": d.object_name,
             "organization": d.organization,

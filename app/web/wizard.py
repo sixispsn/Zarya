@@ -15,7 +15,8 @@ MVP-упрощения (осознанные):
   • до 12 групп потребителей, одно характерное помещение, до 6 участков В2,
     12 участков труб К1/К2/К3 и 24 подтверждённых элементов в форме
     (для демо достаточно; полный ввод — следующая итерация);
-  • результаты хранятся в памяти процесса (run_id → bundle); без БД.
+  • активные результаты кэшируются в памяти, а снимок выпуска сохраняется в
+    ReleaseStore и восстанавливается после перезапуска процесса.
 """
 from __future__ import annotations
 
@@ -42,6 +43,11 @@ from app.intake.applicability import applicability_rules_for_web
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.intake.passport_store import PassportStore
+from app.intake.release_store import (
+    ReleaseIntegrityError,
+    ReleaseNotFoundError,
+    ReleaseStore,
+)
 from app.intake.yaml_io import load_request_file
 from app.pz.generator import cold_meter_loss
 from app.pz.impact import (
@@ -71,6 +77,7 @@ _RUNS: Dict[str, dict] = {}
 _OUT_ROOT = "/tmp/zarya_wizard_runs"
 _STORE = ProjectStore()
 _PASSPORT_STORE = PassportStore()
+_RELEASE_STORE = ReleaseStore()
 _CONSUMER_NORMS = list_consumer_norms()
 _STORM_CITIES = list_cities()
 _DEMO_PROJECT = Path(__file__).parents[2] / "demo" / "demo_project.yaml"
@@ -120,13 +127,7 @@ def _form_context(**values):
     }
 
 
-def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
-    """Единый каталог фактически выпущенных PDF для результата и Defense."""
-    wastewater_topology = build_wastewater_topology(bundle.project)
-    incomplete_wastewater_documents = {
-        "wastewater_package_pdf",
-        "wastewater_scheme_pdf",
-    }
+def _group_documents(documents: list[dict]) -> tuple[list[dict], list[dict]]:
     groups = {
         key: {
             "key": key,
@@ -136,6 +137,24 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
             "documents": [],
         }
         for key, code, label, description in _DOCUMENT_GROUPS
+    }
+    for document in documents:
+        group = document["group"]
+        if group in groups:
+            groups[group]["documents"].append(document)
+    document_groups = [
+        groups[key] for key, *_ in _DOCUMENT_GROUPS
+        if groups[key]["documents"]
+    ]
+    return documents, document_groups
+
+
+def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
+    """Единый каталог фактически выпущенных PDF для результата и Defense."""
+    wastewater_topology = build_wastewater_topology(bundle.project)
+    incomplete_wastewater_documents = {
+        "wastewater_package_pdf",
+        "wastewater_scheme_pdf",
     }
     documents = []
     for group, label, attribute in _DOCUMENTS:
@@ -164,12 +183,69 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
             ),
         }
         documents.append(document)
-        groups[group]["documents"].append(document)
-    document_groups = [
-        groups[key] for key, *_ in _DOCUMENT_GROUPS
-        if groups[key]["documents"]
-    ]
-    return documents, document_groups
+    return _group_documents(documents)
+
+
+def _run_documents(run: dict) -> tuple[list[dict], list[dict]]:
+    documents = run.get("documents")
+    if documents is not None:
+        return _group_documents(documents)
+    return _bundle_documents(run["bundle"])
+
+
+def _restore_run(run_id: str) -> dict:
+    snapshot = _RELEASE_STORE.load(run_id)
+    req = snapshot.request()
+    project = build_project(req)
+    suffix = f"/p/{snapshot.passport_id}"
+    public_base = (
+        snapshot.passport_url[:-len(suffix)]
+        if snapshot.passport_url.endswith(suffix)
+        else snapshot.passport_url.rsplit("/", 1)[0]
+    )
+    project.digital_passport = build_passport_info(
+        snapshot.passport_id,
+        public_base,
+    )
+    outdir = os.path.join(_OUT_ROOT, run_id)
+    bundle = design_ios2(
+        project,
+        output_dir=outdir,
+        render_documents=False,
+    )
+    bundle.commission_report = snapshot.commission_report()
+    bundle.status = list(snapshot.status)
+    bundle.warnings = list(snapshot.warnings)
+    run = {
+        "bundle": bundle,
+        "outdir": outdir,
+        "project_id": snapshot.project_id,
+        "advisories": snapshot.advisories(),
+        "request": req,
+        "proof_graph": snapshot.proof_graph(),
+        "defense_payload": snapshot.defense_payload,
+        "passport_id": snapshot.passport_id,
+        "passport_url": snapshot.passport_url,
+        "documents": snapshot.documents,
+        "release_id": run_id,
+    }
+    _RUNS[run_id] = run
+    return run
+
+
+def _get_run(run_id: str) -> dict | None:
+    run = _RUNS.get(run_id)
+    if run is not None:
+        return run
+    try:
+        return _restore_run(run_id)
+    except (
+        ReleaseNotFoundError,
+        ReleaseIntegrityError,
+        RequestValidationError,
+        ValueError,
+    ):
+        return None
 
 
 def _run_file(run: dict, name: str) -> str | None:
@@ -181,7 +257,20 @@ def _run_file(run: dict, name: str) -> str | None:
         or os.path.dirname(os.path.abspath(path))
         != os.path.abspath(run["outdir"])
     ):
-        return None
+        try:
+            passport_path, _ = _PASSPORT_STORE.document(
+                run.get("passport_id", ""),
+                name,
+            )
+            return str(passport_path)
+        except (FileNotFoundError, ValueError):
+            try:
+                answer_path = _RELEASE_STORE.answer_path(
+                    run.get("release_id", ""), name
+                )
+            except (FileNotFoundError, ValueError):
+                return None
+            return str(answer_path) if answer_path.is_file() else None
     return path
 
 
@@ -807,9 +896,23 @@ async def wizard_design(request: Request):
             documents=documents,
             outdir=outdir,
         )
+        release_manifest = _RELEASE_STORE.publish(
+            release_id=run_id,
+            project_id=project_id,
+            passport_id=passport_id,
+            passport_url=bundle.project.digital_passport.url,
+            request=req,
+            commission=bundle.commission_report,
+            proof_graph=proof_graph,
+            defense_payload=defense_payload,
+            documents=documents,
+            advisories=advisories,
+            status=bundle.status,
+            warnings=bundle.warnings,
+        )
     except Exception as exc:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
-            "errors": [f"Цифровой паспорт выпуска не сохранён: {exc}"],
+            "errors": [f"Постоянный выпуск не сохранён: {exc}"],
             "advisories": advisories,
             "prefill": req,
             "project_id": project_id,
@@ -823,18 +926,21 @@ async def wizard_design(request: Request):
         "passport_id": passport_id,
         "passport_url": bundle.project.digital_passport.url,
         "passport_manifest": passport_manifest,
+        "release_manifest": release_manifest,
+        "release_id": run_id,
+        "documents": documents,
     }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
 
 @router.get("/result/{run_id}", response_class=HTMLResponse)
 def wizard_result(request: Request, run_id: str):
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
     b = run["bundle"]
     proof_graph = run["proof_graph"]
-    pdfs, document_groups = _bundle_documents(b)
+    pdfs, document_groups = _run_documents(run)
     f = b.project.fire
     p = b.project
     wastewater_topology = build_wastewater_topology(p)
@@ -929,7 +1035,7 @@ def wizard_result(request: Request, run_id: str):
 @router.get("/proof/{run_id}")
 def wizard_proof(run_id: str):
     """Машиночитаемый доказательный граф того же расчётного прогона."""
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         return JSONResponse({"detail": "прогон не найден"}, status_code=404)
     graph = run["proof_graph"]
@@ -943,7 +1049,7 @@ def wizard_proof(run_id: str):
 @router.post("/impact/{run_id}")
 def wizard_impact(run_id: str, data: ImpactPreviewInput):
     """Предпросмотр «было → станет» без сохранения и выпуска документов."""
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="прогон не найден")
     try:
@@ -961,11 +1067,11 @@ def wizard_impact(run_id: str, data: ImpactPreviewInput):
 @router.get("/defense/{run_id}", response_class=HTMLResponse)
 def wizard_defense(request: Request, run_id: str):
     """Полноэкранный режим живой защиты выпущенного расчётного прогона."""
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         return HTMLResponse("<h2>Прогон не найден</h2>", status_code=404)
     bundle = run["bundle"]
-    documents, _ = _bundle_documents(bundle)
+    documents, _ = _run_documents(run)
     defense = run.get("defense_payload")
     if defense is None:
         defense = build_defense_payload(
@@ -1015,7 +1121,7 @@ def wizard_defense_answer(
     question: str = Form(""),
 ):
     """Сформировать проверяемый PDF-ответ по уже рассчитанному решению."""
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="прогон не найден")
     if len(question) > 1000:
@@ -1029,7 +1135,7 @@ def wizard_defense_answer(
     )
     if decision is None:
         raise HTTPException(status_code=404, detail="решение не найдено")
-    documents, _ = _bundle_documents(run["bundle"])
+    documents, _ = _run_documents(run)
     defense = run.get("defense_payload") or build_defense_payload(
         run["proof_graph"],
         documents,
@@ -1042,7 +1148,10 @@ def wizard_defense_answer(
         if row["id"] == decision_id
     )
     output_name = f"Ответ_эксперту_{decision_id}.pdf"
-    output_path = os.path.join(run["outdir"], output_name)
+    try:
+        output_path = str(_RELEASE_STORE.answer_path(run_id, output_name))
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="выпуск не найден") from exc
     generate_expert_response_pdf(
         run["bundle"].project,
         run["proof_graph"],
@@ -1061,7 +1170,7 @@ def wizard_defense_answer(
 @router.get("/view/{run_id}/{name}")
 def wizard_view(run_id: str, name: str):
     """Открыть выпущенный PDF внутри Defense без принудительного скачивания."""
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         return HTMLResponse("нет прогона", status_code=404)
     path = _run_file(run, name)
@@ -1076,7 +1185,7 @@ def wizard_view(run_id: str, name: str):
 
 @router.get("/file/{run_id}/{name}")
 def wizard_file(run_id: str, name: str):
-    run = _RUNS.get(run_id)
+    run = _get_run(run_id)
     if run is None:
         return HTMLResponse("нет прогона", status_code=404)
     path = _run_file(run, name)

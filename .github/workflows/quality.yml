@@ -1,0 +1,59 @@
+name: Zarya quality gates
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install PDF runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            fonts-dejavu-core fonts-liberation libcairo2 libpango-1.0-0 \
+            libpangoft2-1.0-0 shared-mime-info
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements.txt
+      - name: Legacy parity gate
+        run: |
+          python -m pytest -q \
+            tests/test_legacy_sp30_source_parity.py \
+            tests/test_water_demand.py \
+            tests/test_pumps.py \
+            tests/test_insulation.py
+      - name: Full test suite
+        run: python -m pytest -q
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build traceable image
+        run: |
+          docker build \
+            --build-arg ZARYA_BUILD_COMMIT=${{ github.sha }} \
+            --tag zarya:${{ github.sha }} .
+      - name: Verify embedded commit and health
+        run: |
+          test "$(docker run --rm zarya:${{ github.sha }} printenv ZARYA_BUILD_COMMIT)" = "${{ github.sha }}"
+          docker run --detach --name zarya-smoke --publish 18000:8000 zarya:${{ github.sha }}
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs zarya-smoke
+          exit 1

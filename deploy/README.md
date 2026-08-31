@@ -58,6 +58,7 @@ ZARYA_PASSWORD_HASH='$2a$14$...'
 ## 4. Запустить
 
 ```bash
+export ZARYA_BUILD_COMMIT=$(git rev-parse HEAD)
 docker compose config
 docker compose up -d --build
 docker compose ps
@@ -72,8 +73,16 @@ TLS-сертификат. Сайт откроется по `https://<домен>
 
 ```bash
 git pull --ff-only
+export ZARYA_BUILD_COMMIT=$(git rev-parse HEAD)
 docker compose up -d --build
 docker image prune -f
+```
+
+`ZARYA_BUILD_COMMIT` встраивается в образ и попадает в цифровой паспорт
+выпуска. После запуска значение можно проверить командой:
+
+```bash
+docker compose exec app printenv ZARYA_BUILD_COMMIT
 ```
 
 ## Резервная копия проектов

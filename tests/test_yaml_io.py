@@ -3,7 +3,7 @@
 import pytest
 
 from app.intake.yaml_io import (
-    load_request, dump_request, YamlFormatError,
+    CURRENT_PROJECT_SCHEMA_VERSION, load_request, dump_request, YamlFormatError,
 )
 from app.intake.project_builder import build_project, RequestValidationError
 
@@ -43,6 +43,24 @@ def test_load_basic():
 def test_roundtrip_identity():
     req = load_request(GOOD)
     assert load_request(dump_request(req)) == req
+
+
+def test_dump_declares_current_schema_version():
+    dumped = dump_request(load_request(GOOD))
+    assert dumped.startswith(
+        f"schema_version: {CURRENT_PROJECT_SCHEMA_VERSION}\n"
+    )
+
+
+def test_legacy_yaml_without_schema_version_migrates_to_current():
+    request = load_request(GOOD)
+    assert load_request(dump_request(request)) == request
+
+
+def test_future_schema_version_is_rejected_explicitly():
+    future = f"schema_version: {CURRENT_PROJECT_SCHEMA_VERSION + 1}\n" + GOOD
+    with pytest.raises(YamlFormatError, match="более новой версией"):
+        load_request(future)
 
 
 def test_roundtrip_preserves_optional_fields():

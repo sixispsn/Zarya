@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Тесты app/intake/project_store.py + prefill формы Wizard."""
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from app.intake.project_store import ProjectStore
@@ -48,6 +50,12 @@ def test_update_same_id(store):
     assert store.save(req, project_id=pid) == pid
     assert store.load(pid).floors == 20
     assert store.source_sha256(pid) != before
+    revisions = store.list_revisions(pid)
+    assert {row.source_sha256 for row in revisions} == {
+        before,
+        store.source_sha256(pid),
+    }
+    assert store.load_revision(pid, before).floors == 16
 
 
 def test_delete(store):
@@ -55,6 +63,7 @@ def test_delete(store):
     store.delete(pid)
     assert not store.exists(pid)
     assert store.list() == []
+    assert store.list_revisions(pid) == []
 
 
 def test_load_missing_raises(store):
@@ -73,6 +82,31 @@ def test_yaml_on_disk_is_readable(store, tmp_path):
     pid = store.save(_req())
     raw = open(tmp_path / f"{pid}.yaml", encoding="utf-8").read()
     assert "cipher: Т-ИОС2" in raw   # человекочитаемый YAML, не бинарь
+    assert raw.startswith("schema_version: 1\n")
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_concurrent_saves_never_leave_partial_yaml(store, tmp_path):
+    pid = store.save(_req())
+
+    def save_floor(floor):
+        req = _req()
+        req.floors = floor
+        store.save(req, project_id=pid)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(save_floor, (18, 20)))
+
+    assert store.load(pid).floors in {18, 20}
+    assert not list(tmp_path.glob(".*.tmp"))
+    assert len(store.list_revisions(pid)) == 3
+
+
+def test_meta_title_may_contain_pipe_character(store):
+    req = _req()
+    req.document.object_name = "Корпус А | секция 2"
+    store.save(req)
+    assert store.list()[0].title == "Корпус А | секция 2"
 
 
 # ── prefill формы ────────────────────────────────────────────────────────────
