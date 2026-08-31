@@ -139,6 +139,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
         assert f'data-pipe-line-id="{line_id}"' in basement_svg
     assert 'data-building-transition="К1-Пер1"' in basement_svg
     assert 'data-building-transition="К2-Пер1"' in basement_svg
+    assert 'data-transition-placement="upstream-before-junction"' in basement_svg
+    assert 'data-transition-placement="downstream-after-terminal-turn"' in basement_svg
     assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
     assert basement_svg.count('data-fitting="service_wye_45"') == 2
     assert basement_svg.count('data-fitting="through_wye_45"') == 2

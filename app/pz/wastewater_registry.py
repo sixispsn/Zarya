@@ -110,6 +110,61 @@ def audit_wastewater_registry(project: Project) -> WastewaterRegistryAudit:
     result.warnings.extend(
         problem for problem in topology.warnings if problem not in result.warnings
     )
+
+    # В проходном узле DN относится к оси горизонтальной магистрали. Если DN
+    # увеличивается после присоединения стояка, переход должен начинать больший
+    # DN ещё ДО тройника, а тройник должен иметь этот DN по проходу. Когда
+    # входящая магистраль уже имеет тот же большой DN, отдельный переход у
+    # стояка является лишним: меньший DN задаётся ответвлением тройника.
+    mains = list(topology.mains)
+    for outgoing in mains:
+        incoming = [
+            item for item in mains
+            if item.system == outgoing.system
+            and item.to_node == outgoing.from_node
+        ]
+        if len(incoming) != 1:
+            continue
+        upstream = incoming[0]
+        upstream_dn = upstream.nominal_diameter_mm
+        downstream_dn = outgoing.nominal_diameter_mm
+        if upstream_dn is None or downstream_dn is None:
+            continue
+        node = outgoing.from_node
+        transitions = [
+            row for row in elements
+            if row.kind == "transition"
+            and row.system == outgoing.system
+            and row.section_id == outgoing.section_id
+            and row.connects_to == node
+        ]
+        through_tees = [
+            row for row in elements
+            if row.kind in {"tee", "cross"}
+            and row.system == outgoing.system
+            and row.section_id == outgoing.section_id
+            and row.connects_to == node
+        ]
+        if downstream_dn > upstream_dn:
+            if not transitions:
+                result.errors.append(
+                    f"{node}: перед проходным узлом не задан переход "
+                    f"DN{upstream_dn}×{downstream_dn}"
+                )
+            if not any(row.dn_mm == downstream_dn for row in through_tees):
+                result.errors.append(
+                    f"{node}: проходной тройник/крестовина должен иметь "
+                    f"DN{downstream_dn} по магистрали и присоединение стояка "
+                    "меньшего DN"
+                )
+        elif downstream_dn == upstream_dn and transitions:
+            for transition in transitions:
+                result.errors.append(
+                    f"{transition.element_id}: отдельный переход в проходном "
+                    f"узле {node} не нужен — входящая и выходящая магистрали "
+                    f"уже DN{downstream_dn}; требуется редукционный косой "
+                    "тройник/крестовина по диаметру стояка"
+                )
     return result
 
 

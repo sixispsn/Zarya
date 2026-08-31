@@ -25,7 +25,7 @@ def _request():
 def test_demo_element_registry_is_valid_and_roundtrips():
     request = _request()
     assert request.validate() == []
-    assert len(request.sewer_elements) == 41
+    assert len(request.sewer_elements) == 40
 
     loaded = load_request(dump_request(request))
     assert loaded.sewer_elements == request.sewer_elements
@@ -33,8 +33,8 @@ def test_demo_element_registry_is_valid_and_roundtrips():
     audit = audit_wastewater_registry(build_project(request))
     assert audit.ready
     assert audit.errors == []
-    assert audit.element_count == 41
-    assert audit.spec_position_count == 41
+    assert audit.element_count == 40
+    assert audit.spec_position_count == 40
 
 
 def test_registry_validation_rejects_duplicate_and_unknown_section():
@@ -101,7 +101,11 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert "СХЕМА ИМЕЕТ БЛОКИРУЮЩИЕ ЗАМЕЧАНИЯ" in result.svg
     assert 'data-element-id="К1-Пер1"' in result.svg
     assert 'data-element-id="К2-Пер1"' in result.svg
-    assert 'data-element-id="К2-Пер2"' in result.svg
+    assert 'data-element-id="К2-Пер2"' not in result.svg
+    assert 'data-transition-host-section="К1-М1"' in result.svg
+    assert 'data-transition-node="К1-Ст2"' in result.svg
+    assert 'data-transition-placement="upstream-before-junction"' in result.svg
+    assert 'data-transition-placement="downstream-after-terminal-turn"' in result.svg
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
     assert 'data-element-id="К1-ОтвСт2"' in result.svg
     assert result.svg.count('data-fitting-callout="elbow"') == 4
@@ -202,6 +206,26 @@ def test_terminal_cleanout_is_not_silently_dropped_but_through_nodes_stay_open()
     assert result.svg.count('data-lower-node-kind="through-junction"') == 2
     assert result.svg.count(">Прочистка</text>") == 2
     assert sum("не внесена в реестр" in row for row in result.warnings) == 2
+
+
+def test_redundant_transition_after_reducing_through_wye_is_rejected():
+    project = deepcopy(build_project(_request()))
+    redundant = deepcopy(next(
+        row for row in project.sewage.elements
+        if row.element_id == "К2-Пер1"
+    ))
+    redundant.element_id = "К2-Пер2-Лишний"
+    redundant.section_id = "К2-Вып1"
+    redundant.connects_to = "К2-Ст2"
+    project.sewage.elements.append(redundant)
+
+    result = generate_wastewater_scheme_result(project)
+
+    assert 'data-element-id="К2-Пер2-Лишний"' not in result.svg
+    assert any(
+        "К2-Пер2-Лишний" in row and "отдельный переход" in row
+        for row in result.warnings
+    )
 
 
 def test_empty_topology_is_a_blocking_architectural_scaffold_not_a_scheme():

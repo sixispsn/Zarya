@@ -540,11 +540,13 @@ def _transition_svg(
     y: float,
     upstream_dn: int,
     downstream_dn: int,
+    placement: str,
 ) -> str:
     return "".join(
         (
             f'<g data-building-transition="{escape(element_id)}" '
-            f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}">',
+            f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}" '
+            f'data-transition-placement="{escape(placement)}">',
             f'<path d="M{x-12:.1f},{y-10:.1f} L{x+12:.1f},{y:.1f} '
             f'L{x-12:.1f},{y+10:.1f} Z" fill="white" stroke="white" '
             'stroke-width="4"/>',
@@ -777,10 +779,19 @@ def build_wastewater_building_basement_svg(
     body.append(
         _transition_svg(
             element_id=inputs.k1_transition_element_ids[0],
-            x=1350.0,
-            y=953.0,
+            # Увеличение DN выполняется на входящей магистрали до проходного
+            # редукционного тройника второго стояка.
+            x=(
+                k1_collector_start[0]
+                + (k1_collector_end[0] - k1_collector_start[0]) * 0.90
+            ),
+            y=(
+                k1_collector_start[1]
+                + (k1_collector_end[1] - k1_collector_start[1]) * 0.90
+            ),
             upstream_dn=k1_collector.dn_mm,
             downstream_dn=k1_outlet.dn_mm,
+            placement="upstream-before-junction",
         )
     )
     body.append(_pipe_caption(k1_outlet, x=2130.0, y=940.0))
@@ -899,6 +910,7 @@ def build_wastewater_building_basement_svg(
             y=1204.0,
             upstream_dn=inputs.k2_risers[0].riser_dn_mm,
             downstream_dn=k2_collector.dn_mm,
+            placement="downstream-after-terminal-turn",
         )
     )
     body.append(_pipe_caption(k2_collector, x=1870.0, y=1300.0))

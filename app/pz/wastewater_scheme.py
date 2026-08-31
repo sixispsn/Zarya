@@ -1172,6 +1172,82 @@ def build_wastewater_scheme(
         "K2": building_x2 + 250.0,
     }
     node_x: Dict[str, float] = dict(main_connection_x)
+
+    def transition_placement(row: SewerElementSpec):
+        """Resolve a reducer against the actual through-flow topology.
+
+        A diameter increase serving a merging node belongs on the incoming
+        horizontal main immediately before the reducing wye.  The registry
+        still links the fitting to the downstream section whose DN it starts;
+        ``connects_to`` identifies the junction.  At a terminal start without
+        an incoming main (for example the first K2 riser), the reducer remains
+        on the outgoing main after the lower turn.
+        """
+        outgoing = next(
+            (item for item in topology.mains if item.section_id == row.section_id),
+            None,
+        )
+        if outgoing is None:
+            return None
+        junction = row.connects_to or outgoing.from_node
+        incoming = [
+            item for item in topology.mains
+            if item.system == outgoing.system and item.to_node == junction
+        ]
+        if outgoing.from_node == junction and len(incoming) == 1:
+            upstream = incoming[0]
+            upstream_dn = upstream.nominal_diameter_mm
+            downstream_dn = outgoing.nominal_diameter_mm
+            if (
+                upstream_dn is not None
+                and downstream_dn is not None
+                and upstream_dn == downstream_dn
+            ):
+                return {
+                    "status": "redundant",
+                    "node": junction,
+                    "host_section": upstream.section_id,
+                    "upstream_dn": upstream_dn,
+                    "downstream_dn": downstream_dn,
+                }
+            if (
+                upstream_dn is not None
+                and downstream_dn is not None
+                and downstream_dn > upstream_dn
+                and junction in node_x
+                and upstream.from_node in node_x
+            ):
+                junction_x = node_x[junction]
+                upstream_x = node_x[upstream.from_node]
+                flow_direction = 1 if junction_x >= upstream_x else -1
+                offset = min(42.0, abs(junction_x - upstream_x) * 0.18)
+                return {
+                    "status": "placed",
+                    "placement": "upstream-before-junction",
+                    "node": junction,
+                    "host_section": upstream.section_id,
+                    "x": junction_x - flow_direction * offset,
+                    "y": main_y[outgoing.system],
+                    "callout_side": -flow_direction,
+                    "upstream_dn": upstream_dn,
+                    "downstream_dn": downstream_dn,
+                }
+        if outgoing.from_node not in node_x or outgoing.to_node not in node_x:
+            return None
+        x1, x2 = node_x[outgoing.from_node], node_x[outgoing.to_node]
+        flow_direction = 1 if x2 >= x1 else -1
+        return {
+            "status": "placed",
+            "placement": "downstream-after-terminal-turn",
+            "node": outgoing.from_node,
+            "host_section": outgoing.section_id,
+            "x": x1 + flow_direction * min(42.0, abs(x2 - x1) * 0.18),
+            "y": main_y[outgoing.system],
+            "callout_side": flow_direction,
+            "upstream_dn": None,
+            "downstream_dn": outgoing.nominal_diameter_mm,
+        }
+
     stage_focus = focus_section_id
     if not full_scope and not stage_focus:
         stage_focus = next(
@@ -1232,6 +1308,17 @@ def build_wastewater_scheme(
                 line(building_x2 + 4, y - 10, building_x2 + 4, y + 10, 1.4)
                 G.append('</g>')
             for element in elements:
+                if element.kind == "transition":
+                    placement = transition_placement(element)
+                    if (
+                        placement is not None
+                        and placement.get("status") == "placed"
+                        and placement.get("host_section") == pipe.section_id
+                    ):
+                        label_fittings.append(
+                            (float(placement["x"]), float(placement["y"]))
+                        )
+                    continue
                 if element.section_id != pipe.section_id:
                     continue
                 if (
@@ -1248,13 +1335,6 @@ def build_wastewater_scheme(
                         ),
                     )
                     label_fittings.append((x1 + (x2 - x1) * ratio, y))
-                elif element.kind == "transition":
-                    direction = 1 if x2 >= x1 else -1
-                    transition_x = x1 + direction * min(
-                        42.0,
-                        abs(x2 - x1) * 0.18,
-                    )
-                    label_fittings.append((transition_x, y))
                 elif element.kind == "cleanout" and not element.connects_to:
                     # This is the actual fallback position used by the
                     # cleanout renderer below, so the label must avoid it.
@@ -1451,24 +1531,33 @@ def build_wastewater_scheme(
         )
         G.append('</g>')
 
-    # Переход диаметра ставится на фактическом выходящем участке после узла
-    # объединения расходов; наружный Ø и номинальный DN не смешиваются.
+    # При увеличении DN в проходном узле переход ставится на входящей
+    # горизонтальной магистрали ДО косого тройника. После тройника переход
+    # рисовать запрещено. Если магистраль уже имеет увеличенный DN, отдельный
+    # переход не нужен: стояк подключается редукционным тройником.
     for row in elements if full_scope else []:
         if row.kind != "transition":
             continue
-        pipe = next(
-            (item for item in topology.mains if item.section_id == row.section_id),
-            None,
-        )
-        if pipe is None or pipe.from_node not in node_x or pipe.to_node not in node_x:
+        placement = transition_placement(row)
+        if placement is None:
             continue
-        x1, x2 = node_x[pipe.from_node], node_x[pipe.to_node]
-        direction = 1 if x2 >= x1 else -1
-        sx = x1 + direction * min(42.0, abs(x2 - x1) * 0.18)
-        sy = main_y[pipe.system]
+        if placement.get("status") == "redundant":
+            warnings.append(
+                f"{row.element_id}: отдельный переход в проходном узле "
+                f"{placement['node']} не нужен — входящая и выходящая "
+                f"магистрали уже DN{placement['downstream_dn']}; требуется "
+                "редукционный косой тройник по диаметру стояка"
+            )
+            continue
+        sx = float(placement["x"])
+        sy = float(placement["y"])
+        direction = int(placement["callout_side"])
         G.append(
             f'<g data-element-id="{escape(row.element_id)}" '
-            f'data-transition-section="{escape(pipe.section_id)}">'
+            f'data-transition-section="{escape(row.section_id)}" '
+            f'data-transition-host-section="{escape(str(placement["host_section"]))}" '
+            f'data-transition-node="{escape(str(placement["node"]))}" '
+            f'data-transition-placement="{escape(str(placement["placement"]))}">'
             f'{render_ugo("transition", sx, sy, scale=0.34)}</g>'
         )
         two_line_callout(
