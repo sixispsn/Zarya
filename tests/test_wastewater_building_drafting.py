@@ -113,6 +113,8 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
 
     assert root.get("width") == "841mm"
     assert root.get("height") == "594mm"
+    assert floors_svg.count('data-title-block="form-3"') == 1
+    assert 'data-sheet-no="1" data-sheet-total="3"' in floors_svg
     assert floors_svg.count('data-floor-assembly="') == 6
     assert floors_svg.count('data-building-floor="') == 3
     assert 'data-floor-assembly="К1-Ст1-Сборка-Этаж-16"' in floors_svg
@@ -139,6 +141,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
 
     assert root.get("width") == "841mm"
     assert root.get("height") == "594mm"
+    assert basement_svg.count('data-title-block="form-3"') == 1
+    assert 'data-sheet-no="2" data-sheet-total="3"' in basement_svg
     for line_id in ("К1-М1", "К1-Вып1", "К2-М1", "К2-Вып1"):
         assert f'data-building-pipe-line="{line_id}"' in basement_svg
         assert f'data-pipe-line-id="{line_id}"' in basement_svg

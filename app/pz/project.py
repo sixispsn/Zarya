@@ -711,6 +711,10 @@ class SewageDesign:
     # Явная относительная отметка чистого пола подвала. Она не выводится из
     # этажности или отметок труб: это самостоятельная проектная привязка.
     basement_floor_elevation_m: Optional[float] = None
+    # Точные входы принципиальной схемы. Их отсутствие не компенсируется
+    # делением общей высоты на этажность или догадкой о доступности кровли.
+    floor_height_m: Optional[float] = None
+    roof_kind: str = "unknown"
     result: Optional[object] = None
     hydraulic_assessment: Optional[object] = None
     # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.

@@ -165,6 +165,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const basementFloorLamp = document.querySelector(
     '[data-completeness-for="wastewater_basement_floor_elevation_m"]'
   );
+  const floorHeightControl = document.querySelector(
+    '[name="wastewater_floor_height_m"]'
+  );
+  const floorHeightLamp = document.querySelector(
+    '[data-completeness-for="wastewater_floor_height_m"]'
+  );
+  const roofKindControl = document.querySelector(
+    '[name="wastewater_roof_kind"]'
+  );
+  const roofKindLamp = document.querySelector(
+    '[data-completeness-for="wastewater_roof_kind"]'
+  );
   const outletRegistryLamp = document.querySelector(
     "[data-wastewater-outlet-registry-lamp]"
   );
@@ -194,6 +206,24 @@ document.addEventListener("DOMContentLoaded", () => {
       floorComplete
         ? "Отметка пола подвала задана"
         : "Нужна относительная отметка чистого пола подвала ниже ±0,000"
+    );
+    const floorHeightComplete = positiveFiniteNumber(floorHeightControl);
+    setCompletenessLamp(
+      floorHeightLamp,
+      floorHeightComplete,
+      floorHeightComplete
+        ? "Точная высота типового этажа задана"
+        : "Задайте точную высоту типового этажа по АР"
+    );
+    const roofKindComplete = Boolean(
+      roofKindControl && roofKindControl.value !== "unknown"
+    );
+    setCompletenessLamp(
+      roofKindLamp,
+      roofKindComplete,
+      roofKindComplete
+        ? "Вид кровли для выпуска вентиляции подтверждён"
+        : "Подтвердите вид и доступность кровли"
     );
 
     const pipeRows = [...document.querySelectorAll(
@@ -275,6 +305,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   document.querySelectorAll(
     '[name="wastewater_basement_floor_elevation_m"], '
+    + '[name="wastewater_floor_height_m"], '
+    + '[name="wastewater_roof_kind"], '
     + '[name^="sewer_pipe"], [name^="sewer_element"]'
   ).forEach((control) => {
     control.addEventListener("input", syncWastewaterSchemeCompleteness);

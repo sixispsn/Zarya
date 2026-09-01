@@ -15,7 +15,7 @@ from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree
 
-from app.pz.project import Project
+from app.pz.project import DocumentInfo, Project
 from app.pz.wastewater_drafting import (
     BLACK,
     FONT,
@@ -50,6 +50,109 @@ _ROOF_VENT_HEIGHT_M = {
     "flat_accessible": 3.0,
 }
 
+_SHEET_SCALE = 10.0 / 3.0
+_FRAME_LEFT = 20.0 * _SHEET_SCALE
+_FRAME_TOP = 5.0 * _SHEET_SCALE
+_FRAME_RIGHT = 2800.0 - 5.0 * _SHEET_SCALE
+_FRAME_BOTTOM = 1980.0 - 5.0 * _SHEET_SCALE
+
+
+def _short(value: str, limit: int) -> str:
+    value = " ".join((value or "").split())
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
+
+
+def _title_block_svg(
+    document: DocumentInfo,
+    *,
+    sheet_no: int,
+    sheet_total: int,
+    title: str,
+) -> str:
+    """Основная надпись формы 3 в координатах двухлистового A1."""
+    doc = document
+    scale = _SHEET_SCALE
+    x0 = _FRAME_RIGHT - 185.0 * scale
+    y0 = _FRAME_BOTTOM - 55.0 * scale
+
+    def x(mm: float) -> float:
+        return x0 + mm * scale
+
+    def y(mm: float) -> float:
+        return y0 + mm * scale
+
+    def line(x1: float, y1: float, x2: float, y2: float, width: float = 1.0) -> str:
+        return (
+            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" '
+            f'y2="{y2:.1f}" stroke="{BLACK}" stroke-width="{width:.1f}"/>'
+        )
+
+    def text_svg(
+        px: float,
+        py: float,
+        value: str,
+        size: float,
+        anchor: str = "middle",
+        weight: str = "normal",
+    ) -> str:
+        return (
+            f'<text x="{px:.1f}" y="{py:.1f}" font-family="{FONT}" '
+            f'font-size="{size:.1f}" text-anchor="{anchor}" '
+            f'font-weight="{weight}">{escape(value)}</text>'
+        )
+
+    rows = [
+        f'<g data-title-block="form-3" data-sheet-no="{sheet_no}" '
+        f'data-sheet-total="{sheet_total}">',
+        f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{185*scale:.1f}" '
+        f'height="{55*scale:.1f}" fill="white" stroke="{BLACK}" '
+        'stroke-width="2.0"/>',
+        line(x(65), y(0), x(65), y(55), 1.5),
+    ]
+    for column in (7, 17, 25, 37, 53):
+        rows.append(line(x(column), y(0), x(column), y(25)))
+    for column in (17, 37, 53):
+        rows.append(line(x(column), y(25), x(column), y(55)))
+    rows.append(line(x(135), y(25), x(135), y(55), 1.4))
+    for column in (150, 165):
+        rows.append(line(x(column), y(25), x(column), y(40)))
+    for row_mm in range(5, 55, 5):
+        rows.append(line(x(0), y(row_mm), x(65), y(row_mm)))
+    for row_mm, start_mm in ((10, 65), (25, 65), (30, 135), (40, 65)):
+        rows.append(line(x(start_mm), y(row_mm), x(185), y(row_mm)))
+    for label, c0, c1 in (
+        ("Изм.", 0, 7), ("Кол.уч.", 7, 17), ("Лист", 17, 25),
+        ("№ док.", 25, 37), ("Подп.", 37, 53), ("Дата", 53, 65),
+    ):
+        rows.append(text_svg(x((c0 + c1) / 2), y(23.4), label, 7.0))
+    signers = (
+        ("Разраб.", doc.developer_name, 30),
+        ("Проверил", doc.inspector_name, 35),
+        ("Нач. отдела", doc.dept_head_name, 40),
+        ("ГИП", doc.gip_name, 45),
+        ("Н. контр.", doc.norm_control_name, 55),
+    )
+    for label, name, row_mm in signers:
+        rows.append(text_svg(x(1), y(row_mm - 1.5), label, 7.4, "start"))
+        if name:
+            rows.append(text_svg(x(27), y(row_mm - 1.5), _short(name, 18), 7.4))
+    rows.extend((
+        text_svg(x(125), y(7), _short(doc.cipher or "", 34), 13.0),
+        text_svg(x(125), y(18), _short(doc.object_name or "", 68), 8.5),
+        text_svg(x(100), y(34.5), _short(doc.object_part or "", 38), 9.5),
+        text_svg(x(142.5), y(28.5), "Стадия", 6.7),
+        text_svg(x(157.5), y(28.5), "Лист", 6.7),
+        text_svg(x(175), y(28.5), "Листов", 6.7),
+        text_svg(x(142.5), y(37.3), doc.stage_label or "П", 10.0),
+        text_svg(x(157.5), y(37.3), str(sheet_no), 10.0),
+        text_svg(x(175), y(37.3), str(sheet_total), 10.0),
+        text_svg(x(100), y(47), _short(title, 48), 8.8),
+        text_svg(x(100), y(53), "К1, К2", 10.5, weight="bold"),
+        text_svg(x(160), y(49), _short(doc.organization or "", 28), 8.0),
+        "</g>",
+    ))
+    return "".join(rows)
+
 
 @dataclass(frozen=True)
 class WastewaterBuildingAssembly:
@@ -57,6 +160,7 @@ class WastewaterBuildingAssembly:
     k1_stacks: tuple[WastewaterStackAssembly, ...]
     floor_height_m: float
     roof_kind: str
+    document: DocumentInfo
 
     @property
     def displayed_floor_numbers(self) -> tuple[int, ...]:
@@ -115,6 +219,7 @@ def build_wastewater_building_assembly(
     *,
     floor_height_m: float,
     roof_kind: str,
+    document: DocumentInfo | None = None,
 ) -> WastewaterBuildingAssembly:
     """Build a combined semantic assembly from confirmed register values."""
     if not project_inputs.complete:
@@ -151,6 +256,7 @@ def build_wastewater_building_assembly(
         k1_stacks=stacks,
         floor_height_m=floor_height_m,
         roof_kind=roof_kind,
+        document=document or DocumentInfo(),
     )
     errors = assembly.validate()
     if errors:
@@ -298,19 +404,25 @@ def build_wastewater_building_floors_svg(
     margin = 50
     floors = assembly.displayed_floor_numbers
     origins = _floor_origins(floors)
-    k1_origins_x = (90.0, 880.0)
+    # Выноска начальной этажной прочистки уходит влево от сборки; оси
+    # сдвинуты внутрь рабочей рамки, чтобы полка и текст не пересекали поле
+    # подшивки формы А1.
+    k1_origins_x = (160.0, 950.0)
     k2_xs = (2110.0, 2400.0)
     scale = 1.0
     roof_y = 220.0
-    bottom_y = 1775.0
+    bottom_y = 1660.0
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
         'viewBox="0 0 2800 1980">',
         '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
+        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
+        f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Принципиальная схема систем К1 и К2. Надземная часть</text>',
+        'font-size="30" font-weight="bold">Принципиальная схема внутренних систем '
+        'канализации и водоотведения. Надземная часть</text>',
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
         f'font-size="16" fill="{GRAY}">Этажей: {assembly.project_inputs.floors_above}; '
         'характерные этажи; самотечная К1 и внутренний водосток К2</text>',
@@ -536,14 +648,20 @@ def build_wastewater_building_floors_svg(
 
     body.extend(
         (
-            f'<line x1="{margin+30}" y1="{bottom_y+45:.1f}" '
-            f'x2="{width-margin-30}" y2="{bottom_y+45:.1f}" stroke="#777"/>',
+            f'<line x1="{margin+30}" y1="{bottom_y+35:.1f}" '
+            f'x2="{_FRAME_RIGHT-650:.1f}" y2="{bottom_y+35:.1f}" stroke="#777"/>',
             f'<text x="{margin+38}" y="{bottom_y+78:.1f}" font-family="{FONT}" '
             'font-size="13">Все показанные приборы и количества получены из реестра проекта. '
             'К2 не соединяется с К1.</text>',
-            f'<text x="{margin+38}" y="{height-margin-24}" font-family="{FONT}" '
+            f'<text x="{margin+38}" y="{bottom_y+112:.1f}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Графический язык — приложение В '
             'ГОСТ Р 21.620-2023; контрольная сборка генератора.</text>',
+            _title_block_svg(
+                assembly.document,
+                sheet_no=1,
+                sheet_total=3,
+                title="Принципиальная схема. Надземная часть",
+            ),
             "</svg>",
         )
     )
@@ -688,10 +806,13 @@ def build_wastewater_building_basement_svg(
         '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
         '</pattern></defs>',
         '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
+        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
+        f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Принципиальная схема систем К1 и К2. Подвал и выпуски</text>',
+        'font-size="30" font-weight="bold">Принципиальная схема внутренних систем '
+        'канализации и водоотведения. Подвал и выпуски</text>',
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
         f'font-size="16" fill="{GRAY}">Лист 2; подтверждённые участки реестра; '
         'граница — наружная грань здания</text>',
@@ -993,8 +1114,8 @@ def build_wastewater_building_basement_svg(
 
     body.extend(
         (
-            f'<rect x="{margin+35}" y="{1680}" width="{width-2*margin-70}" '
-            'height="155" fill="white" stroke="#777" stroke-width="1"/>',
+            f'<rect x="{margin+35}" y="{1680}" width="{2010}" '
+            'height="215" fill="white" stroke="#777" stroke-width="1"/>',
             f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
             'font-size="14" font-weight="bold">Граница детализации</text>',
             f'<text x="{margin+58}" y="1745" font-family="{FONT}" '
@@ -1003,9 +1124,15 @@ def build_wastewater_building_basement_svg(
             'font-size="12">Промежуточный узел: проточный косой тройник без заглушки; ось магистрали открыта.</text>',
             f'<text x="{margin+58}" y="1795" font-family="{FONT}" '
             'font-size="12">Доступ к промежуточному повороту К2 обеспечивает отдельная доступная ревизия.</text>',
-            f'<text x="{margin+38}" y="{height-margin-24}" font-family="{FONT}" '
+            f'<text x="{margin+58}" y="1875" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Графический язык — приложение В '
             'ГОСТ Р 21.620-2023; выпуск заканчивается за наружной гранью здания.</text>',
+            _title_block_svg(
+                assembly.document,
+                sheet_no=2,
+                sheet_total=3,
+                title="Принципиальная схема. Подвал и выпуски",
+            ),
             "</svg>",
         )
     )
@@ -1036,6 +1163,19 @@ def audit_wastewater_building_svgs(
 
     for page_no, root in enumerate((floors_root, basement_root), start=1):
         visible_text = " ".join(root.itertext())
+        title_blocks = [
+            row for row in root.iter()
+            if row.get("data-title-block") == "form-3"
+        ]
+        if len(title_blocks) != 1:
+            findings.append(
+                f"sheet {page_no}: expected exactly one form-3 title block"
+            )
+        elif (
+            title_blocks[0].get("data-sheet-no") != str(page_no)
+            or title_blocks[0].get("data-sheet-total") != "3"
+        ):
+            findings.append(f"sheet {page_no}: title block numbering is invalid")
         if "i=" in visible_text or "i =" in visible_text:
             findings.append(f"sheet {page_no}: legacy i= slope notation remains")
         for group in root.iter():
@@ -1198,6 +1338,7 @@ def generate_wastewater_building_pdf_from_project(
         inputs,
         floor_height_m=floor_height_m,
         roof_kind=roof_kind,
+        document=project.document,
     )
     svgs = build_wastewater_building_svgs(assembly)
     findings = audit_wastewater_building_svgs(assembly, svgs)

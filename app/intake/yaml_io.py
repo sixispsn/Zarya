@@ -606,6 +606,11 @@ def load_request(text: str) -> IOS2Request:
             float(sewage_s["basement_floor_elevation_m"])
             if sewage_s.get("basement_floor_elevation_m") is not None else None
         ),
+        wastewater_floor_height_m=(
+            float(sewage_s["floor_height_m"])
+            if sewage_s.get("floor_height_m") is not None else None
+        ),
+        wastewater_roof_kind=str(sewage_s.get("roof_kind", "unknown")),
         wastewater_design_assignment_ref=str(
             sewage_s.get("design_assignment_ref", "")
         ),
@@ -1004,6 +1009,8 @@ def dump_request(req: IOS2Request) -> str:
             "basement_floor_elevation_m": (
                 req.wastewater_basement_floor_elevation_m
             ),
+            "floor_height_m": req.wastewater_floor_height_m,
+            "roof_kind": req.wastewater_roof_kind,
             "disposal_mode": req.wastewater_disposal_mode,
             "tu_org": req.wastewater_tu_org,
             "tu_number": req.wastewater_tu_number,

@@ -471,22 +471,15 @@ def generate_wastewater_scheme_pdf(
     project: Project,
     output_path: str,
 ) -> str:
-    """Сформировать векторный лист А1 схемы К1/К2/К3 стадии П."""
-    import cairosvg
+    """Сформировать каноническую двухлистовую схему К1/К2 стадии П.
 
-    from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+    Production-выпуск не использует старый универсальный SVG-рендерер. Если
+    реестр или точная геометрия неполны, сервис создаёт отдельный лист статуса
+    без вымышленных участков и фасонных частей.
+    """
+    from app.pz.wastewater_scheme_service import generate_wastewater_scheme
 
-    if project.sewage.hydraulic_assessment is None:
-        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(
-            project
-        )
-    # Неполные исходные данные не замещаются условными элементами. Лист всё
-    # равно формируется, но рендерер явно ставит блокирующий статус и выводит
-    # диагностическое замечание. Так комплект показывает реальную степень
-    # готовности, не материализуя выдуманную прочистку или трассу.
-    svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(project))
-    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
-    return output_path
+    return generate_wastewater_scheme(project, output_path).output_path
 
 
 def generate_architecture_section_node_pdf(
@@ -566,8 +559,8 @@ def generate_wastewater_ugo_pdf(
         project.document,
         cipher=_document_cipher(cipher, ".СК"),
         sheet_title="Ведомость условных графических обозначений К1, К2 и К3",
-        sheet_no="2",
-        sheet_total="2",
+        sheet_no="3",
+        sheet_total="3",
     )
     svg = build_wastewater_ugo_sheet(replace(project, document=ugo_doc))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
@@ -579,7 +572,12 @@ def generate_wastewater_scheme_result(
     *,
     diagnostics: bool = False,
 ):
-    """Собрать схему и вернуть SVG вместе с диагностическими замечаниями."""
+    """Вернуть старый сравнительный SVG с диагностическими замечаниями.
+
+    Функция сохраняется для регрессионных и диагностических тестов. Она не
+    является production-путём PDF; выпуск выполняет
+    :func:`app.pz.wastewater_scheme_service.generate_wastewater_scheme`.
+    """
     from app.pz.wastewater_scheme import build_wastewater_scheme
 
     cipher = _wastewater_document_cipher(project.document.cipher or "")

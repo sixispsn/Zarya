@@ -192,7 +192,7 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert height_mm == pytest.approx(594.0, abs=0.02)
 
 
-def test_terminal_cleanout_is_not_silently_dropped_but_through_nodes_stay_open():
+def test_missing_terminal_cleanout_is_blocking_and_never_synthesized():
     project = deepcopy(build_project(_request()))
     project.sewage.elements = [
         row for row in project.sewage.elements
@@ -206,11 +206,13 @@ def test_terminal_cleanout_is_not_silently_dropped_but_through_nodes_stay_open()
     result = generate_wastewater_scheme_result(project)
 
     assert result.svg.count('data-lower-turn-node=') == 4
-    assert result.svg.count('data-cleanout-source="generator-invariant"') == 2
-    assert result.svg.count('data-draft-segment="cleanout_access"') == 2
+    assert 'data-cleanout-source="generator-invariant"' not in result.svg
+    assert result.svg.count('data-cleanout-source="missing"') == 2
+    assert result.svg.count('data-lower-node-kind="missing-terminal-cleanout"') == 2
+    assert 'data-draft-segment="cleanout_access"' not in result.svg
     assert result.svg.count('data-lower-node-kind="through-junction"') == 2
-    assert result.svg.count(">Прочистка</text>") == 2
-    assert sum("не внесена в реестр" in row for row in result.warnings) == 2
+    assert ">Прочистка</text>" not in result.svg
+    assert sum("не имеет права дорисовывать" in row for row in result.warnings) == 2
 
 
 def test_redundant_transition_after_reducing_through_wye_is_rejected():

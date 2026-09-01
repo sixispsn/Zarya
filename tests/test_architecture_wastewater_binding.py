@@ -367,8 +367,8 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
         import_id,
     )
     body = workspace.body.decode("utf-8")
-    assert "Скачать новую схему PDF" in body
-    assert "Предпросмотр SVG" in body
+    assert "Скачать принципиальную схему PDF" in body
+    assert "Контроль привязки по АР · SVG" in body
     assert "Инженерный граф не связан" not in body
 
     control = web.architecture_wastewater_control_svg(import_id)
@@ -380,7 +380,7 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     assert pdf_response.status_code == 200
     assert pdf_response.media_type == "application/pdf"
     assert Path(pdf_response.path).is_file()
-    assert len(PdfReader(pdf_response.path).pages) == 1
+    assert len(PdfReader(pdf_response.path).pages) == 2
 
     request_dto.apartments += 1
     project_store.save(request_dto, project_id=project_id)

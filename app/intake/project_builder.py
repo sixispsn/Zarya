@@ -290,6 +290,8 @@ def build_project(intent: IntentLike) -> Project:
     p.sewage.basement_floor_elevation_m = (
         req.wastewater_basement_floor_elevation_m
     )
+    p.sewage.floor_height_m = req.wastewater_floor_height_m
+    p.sewage.roof_kind = req.wastewater_roof_kind
     p.sewage.design_assignment_ref = req.wastewater_design_assignment_ref
     p.sewage.survey_ref = req.wastewater_survey_ref
     p.sewage.service_life_years = req.wastewater_service_life_years

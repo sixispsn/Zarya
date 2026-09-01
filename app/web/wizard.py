@@ -668,6 +668,11 @@ async def wizard_design(request: Request):
             ff("wastewater_basement_floor_elevation_m")
             if fv("wastewater_basement_floor_elevation_m") else None
         ),
+        wastewater_floor_height_m=(
+            ff("wastewater_floor_height_m")
+            if fv("wastewater_floor_height_m") else None
+        ),
+        wastewater_roof_kind=fv("wastewater_roof_kind", "unknown"),
         wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
         wastewater_survey_ref=fv("wastewater_survey_ref"),
         wastewater_service_life_years=(

@@ -7,6 +7,7 @@ it is never replaced with a generated elevation, slope or outlet mark.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.wastewater_floor_drafting import FloorFixtureInput
@@ -682,6 +683,132 @@ def _validate_outlet_reachability(
             current = _section(candidates[0].to_node)
 
 
+def _validate_transition_topology(
+    project: Project,
+    *,
+    systems: tuple[str, ...],
+    diagnostics: list[str],
+) -> None:
+    """Проверить каждый переход относительно реального направления потока.
+
+    ``section_id`` перехода связывает его с выходящим участком нового DN, а
+    ``connects_to`` — с узлом изменения диаметра. В проточном узле знак
+    перехода размещается на входящей магистрали до тройника; в терминальном
+    узле — после нижнего поворота до выходящей магистрали. Наличие произвольной
+    строки ``transition`` в системе не считается подтверждением.
+    """
+    horizontal = [
+        row for row in project.sewage.pipes
+        if _system(row.system) in systems and _is_horizontal_building_edge(row)
+    ]
+    risers = {
+        (_system(row.system), _section(row.section_id)): row
+        for row in project.sewage.pipes
+        if _system(row.system) in systems and _is_riser_pipe(row)
+    }
+    transitions = [
+        row for row in project.sewage.elements
+        if _system(row.system) in systems
+        and row.kind == "transition"
+        and row.element_id.strip()
+    ]
+    consumed: set[str] = set()
+
+    for outgoing in horizontal:
+        system = _system(outgoing.system)
+        node = _section(outgoing.from_node)
+        incoming = [
+            row for row in horizontal
+            if _system(row.system) == system and _section(row.to_node) == node
+        ]
+        riser = risers.get((system, node))
+        if len(incoming) > 1:
+            diagnostics.append(
+                f"{outgoing.from_node}: переход DN нельзя определить — в "
+                "узел входят несколько горизонтальных магистралей."
+            )
+            continue
+        source = incoming[0] if incoming else riser
+        if source is None:
+            continue
+        upstream_dn = source.nominal_diameter_mm
+        downstream_dn = outgoing.nominal_diameter_mm
+        if upstream_dn is None or downstream_dn is None:
+            continue
+        rows = [
+            row for row in transitions
+            if _system(row.system) == system
+            and _section(row.section_id) == _section(outgoing.section_id)
+            and _section(row.connects_to) == node
+        ]
+        consumed.update(row.element_id.strip() for row in rows)
+
+        if downstream_dn < upstream_dn:
+            diagnostics.append(
+                f"{outgoing.from_node}: DN уменьшается по потоку "
+                f"DN{upstream_dn}→DN{downstream_dn}; сужение запрещено."
+            )
+            continue
+        if downstream_dn == upstream_dn:
+            for row in rows:
+                diagnostics.append(
+                    f"{row.element_id}: отдельный переход в узле "
+                    f"{outgoing.from_node} не нужен — проходной DN уже "
+                    f"равен DN{downstream_dn}."
+                )
+            continue
+        if len(rows) != 1:
+            placement = (
+                "на входящей магистрали до проходного тройника"
+                if incoming else "после терминального нижнего поворота"
+            )
+            diagnostics.append(
+                f"{outgoing.from_node}: для увеличения "
+                f"DN{upstream_dn}→DN{downstream_dn} нужна ровно одна строка перехода "
+                f"{placement}."
+            )
+            continue
+
+        row = rows[0]
+        declared_dns = [int(value) for value in re.findall(r"\d+", row.type_mark)]
+        if row.dn_mm != downstream_dn or declared_dns[:2] != [
+            upstream_dn,
+            downstream_dn,
+        ]:
+            diagnostics.append(
+                f"{row.element_id}: марка перехода должна подтверждать "
+                f"DN{upstream_dn}×{downstream_dn}, а dn_mm — выходной "
+                f"DN{downstream_dn}."
+            )
+        if incoming:
+            through_fittings = [
+                element for element in project.sewage.elements
+                if _system(element.system) == system
+                and element.kind in {"tee", "junction"}
+                and _section(element.section_id) == _section(outgoing.section_id)
+                and _section(element.connects_to) == node
+                and element.dn_mm == downstream_dn
+                and "45" in element.type_mark
+                and (
+                    "без заглуш" in element.type_mark.casefold()
+                    or "заглуш" not in element.type_mark.casefold()
+                )
+            ]
+            if len(through_fittings) != 1:
+                diagnostics.append(
+                    f"{outgoing.from_node}: после перехода до узла нужен один "
+                    f"проходной косой тройник/крестовина DN{downstream_dn} "
+                    "без заглушки."
+                )
+
+    for row in transitions:
+        if row.element_id.strip() not in consumed:
+            diagnostics.append(
+                f"{row.element_id}: переход не привязан к подтверждённому "
+                "изменению DN по направлению потока."
+            )
+
+
 def resolve_wastewater_building_project_inputs(
     project: Project,
 ) -> WastewaterBuildingProjectInputs:
@@ -759,12 +886,20 @@ def resolve_wastewater_building_project_inputs(
             and _is_horizontal_building_edge(row)
             and _section(row.to_node) == _section(pipe.section_id)
         ]
+        outgoing_edges = [
+            row for row in project.sewage.pipes
+            if _system(row.system) == "K1"
+            and _is_horizontal_building_edge(row)
+            and _section(row.from_node) == _section(pipe.section_id)
+        ]
         lower_cleanouts = tuple(
             row.element_id.strip()
             for row in project.sewage.elements
             if _system(row.system) == "K1"
             and row.kind == "cleanout"
             and _section(row.connects_to) == _section(pipe.section_id)
+            and len(outgoing_edges) == 1
+            and _section(row.section_id) == _section(outgoing_edges[0].section_id)
             and row.service_direction in {"downstream", "both"}
             and row.service_fitting == "wye_45"
             and row.accessible
@@ -774,11 +909,34 @@ def resolve_wastewater_building_project_inputs(
             row.element_id.strip()
             for row in project.sewage.elements
             if _system(row.system) == "K1"
-            and row.kind == "tee"
+            and row.kind in {"tee", "junction"}
             and _section(row.connects_to) == _section(pipe.section_id)
+            and len(outgoing_edges) == 1
+            and _section(row.section_id) == _section(outgoing_edges[0].section_id)
             and "45" in row.type_mark
+            and (
+                "без заглуш" in row.type_mark.casefold()
+                or "заглуш" not in row.type_mark.casefold()
+            )
             and row.element_id.strip()
         )
+        lower_revisions = tuple(
+            row.element_id.strip()
+            for row in project.sewage.elements
+            if _system(row.system) == "K1"
+            and row.kind == "revision"
+            and _section(row.section_id) == _section(pipe.section_id)
+            and row.floor_from <= 1
+            and row.service_direction in {"downstream", "both"}
+            and row.service_fitting == "revision_opening"
+            and row.accessible
+            and row.element_id.strip()
+        )
+        if len(outgoing_edges) != 1:
+            diagnostics.append(
+                f"Стояк {pipe.section_id}: нижний узел должен иметь ровно "
+                "одну выходящую горизонтальную магистраль."
+            )
         if incoming_edges:
             if lower_cleanouts:
                 diagnostics.append(
@@ -790,11 +948,23 @@ def resolve_wastewater_building_project_inputs(
                     f"Для проточного узла {pipe.section_id} нужен один "
                     "косой тройник 45° без заглушки."
                 )
-        elif len(lower_cleanouts) != 1:
-            diagnostics.append(
-                f"Для начального нижнего поворота {pipe.section_id} "
-                "нужна одна прочистка с соосным заглушённым концом."
-            )
+            if len(lower_revisions) != 1:
+                diagnostics.append(
+                    f"Для проточного нижнего узла {pipe.section_id} нужна "
+                    "одна отдельная доступная ревизия на стояке."
+                )
+        else:
+            if len(lower_cleanouts) != 1:
+                diagnostics.append(
+                    f"Для начального нижнего поворота {pipe.section_id} "
+                    "нужна одна прочистка с соосным заглушённым концом."
+                )
+            if lower_junctions:
+                diagnostics.append(
+                    f"Стояк {pipe.section_id}: в терминальном узле нельзя "
+                    "одновременно задавать проточный тройник и заглушённую "
+                    "прочистку."
+                )
         k1_risers.append(
             BuildingK1RiserProjectInput(
                 stack=stack,
@@ -901,12 +1071,26 @@ def resolve_wastewater_building_project_inputs(
             and "45" in row.type_mark
             and row.element_id.strip()
         )
+        incoming_edges = [
+            row for row in project.sewage.pipes
+            if _system(row.system) == "K2"
+            and _is_horizontal_building_edge(row)
+            and _section(row.to_node) == _section(pipe.section_id)
+        ]
+        outgoing_edges = [
+            row for row in project.sewage.pipes
+            if _system(row.system) == "K2"
+            and _is_horizontal_building_edge(row)
+            and _section(row.from_node) == _section(pipe.section_id)
+        ]
         lower_cleanouts = tuple(
             row.element_id.strip()
             for row in project.sewage.elements
             if _system(row.system) == "K2"
             and row.kind == "cleanout"
             and _section(row.connects_to) == _section(pipe.section_id)
+            and len(outgoing_edges) == 1
+            and _section(row.section_id) == _section(outgoing_edges[0].section_id)
             and row.service_direction in {"downstream", "both"}
             and row.service_fitting == "wye_45"
             and row.accessible
@@ -916,17 +1100,22 @@ def resolve_wastewater_building_project_inputs(
             row.element_id.strip()
             for row in project.sewage.elements
             if _system(row.system) == "K2"
-            and row.kind == "tee"
+            and row.kind in {"tee", "junction"}
             and _section(row.connects_to) == _section(pipe.section_id)
+            and len(outgoing_edges) == 1
+            and _section(row.section_id) == _section(outgoing_edges[0].section_id)
             and "45" in row.type_mark
+            and (
+                "без заглуш" in row.type_mark.casefold()
+                or "заглуш" not in row.type_mark.casefold()
+            )
             and row.element_id.strip()
         )
-        incoming_edges = [
-            row for row in project.sewage.pipes
-            if _system(row.system) == "K2"
-            and _is_horizontal_building_edge(row)
-            and _section(row.to_node) == _section(pipe.section_id)
-        ]
+        if len(outgoing_edges) != 1:
+            diagnostics.append(
+                f"Стояк {pipe.section_id}: нижний узел должен иметь ровно "
+                "одну выходящую горизонтальную магистраль."
+            )
         lower_revisions = tuple(
             row.element_id.strip()
             for row in project.sewage.elements
@@ -980,11 +1169,18 @@ def resolve_wastewater_building_project_inputs(
                     f"Для проточного нижнего поворота {pipe.section_id} "
                     "нужна одна доступная ревизия на стояке."
                 )
-        elif len(lower_cleanouts) != 1:
-            diagnostics.append(
-                f"Для начального нижнего поворота {pipe.section_id} "
-                "нужна одна прочистка с соосным заглушённым концом."
-            )
+        else:
+            if len(lower_cleanouts) != 1:
+                diagnostics.append(
+                    f"Для начального нижнего поворота {pipe.section_id} "
+                    "нужна одна прочистка с соосным заглушённым концом."
+                )
+            if lower_junctions:
+                diagnostics.append(
+                    f"Стояк {pipe.section_id}: в терминальном узле нельзя "
+                    "одновременно задавать проточный тройник и заглушённую "
+                    "прочистку."
+                )
         k2_risers.append(
             BuildingK2RiserProjectInput(
                 riser_id=pipe.section_id.strip(),
@@ -1055,24 +1251,11 @@ def resolve_wastewater_building_project_inputs(
         and row.kind == "transition"
         and row.element_id.strip()
     )
-    if (
-        k1_outlet is not None
-        and k1_collectors
-        and k1_collectors[-1].dn_mm != k1_outlet.dn_mm
-        and not k1_transition_ids
-    ):
-        diagnostics.append(
-            "На изменении DN магистрали/выпуска К1 не задан элемент перехода."
-        )
-    if (
-        k2_collectors
-        and k2_risers
-        and k2_risers[0].riser_dn_mm != k2_collectors[0].dn_mm
-        and not k2_transition_ids
-    ):
-        diagnostics.append(
-            "На изменении DN стояка/магистрали К2 не задан элемент перехода."
-        )
+    _validate_transition_topology(
+        project,
+        systems=("K1", "K2"),
+        diagnostics=diagnostics,
+    )
 
     _validate_outlet_reachability(
         system_mark="К1",

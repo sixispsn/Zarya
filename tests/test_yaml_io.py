@@ -132,6 +132,8 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
     )]
     req.sewage_outlets_count = 2
     req.wastewater_basement_floor_elevation_m = -3.2
+    req.wastewater_floor_height_m = 3.3
+    req.wastewater_roof_kind = "flat_accessible"
     req.wastewater_design_assignment_ref = "Задание, раздел 6"
     req.wastewater_survey_ref = "ИГИ, том 2"
     req.wastewater_service_life_years = 50

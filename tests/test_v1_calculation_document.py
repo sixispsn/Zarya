@@ -132,7 +132,9 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert "Подраздел 5.3 «Система водоотведения»" in package_text
     assert "Расчётные обоснования систем К1 и К2" in package_text
     normalized_package_text = package_text.replace(" ", "")
-    assert "Принципиальнаясхемавнутреннихсистемканализациииводоотведения" in normalized_package_text
+    # В этом unit fixture нет ни одного участка/элемента К1/К2. Комплект
+    # обязан приложить честный лист неполноты, а не дорисовать условную схему.
+    assert "ПРИНЦИПИАЛЬНАЯСХЕМАНЕСФОРМИРОВАНА" in normalized_package_text
     assert "ВедомостьусловныхграфическихобозначенийсистемК1,К2" in normalized_package_text
     assert "Спецификация оборудования" in package_text
     assert "материалов К1/К2" in package_text

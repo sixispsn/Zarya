@@ -54,8 +54,8 @@ from app.pz.wastewater_layout import audit_wastewater_layout
 from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
-    generate_wastewater_structure_pdf,
 )
+from app.pz.wastewater_scheme_service import generate_wastewater_scheme
 
 
 router = APIRouter(prefix="/wizard", tags=["architecture-import"])
@@ -1095,13 +1095,12 @@ def architecture_wastewater_scheme_pdf(import_id: str):
         evaluation = _ready_wastewater_evaluation(import_id)
         output_dir = os.path.join(_EXPORT_ROOT, import_id)
         os.makedirs(output_dir, mode=0o700, exist_ok=True)
-        output_path = os.path.join(output_dir, "Схема_К1_К2_новая.pdf")
-        generate_wastewater_structure_pdf(
-            evaluation["project"],
-            evaluation["layout"],
-            output_path,
-            scope=WastewaterStructureScope.FULL_FLOOR_STACK,
-        )
+        output_path = os.path.join(output_dir, "Схема_К1_К2.pdf")
+        # Экран архитектурной привязки оставляет SVG-контроль подложки, но
+        # кнопка PDF выпускает тот же канонический документ, что и комплект
+        # ПЗ. Так пользователь больше не получает «новую» схему только с
+        # этажами и иную схему из общего мастера.
+        generate_wastewater_scheme(evaluation["project"], output_path)
         os.chmod(output_path, 0o600)
     except FileNotFoundError:
         return PlainTextResponse("Сессия или проект не найдены.", status_code=404)
@@ -1110,7 +1109,7 @@ def architecture_wastewater_scheme_pdf(import_id: str):
     return FileResponse(
         output_path,
         media_type="application/pdf",
-        filename="Схема_К1_К2_новая.pdf",
+        filename="Схема_К1_К2.pdf",
         headers={"Cache-Control": "no-store"},
     )
 

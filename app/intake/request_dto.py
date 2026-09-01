@@ -38,6 +38,13 @@ FIRE_CATEGORIES = (
     "dormitory_f12",
 )
 ROOF_TYPES = ("not_set", "flat", "sloped")
+WASTEWATER_ROOF_KINDS = (
+    "unknown",
+    "flat_non_accessible",
+    "flat_accessible",
+    "pitched",
+    "collecting_vent_shaft",
+)
 CATERING_TYPES = ("none", "semi_finished", "raw", "school")
 APPLICABILITY_ANSWERS = ("unknown", "yes", "no")
 GREASE_TRAP_LOCATIONS = (
@@ -449,6 +456,11 @@ class IOS2Request:
     sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
     wastewater_basement_floor_elevation_m: Optional[float] = None
+    # Точные входы графического генератора. Высота этажа не выводится из
+    # общей высоты здания, а вид кровли не подменяется общим roof_type:
+    # оба значения влияют на отметки и высоту вентиляционной части стояка.
+    wastewater_floor_height_m: Optional[float] = None
+    wastewater_roof_kind: str = "unknown"
     wastewater_design_assignment_ref: str = ""
     wastewater_survey_ref: str = ""
     wastewater_service_life_years: Optional[int] = None
@@ -622,6 +634,16 @@ class IOS2Request:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
         if self.sewage_outlets_count < 0:
             p.append("sewage_outlets_count не может быть отрицательным")
+        if (
+            self.wastewater_floor_height_m is not None
+            and self.wastewater_floor_height_m <= 0
+        ):
+            p.append("wastewater_floor_height_m должен быть > 0")
+        if self.wastewater_roof_kind not in WASTEWATER_ROOF_KINDS:
+            p.append(
+                "wastewater_roof_kind должен быть одним из "
+                f"{WASTEWATER_ROOF_KINDS}"
+            )
         seen_sewage_risers = set()
         for i, riser in enumerate(self.sewage_risers):
             if not riser.riser_id or riser.riser_id in seen_sewage_risers:

@@ -35,6 +35,17 @@ def test_fact_registry_marks_missing_sewer_topology_as_stage_r():
     assert "ГОСТ Р 21.620-2023" in topology.normative_refs[0]
 
 
+def test_fact_registry_tracks_exact_scheme_geometry_separately():
+    intent = ProjectIntent.from_yaml(DEMO.read_text(encoding="utf-8"))
+    geometry = build_fact_registry(intent).get("sewage.scheme_geometry")
+
+    assert geometry.status == FactStatus.USER_DECLARED
+    assert geometry.value == {
+        "floor_height_m": 3.0,
+        "roof_kind": "flat_non_accessible",
+    }
+
+
 def test_fact_registry_is_json_ready():
     registry = build_fact_registry(
         ProjectIntent.from_yaml(DEMO.read_text(encoding="utf-8"))

@@ -64,6 +64,21 @@ def test_missing_ios3_topology_is_explicit_stage_r_not_invented():
     assert issue.fact_ids == ("sewage.topology",)
 
 
+def test_missing_exact_scheme_geometry_is_stage_r_not_a_silent_default():
+    intent = _intent()
+    intent.request.wastewater_floor_height_m = None
+    intent.request.wastewater_roof_kind = "unknown"
+
+    report = preflight_request(intent)
+
+    issue = next(
+        row for row in report.issues
+        if row.code == "stage_r.ios3_scheme_geometry_missing"
+    )
+    assert issue.level == PreflightLevel.STAGE_R
+    assert issue.fact_ids == ("sewage.scheme_geometry",)
+
+
 def test_question_registry_keeps_legacy_js_triggers_and_metadata():
     payload = questions_for_web()
     assert "sport_pool" in payload["group_showers_consumer_codes"]

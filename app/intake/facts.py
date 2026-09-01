@@ -219,4 +219,24 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
         systems=("K1", "K2", "K3"),
         normative_refs=("ГОСТ Р 21.620-2023, пп. 5.2.2–5.2.4",),
         required_for=("wastewater_scheme", "wastewater_specification"))
+    scheme_geometry_status = (
+        FactStatus.USER_DECLARED
+        if req.wastewater_floor_height_m is not None
+        and req.wastewater_roof_kind != "unknown"
+        else FactStatus.STAGE_R
+    )
+    add(
+        "sewage.scheme_geometry",
+        "sewage",
+        "Высота типового этажа и вид кровли для принципиальной схемы",
+        {
+            "floor_height_m": req.wastewater_floor_height_m,
+            "roof_kind": req.wastewater_roof_kind,
+        },
+        status=scheme_geometry_status,
+        source_kind="architecture_input",
+        systems=("K1", "K2"),
+        normative_refs=("ГОСТ Р 21.620-2023, пп. 5.2.2–5.2.4",),
+        required_for=("wastewater_scheme",),
+    )
     return registry

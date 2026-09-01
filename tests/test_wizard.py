@@ -103,6 +103,8 @@ def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
     assert 'name="sewer_internal_node1_id" value="К1-Ст1"' in html
     assert 'name="sewer_internal_node2_upstream" value="К1-М1"' in html
     assert 'name="wastewater_basement_floor_elevation_m" value="-3.2"' in html
+    assert 'name="wastewater_floor_height_m" value="3.0"' in html
+    assert '<option value="flat_non_accessible" selected>' in html
 
 
 def test_form_template_has_collapsed_wastewater_element_registry():

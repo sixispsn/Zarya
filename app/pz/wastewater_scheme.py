@@ -916,11 +916,6 @@ def build_wastewater_scheme(
             )
             return
 
-        cleanout_id = (
-            explicit_cleanout.element_id
-            if explicit_cleanout is not None
-            else f"{owner_id}-ПрНП"
-        )
         assembly = build_lower_turn_cleanout_assembly(
             assembly_id=f"{owner_id}-Узел-НП",
             system=riser.system,
@@ -928,15 +923,30 @@ def build_wastewater_scheme(
         )
         scale = lower_turn_scale
         origin_y = main_axis_y - lower_turn_dy
-        cleanout_source = (
-            "registry" if explicit_cleanout is not None else "generator-invariant"
-        )
         if explicit_cleanout is None:
             warnings.append(
-                f"{owner_id}: обязательная прочистка нижнего поворота показана "
-                "генератором, но не внесена в реестр элементов; подтвердите "
-                "позицию и доступность для спецификации"
+                f"{owner_id}: терминальная прочистка нижнего поворота не "
+                "внесена в реестр; генератор не имеет права дорисовывать её"
             )
+            lower_turn_svg = render_lower_turn_assembly_svg(
+                assembly,
+                pipe_labels=False,
+                annotations=False,
+                flow_direction=False,
+                visible_segment_ids=("riser", "diagonal"),
+                x=riser_axis,
+                y=origin_y,
+                scale=scale,
+                pipe_width=pipe_width,
+            )
+            G.append(
+                f'<g data-lower-turn-node="{escape(owner_id)}" '
+                'data-lower-node-kind="missing-terminal-cleanout" '
+                'data-cleanout-source="missing">'
+                f'{lower_turn_svg}</g>'
+            )
+            return
+        cleanout_id = explicit_cleanout.element_id
         lower_turn_svg = render_lower_turn_assembly_svg(
             assembly,
             pipe_labels=False,
@@ -954,7 +964,7 @@ def build_wastewater_scheme(
             f'<g data-lower-turn-node="{escape(owner_id)}" '
             'data-lower-node-kind="terminal-cleanout" '
             f'data-cleanout-element-id="{escape(cleanout_id)}" '
-            f'data-cleanout-source="{cleanout_source}">'
+            'data-cleanout-source="registry">'
             f'{lower_turn_svg}'
             '</g>'
         )

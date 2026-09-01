@@ -151,6 +151,25 @@ def preflight_request(value: IntentLike) -> PreflightReport:
             systems=("K1", "K2", "K3"),
             fact_ids=("sewage.topology",),
         ))
+    if (
+        req.sewer_pipes
+        and (
+            req.wastewater_floor_height_m is None
+            or req.wastewater_roof_kind == "unknown"
+        )
+    ):
+        issues.append(PreflightIssue(
+            level=PreflightLevel.STAGE_R,
+            code="stage_r.ios3_scheme_geometry_missing",
+            message=(
+                "Для выпуска принципиальной схемы К1/К2 требуются точная "
+                "высота типового этажа и подтверждённый вид кровли; общая "
+                "высота здания не используется как подстановка."
+            ),
+            reference="ГОСТ Р 21.620-2023, пп. 5.2.2–5.2.4",
+            systems=("K1", "K2"),
+            fact_ids=("sewage.scheme_geometry",),
+        ))
 
     return PreflightReport(
         issues=tuple(issues),
