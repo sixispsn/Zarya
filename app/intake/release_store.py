@@ -124,6 +124,7 @@ class ReleaseSnapshot:
     defense_payload: dict
     documents: list[dict]
     advisories_payload: list[dict]
+    preflight_payload: dict
     status: list[str]
     warnings: list[str]
 
@@ -167,6 +168,7 @@ class ReleaseStore:
         advisories: list[InputAdvisory],
         status: list[str],
         warnings: list[str],
+        preflight: dict | None = None,
     ) -> dict:
         destination = self._directory(release_id)
         if destination.exists():
@@ -188,6 +190,7 @@ class ReleaseStore:
                 "defense.json": defense_payload,
                 "documents.json": documents,
                 "advisories.json": [asdict(row) for row in advisories],
+                "preflight.json": preflight or {},
                 "state.json": {
                     "status": list(status),
                     "warnings": list(warnings),
@@ -284,6 +287,10 @@ class ReleaseStore:
             defense_payload=read_json("defense.json"),
             documents=read_json("documents.json"),
             advisories_payload=read_json("advisories.json"),
+            preflight_payload=(
+                read_json("preflight.json")
+                if (directory / "preflight.json").is_file() else {}
+            ),
             status=[str(row) for row in state.get("status", [])],
             warnings=[str(row) for row in state.get("warnings", [])],
         )

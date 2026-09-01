@@ -149,6 +149,10 @@
     </section>
 
     <section class="card full protocol-card">
+      {% if preflight %}<details class="protocol"><summary><span>Предвыпускной контроль исходных данных</span><span class="system-tag">{{ preflight.facts.facts|length }} фактов · {{ preflight.counts.stage_r }} границ стадии Р</span></summary>
+      <div class="protocol-body">
+        {% if preflight.issues %}<ul class="log warn">{% for item in preflight.issues %}<li><b>{{ item.level }}</b> · {{ item.message }}{% if item.reference %} ({{ item.reference }}){% endif %}</li>{% endfor %}</ul>{% else %}<ul class="log"><li>Замечаний к исходным данным нет.</li></ul>{% endif %}
+      </div></details>{% endif %}
       <details class="protocol"><summary><span>Протокол сборки</span><span class="system-tag">{{ status|length }} операций{% if warnings %} · {{ warnings|length }} замечание{% endif %}</span></summary>
       <div class="protocol-body"><ul class="log">{% for s in status %}<li>{{ s }}</li>{% endfor %}</ul>
       {% if warnings %}<ul class="log warn">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}</div></details>

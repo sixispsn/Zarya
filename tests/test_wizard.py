@@ -27,6 +27,8 @@ def test_wizard_included_in_app():
     paths = app.openapi()["paths"].keys()
     assert "/wizard" in paths
     assert "/wizard/design" in paths
+    assert "/api/project/preflight" in paths
+    assert "/api/project/preflight/questions" in paths
 
 
 def test_root_redirects_to_workspace():

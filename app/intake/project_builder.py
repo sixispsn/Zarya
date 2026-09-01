@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import List
 
-from app.intake.request_dto import IOS2Request
+from app.intake.project_intent import IntentLike, unwrap_project_intent
 from app.pz.project import (
     Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
@@ -55,8 +55,9 @@ _FIRE_CATEGORY_MAP = {
 }
 
 
-def build_project(req: IOS2Request) -> Project:
-    """IOS2Request → Project. Валидация намерения → маппинг → сборка."""
+def build_project(intent: IntentLike) -> Project:
+    """ProjectIntent/IOS2Request → Project без изменения рабочего маппинга."""
+    req = unwrap_project_intent(intent)
     problems = req.validate()
     if problems:
         raise RequestValidationError(problems)

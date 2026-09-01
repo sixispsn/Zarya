@@ -6,7 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import fire, insulation, irrigation, pumps, storm, water_demand, water_meters
+from app.api import (
+    fire,
+    insulation,
+    irrigation,
+    preflight,
+    pumps,
+    storm,
+    water_demand,
+    water_meters,
+)
 from app.web import architecture_import, passport, reference_analysis, wizard
 
 app = FastAPI(
@@ -36,6 +45,7 @@ app.include_router(reference_analysis.router)
 app.include_router(passport.router)
 app.include_router(insulation.router)
 app.include_router(pumps.router)
+app.include_router(preflight.router)
 app.mount(
     "/static",
     StaticFiles(directory=str(Path(__file__).parent / "web" / "static")),

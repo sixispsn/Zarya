@@ -39,7 +39,8 @@ from app.intake.request_dto import (
 )
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
-from app.intake.applicability import applicability_rules_for_web
+from app.intake.preflight import preflight_request
+from app.intake.questions import questions_for_web
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.intake.passport_store import PassportStore
@@ -120,7 +121,7 @@ def _form_context(**values):
     return {
         "consumer_norms": _CONSUMER_NORMS,
         "storm_cities": _STORM_CITIES,
-        "applicability_rules": applicability_rules_for_web(),
+        "applicability_rules": questions_for_web(),
         "advisories": [],
         "example_mode": False,
         **values,
@@ -228,6 +229,7 @@ def _restore_run(run_id: str) -> dict:
         "passport_url": snapshot.passport_url,
         "documents": snapshot.documents,
         "release_id": run_id,
+        "preflight": snapshot.preflight_payload,
     }
     _RUNS[run_id] = run
     return run
@@ -844,9 +846,18 @@ async def wizard_design(request: Request):
         ),
         consumers=consumers,
     )
+    preflight = preflight_request(req)
     advisories = review_request(req)
 
     pid = fv("project_id") or None
+    if not preflight.can_calculate:
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
+            "errors": [item.message for item in preflight.blockers],
+            "advisories": advisories,
+            "prefill": req,
+            "project_id": pid,
+            "preflight": preflight,
+        }))
     try:
         project = build_project(req)
     except RequestValidationError as e:
@@ -909,6 +920,7 @@ async def wizard_design(request: Request):
             advisories=advisories,
             status=bundle.status,
             warnings=bundle.warnings,
+            preflight=preflight.to_dict(),
         )
     except Exception as exc:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
@@ -929,6 +941,7 @@ async def wizard_design(request: Request):
         "release_manifest": release_manifest,
         "release_id": run_id,
         "documents": documents,
+        "preflight": preflight.to_dict(),
     }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -955,6 +968,7 @@ def wizard_result(request: Request, run_id: str):
         "passport_url": run.get("passport_url"),
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
+        "preflight": run.get("preflight", {}),
         "proof": proof_graph,
         "impact": impact_form_context(run["request"]),
         "warnings": b.warnings + [

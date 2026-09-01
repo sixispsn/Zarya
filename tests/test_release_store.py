@@ -6,6 +6,7 @@ from app.intake.release_store import (
     ReleaseStore,
 )
 from app.intake.yaml_io import load_request
+from app.intake.preflight import preflight_request
 from app.pz.commission import CommissionReport, PassportItem
 from app.pz.proof import ProofDecision, ProofGraph, ProofStep
 
@@ -57,6 +58,7 @@ def _publish(store: ReleaseStore):
         advisories=[InputAdvisory("warning", "x", "Проверить", "СП")],
         status=["готово"],
         warnings=["уточнить"],
+        preflight=preflight_request(load_request(YAML)).to_dict(),
     )
 
 
@@ -70,6 +72,7 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     assert snapshot.advisories()[0].reference == "СП"
     assert snapshot.documents[0]["name"] == "ПЗ.pdf"
     assert snapshot.status == ["готово"]
+    assert snapshot.preflight_payload["can_release"] is True
 
 
 def test_release_is_append_only(tmp_path):
@@ -141,3 +144,5 @@ def test_wizard_restores_release_after_memory_cache_is_cleared(
     assert restored["bundle"].project.building.floors_above == 9
     assert restored["proof_graph"].project_fingerprint == graph.project_fingerprint
     assert restored["documents"][0]["name"] == "ПЗ.pdf"
+    # Вызов publish без отчёта сохраняет совместимое пустое значение.
+    assert restored["preflight"] == {}
