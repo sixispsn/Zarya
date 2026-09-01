@@ -113,6 +113,19 @@ class BuildingPipeProjectInput:
 
 
 @dataclass(frozen=True)
+class BuildingTransitionProjectInput:
+    """One validated DN change tied to a real directed graph node."""
+
+    system: str
+    element_id: str
+    section_id: str
+    node_id: str
+    upstream_dn_mm: int
+    downstream_dn_mm: int
+    placement: str
+
+
+@dataclass(frozen=True)
 class BuildingK1RiserProjectInput:
     """One fully resolved K1 riser and its declared revision floors."""
 
@@ -162,10 +175,12 @@ class WastewaterBuildingProjectInputs:
     k1_collectors: tuple[BuildingPipeProjectInput, ...]
     k1_outlet: BuildingPipeProjectInput | None
     k1_transition_element_ids: tuple[str, ...]
+    k1_transitions: tuple[BuildingTransitionProjectInput, ...]
     k2_risers: tuple[BuildingK2RiserProjectInput, ...]
     k2_collectors: tuple[BuildingPipeProjectInput, ...]
     k2_outlet: BuildingPipeProjectInput | None
     k2_transition_element_ids: tuple[str, ...]
+    k2_transitions: tuple[BuildingTransitionProjectInput, ...]
     diagnostics: tuple[str, ...]
 
     @property
@@ -683,12 +698,83 @@ def _validate_outlet_reachability(
             current = _section(candidates[0].to_node)
 
 
+def _order_linear_system_chain(
+    *,
+    system_mark: str,
+    riser_ids: tuple[str, ...],
+    collectors: tuple[BuildingPipeProjectInput, ...],
+    outlet: BuildingPipeProjectInput | None,
+    diagnostics: list[str],
+) -> tuple[tuple[str, ...], tuple[BuildingPipeProjectInput, ...]]:
+    """Return the confirmed start-to-outlet order for a linear building graph."""
+    if not riser_ids or outlet is None:
+        return riser_ids, collectors
+
+    riser_by_key = {_section(row): row for row in riser_ids}
+    incoming_nodes = {_section(row.to_node) for row in collectors}
+    starts = [row for row in riser_ids if _section(row) not in incoming_nodes]
+    if len(starts) != 1:
+        diagnostics.append(
+            f"{system_mark}: линейная схема должна иметь ровно один начальный "
+            "стояк без входящей горизонтальной магистрали."
+        )
+        return riser_ids, collectors
+
+    outgoing: dict[str, list[BuildingPipeProjectInput]] = {}
+    for edge in collectors:
+        outgoing.setdefault(_section(edge.from_node), []).append(edge)
+
+    ordered_ids: list[str] = []
+    ordered_collectors: list[BuildingPipeProjectInput] = []
+    visited: set[str] = set()
+    current = _section(starts[0])
+    while True:
+        if current in visited:
+            diagnostics.append(f"{system_mark}: цикл в линейной цепи стояков.")
+            return riser_ids, collectors
+        visited.add(current)
+        ordered_ids.append(riser_by_key[current])
+        edges = outgoing.get(current, [])
+        if not edges:
+            if _section(outlet.from_node) != current:
+                diagnostics.append(
+                    f"{system_mark}: последний стояк цепи не связан с выпуском "
+                    f"{outlet.section_id}."
+                )
+                return riser_ids, collectors
+            break
+        if len(edges) != 1:
+            diagnostics.append(
+                f"{system_mark}: от стояка {riser_by_key[current]} должна "
+                "выходить ровно одна горизонтальная магистраль."
+            )
+            return riser_ids, collectors
+        edge = edges[0]
+        next_key = _section(edge.to_node)
+        if next_key not in riser_by_key:
+            diagnostics.append(
+                f"{system_mark}: магистраль {edge.section_id} должна завершаться "
+                "на следующем стояке линейной цепи."
+            )
+            return riser_ids, collectors
+        ordered_collectors.append(edge)
+        current = next_key
+
+    if len(ordered_ids) != len(riser_ids) or len(ordered_collectors) != len(collectors):
+        diagnostics.append(
+            f"{system_mark}: не все стояки и магистрали входят в единую "
+            "линейную цепь до выпуска."
+        )
+        return riser_ids, collectors
+    return tuple(ordered_ids), tuple(ordered_collectors)
+
+
 def _validate_transition_topology(
     project: Project,
     *,
     systems: tuple[str, ...],
     diagnostics: list[str],
-) -> None:
+) -> tuple[BuildingTransitionProjectInput, ...]:
     """Проверить каждый переход относительно реального направления потока.
 
     ``section_id`` перехода связывает его с выходящим участком нового DN, а
@@ -713,6 +799,7 @@ def _validate_transition_topology(
         and row.element_id.strip()
     ]
     consumed: set[str] = set()
+    resolved: list[BuildingTransitionProjectInput] = []
 
     for outgoing in horizontal:
         system = _system(outgoing.system)
@@ -770,6 +857,21 @@ def _validate_transition_topology(
             continue
 
         row = rows[0]
+        resolved.append(
+            BuildingTransitionProjectInput(
+                system=system,
+                element_id=row.element_id.strip(),
+                section_id=outgoing.section_id.strip(),
+                node_id=outgoing.from_node.strip(),
+                upstream_dn_mm=int(upstream_dn),
+                downstream_dn_mm=int(downstream_dn),
+                placement=(
+                    "upstream-before-junction"
+                    if incoming
+                    else "downstream-after-terminal-turn"
+                ),
+            )
+        )
         declared_dns = [int(value) for value in re.findall(r"\d+", row.type_mark)]
         if row.dn_mm != downstream_dn or declared_dns[:2] != [
             upstream_dn,
@@ -807,6 +909,7 @@ def _validate_transition_topology(
                 f"{row.element_id}: переход не привязан к подтверждённому "
                 "изменению DN по направлению потока."
             )
+    return tuple(resolved)
 
 
 def resolve_wastewater_building_project_inputs(
@@ -1011,6 +1114,18 @@ def resolve_wastewater_building_project_inputs(
             "Количество подтверждённых магистралей К1 между стояками не "
             "соответствует линейной схеме здания."
         )
+    k1_ids, k1_collectors = _order_linear_system_chain(
+        system_mark="К1",
+        riser_ids=k1_ids,
+        collectors=k1_collectors,
+        outlet=k1_outlet,
+        diagnostics=diagnostics,
+    )
+    k1_riser_by_id = {
+        _section(row.stack.riser_id): row for row in k1_risers
+    }
+    if all(_section(row) in k1_riser_by_id for row in k1_ids):
+        k1_risers = [k1_riser_by_id[_section(row)] for row in k1_ids]
 
     k2_riser_pipes = [
         row
@@ -1236,26 +1351,26 @@ def resolve_wastewater_building_project_inputs(
             "Количество подтверждённых магистралей К2 между стояками не "
             "соответствует линейной схеме здания."
         )
+    k2_ids, k2_collectors = _order_linear_system_chain(
+        system_mark="К2",
+        riser_ids=k2_ids,
+        collectors=k2_collectors,
+        outlet=k2_outlet,
+        diagnostics=diagnostics,
+    )
+    k2_riser_by_id = {_section(row.riser_id): row for row in k2_risers}
+    if all(_section(row) in k2_riser_by_id for row in k2_ids):
+        k2_risers = [k2_riser_by_id[_section(row)] for row in k2_ids]
 
-    k1_transition_ids = tuple(
-        row.element_id.strip()
-        for row in project.sewage.elements
-        if _system(row.system) == "K1"
-        and row.kind == "transition"
-        and row.element_id.strip()
-    )
-    k2_transition_ids = tuple(
-        row.element_id.strip()
-        for row in project.sewage.elements
-        if _system(row.system) == "K2"
-        and row.kind == "transition"
-        and row.element_id.strip()
-    )
-    _validate_transition_topology(
+    transitions = _validate_transition_topology(
         project,
         systems=("K1", "K2"),
         diagnostics=diagnostics,
     )
+    k1_transitions = tuple(row for row in transitions if row.system == "K1")
+    k2_transitions = tuple(row for row in transitions if row.system == "K2")
+    k1_transition_ids = tuple(row.element_id for row in k1_transitions)
+    k2_transition_ids = tuple(row.element_id for row in k2_transitions)
 
     _validate_outlet_reachability(
         system_mark="К1",
@@ -1278,9 +1393,11 @@ def resolve_wastewater_building_project_inputs(
         k1_collectors=k1_collectors,
         k1_outlet=k1_outlet,
         k1_transition_element_ids=k1_transition_ids,
+        k1_transitions=k1_transitions,
         k2_risers=tuple(k2_risers),
         k2_collectors=k2_collectors,
         k2_outlet=k2_outlet,
         k2_transition_element_ids=k2_transition_ids,
+        k2_transitions=k2_transitions,
         diagnostics=tuple(dict.fromkeys(diagnostics)),
     )

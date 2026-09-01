@@ -1,7 +1,7 @@
 """Единая production-точка выпуска принципиальной схемы К1/К2.
 
 Сервис намеренно не переключается на старый рендерер и не достраивает
-отсутствующие элементы. Полный двухлистовый PDF выпускается только из
+отсутствующие элементы. Полный многостраничный PDF выпускается только из
 прошедшего топологическую проверку реестра. При нехватке исходных данных
 создаётся отдельный лист статуса без труб и фасонных частей.
 """
@@ -53,20 +53,10 @@ def assess_wastewater_scheme_readiness(
         reasons.append(
             "Не подтверждён вид и доступность кровли для выпуска вентиляции."
         )
-    if len(inputs.k1_risers) > 2:
-        reasons.append(
-            "Текущий формат двухлистовой схемы поддерживает не более двух "
-            "стояков К1 на одном комплекте."
-        )
-    if len(inputs.k2_risers) > 2:
-        reasons.append(
-            "Текущий формат двухлистовой схемы поддерживает не более двух "
-            "стояков К2 на одном комплекте."
-        )
     if any(row.system.strip().upper() == "K3" for row in project.sewage.pipes):
         reasons.append(
             "В проекте есть К3; её схема требует отдельного подтверждённого "
-            "листа и пока не объединяется с двухлистовой К1/К2."
+            "листа и пока не объединяется с комплектом К1/К2."
         )
     unique = tuple(dict.fromkeys(reason for reason in reasons if reason))
     return WastewaterSchemeReadiness(
@@ -108,7 +98,7 @@ def _status_svg(project: Project, reasons: tuple[str, ...]) -> str:
         f'{escape(cipher)}</text>'
         + text_rows
         + '<text x="56" y="548" font-size="11">После заполнения реестра '
-        'будет выпущен двухлистовый векторный PDF: этажи и нижние узлы.</text>'
+        'будет выпущен многостраничный векторный PDF: этажи и нижние узлы.</text>'
         '<text x="56" y="571" font-size="10">ГОСТ Р 21.620-2023 · '
         'внутренние К1/К2 · без подмены стадии Р</text>'
         '</g></svg>'
@@ -185,5 +175,5 @@ def generate_wastewater_scheme(
     return WastewaterSchemeGenerationResult(
         output_path=path,
         ready=True,
-        backend="registry-building-v1",
+        backend="registry-building-v2-paginated",
     )

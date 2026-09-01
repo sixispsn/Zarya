@@ -27,7 +27,10 @@ from app.pz.wastewater_drafting import (
 )
 from app.pz.wastewater_floor_drafting import render_typical_floor_assembly_svg
 from app.pz.wastewater_project_inputs import (
+    BuildingK1RiserProjectInput,
+    BuildingK2RiserProjectInput,
     BuildingPipeProjectInput,
+    BuildingTransitionProjectInput,
     WastewaterBuildingProjectInputs,
     resolve_wastewater_building_project_inputs,
 )
@@ -55,6 +58,22 @@ _FRAME_LEFT = 20.0 * _SHEET_SCALE
 _FRAME_TOP = 5.0 * _SHEET_SCALE
 _FRAME_RIGHT = 2800.0 - 5.0 * _SHEET_SCALE
 _FRAME_BOTTOM = 1980.0 - 5.0 * _SHEET_SCALE
+_FLOOR_K1_PAGE_CAPACITY = 2
+_FLOOR_K2_PAGE_CAPACITY = 2
+_BASEMENT_RISER_PAGE_CAPACITY = 4
+
+
+def _chunks(values: tuple, size: int) -> tuple[tuple, ...]:
+    return tuple(values[index:index + size] for index in range(0, len(values), size))
+
+
+def _spread_positions(count: int, start: float, end: float) -> tuple[float, ...]:
+    if count <= 0:
+        return ()
+    if count == 1:
+        return ((start + end) / 2.0,)
+    step = (end - start) / (count - 1)
+    return tuple(start + index * step for index in range(count))
 
 
 def _short(value: str, limit: int) -> str:
@@ -69,7 +88,7 @@ def _title_block_svg(
     sheet_total: int,
     title: str,
 ) -> str:
-    """Основная надпись формы 3 в координатах двухлистового A1."""
+    """Основная надпись формы 3 в координатах листа A1."""
     doc = document
     scale = _SHEET_SCALE
     x0 = _FRAME_RIGHT - 185.0 * scale
@@ -177,10 +196,6 @@ class WastewaterBuildingAssembly:
         if not self.k1_stacks:
             errors.append("combined sheet needs at least one K1 stack")
             return errors
-        if len(self.k1_stacks) > 2:
-            errors.append("current A1 building sheet supports at most two K1 stacks")
-        if len(self.project_inputs.k2_risers) > 2:
-            errors.append("current A1 building sheet supports at most two K2 stacks")
         if len(self.k1_stacks) != len(self.project_inputs.k1_risers):
             errors.append("K1 semantic stacks differ from the registry selection")
         expected_displayed = self.k1_stacks[0].displayed_floor_numbers
@@ -395,6 +410,15 @@ def _floor_origins(floors: tuple[int, ...]) -> dict[int, float]:
 
 def build_wastewater_building_floors_svg(
     assembly: WastewaterBuildingAssembly,
+    *,
+    k1_stacks: tuple[WastewaterStackAssembly, ...] | None = None,
+    k2_risers: tuple[BuildingK2RiserProjectInput, ...] | None = None,
+    sheet_no: int = 1,
+    sheet_total: int = 3,
+    fragment_index: int = 1,
+    fragment_total: int = 1,
+    basement_first_sheet_no: int = 2,
+    basement_sheet_by_riser_id: dict[str, int] | None = None,
 ) -> str:
     """Render the shared roof and characteristic-floor sheet."""
     errors = assembly.validate()
@@ -404,17 +428,31 @@ def build_wastewater_building_floors_svg(
     margin = 50
     floors = assembly.displayed_floor_numbers
     origins = _floor_origins(floors)
+    selected_k1 = assembly.k1_stacks if k1_stacks is None else k1_stacks
+    selected_k2 = (
+        assembly.project_inputs.k2_risers if k2_risers is None else k2_risers
+    )
+    if len(selected_k1) > _FLOOR_K1_PAGE_CAPACITY:
+        raise ValueError("floor fragment contains too many K1 stacks")
+    if len(selected_k2) > _FLOOR_K2_PAGE_CAPACITY:
+        raise ValueError("floor fragment contains too many K2 stacks")
     # Выноска начальной этажной прочистки уходит влево от сборки; оси
     # сдвинуты внутрь рабочей рамки, чтобы полка и текст не пересекали поле
     # подшивки формы А1.
-    k1_origins_x = (160.0, 950.0)
-    k2_xs = (2110.0, 2400.0)
+    k1_origins_x = (
+        (550.0,) if len(selected_k1) == 1 else (160.0, 950.0)
+    )[:len(selected_k1)]
+    k2_xs = (
+        (2260.0,) if len(selected_k2) == 1 else (2110.0, 2400.0)
+    )[:len(selected_k2)]
     scale = 1.0
     roof_y = 220.0
     bottom_y = 1660.0
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        'viewBox="0 0 2800 1980">',
+        f'viewBox="0 0 2800 1980" data-sheet-role="floors" '
+        f'data-fragment-index="{fragment_index}" '
+        f'data-fragment-total="{fragment_total}">',
         '<rect width="2800" height="1980" fill="white"/>',
         f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
@@ -425,7 +463,8 @@ def build_wastewater_building_floors_svg(
         'канализации и водоотведения. Надземная часть</text>',
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
         f'font-size="16" fill="{GRAY}">Этажей: {assembly.project_inputs.floors_above}; '
-        'характерные этажи; самотечная К1 и внутренний водосток К2</text>',
+        f'фрагмент {fragment_index}/{fragment_total}; характерные этажи; '
+        'самотечная К1 и внутренний водосток К2</text>',
         f'<line data-architecture="roof" x1="{margin+30}" y1="{roof_y}" '
         f'x2="{width-margin-30}" y2="{roof_y}" stroke="#777" stroke-width="2"/>',
         f'<text x="{margin+38}" y="{roof_y-18}" font-family="{FONT}" '
@@ -447,7 +486,7 @@ def build_wastewater_building_floors_svg(
             )
         )
 
-    for stack_index, stack in enumerate(assembly.k1_stacks):
+    for stack_index, stack in enumerate(selected_k1):
         origin_x = k1_origins_x[stack_index]
         riser_x = origin_x + stack.floor(floors[0]).port("riser_join").point.x_mm
         for floor_no in floors:
@@ -532,14 +571,19 @@ def build_wastewater_building_floors_svg(
             )
         )
         body.append(
-            f'<text x="{riser_x+20:.1f}" y="{bottom_y-12:.1f}" '
+            # Каждый стояк ссылается на тот подвальный фрагмент, где показан
+            # его нижний узел; при одном фрагменте это обычный лист 2.
+            f'<text data-continuation-riser="{escape(stack.riser_id)}" '
+            f'data-target-sheet="{(basement_sheet_by_riser_id or {}).get(stack.riser_id, basement_first_sheet_no)}" '
+            f'x="{riser_x+20:.1f}" y="{bottom_y-12:.1f}" '
             f'font-family="{FONT}" font-size="13">{escape(stack.riser_id)}; '
-            'продолжение на листе 2</text>'
+            f'продолжение на листе '
+            f'{(basement_sheet_by_riser_id or {}).get(stack.riser_id, basement_first_sheet_no)}</text>'
         )
 
     first_origin = origins[floors[0]]
     last_origin = origins[floors[-1]]
-    for index, riser in enumerate(assembly.project_inputs.k2_risers):
+    for index, riser in enumerate(selected_k2):
         x = k2_xs[index]
         body.append(
             _line_with_label(
@@ -641,9 +685,12 @@ def build_wastewater_building_floors_svg(
                 '</g>',
             ))
         body.append(
-            f'<text x="{x+20:.1f}" y="{bottom_y-12:.1f}" '
+            f'<text data-continuation-riser="{escape(riser.riser_id)}" '
+            f'data-target-sheet="{(basement_sheet_by_riser_id or {}).get(riser.riser_id, basement_first_sheet_no)}" '
+            f'x="{x+20:.1f}" y="{bottom_y-12:.1f}" '
             f'font-family="{FONT}" font-size="13">{escape(riser.riser_id)}; '
-            'продолжение на листе 2</text>'
+            f'продолжение на листе '
+            f'{(basement_sheet_by_riser_id or {}).get(riser.riser_id, basement_first_sheet_no)}</text>'
         )
 
     body.extend(
@@ -655,12 +702,16 @@ def build_wastewater_building_floors_svg(
             'К2 не соединяется с К1.</text>',
             f'<text x="{margin+38}" y="{bottom_y+112:.1f}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Графический язык — приложение В '
-            'ГОСТ Р 21.620-2023; контрольная сборка генератора.</text>',
+            'ГОСТ Р 21.620-2023; элементы получены из реестра проекта.</text>',
             _title_block_svg(
                 assembly.document,
-                sheet_no=1,
-                sheet_total=3,
-                title="Принципиальная схема. Надземная часть",
+                sheet_no=sheet_no,
+                sheet_total=sheet_total,
+                title=(
+                    "Принципиальная схема. Надземная часть"
+                    if fragment_total == 1
+                    else f"Надземная часть. Фрагмент {fragment_index}"
+                ),
             ),
             "</svg>",
         )
@@ -773,7 +824,7 @@ def _pipe_caption(
     )
 
 
-def build_wastewater_building_basement_svg(
+def _build_two_riser_basement_reference_svg(
     assembly: WastewaterBuildingAssembly,
 ) -> str:
     """Render the confirmed internal basement topology and both outlets."""
@@ -1139,29 +1190,539 @@ def build_wastewater_building_basement_svg(
     return "".join(body)
 
 
+def _riser_id(
+    row: BuildingK1RiserProjectInput | BuildingK2RiserProjectInput,
+) -> str:
+    if isinstance(row, BuildingK1RiserProjectInput):
+        return row.stack.riser_id
+    return row.riser_id
+
+
+def _riser_dn(
+    row: BuildingK1RiserProjectInput | BuildingK2RiserProjectInput,
+) -> int:
+    if isinstance(row, BuildingK1RiserProjectInput):
+        return int(row.stack.riser_dn_mm or 0)
+    return row.riser_dn_mm
+
+
+def _transition_for_node(
+    transitions: tuple[BuildingTransitionProjectInput, ...],
+    *,
+    node_id: str,
+    section_id: str,
+) -> BuildingTransitionProjectInput | None:
+    key = " ".join(node_id.strip().casefold().split())
+    section_key = " ".join(section_id.strip().casefold().split())
+    return next(
+        (
+            row for row in transitions
+            if " ".join(row.node_id.strip().casefold().split()) == key
+            and " ".join(row.section_id.strip().casefold().split()) == section_key
+        ),
+        None,
+    )
+
+
+def _render_basement_system_fragment(
+    *,
+    body: list[str],
+    system: str,
+    risers: tuple[BuildingK1RiserProjectInput | BuildingK2RiserProjectInput, ...],
+    collectors: tuple[BuildingPipeProjectInput, ...],
+    outlet: BuildingPipeProjectInput,
+    transitions: tuple[BuildingTransitionProjectInput, ...],
+    start_index: int,
+    end_index: int,
+    base_y: float,
+    first_floor_y: float,
+    wall_left: float,
+    wall_right: float,
+    previous_sheet_no: int | None,
+    next_sheet_no: int | None,
+) -> None:
+    """Draw one paginated fragment of a confirmed linear system chain."""
+    fragment = risers[start_index:end_index]
+    if not fragment:
+        return
+    xs = _spread_positions(len(fragment), 470.0, 2090.0)
+    turn_scale = 2.0
+    turn_offset_x = 38.0 * turn_scale
+    turn_offset_y = 76.0 * turn_scale
+    node_ys = [base_y]
+    for local_index in range(1, len(fragment)):
+        edge = collectors[start_index + local_index - 1]
+        dx = xs[local_index] - xs[local_index - 1]
+        drop = max(2.0, min(12.0, dx * float(edge.slope_per_mille or 0) / 1000.0))
+        node_ys.append(node_ys[-1] + drop)
+    joins = tuple((x + turn_offset_x, y) for x, y in zip(xs, node_ys))
+
+    range_label = (
+        f"стояк {start_index+1}"
+        if end_index - start_index == 1
+        else f"стояки {start_index+1}-{end_index}"
+    )
+    body.append(
+        f'<text x="{wall_left+45:.1f}" y="{base_y-205:.1f}" '
+        f'font-family="{FONT}" font-size="20" font-weight="bold">'
+        f'{_system_mark(system)} · {range_label}</text>'
+    )
+
+    incoming_stub: tuple[tuple[float, float], tuple[float, float]] | None = None
+    if start_index > 0:
+        incoming = collectors[start_index - 1]
+        end = joins[0]
+        start = (wall_left + 78.0, end[1] - 5.0)
+        incoming_stub = (start, end)
+        body.append(
+            _line_with_label(
+                line_id=incoming.section_id,
+                system=system,
+                dn_mm=incoming.dn_mm,
+                start=start,
+                end=end,
+                position=0.42,
+            )
+        )
+        body.append(
+            _slope_sign_svg(
+                marker_id=f"{incoming.section_id}-slope-in-{start_index}",
+                value_per_mille=float(incoming.slope_per_mille or 0),
+                start=start,
+                end=end,
+                position=0.38,
+            )
+        )
+        body.append(
+            f'<text x="{start[0]:.1f}" y="{start[1]-34:.1f}" '
+            f'font-family="{FONT}" font-size="12">с листа '
+            f'{previous_sheet_no or "—"}</text>'
+        )
+
+    for local_index, riser in enumerate(fragment):
+        global_index = start_index + local_index
+        x = xs[local_index]
+        main_y = node_ys[local_index]
+        turn_origin_y = main_y - turn_offset_y
+        riser_id = _riser_id(riser)
+        dn = _riser_dn(riser)
+        body.append(
+            _line_with_label(
+                line_id=f"{riser_id}-basement-riser",
+                system=system,
+                dn_mm=dn,
+                start=(x, first_floor_y),
+                end=(x, turn_origin_y),
+                position=0.52,
+            )
+        )
+        if riser.lower_cleanout_element_ids:
+            cleanout_id = riser.lower_cleanout_element_ids[0]
+            node = build_lower_turn_cleanout_assembly(
+                assembly_id=f"{riser_id}-Узел-НП",
+                system=system,
+                dn_mm=dn,
+            )
+            body.append(
+                f'<g data-basement-cleanout="{escape(cleanout_id)}" '
+                'data-cleanout-axis="collinear">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal", "cleanout_access"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=turn_scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
+            body.append(
+                f'<text x="{x-12:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="11">Прочистка '
+                f'{escape(cleanout_id)}; соосно</text>'
+            )
+        else:
+            junction_id = riser.lower_junction_element_ids[0]
+            node = build_lower_turn_through_junction_assembly(
+                assembly_id=f"{riser_id}-Узел-НП-Проточный",
+                system=system,
+                dn_mm=dn,
+            )
+            body.append(
+                f'<g data-basement-through-junction="{escape(junction_id)}" '
+                'data-through-axis="open">'
+                + render_lower_turn_assembly_svg(
+                    node,
+                    pipe_labels=False,
+                    annotations=False,
+                    flow_direction=False,
+                    visible_segment_ids=("riser", "diagonal"),
+                    x=x,
+                    y=turn_origin_y,
+                    scale=turn_scale,
+                    pipe_width=4.0,
+                )
+                + '</g>'
+            )
+
+        outgoing = collectors[global_index] if global_index < len(collectors) else outlet
+        outgoing_start = joins[local_index]
+        if local_index + 1 < len(fragment):
+            outgoing_end = joins[local_index + 1]
+        elif global_index < len(collectors):
+            outgoing_end = (wall_right - 80.0, outgoing_start[1] + 5.0)
+        else:
+            horizontal = 2660.0 - outgoing_start[0]
+            drop = max(
+                2.0,
+                min(14.0, horizontal * float(outgoing.slope_per_mille or 0) / 1000.0),
+            )
+            outgoing_end = (2660.0, outgoing_start[1] + drop)
+
+        body.append(
+            _line_with_label(
+                line_id=outgoing.section_id,
+                system=system,
+                dn_mm=outgoing.dn_mm,
+                start=outgoing_start,
+                end=outgoing_end,
+                position=0.52,
+            )
+        )
+        body.append(
+            _slope_sign_svg(
+                marker_id=f"{outgoing.section_id}-slope-{global_index}",
+                value_per_mille=float(outgoing.slope_per_mille or 0),
+                start=outgoing_start,
+                end=outgoing_end,
+                position=0.55,
+            )
+        )
+
+        transition = _transition_for_node(
+            transitions,
+            node_id=riser_id,
+            section_id=outgoing.section_id,
+        )
+        if transition is not None:
+            if transition.placement == "upstream-before-junction":
+                if local_index > 0:
+                    transition_start = joins[local_index - 1]
+                    transition_end = joins[local_index]
+                elif incoming_stub is not None:
+                    transition_start, transition_end = incoming_stub
+                else:
+                    raise ValueError(
+                        f"{transition.element_id}: no incoming graphic segment"
+                    )
+                position = 0.86
+            else:
+                transition_start, transition_end = outgoing_start, outgoing_end
+                position = 0.18
+            transition_x = transition_start[0] + (
+                transition_end[0] - transition_start[0]
+            ) * position
+            transition_y = transition_start[1] + (
+                transition_end[1] - transition_start[1]
+            ) * position
+            body.append(
+                _transition_svg(
+                    element_id=transition.element_id,
+                    x=transition_x,
+                    y=transition_y,
+                    upstream_dn=transition.upstream_dn_mm,
+                    downstream_dn=transition.downstream_dn_mm,
+                    placement=transition.placement,
+                )
+            )
+
+        if global_index < len(collectors) and local_index == len(fragment) - 1:
+            body.append(
+                f'<text x="{outgoing_end[0]-12:.1f}" y="{outgoing_end[1]-66:.1f}" '
+                f'text-anchor="end" font-family="{FONT}" font-size="12">'
+                f'продолжение на листе {next_sheet_no or "—"}</text>'
+            )
+        if global_index == len(risers) - 1:
+            body.append(
+                f'<path data-flow-direction="{escape(outlet.section_id)}" '
+                f'd="M{outgoing_end[0]-28:.1f},{outgoing_end[1]-12:.1f} '
+                f'L{outgoing_end[0]:.1f},{outgoing_end[1]:.1f} '
+                f'L{outgoing_end[0]-29:.1f},{outgoing_end[1]+11:.1f} Z" '
+                f'fill="{BLACK}"/>'
+            )
+            body.append(
+                f'<text x="{outgoing_end[0]-185:.1f}" y="{outgoing_end[1]+52:.1f}" '
+                f'font-family="{FONT}" font-size="13" font-weight="bold">'
+                f'Выпуск {escape(outlet.section_id)} DN{outlet.dn_mm} '
+                'за грань здания</text>'
+            )
+
+
+def build_wastewater_building_basement_fragment_svg(
+    assembly: WastewaterBuildingAssembly,
+    *,
+    k1_start_index: int,
+    k1_end_index: int,
+    k2_start_index: int,
+    k2_end_index: int,
+    sheet_no: int,
+    sheet_total: int,
+    fragment_index: int,
+    fragment_total: int,
+) -> str:
+    """Render one A1 fragment of the complete lower-node chain."""
+    errors = assembly.validate()
+    if errors:
+        raise ValueError("cannot render invalid building assembly: " + "; ".join(errors))
+    inputs = assembly.project_inputs
+    assert inputs.k1_outlet is not None
+    assert inputs.k2_outlet is not None
+    width = 2800
+    margin = 50
+    first_floor_y = 260.0
+    basement_floor_y = 1560.0
+    wall_left, wall_right = 230.0, 2440.0
+    body: list[str] = [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
+        f'viewBox="0 0 2800 1980" data-sheet-role="basement" '
+        f'data-fragment-index="{fragment_index}" '
+        f'data-fragment-total="{fragment_total}">',
+        '<defs><pattern id="basement-hatch" width="22" height="22" '
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(35)">'
+        '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
+        '</pattern></defs>',
+        '<rect width="2800" height="1980" fill="white"/>',
+        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
+        f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="3"/>',
+        f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
+        'font-size="30" font-weight="bold">Принципиальная схема внутренних систем '
+        'канализации и водоотведения. Подвал и выпуски</text>',
+        f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
+        f'font-size="16" fill="{GRAY}">Фрагмент {fragment_index}/{fragment_total}; '
+        'подтверждённая линейная топология реестра</text>',
+        f'<line data-architecture="first-floor" x1="{wall_left}" y1="{first_floor_y}" '
+        f'x2="{wall_right}" y2="{first_floor_y}" stroke="#777" stroke-width="2"/>',
+        f'<text x="{wall_left-20}" y="{first_floor_y-14}" text-anchor="end" '
+        f'font-family="{FONT}" font-size="13">1 этаж; отм. 0,000</text>',
+        f'<rect data-architecture="basement-slab" x="{wall_left}" '
+        f'y="{basement_floor_y}" width="{wall_right-wall_left}" height="82" '
+        'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
+        f'<rect data-architecture="foundation-left" x="{wall_left-55}" '
+        f'y="{first_floor_y}" width="55" height="{basement_floor_y-first_floor_y+82}" '
+        'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
+        f'<rect data-architecture="foundation-right" x="{wall_right}" '
+        f'y="{first_floor_y}" width="55" height="{basement_floor_y-first_floor_y+82}" '
+        'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
+        f'<text x="{wall_left-20}" y="{basement_floor_y-10}" text-anchor="end" '
+        f'font-family="{FONT}" font-size="13">Пол подвала; отм. '
+        f'{_fmt(float(inputs.basement_floor_elevation_m or 0))}</text>',
+        f'<text x="{wall_right+82}" y="{first_floor_y+35}" font-family="{FONT}" '
+        'font-size="12">наружная грань здания</text>',
+    ]
+    previous_sheet_no = sheet_no - 1 if fragment_index > 1 else None
+    next_sheet_no = sheet_no + 1 if fragment_index < fragment_total else None
+    _render_basement_system_fragment(
+        body=body,
+        system="K1",
+        risers=inputs.k1_risers,
+        collectors=inputs.k1_collectors,
+        outlet=inputs.k1_outlet,
+        transitions=inputs.k1_transitions,
+        start_index=k1_start_index,
+        end_index=k1_end_index,
+        base_y=820.0,
+        first_floor_y=first_floor_y,
+        wall_left=wall_left,
+        wall_right=wall_right,
+        previous_sheet_no=previous_sheet_no,
+        next_sheet_no=next_sheet_no,
+    )
+    _render_basement_system_fragment(
+        body=body,
+        system="K2",
+        risers=inputs.k2_risers,
+        collectors=inputs.k2_collectors,
+        outlet=inputs.k2_outlet,
+        transitions=inputs.k2_transitions,
+        start_index=k2_start_index,
+        end_index=k2_end_index,
+        base_y=1210.0,
+        first_floor_y=first_floor_y,
+        wall_left=wall_left,
+        wall_right=wall_right,
+        previous_sheet_no=previous_sheet_no,
+        next_sheet_no=next_sheet_no,
+    )
+    body.extend((
+        f'<rect x="{margin+35}" y="1680" width="2010" height="215" '
+        'fill="white" stroke="#777" stroke-width="1"/>',
+        f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
+        'font-size="14" font-weight="bold">Граница детализации</text>',
+        f'<text x="{margin+58}" y="1745" font-family="{FONT}" font-size="12">'
+        'Начальный узел: соосная заглушённая прочистка только на свободном конце.</text>',
+        f'<text x="{margin+58}" y="1770" font-family="{FONT}" font-size="12">'
+        'Промежуточный узел: проточный косой тройник без заглушки; ось открыта.</text>',
+        f'<text x="{margin+58}" y="1795" font-family="{FONT}" font-size="12">'
+        'Уклон показан нормативным острым углом; геометрический наклон не преувеличен.</text>',
+        _title_block_svg(
+            assembly.document,
+            sheet_no=sheet_no,
+            sheet_total=sheet_total,
+            title=(
+                "Принципиальная схема. Подвал и выпуски"
+                if fragment_total == 1
+                else f"Подвал и выпуски. Фрагмент {fragment_index}"
+            ),
+        ),
+        '</svg>',
+    ))
+    return "".join(body)
+
+
+def build_wastewater_building_basement_svg(
+    assembly: WastewaterBuildingAssembly,
+) -> str:
+    """Render a single basement sheet when the topology fits one A1 fragment.
+
+    Full production generation must use :func:`build_wastewater_building_svgs`,
+    which paginates longer chains instead of shrinking or omitting them.
+    """
+    if (
+        len(assembly.project_inputs.k1_risers) > _BASEMENT_RISER_PAGE_CAPACITY
+        or len(assembly.project_inputs.k2_risers) > _BASEMENT_RISER_PAGE_CAPACITY
+    ):
+        raise ValueError(
+            "basement topology requires multiple A1 fragments; "
+            "use build_wastewater_building_svgs"
+        )
+    return build_wastewater_building_basement_fragment_svg(
+        assembly,
+        k1_start_index=0,
+        k1_end_index=len(assembly.project_inputs.k1_risers),
+        k2_start_index=0,
+        k2_end_index=len(assembly.project_inputs.k2_risers),
+        sheet_no=2,
+        sheet_total=3,
+        fragment_index=1,
+        fragment_total=1,
+    )
+
+
 def build_wastewater_building_svgs(
     assembly: WastewaterBuildingAssembly,
-) -> tuple[str, str]:
-    return (
-        build_wastewater_building_floors_svg(assembly),
-        build_wastewater_building_basement_svg(assembly),
+) -> tuple[str, ...]:
+    """Compose as many A1 fragments as the confirmed riser count requires."""
+    k1_floor_chunks = _chunks(assembly.k1_stacks, _FLOOR_K1_PAGE_CAPACITY)
+    k2_floor_chunks = _chunks(
+        assembly.project_inputs.k2_risers,
+        _FLOOR_K2_PAGE_CAPACITY,
     )
+    floor_page_count = max(len(k1_floor_chunks), len(k2_floor_chunks), 1)
+
+    k1_basement_chunks = _chunks(
+        assembly.project_inputs.k1_risers,
+        _BASEMENT_RISER_PAGE_CAPACITY,
+    )
+    k2_basement_chunks = _chunks(
+        assembly.project_inputs.k2_risers,
+        _BASEMENT_RISER_PAGE_CAPACITY,
+    )
+    basement_page_count = max(
+        len(k1_basement_chunks),
+        len(k2_basement_chunks),
+        1,
+    )
+    drawing_page_count = floor_page_count + basement_page_count
+    sheet_total = drawing_page_count + 1  # отдельный лист УГО комплекта
+    basement_sheet_by_riser_id: dict[str, int] = {}
+    for index in range(basement_page_count):
+        sheet_no = floor_page_count + index + 1
+        for row in assembly.project_inputs.k1_risers[
+            index * _BASEMENT_RISER_PAGE_CAPACITY:
+            (index + 1) * _BASEMENT_RISER_PAGE_CAPACITY
+        ]:
+            basement_sheet_by_riser_id[row.stack.riser_id] = sheet_no
+        for row in assembly.project_inputs.k2_risers[
+            index * _BASEMENT_RISER_PAGE_CAPACITY:
+            (index + 1) * _BASEMENT_RISER_PAGE_CAPACITY
+        ]:
+            basement_sheet_by_riser_id[row.riser_id] = sheet_no
+    pages: list[str] = []
+    for index in range(floor_page_count):
+        pages.append(
+            build_wastewater_building_floors_svg(
+                assembly,
+                k1_stacks=(
+                    k1_floor_chunks[index]
+                    if index < len(k1_floor_chunks)
+                    else ()
+                ),
+                k2_risers=(
+                    k2_floor_chunks[index]
+                    if index < len(k2_floor_chunks)
+                    else ()
+                ),
+                sheet_no=index + 1,
+                sheet_total=sheet_total,
+                fragment_index=index + 1,
+                fragment_total=floor_page_count,
+                basement_first_sheet_no=floor_page_count + 1,
+                basement_sheet_by_riser_id=basement_sheet_by_riser_id,
+            )
+        )
+    for index in range(basement_page_count):
+        k1_start = index * _BASEMENT_RISER_PAGE_CAPACITY
+        k2_start = index * _BASEMENT_RISER_PAGE_CAPACITY
+        pages.append(
+            build_wastewater_building_basement_fragment_svg(
+                assembly,
+                k1_start_index=min(k1_start, len(assembly.project_inputs.k1_risers)),
+                k1_end_index=min(
+                    k1_start + _BASEMENT_RISER_PAGE_CAPACITY,
+                    len(assembly.project_inputs.k1_risers),
+                ),
+                k2_start_index=min(k2_start, len(assembly.project_inputs.k2_risers)),
+                k2_end_index=min(
+                    k2_start + _BASEMENT_RISER_PAGE_CAPACITY,
+                    len(assembly.project_inputs.k2_risers),
+                ),
+                sheet_no=floor_page_count + index + 1,
+                sheet_total=sheet_total,
+                fragment_index=index + 1,
+                fragment_total=basement_page_count,
+            )
+        )
+    return tuple(pages)
 
 
 def audit_wastewater_building_svgs(
     assembly: WastewaterBuildingAssembly,
-    svgs: tuple[str, str],
+    svgs: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Fail-fast graphic audit for the combined two-sheet assembly."""
+    """Fail-fast graphic audit for the complete paginated assembly."""
     findings: list[str] = []
     try:
-        floors_root, basement_root = (
-            ElementTree.fromstring(svg) for svg in svgs
-        )
+        roots = tuple(ElementTree.fromstring(svg) for svg in svgs)
     except ElementTree.ParseError as exc:
         return (f"combined sheet SVG is invalid: {exc}",)
+    floor_roots = tuple(
+        row for row in roots if row.get("data-sheet-role") == "floors"
+    )
+    basement_roots = tuple(
+        row for row in roots if row.get("data-sheet-role") == "basement"
+    )
+    if not floor_roots:
+        findings.append("assembly has no above-ground sheet")
+    if not basement_roots:
+        findings.append("assembly has no basement sheet")
 
-    for page_no, root in enumerate((floors_root, basement_root), start=1):
+    expected_sheet_total = str(len(roots) + 1)
+    for page_no, root in enumerate(roots, start=1):
         visible_text = " ".join(root.itertext())
         title_blocks = [
             row for row in root.iter()
@@ -1173,7 +1734,7 @@ def audit_wastewater_building_svgs(
             )
         elif (
             title_blocks[0].get("data-sheet-no") != str(page_no)
-            or title_blocks[0].get("data-sheet-total") != "3"
+            or title_blocks[0].get("data-sheet-total") != expected_sheet_total
         ):
             findings.append(f"sheet {page_no}: title block numbering is invalid")
         if "i=" in visible_text or "i =" in visible_text:
@@ -1194,7 +1755,8 @@ def audit_wastewater_building_svgs(
 
     floor_assembly_ids = {
         row.get("data-floor-assembly")
-        for row in floors_root.iter()
+        for root in floor_roots
+        for row in root.iter()
         if row.get("data-floor-assembly")
     }
     for stack in assembly.k1_stacks:
@@ -1203,9 +1765,27 @@ def audit_wastewater_building_svgs(
             if expected not in floor_assembly_ids:
                 findings.append(f"sheet 1: missing floor assembly {expected}")
 
+    basement_sheet_by_riser: dict[str, int] = {}
+    for page_no, root in enumerate(roots, start=1):
+        if root.get("data-sheet-role") != "basement":
+            continue
+        for row in root.iter():
+            line_id = row.get("data-building-pipe-line", "")
+            if line_id.endswith("-basement-riser"):
+                basement_sheet_by_riser[line_id[:-len("-basement-riser")]] = page_no
+    continuation_targets = {
+        row.get("data-continuation-riser"): int(row.get("data-target-sheet", "0"))
+        for root in floor_roots
+        for row in root.iter()
+        if row.get("data-continuation-riser")
+    }
+    if continuation_targets != basement_sheet_by_riser:
+        findings.append("above-ground continuation references do not match basement sheets")
+
     drawn_k2_floor_revisions = {
         row.get("data-building-revision")
-        for row in floors_root.iter()
+        for root in floor_roots
+        for row in root.iter()
         if row.get("data-building-revision", "").startswith("К2")
     }
     expected_k2_floor_revisions = {
@@ -1217,14 +1797,16 @@ def audit_wastewater_building_svgs(
         findings.append("sheet 1: K2 revisions differ from project registry")
     drawn_k2_lower_revisions = {
         row.get("data-basement-revision")
-        for row in basement_root.iter()
+        for root in basement_roots
+        for row in root.iter()
         if row.get("data-basement-revision", "").startswith("К2")
     }
     if drawn_k2_lower_revisions:
         findings.append("sheet 2: floor K2 revision was moved into the basement")
     cleanout_ids = {
         row.get("data-basement-cleanout")
-        for row in basement_root.iter()
+        for root in basement_roots
+        for row in root.iter()
         if row.get("data-basement-cleanout")
     }
     expected_cleanout_ids = {
@@ -1237,12 +1819,17 @@ def audit_wastewater_building_svgs(
     }
     if cleanout_ids != expected_cleanout_ids:
         findings.append("sheet 2: lower-turn cleanouts differ from project registry")
-    for row in basement_root.iter():
-        if row.get("data-basement-cleanout") and row.get("data-cleanout-axis") != "collinear":
-            findings.append("sheet 2: lower-turn cleanout is not collinear with main")
+    for root in basement_roots:
+        for row in root.iter():
+            if (
+                row.get("data-basement-cleanout")
+                and row.get("data-cleanout-axis") != "collinear"
+            ):
+                findings.append("basement: lower-turn cleanout is not collinear with main")
     junction_ids = {
         row.get("data-basement-through-junction")
-        for row in basement_root.iter()
+        for root in basement_roots
+        for row in root.iter()
         if row.get("data-basement-through-junction")
     }
     expected_junction_ids = {
@@ -1255,16 +1842,18 @@ def audit_wastewater_building_svgs(
     }
     if junction_ids != expected_junction_ids:
         findings.append("sheet 2: through junctions differ from project registry")
-    for row in basement_root.iter():
-        if (
-            row.get("data-basement-through-junction")
-            and row.get("data-through-axis") != "open"
-        ):
-            findings.append("sheet 2: through junction was incorrectly capped")
+    for root in basement_roots:
+        for row in root.iter():
+            if (
+                row.get("data-basement-through-junction")
+                and row.get("data-through-axis") != "open"
+            ):
+                findings.append("basement: through junction was incorrectly capped")
 
     basement_line_ids = {
         row.get("data-building-pipe-line")
-        for row in basement_root.iter()
+        for root in basement_roots
+        for row in root.iter()
         if row.get("data-building-pipe-line")
     }
     expected_edges = {
@@ -1288,36 +1877,60 @@ def audit_wastewater_building_svgs(
             "sheet 2: registry edges are not drawn: " + ", ".join(missing_edges)
         )
 
-    right_wall = next(
-        (
-            row
-            for row in basement_root.iter()
-            if row.get("data-architecture") == "foundation-right"
-        ),
-        None,
-    )
-    wall_x = float(right_wall.get("x", "inf")) if right_wall is not None else float("inf")
+    drawn_transition_ids = {
+        row.get("data-building-transition")
+        for root in basement_roots
+        for row in root.iter()
+        if row.get("data-building-transition")
+    }
+    expected_transition_ids = {
+        row.element_id
+        for row in (
+            assembly.project_inputs.k1_transitions
+            + assembly.project_inputs.k2_transitions
+        )
+    }
+    if drawn_transition_ids != expected_transition_ids:
+        findings.append("basement: DN transitions differ from project registry")
+
     for outlet in (
         assembly.project_inputs.k1_outlet,
         assembly.project_inputs.k2_outlet,
     ):
         if outlet is None:
             continue
-        group = next(
+        root_and_group = next(
             (
-                row
-                for row in basement_root.iter()
+                (root, row)
+                for root in basement_roots
+                for row in root.iter()
                 if row.get("data-building-pipe-line") == outlet.section_id
             ),
             None,
         )
+        if root_and_group is None:
+            findings.append(f"basement: outlet {outlet.section_id} is not drawn")
+            continue
+        root, group = root_and_group
+        right_wall = next(
+            (
+                row for row in root.iter()
+                if row.get("data-architecture") == "foundation-right"
+            ),
+            None,
+        )
+        wall_x = (
+            float(right_wall.get("x", "inf"))
+            if right_wall is not None
+            else float("inf")
+        )
         line = next(
             (row for row in group.iter() if row.tag.endswith("line")),
             None,
-        ) if group is not None else None
+        )
         if line is None or float(line.get("x2", "-inf")) <= wall_x:
             findings.append(
-                f"sheet 2: outlet {outlet.section_id} does not cross the building face"
+                f"basement: outlet {outlet.section_id} does not cross the building face"
             )
     return tuple(dict.fromkeys(findings))
 
@@ -1329,7 +1942,7 @@ def generate_wastewater_building_pdf_from_project(
     floor_height_m: float,
     roof_kind: str,
 ) -> str:
-    """Write the combined registry-backed two-sheet vector PDF."""
+    """Write the combined registry-backed paginated vector PDF."""
     import cairosvg
     from pypdf import PdfReader, PdfWriter
 

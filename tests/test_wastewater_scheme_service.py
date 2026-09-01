@@ -25,7 +25,7 @@ def test_canonical_release_uses_registry_building_pdf(tmp_path):
     result = generate_wastewater_scheme(_project(), str(output))
 
     assert result.ready
-    assert result.backend == "registry-building-v1"
+    assert result.backend == "registry-building-v2-paginated"
     pages = PdfReader(str(output)).pages
     assert len(pages) == 2
     all_text = "\n".join(page.extract_text() or "" for page in pages)
