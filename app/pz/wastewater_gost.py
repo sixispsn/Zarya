@@ -186,7 +186,14 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         s.pump_location and s.pump_model and s.pump_q_m3h is not None
         and s.pump_head_m is not None and s.pump_power_kw is not None
         and s.pump_reserve_note and s.pump_power_category
-        and s.pump_automation_note
+        and s.pump_automation_note and s.pump_system in {"K1", "K3"}
+        and s.pump_mode in {"local_fixture_unit", "internal_station"}
+        and s.pump_static_head_m is not None
+        and s.pump_dynamic_loss_m is not None
+        and len(s.pump_curve) >= 3 and s.pump_curve_source
+        and s.pump_hydraulic_source and s.pump_working_units is not None
+        and s.pump_reserve_units is not None and s.pump_discharge_node
+        and s.pump_emergency_note
     )
     add(
         "K-GOST-10", "Канализационная насосная установка",

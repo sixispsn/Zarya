@@ -131,10 +131,15 @@
 <p class="subhead">5. Канализационное насосное оборудование (п. 5.1.4.2)</p>
 {% if sewage.pump_required %}
 <table class="data calc-table compact-calc">
+  <tr><th>Система / режим</th><td>{{ sewage.pump_system|replace('K', 'К') }}н; {% if sewage.pump_mode == 'local_fixture_unit' %}малогабаритная установка для {{ sewage.pump_fixture_count }} приборов по п. 18.32 СП 30.13330.2020{% elif sewage.pump_mode == 'internal_station' %}внутренняя насосная станция по п. 18.31 СП 30.13330.2020{% else %}режим не подтверждён{% endif %}</td></tr>
   <tr><th>Размещение / тип</th><td>{{ sewage.pump_location }}; {{ sewage.pump_model }}</td></tr>
   <tr><th>Рабочая точка</th><td>Q = {{ sewage.pump_q_m3h|num(2) }} м³/ч; H = {{ sewage.pump_head_m|num(2) }} м; P = {{ sewage.pump_power_kw|num(2) }} кВт</td></tr>
+  <tr><th>Состав требуемого напора</th><td>H<sub>ст</sub> = {{ sewage.pump_static_head_m|num(2) }} м; динамические потери при Q<sub>р</sub> = {{ sewage.pump_dynamic_loss_m|num(2) }} м. Источник: {{ sewage.pump_hydraulic_source }}</td></tr>
+  <tr><th>Характеристика насоса</th><td>{{ sewage.pump_curve|length }} точек Q-H; источник: {{ sewage.pump_curve_source }}. Рабочая точка проверяется на отдельном расчётном листе.</td></tr>
+  <tr><th>Состав установки</th><td>{{ sewage.pump_working_units }} раб. + {{ sewage.pump_reserve_units }} рез.; узел присоединения {{ sewage.pump_discharge_node }}</td></tr>
   <tr><th>Резервирование / категория</th><td>{{ sewage.pump_reserve_note }}; {{ sewage.pump_power_category }}</td></tr>
   <tr><th>Автоматизация</th><td>{{ sewage.pump_automation_note }}</td></tr>
+  <tr><th>Аварийный режим</th><td>{{ sewage.pump_emergency_note }}{% if sewage.pump_mode == 'internal_station' %}; полезный объём {{ sewage.pump_receiver_useful_volume_m3|num(2) }} м³; аварийный объём {{ sewage.pump_emergency_volume_m3|num(2) }} м³; время реагирования {{ sewage.pump_emergency_runtime_min|num(0) }} мин{% endif %}</td></tr>
 </table>
 {% else %}
 <p class="subitem">Канализационное насосное оборудование в границах проектирования не предусмотрено.</p>

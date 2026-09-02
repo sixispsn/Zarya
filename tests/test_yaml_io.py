@@ -102,7 +102,11 @@ def test_roundtrip_preserves_topology_hws_and_head_path_inputs():
 
 
 def test_roundtrip_preserves_sp54_118_253_inputs():
-    from app.intake.request_dto import SewageRiserRequest, SewerPipeRequest
+    from app.intake.request_dto import (
+        SewageRiserRequest,
+        SewerElementRequest,
+        SewerPipeRequest,
+    )
 
     req = load_request(GOOD)
     req.apartments = 240
@@ -129,6 +133,17 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
         slope_per_mille=20.0, fill_ratio=0.55,
         from_node="К1-Ст1", to_node="К1-Вып1", room="техподполье",
         elevation_start_m=-0.40, elevation_end_m=-1.36,
+    ), SewerPipeRequest(
+        "K1", "К1-Н1", "напорная сеть", "ПЭ", "ГОСТ 18599-2001", 50, 3.0, 18,
+        calculation_length_m=24.0, nominal_diameter_mm=40,
+        design_flow_lps=1.111, hydraulic_source="расчёт НК-01",
+        from_node="К1-НУ1", to_node="К1-М1", room="техническое помещение",
+        elevation_start_m=-2.8, elevation_end_m=-0.2,
+        pressure_rated=True, pressure_class_bar=10.0,
+    )]
+    req.sewer_elements = [SewerElementRequest(
+        "К1-Н1-ПГ", "K1", "pressure_break_loop", "Петля гашения напора",
+        section_id="К1-Н1", connects_to="К1-М1", dn_mm=40,
     )]
     req.sewage_outlets_count = 2
     req.wastewater_basement_floor_elevation_m = -3.2
@@ -156,6 +171,27 @@ def test_roundtrip_preserves_sp54_118_253_inputs():
     req.wastewater_fire_barrier_note = "противопожарные муфты"
     req.wastewater_deformation_joint_note = "пересечения отсутствуют"
     req.wastewater_external_network_design_note = "решения по ИГИ и ГП"
+    req.wastewater_pump_required = True
+    req.wastewater_pump_system = "K1"
+    req.wastewater_pump_mode = "local_fixture_unit"
+    req.wastewater_pump_fixture_count = 3
+    req.wastewater_pump_location = "техническое помещение"
+    req.wastewater_pump_model = "НК-4"
+    req.wastewater_pump_q_m3h = 4.0
+    req.wastewater_pump_head_m = 6.0
+    req.wastewater_pump_power_kw = 1.1
+    req.wastewater_pump_static_head_m = 4.0
+    req.wastewater_pump_dynamic_loss_m = 2.0
+    req.wastewater_pump_curve = [(0.0, 8.0), (4.0, 6.0), (6.0, 4.0)]
+    req.wastewater_pump_curve_source = "паспорт, лист 3"
+    req.wastewater_pump_hydraulic_source = "расчёт НК-01"
+    req.wastewater_pump_working_units = 1
+    req.wastewater_pump_reserve_units = 1
+    req.wastewater_pump_discharge_node = "К1-М1"
+    req.wastewater_pump_receiver_useful_volume_m3 = 0.8
+    req.wastewater_pump_emergency_volume_m3 = 1.2
+    req.wastewater_pump_emergency_runtime_min = 30
+    req.wastewater_pump_emergency_note = "сигнал диспетчеру"
     req.storm_roof_sections = 2
     req.storm_funnels_count = 4
     req.storm_max_funnel_spacing_m = 40

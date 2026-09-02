@@ -113,6 +113,7 @@ _DOCUMENTS = (
      "wastewater_calculation_pdf"),
     ("ios3", "Принципиальная схема ИОС3", "wastewater_scheme_pdf"),
     ("ios3", "Отдельная принципиальная схема К3", "wastewater_k3_scheme_pdf"),
+    ("ios3", "Напорная канализация и рабочая точка", "wastewater_pressure_scheme_pdf"),
     ("ios3", "Ведомость УГО К1, К2 и К3", "wastewater_ugo_pdf"),
     ("ios3", "Спецификация К1, К2 и К3", "wastewater_spec_pdf"),
 )
@@ -159,10 +160,16 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
     from app.pz.wastewater_scheme_service import (
         assess_wastewater_scheme_readiness,
     )
+    from app.pz.wastewater_pressure_scheme_service import (
+        assess_wastewater_pressure_scheme_readiness,
+    )
 
     try:
         k1_k2_ready = assess_wastewater_scheme_readiness(bundle.project).ready
         k3_readiness = assess_wastewater_k3_scheme_readiness(bundle.project)
+        pressure_readiness = assess_wastewater_pressure_scheme_readiness(
+            bundle.project
+        )
     except AttributeError:
         # Compatibility for lightweight presentation/test bundles that expose
         # only the historical topology facade instead of a complete Project.
@@ -173,15 +180,24 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
             "ready": True,
             "reasons": (),
         })()
+        pressure_readiness = type("PressureReadiness", (), {
+            "applicable": False,
+            "ready": True,
+            "reasons": (),
+        })()
 
     def incomplete(attribute: str) -> bool:
         if attribute == "wastewater_scheme_pdf":
             return not k1_k2_ready
         if attribute == "wastewater_k3_scheme_pdf":
             return not k3_readiness.ready
+        if attribute == "wastewater_pressure_scheme_pdf":
+            return not pressure_readiness.ready
         if attribute == "wastewater_package_pdf":
             return not k1_k2_ready or (
                 k3_readiness.applicable and not k3_readiness.ready
+            ) or (
+                pressure_readiness.applicable and not pressure_readiness.ready
             )
         return False
 
@@ -191,6 +207,12 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
                 k3_readiness.reasons[0]
                 if k3_readiness.reasons
                 else "Нужен подтверждённый реестр самостоятельной К3"
+            )
+        if attribute == "wastewater_pressure_scheme_pdf":
+            return (
+                pressure_readiness.reasons[0]
+                if pressure_readiness.reasons
+                else "Нужны подтверждённые напорные участки, насос и Q-H кривая"
             )
         return "Каркас: нужны стояки, ветви, магистрали и выпуски К1/К2"
 
@@ -459,6 +481,10 @@ async def wizard_design(request: Request):
                 outer_diameter_mm=ff(f"sewer_pipe{i}_outer"),
                 wall_thickness_mm=ff(f"sewer_pipe{i}_wall"),
                 length_m=ff(f"sewer_pipe{i}_length"),
+                calculation_length_m=(
+                    ff(f"sewer_pipe{i}_calculation_length")
+                    if fv(f"sewer_pipe{i}_calculation_length") else None
+                ),
                 nominal_diameter_mm=(
                     fi(f"sewer_pipe{i}_nominal")
                     if fv(f"sewer_pipe{i}_nominal") else None
@@ -471,6 +497,11 @@ async def wizard_design(request: Request):
                     ff(f"sewer_pipe{i}_fill")
                     if fv(f"sewer_pipe{i}_fill") else None
                 ),
+                design_flow_lps=(
+                    ff(f"sewer_pipe{i}_design_flow")
+                    if fv(f"sewer_pipe{i}_design_flow") else None
+                ),
+                hydraulic_source=fv(f"sewer_pipe{i}_hydraulic_source"),
                 from_node=fv(f"sewer_pipe{i}_from"),
                 to_node=fv(f"sewer_pipe{i}_to"),
                 room=fv(f"sewer_pipe{i}_room"),
@@ -491,6 +522,15 @@ async def wizard_design(request: Request):
                     if fv(f"sewer_pipe{i}_abs_elev_end") else None
                 ),
                 insulated=bool(form.get(f"sewer_pipe{i}_insulated")),
+                pressure_rated=(
+                    True if fv(f"sewer_pipe{i}_pressure") == "yes"
+                    else False if fv(f"sewer_pipe{i}_pressure") == "no"
+                    else None
+                ),
+                pressure_class_bar=(
+                    ff(f"sewer_pipe{i}_pressure_class")
+                    if fv(f"sewer_pipe{i}_pressure_class") else None
+                ),
                 critical_velocity_mps=(
                     ff(f"sewer_pipe{i}_critical_velocity")
                     if fv(f"sewer_pipe{i}_critical_velocity") else None
@@ -640,6 +680,16 @@ async def wizard_design(request: Request):
                 source=fv(f"sewer_internal_node{i}_source"),
             ))
 
+    wastewater_pump_curve = []
+    for i in range(1, 7):
+        q_value = fv(f"wastewater_pump_curve{i}_q")
+        h_value = fv(f"wastewater_pump_curve{i}_h")
+        if q_value or h_value:
+            wastewater_pump_curve.append((
+                ff(f"wastewater_pump_curve{i}_q"),
+                ff(f"wastewater_pump_curve{i}_h"),
+            ))
+
     req = IOS2Request(
         document=DocumentRequest(
             cipher=fv("cipher"), object_name=fv("object_name"),
@@ -780,6 +830,51 @@ async def wizard_design(request: Request):
         wastewater_pump_reserve_note=fv("wastewater_pump_reserve_note"),
         wastewater_pump_power_category=fv("wastewater_pump_power_category"),
         wastewater_pump_automation_note=fv("wastewater_pump_automation_note"),
+        wastewater_pump_system=fv("wastewater_pump_system"),
+        wastewater_pump_mode=fv("wastewater_pump_mode", "not_set"),
+        wastewater_pump_fixture_count=(
+            fi("wastewater_pump_fixture_count")
+            if fv("wastewater_pump_fixture_count") else None
+        ),
+        wastewater_pump_static_head_m=(
+            ff("wastewater_pump_static_head_m")
+            if fv("wastewater_pump_static_head_m") else None
+        ),
+        wastewater_pump_dynamic_loss_m=(
+            ff("wastewater_pump_dynamic_loss_m")
+            if fv("wastewater_pump_dynamic_loss_m") else None
+        ),
+        wastewater_pump_curve=wastewater_pump_curve,
+        wastewater_pump_curve_source=fv("wastewater_pump_curve_source"),
+        wastewater_pump_hydraulic_source=fv(
+            "wastewater_pump_hydraulic_source"
+        ),
+        wastewater_pump_working_units=(
+            fi("wastewater_pump_working_units")
+            if fv("wastewater_pump_working_units") else None
+        ),
+        wastewater_pump_reserve_units=(
+            fi("wastewater_pump_reserve_units")
+            if fv("wastewater_pump_reserve_units") else None
+        ),
+        wastewater_pump_discharge_node=fv(
+            "wastewater_pump_discharge_node"
+        ),
+        wastewater_pump_receiver_useful_volume_m3=(
+            ff("wastewater_pump_receiver_useful_volume_m3")
+            if fv("wastewater_pump_receiver_useful_volume_m3") else None
+        ),
+        wastewater_pump_emergency_volume_m3=(
+            ff("wastewater_pump_emergency_volume_m3")
+            if fv("wastewater_pump_emergency_volume_m3") else None
+        ),
+        wastewater_pump_emergency_runtime_min=(
+            ff("wastewater_pump_emergency_runtime_min")
+            if fv("wastewater_pump_emergency_runtime_min") else None
+        ),
+        wastewater_pump_emergency_note=fv(
+            "wastewater_pump_emergency_note"
+        ),
         wastewater_treatment_required=bool(
             form.get("wastewater_treatment_required")
         ),
@@ -998,9 +1093,13 @@ def wizard_result(request: Request, run_id: str):
     from app.pz.wastewater_scheme_service import (
         assess_wastewater_scheme_readiness,
     )
+    from app.pz.wastewater_pressure_scheme_service import (
+        assess_wastewater_pressure_scheme_readiness,
+    )
 
     wastewater_readiness = assess_wastewater_scheme_readiness(p)
     wastewater_k3_readiness = assess_wastewater_k3_scheme_readiness(p)
+    wastewater_pressure_readiness = assess_wastewater_pressure_scheme_readiness(p)
     from app.pz.rules import project_governing_head
     head = project_governing_head(
         p, fallback_h_vod_m=cold_meter_loss(p.meters),
@@ -1086,6 +1185,19 @@ def wizard_result(request: Request, run_id: str):
             "treatment_required": p.sewage.treatment_required,
             "treatment_type": p.sewage.treatment_type,
             "treatment_location": p.sewage.treatment_location,
+        },
+        "pressure_sewer": {
+            "applicable": wastewater_pressure_readiness.applicable,
+            "scheme_ready": wastewater_pressure_readiness.ready,
+            "scheme_missing": wastewater_pressure_readiness.reasons,
+            "system": p.sewage.pump_system.replace("K", "К"),
+            "mode": p.sewage.pump_mode,
+            "model": p.sewage.pump_model,
+            "q": p.sewage.pump_q_m3h,
+            "h": p.sewage.pump_head_m,
+            "working_point": (
+                wastewater_pressure_readiness.project_inputs.working_point
+            ),
         },
         "storm": {
             "required": p.storm.system_kind == "internal",

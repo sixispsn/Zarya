@@ -125,6 +125,11 @@ def test_form_template_has_collapsed_wastewater_element_registry():
     assert 'data-outlet-completeness-lamp="invert"' in html
     assert 'data-outlet-completeness-lamp="dn"' in html
     assert 'name="sewer_pipe1_nominal"' in html
+    assert 'name="wastewater_pump_system"' in html
+    assert 'name="wastewater_pump_mode"' in html
+    assert 'name="wastewater_pump_curve1_q"' in html
+    assert 'name="sewer_pipe1_pressure"' in html
+    assert 'value="pressure_break_loop"' in html
     assert html.count('<details class="input-section"') == 5
     assert html.count('<details class="input-section" open') == 1
     assert 'data-design-form novalidate' in html
@@ -186,6 +191,8 @@ def test_result_template_shows_key_numbers():
     assert "sewage.scheme_ready" in html
     assert "k3.scheme_ready" in html
     assert "Самостоятельная схема К3 подтверждена" in html
+    assert "pressure_sewer.scheme_ready" in html
+    assert "Напорная схема требует исходных данных" in html
     assert "К3 не заявлена" in html
     assert "Схема не сформирована — выпущен только каркас" in html
     assert "p.state == 'incomplete'" in html

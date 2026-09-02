@@ -339,6 +339,27 @@ def build_project(intent: IntentLike) -> Project:
     p.sewage.pump_reserve_note = req.wastewater_pump_reserve_note
     p.sewage.pump_power_category = req.wastewater_pump_power_category
     p.sewage.pump_automation_note = req.wastewater_pump_automation_note
+    p.sewage.pump_system = req.wastewater_pump_system
+    p.sewage.pump_mode = req.wastewater_pump_mode
+    p.sewage.pump_fixture_count = req.wastewater_pump_fixture_count
+    p.sewage.pump_static_head_m = req.wastewater_pump_static_head_m
+    p.sewage.pump_dynamic_loss_m = req.wastewater_pump_dynamic_loss_m
+    p.sewage.pump_curve = list(req.wastewater_pump_curve)
+    p.sewage.pump_curve_source = req.wastewater_pump_curve_source
+    p.sewage.pump_hydraulic_source = req.wastewater_pump_hydraulic_source
+    p.sewage.pump_working_units = req.wastewater_pump_working_units
+    p.sewage.pump_reserve_units = req.wastewater_pump_reserve_units
+    p.sewage.pump_discharge_node = req.wastewater_pump_discharge_node
+    p.sewage.pump_receiver_useful_volume_m3 = (
+        req.wastewater_pump_receiver_useful_volume_m3
+    )
+    p.sewage.pump_emergency_volume_m3 = (
+        req.wastewater_pump_emergency_volume_m3
+    )
+    p.sewage.pump_emergency_runtime_min = (
+        req.wastewater_pump_emergency_runtime_min
+    )
+    p.sewage.pump_emergency_note = req.wastewater_pump_emergency_note
     p.sewage.treatment_required = req.wastewater_treatment_required
     p.sewage.treatment_location = req.wastewater_treatment_location
     p.sewage.treatment_type = req.wastewater_treatment_type

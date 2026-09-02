@@ -718,6 +718,57 @@ def load_request(text: str) -> IOS2Request:
         wastewater_pump_automation_note=str(
             sewage_s.get("pump_automation_note", "")
         ),
+        wastewater_pump_system=str(sewage_s.get("pump_system", "")),
+        wastewater_pump_mode=str(sewage_s.get("pump_mode", "not_set")),
+        wastewater_pump_fixture_count=(
+            int(sewage_s["pump_fixture_count"])
+            if sewage_s.get("pump_fixture_count") is not None else None
+        ),
+        wastewater_pump_static_head_m=(
+            float(sewage_s["pump_static_head_m"])
+            if sewage_s.get("pump_static_head_m") is not None else None
+        ),
+        wastewater_pump_dynamic_loss_m=(
+            float(sewage_s["pump_dynamic_loss_m"])
+            if sewage_s.get("pump_dynamic_loss_m") is not None else None
+        ),
+        wastewater_pump_curve=[
+            (float(point["q_m3h"]), float(point["head_m"]))
+            for point in sewage_s.get("pump_curve", [])
+        ],
+        wastewater_pump_curve_source=str(
+            sewage_s.get("pump_curve_source", "")
+        ),
+        wastewater_pump_hydraulic_source=str(
+            sewage_s.get("pump_hydraulic_source", "")
+        ),
+        wastewater_pump_working_units=(
+            int(sewage_s["pump_working_units"])
+            if sewage_s.get("pump_working_units") is not None else None
+        ),
+        wastewater_pump_reserve_units=(
+            int(sewage_s["pump_reserve_units"])
+            if sewage_s.get("pump_reserve_units") is not None else None
+        ),
+        wastewater_pump_discharge_node=str(
+            sewage_s.get("pump_discharge_node", "")
+        ),
+        wastewater_pump_receiver_useful_volume_m3=(
+            float(sewage_s["pump_receiver_useful_volume_m3"])
+            if sewage_s.get("pump_receiver_useful_volume_m3") is not None
+            else None
+        ),
+        wastewater_pump_emergency_volume_m3=(
+            float(sewage_s["pump_emergency_volume_m3"])
+            if sewage_s.get("pump_emergency_volume_m3") is not None else None
+        ),
+        wastewater_pump_emergency_runtime_min=(
+            float(sewage_s["pump_emergency_runtime_min"])
+            if sewage_s.get("pump_emergency_runtime_min") is not None else None
+        ),
+        wastewater_pump_emergency_note=str(
+            sewage_s.get("pump_emergency_note", "")
+        ),
         wastewater_treatment_required=bool(
             sewage_s.get("treatment_required", False)
         ),
@@ -1046,6 +1097,28 @@ def dump_request(req: IOS2Request) -> str:
             "pump_reserve_note": req.wastewater_pump_reserve_note,
             "pump_power_category": req.wastewater_pump_power_category,
             "pump_automation_note": req.wastewater_pump_automation_note,
+            "pump_system": req.wastewater_pump_system,
+            "pump_mode": req.wastewater_pump_mode,
+            "pump_fixture_count": req.wastewater_pump_fixture_count,
+            "pump_static_head_m": req.wastewater_pump_static_head_m,
+            "pump_dynamic_loss_m": req.wastewater_pump_dynamic_loss_m,
+            "pump_curve": [
+                {"q_m3h": q, "head_m": h}
+                for q, h in req.wastewater_pump_curve
+            ],
+            "pump_curve_source": req.wastewater_pump_curve_source,
+            "pump_hydraulic_source": req.wastewater_pump_hydraulic_source,
+            "pump_working_units": req.wastewater_pump_working_units,
+            "pump_reserve_units": req.wastewater_pump_reserve_units,
+            "pump_discharge_node": req.wastewater_pump_discharge_node,
+            "pump_receiver_useful_volume_m3": (
+                req.wastewater_pump_receiver_useful_volume_m3
+            ),
+            "pump_emergency_volume_m3": req.wastewater_pump_emergency_volume_m3,
+            "pump_emergency_runtime_min": (
+                req.wastewater_pump_emergency_runtime_min
+            ),
+            "pump_emergency_note": req.wastewater_pump_emergency_note,
             "treatment_required": req.wastewater_treatment_required,
             "treatment_location": req.wastewater_treatment_location,
             "treatment_type": req.wastewater_treatment_type,

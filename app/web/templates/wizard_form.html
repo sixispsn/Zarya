@@ -211,7 +211,7 @@
         <td><select name="sewer_element{{ i + 1 }}_system"><option value="K1"{% if not r or r.system == 'K1' %} selected{% endif %}>К1</option><option value="K2"{% if r and r.system == 'K2' %} selected{% endif %}>К2</option><option value="K3"{% if r and r.system == 'K3' %} selected{% endif %}>К3</option></select></td>
         <td><input name="sewer_element{{ i + 1 }}_id" value="{{ r.element_id if r else '' }}" placeholder="К1-Р1"></td>
         <td><select name="sewer_element{{ i + 1 }}_kind">
-          {% for value, label in [('toilet','унитаз'),('washbasin','умывальник'),('sink','мойка'),('bath','ванна'),('shower','душ'),('floor_drain','трап'),('roof_funnel','воронка К2'),('revision','ревизия'),('cleanout','прочистка'),('fire_collar','противопожарная муфта'),('trap','гидрозатвор'),('pump','насос'),('sump','резервуар'),('ball_valve','запорный кран'),('check_valve','обратный клапан'),('junction','узел'),('outlet','выпуск'),('tee','тройник'),('elbow','отвод'),('transition','переход'),('other','прочее')] %}<option value="{{ value }}"{% if (r.kind if r else 'other') == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          {% for value, label in [('toilet','унитаз'),('washbasin','умывальник'),('sink','мойка'),('bath','ванна'),('shower','душ'),('floor_drain','трап'),('roof_funnel','воронка К2'),('revision','ревизия'),('cleanout','прочистка'),('fire_collar','противопожарная муфта'),('trap','гидрозатвор'),('pump','насос'),('sump','приёмный резервуар'),('ball_valve','запорный кран'),('check_valve','обратный клапан'),('pressure_break_loop','петля гашения напора'),('junction','узел'),('outlet','выпуск'),('tee','тройник'),('elbow','отвод'),('transition','переход'),('other','прочее')] %}<option value="{{ value }}"{% if (r.kind if r else 'other') == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select></td>
         <td><input name="sewer_element{{ i + 1 }}_name" value="{{ r.name if r else '' }}"></td>
         <td><input name="sewer_element{{ i + 1 }}_quantity" value="{{ r.quantity if r else 1 }}"></td>
@@ -312,17 +312,31 @@
         <td><input name="sewer_internal_node{{ i + 1 }}_source" value="{{ n.source if n else '' }}" placeholder="аксонометрия, АР"></td>
       </tr>{% endfor %}</table></div>
     </details>
-    <details class="field-help"><summary>КНС, локальная очистка и отходы — заполняются только при наличии</summary>
+    <details class="field-help"><summary>Насосная канализация, локальная очистка и отходы — только при наличии</summary>
       <div class="row">
-        <label class="check-label"><input type="checkbox" name="wastewater_pump_required"{% if prefill and prefill.wastewater_pump_required %} checked{% endif %}>Предусмотрена КНС</label>
+        <label class="check-label"><input type="checkbox" name="wastewater_pump_required"{% if prefill and prefill.wastewater_pump_required %} checked{% endif %}>Предусмотрена канализационная насосная установка</label>
+        <label>Система<select name="wastewater_pump_system"><option value=""{% if not prefill or not prefill.wastewater_pump_system %} selected{% endif %}>не задана</option><option value="K1"{% if prefill and prefill.wastewater_pump_system == 'K1' %} selected{% endif %}>К1</option><option value="K3"{% if prefill and prefill.wastewater_pump_system == 'K3' %} selected{% endif %}>К3</option></select></label>
+        <label>Режим<select name="wastewater_pump_mode"><option value="not_set"{% if not prefill or prefill.wastewater_pump_mode == 'not_set' %} selected{% endif %}>не задан</option><option value="local_fixture_unit"{% if prefill and prefill.wastewater_pump_mode == 'local_fixture_unit' %} selected{% endif %}>малогабаритная установка, п. 18.32</option><option value="internal_station"{% if prefill and prefill.wastewater_pump_mode == 'internal_station' %} selected{% endif %}>внутренняя насосная станция, п. 18.31</option></select></label>
+        <label>Число подключённых приборов<input name="wastewater_pump_fixture_count" value="{{ prefill.wastewater_pump_fixture_count if prefill and prefill.wastewater_pump_fixture_count is not none else '' }}"></label>
         <label>Размещение КНС<input name="wastewater_pump_location" value="{{ prefill.wastewater_pump_location if prefill else '' }}"></label>
         <label>Модель / тип насоса<input name="wastewater_pump_model" value="{{ prefill.wastewater_pump_model if prefill else '' }}"></label>
         <label>Q насоса, м³/ч<input name="wastewater_pump_q_m3h" value="{{ prefill.wastewater_pump_q_m3h if prefill and prefill.wastewater_pump_q_m3h is not none else '' }}"></label>
         <label>H насоса, м<input name="wastewater_pump_head_m" value="{{ prefill.wastewater_pump_head_m if prefill and prefill.wastewater_pump_head_m is not none else '' }}"></label>
         <label>P насоса, кВт<input name="wastewater_pump_power_kw" value="{{ prefill.wastewater_pump_power_kw if prefill and prefill.wastewater_pump_power_kw is not none else '' }}"></label>
+        <label>Статическая составляющая H, м<input name="wastewater_pump_static_head_m" value="{{ prefill.wastewater_pump_static_head_m if prefill and prefill.wastewater_pump_static_head_m is not none else '' }}"></label>
+        <label>Динамические потери при Qр, м<input name="wastewater_pump_dynamic_loss_m" value="{{ prefill.wastewater_pump_dynamic_loss_m if prefill and prefill.wastewater_pump_dynamic_loss_m is not none else '' }}"></label>
+        <label>Рабочих насосов<input name="wastewater_pump_working_units" value="{{ prefill.wastewater_pump_working_units if prefill and prefill.wastewater_pump_working_units is not none else '' }}"></label>
+        <label>Резервных насосов<input name="wastewater_pump_reserve_units" value="{{ prefill.wastewater_pump_reserve_units if prefill and prefill.wastewater_pump_reserve_units is not none else '' }}"></label>
+        <label>Узел гашения / приёма напора<input name="wastewater_pump_discharge_node" value="{{ prefill.wastewater_pump_discharge_node if prefill else '' }}" placeholder="К1-М1"></label>
         <label>Резервирование<input name="wastewater_pump_reserve_note" value="{{ prefill.wastewater_pump_reserve_note if prefill else '' }}"></label>
         <label>Категория электроснабжения<input name="wastewater_pump_power_category" value="{{ prefill.wastewater_pump_power_category if prefill else '' }}"></label>
         <label>Автоматизация<input class="w-l" name="wastewater_pump_automation_note" value="{{ prefill.wastewater_pump_automation_note if prefill else '' }}"></label>
+        <label>Полезный объём приёмной части, м³<input name="wastewater_pump_receiver_useful_volume_m3" value="{{ prefill.wastewater_pump_receiver_useful_volume_m3 if prefill and prefill.wastewater_pump_receiver_useful_volume_m3 is not none else '' }}"></label>
+        <label>Аварийный объём, м³<input name="wastewater_pump_emergency_volume_m3" value="{{ prefill.wastewater_pump_emergency_volume_m3 if prefill and prefill.wastewater_pump_emergency_volume_m3 is not none else '' }}"></label>
+        <label>Расчётное время реагирования, мин<input name="wastewater_pump_emergency_runtime_min" value="{{ prefill.wastewater_pump_emergency_runtime_min if prefill and prefill.wastewater_pump_emergency_runtime_min is not none else '' }}"></label>
+        <label>Аварийный режим<input class="w-l" name="wastewater_pump_emergency_note" value="{{ prefill.wastewater_pump_emergency_note if prefill else '' }}" placeholder="сигнал, запрет притока, диспетчеризация"></label>
+        <label>Источник гидравлического расчёта<input class="w-l" name="wastewater_pump_hydraulic_source" value="{{ prefill.wastewater_pump_hydraulic_source if prefill else '' }}"></label>
+        <label>Источник Q-H кривой<input class="w-l" name="wastewater_pump_curve_source" value="{{ prefill.wastewater_pump_curve_source if prefill else '' }}" placeholder="паспорт / каталог, страница"></label>
         <label class="check-label"><input type="checkbox" name="wastewater_treatment_required"{% if prefill and prefill.wastewater_treatment_required %} checked{% endif %}>Предусмотрена локальная очистка</label>
         <label>Тип очистки<input name="wastewater_treatment_type" value="{{ prefill.wastewater_treatment_type if prefill else '' }}"></label>
         <label>Размещение очистки<input name="wastewater_treatment_location" value="{{ prefill.wastewater_treatment_location if prefill else '' }}"></label>
@@ -331,6 +345,13 @@
         <label>Технология очистки<input class="w-l" name="wastewater_treatment_technology" value="{{ prefill.wastewater_treatment_technology if prefill else '' }}"></label>
         <label>Обращение с отходами<input class="w-l" name="wastewater_waste_handling_note" value="{{ prefill.wastewater_waste_handling_note if prefill else '' }}"></label>
       </div>
+      <p class="technical-label">Паспортная Q-H характеристика принятого насоса</p>
+      <p>Точки переносятся из паспорта без аппроксимации «по похожему насосу». Рабочая точка проверяется как пересечение этой кривой с подтверждённой кривой системы.</p>
+      <div class="table-wrap"><table class="grid"><tr><th>Точка</th><th>Q, м³/ч</th><th>H, м</th></tr>
+      {% for i in range(6) %}{% set point = prefill.wastewater_pump_curve[i] if prefill and i < prefill.wastewater_pump_curve|length else none %}<tr><td>{{ i + 1 }}</td><td><input name="wastewater_pump_curve{{ i + 1 }}_q" value="{{ point[0] if point else '' }}"></td><td><input name="wastewater_pump_curve{{ i + 1 }}_h" value="{{ point[1] if point else '' }}"></td></tr>{% endfor %}</table></div>
+      <p class="technical-label">Напорные участки из общего реестра труб</p>
+      <div class="table-wrap"><table class="grid"><tr><th>Участок</th><th>L расч., м</th><th>q, л/с</th><th>Источник гидравлики</th><th>Режим</th><th>PN, бар</th></tr>
+      {% for i in range(12) %}{% set r = prefill.sewer_pipes[i] if prefill and i < prefill.sewer_pipes|length else none %}<tr><td>{{ r.section_id if r else 'участок ' ~ (i + 1) }}</td><td><input name="sewer_pipe{{ i + 1 }}_calculation_length" value="{{ r.calculation_length_m if r and r.calculation_length_m is not none else '' }}"></td><td><input name="sewer_pipe{{ i + 1 }}_design_flow" value="{{ r.design_flow_lps if r and r.design_flow_lps is not none else '' }}"></td><td><input name="sewer_pipe{{ i + 1 }}_hydraulic_source" value="{{ r.hydraulic_source if r else '' }}"></td><td><select name="sewer_pipe{{ i + 1 }}_pressure"><option value="unknown"{% if not r or r.pressure_rated is none %} selected{% endif %}>не задан</option><option value="yes"{% if r and r.pressure_rated is sameas true %} selected{% endif %}>напорный</option><option value="no"{% if r and r.pressure_rated is sameas false %} selected{% endif %}>самотёчный</option></select></td><td><input name="sewer_pipe{{ i + 1 }}_pressure_class" value="{{ r.pressure_class_bar if r and r.pressure_class_bar is not none else '' }}"></td></tr>{% endfor %}</table></div>
     </details>
     <details class="field-help"><summary>Граница расчёта К1 на стадии П</summary><p>Общий расход К1: q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub>. Расход между стояками и длины не назначаются автоматически. Точная проверка стояка выполняется для заполненной строки приложения К; горизонтальная гидравлика без аксонометрии остаётся стадией Р.</p></details>
   </div></details>

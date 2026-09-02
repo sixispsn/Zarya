@@ -759,6 +759,25 @@ class SewageDesign:
     pump_reserve_note: str = ""
     pump_power_category: str = ""
     pump_automation_note: str = ""
+    # Отдельный подтверждаемый контракт напорной внутренней канализации.
+    # Кривая насоса и составляющие кривой системы задаются проектировщиком;
+    # генератор только проверяет их пересечение и не подбирает насос из
+    # водопроводного каталога.
+    pump_system: str = ""  # K1 / K3
+    pump_mode: str = "not_set"  # local_fixture_unit / internal_station
+    pump_fixture_count: Optional[int] = None
+    pump_static_head_m: Optional[float] = None
+    pump_dynamic_loss_m: Optional[float] = None
+    pump_curve: List[tuple[float, float]] = field(default_factory=list)
+    pump_curve_source: str = ""
+    pump_hydraulic_source: str = ""
+    pump_working_units: Optional[int] = None
+    pump_reserve_units: Optional[int] = None
+    pump_discharge_node: str = ""
+    pump_receiver_useful_volume_m3: Optional[float] = None
+    pump_emergency_volume_m3: Optional[float] = None
+    pump_emergency_runtime_min: Optional[float] = None
+    pump_emergency_note: str = ""
     treatment_required: bool = False
     treatment_location: str = ""
     treatment_type: str = ""

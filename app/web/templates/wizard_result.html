@@ -91,6 +91,25 @@
     </section>
 
     <section class="card">
+      <div class="card-kicker"><h2>Напорная канализация</h2><span class="system-tag">{{ pressure_sewer.system or 'К1н / К3н' }}</span></div>
+      {% if pressure_sewer.applicable %}
+      <div class="metric-grid">
+        <div class="metric"><b>Принятый расход</b><strong>{{ pressure_sewer.q|ru_num(2) }}</strong><small>м³/ч · ввод проектировщика</small></div>
+        <div class="metric"><b>Принятый напор</b><strong>{{ pressure_sewer.h|ru_num(2) }}</strong><small>м · Hст + потери</small></div>
+        <div class="metric"><b>Рабочая точка Q</b><strong>{{ pressure_sewer.working_point.q_m3h|ru_num(2) if pressure_sewer.working_point else '—' }}</strong><small>м³/ч · пересечение кривых</small></div>
+        <div class="metric"><b>Рабочая точка H</b><strong>{{ pressure_sewer.working_point.pump_head_m|ru_num(2) if pressure_sewer.working_point else '—' }}</strong><small>м · пересечение кривых</small></div>
+      </div>
+      {% if pressure_sewer.scheme_ready %}
+      <div class="equipment"><strong>{{ pressure_sewer.model }}</strong>Схема напорной линии и отдельный лист рабочей точки подтверждены. Подбор по каталогу водоснабжения не выполнялся.</div>
+      {% else %}
+      <div class="equipment is-incomplete"><strong>Напорная схема требует исходных данных</strong>{{ pressure_sewer.scheme_missing[0] if pressure_sewer.scheme_missing else 'Нужны точные участки, арматура и паспортная Q-H кривая.' }} {% if project_id %}<a href="/wizard/open/{{ project_id }}">Заполнить данные →</a>{% endif %}</div>
+      {% endif %}
+      {% else %}
+      <div class="equipment"><strong>Напорная К1/К3 не заявлена</strong>Отдельная схема и лист рабочей точки не включены в комплект.</div>
+      {% endif %}
+    </section>
+
+    <section class="card">
       <div class="card-kicker"><h2>Внутренний водосток</h2><span class="system-tag">К2</span></div>
       {% if storm.required %}
       <div class="metric-grid">

@@ -59,9 +59,12 @@ SEWER_ELEMENT_KINDS = (
     "toilet", "washbasin", "sink", "bath", "shower", "floor_drain",
     "washing_machine", "dishwasher", "grease_trap",
     "roof_funnel", "revision", "cleanout", "fire_collar", "trap",
-    "pump", "sump", "ball_valve", "check_valve", "junction", "outlet",
+    "pump", "sump", "ball_valve", "check_valve", "pressure_break_loop",
+    "junction", "outlet",
     "tee", "elbow", "transition", "other",
 )
+WASTEWATER_PUMP_SYSTEMS = ("", "K1", "K3")
+WASTEWATER_PUMP_MODES = ("not_set", "local_fixture_unit", "internal_station")
 
 
 @dataclass
@@ -500,6 +503,21 @@ class IOS2Request:
     wastewater_pump_reserve_note: str = ""
     wastewater_pump_power_category: str = ""
     wastewater_pump_automation_note: str = ""
+    wastewater_pump_system: str = ""
+    wastewater_pump_mode: str = "not_set"
+    wastewater_pump_fixture_count: Optional[int] = None
+    wastewater_pump_static_head_m: Optional[float] = None
+    wastewater_pump_dynamic_loss_m: Optional[float] = None
+    wastewater_pump_curve: List[tuple[float, float]] = field(default_factory=list)
+    wastewater_pump_curve_source: str = ""
+    wastewater_pump_hydraulic_source: str = ""
+    wastewater_pump_working_units: Optional[int] = None
+    wastewater_pump_reserve_units: Optional[int] = None
+    wastewater_pump_discharge_node: str = ""
+    wastewater_pump_receiver_useful_volume_m3: Optional[float] = None
+    wastewater_pump_emergency_volume_m3: Optional[float] = None
+    wastewater_pump_emergency_runtime_min: Optional[float] = None
+    wastewater_pump_emergency_note: str = ""
     wastewater_treatment_required: bool = False
     wastewater_treatment_location: str = ""
     wastewater_treatment_type: str = ""
@@ -1233,6 +1251,15 @@ class IOS2Request:
                 "wastewater_disposal_mode должен быть not_set, centralized, "
                 "local или water_body"
             )
+        if self.wastewater_pump_system not in WASTEWATER_PUMP_SYSTEMS:
+            p.append(
+                "wastewater_pump_system должен быть пустым, K1 или K3"
+            )
+        if self.wastewater_pump_mode not in WASTEWATER_PUMP_MODES:
+            p.append(
+                "wastewater_pump_mode должен быть not_set, "
+                "local_fixture_unit или internal_station"
+            )
         for name, value in {
             "wastewater_service_life_years": self.wastewater_service_life_years,
             "wastewater_overhaul_period_years": self.wastewater_overhaul_period_years,
@@ -1244,6 +1271,11 @@ class IOS2Request:
             "wastewater_pump_q_m3h": self.wastewater_pump_q_m3h,
             "wastewater_pump_head_m": self.wastewater_pump_head_m,
             "wastewater_pump_power_kw": self.wastewater_pump_power_kw,
+            "wastewater_pump_static_head_m": self.wastewater_pump_static_head_m,
+            "wastewater_pump_dynamic_loss_m": self.wastewater_pump_dynamic_loss_m,
+            "wastewater_pump_receiver_useful_volume_m3": self.wastewater_pump_receiver_useful_volume_m3,
+            "wastewater_pump_emergency_volume_m3": self.wastewater_pump_emergency_volume_m3,
+            "wastewater_pump_emergency_runtime_min": self.wastewater_pump_emergency_runtime_min,
             "wastewater_treatment_capacity_lps": self.wastewater_treatment_capacity_lps,
             "wastewater_treatment_capacity_m3_day": self.wastewater_treatment_capacity_m3_day,
             "storm_design_m3_day": self.storm_design_m3_day,
@@ -1256,6 +1288,39 @@ class IOS2Request:
         }.items():
             if value is not None and value < 0:
                 p.append(f"{name} не может быть отрицательным")
+        for name, value in {
+            "wastewater_pump_fixture_count": self.wastewater_pump_fixture_count,
+            "wastewater_pump_working_units": self.wastewater_pump_working_units,
+            "wastewater_pump_reserve_units": self.wastewater_pump_reserve_units,
+        }.items():
+            if value is not None and value < 0:
+                p.append(f"{name} не может быть отрицательным")
+        if self.wastewater_pump_curve:
+            malformed_curve = any(
+                not isinstance(point, (list, tuple)) or len(point) != 2
+                for point in self.wastewater_pump_curve
+            )
+            if malformed_curve:
+                p.append(
+                    "wastewater_pump_curve должна содержать пары [Q, H]"
+                )
+            else:
+                curve = [
+                    (float(point[0]), float(point[1]))
+                    for point in self.wastewater_pump_curve
+                ]
+                if any(q < 0 or h <= 0 for q, h in curve):
+                    p.append(
+                        "точки wastewater_pump_curve требуют Q >= 0 и H > 0"
+                    )
+                if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+                    p.append(
+                        "Q в wastewater_pump_curve должен строго возрастать"
+                    )
+                if any(right[1] > left[1] for left, right in zip(curve, curve[1:])):
+                    p.append(
+                        "H в wastewater_pump_curve не должен возрастать"
+                    )
         if self.apartments < 0:
             p.append("apartments не может быть отрицательным")
         if self.owner_groups_count < 1:

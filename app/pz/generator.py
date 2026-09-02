@@ -498,6 +498,22 @@ def generate_wastewater_k3_scheme_pdf(
     return generate_wastewater_k3_scheme(project, output_path).output_path
 
 
+def generate_wastewater_pressure_scheme_pdf(
+    project: Project,
+    output_path: str,
+) -> str:
+    """Сформировать отдельные листы напорной К1/К3 и рабочей точки.
+
+    Насос, Q-H кривая, потери, трубопроводы и арматура должны быть явно
+    подтверждены исходными данными; каталог насосов В1/В2 не используется.
+    """
+    from app.pz.wastewater_pressure_scheme_service import (
+        generate_wastewater_pressure_scheme,
+    )
+
+    return generate_wastewater_pressure_scheme(project, output_path).output_path
+
+
 def generate_architecture_section_node_pdf(
     registry_path: str,
     output_path: str,
