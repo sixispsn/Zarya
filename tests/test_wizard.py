@@ -184,6 +184,9 @@ def test_result_template_shows_key_numbers():
     assert 'data-impact-dialog' in html
     assert 'data-endpoint="/wizard/impact/{{ run_id }}"' in html
     assert "sewage.scheme_ready" in html
+    assert "k3.scheme_ready" in html
+    assert "Самостоятельная схема К3 подтверждена" in html
+    assert "К3 не заявлена" in html
     assert "Схема не сформирована — выпущен только каркас" in html
     assert "p.state == 'incomplete'" in html
 

@@ -53,11 +53,8 @@ def assess_wastewater_scheme_readiness(
         reasons.append(
             "Не подтверждён вид и доступность кровли для выпуска вентиляции."
         )
-    if any(row.system.strip().upper() == "K3" for row in project.sewage.pipes):
-        reasons.append(
-            "В проекте есть К3; её схема требует отдельного подтверждённого "
-            "листа и пока не объединяется с комплектом К1/К2."
-        )
+    # К3 выпускается самостоятельным каноническим листом. Наличие её строк в
+    # общем реестре не должно блокировать уже подтверждённую схему К1/К2.
     unique = tuple(dict.fromkeys(reason for reason in reasons if reason))
     return WastewaterSchemeReadiness(
         ready=inputs.complete and not unique,

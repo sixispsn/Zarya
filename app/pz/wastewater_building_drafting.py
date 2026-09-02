@@ -87,6 +87,7 @@ def _title_block_svg(
     sheet_no: int,
     sheet_total: int,
     title: str,
+    system_label: str = "К1, К2",
 ) -> str:
     """Основная надпись формы 3 в координатах листа A1."""
     doc = document
@@ -166,7 +167,7 @@ def _title_block_svg(
         text_svg(x(157.5), y(37.3), str(sheet_no), 10.0),
         text_svg(x(175), y(37.3), str(sheet_total), 10.0),
         text_svg(x(100), y(47), _short(title, 48), 8.8),
-        text_svg(x(100), y(53), "К1, К2", 10.5, weight="bold"),
+        text_svg(x(100), y(53), system_label, 10.5, weight="bold"),
         text_svg(x(160), y(49), _short(doc.organization or "", 28), 8.0),
         "</g>",
     ))

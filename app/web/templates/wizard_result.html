@@ -62,9 +62,31 @@
         <div class="metric"><b>Выпусков</b><strong>{{ sewage.outlets_count or '—' }}</strong><small>шт. · только явные данные</small></div>
       </div>
       {% if sewage.scheme_ready %}
-      <div class="equipment"><strong>Топология схемы подтверждена</strong>Линии К1/К2/К3 маркируются в разрывах через графический шаг; зоны тройников, крестовин и других фасонных частей остаются свободными.</div>
+      <div class="equipment"><strong>Топология схемы К1/К2 подтверждена</strong>Линии маркируются в разрывах через графический шаг; зоны тройников, крестовин и других фасонных частей остаются свободными.</div>
       {% else %}
       <div class="equipment is-incomplete"><strong>Схема не сформирована — выпущен только каркас</strong>{{ sewage.scheme_missing[0] }} {% if project_id %}<a href="/wizard/open/{{ project_id }}">Заполнить реестр проекта →</a>{% endif %} <a href="/wizard?example=1">Посмотреть заполненный учебный пример →</a></div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-kicker"><h2>Производственная канализация</h2><span class="system-tag">К3</span></div>
+      {% if k3.applicable %}
+      <div class="metric-grid">
+        <div class="metric"><b>Максимальный часовой расход</b><strong>{{ k3.q_max|ru_num(3) }}</strong><small>м³/ч · только исходные данные</small></div>
+        <div class="metric"><b>Минимальный часовой расход</b><strong>{{ k3.q_min|ru_num(3) }}</strong><small>м³/ч · только исходные данные</small></div>
+        <div class="metric"><b>Стояков К3</b><strong>{{ k3.riser_count or '—' }}</strong><small>шт. · подтверждённый реестр</small></div>
+        <div class="metric"><b>Точка сброса</b><strong>{{ k3.discharge_point or '—' }}</strong><small>без автоматического подключения к К1</small></div>
+      </div>
+      {% if k3.treatment_required %}
+      <div class="equipment"><strong>{{ k3.treatment_type or 'Тип очистки не задан' }}</strong>{{ k3.treatment_location or 'Место размещения не задано' }} · оборудование должно присутствовать в реестре К3.</div>
+      {% endif %}
+      {% if k3.scheme_ready %}
+      <div class="equipment"><strong>Самостоятельная схема К3 подтверждена</strong>Надземная часть, подвальная магистраль и выпуск формируются отдельными листами. Самотёчная К3 не объединяется с К1 автоматически.</div>
+      {% else %}
+      <div class="equipment is-incomplete"><strong>Схема К3 требует исходных данных</strong>{{ k3.scheme_missing[0] if k3.scheme_missing else 'Нужен подтверждённый реестр самостоятельной К3.' }} {% if project_id %}<a href="/wizard/open/{{ project_id }}">Заполнить реестр проекта →</a>{% endif %}</div>
+      {% endif %}
+      {% else %}
+      <div class="equipment"><strong>К3 не заявлена</strong>Отдельный лист производственной канализации не включён в комплект.</div>
       {% endif %}
     </section>
 

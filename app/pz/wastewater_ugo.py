@@ -55,6 +55,13 @@ _DEFINITIONS: Tuple[UGOSymbolDefinition, ...] = (
     UGOSymbolDefinition("shower", "поддон душевой", "ГОСТ 21.205-2016, табл. 3, поз. 9", "normative", 40),
     UGOSymbolDefinition("toilet", "унитаз", "ГОСТ 21.205-2016, табл. 3, поз. 11", "normative", 50),
     UGOSymbolDefinition("floor_drain", "трап", "ГОСТ 21.205-2016, табл. 3, поз. 16", "normative", 60),
+    UGOSymbolDefinition(
+        "grease_trap",
+        "жироуловитель",
+        "Проектное обозначение оборудования; тип, марка и изготовитель задаются проектом и раскрываются в выноске",
+        "project",
+        65,
+    ),
     UGOSymbolDefinition("roof_funnel", "воронка внутреннего водостока", "ГОСТ 21.205-2016, табл. 3, поз. 18", "normative", 70),
     UGOSymbolDefinition("roof_funnel_heated", "воронка внутреннего водостока с электрообогревом", "ГОСТ Р 21.620-2023, прил. В (обозначение в рекомендуемом примере; не отдельное УГО ГОСТ 21.205-2016)", "recommended", 71),
     UGOSymbolDefinition("trap", "сифон (гидрозатвор)", "ГОСТ 21.205-2016, табл. 4, поз. 4", "normative", 80),
@@ -258,6 +265,18 @@ def _shape(kind: str) -> str:
         return (
             f'<path d="M-21,-10 H21 L16,10 H-16 Z" fill="white" '
             f'stroke="{s}" stroke-width="{sw}"/>'
+        )
+    if kind == "grease_trap":
+        # Для жироуловителя в ГОСТ 21.205-2016 нет отдельного УГО. Поэтому
+        # используется явно раскрытое проектное обозначение фактического
+        # оборудования, а не стилизация под нормативный знак.
+        return (
+            f'<rect x="-31" y="-17" width="62" height="34" rx="2" '
+            f'fill="white" stroke="{s}" stroke-width="{sw}"/>'
+            f'<path d="M-18,-17 V8 M0,17 V-8 M18,-17 V8" fill="none" '
+            f'stroke="{s}" stroke-width="{sw}"/>'
+            f'<text x="0" y="5" text-anchor="middle" font-family="{FONT}" '
+            f'font-size="12" font-weight="bold" fill="{s}">ЖУ</text>'
         )
     if kind == "roof_funnel":
         # Исходный CAD-вектор извлечён из предоставленного файла

@@ -112,6 +112,7 @@ _DOCUMENTS = (
     ("ios3", "Расчётные обоснования К1 и К2",
      "wastewater_calculation_pdf"),
     ("ios3", "Принципиальная схема ИОС3", "wastewater_scheme_pdf"),
+    ("ios3", "Отдельная принципиальная схема К3", "wastewater_k3_scheme_pdf"),
     ("ios3", "Ведомость УГО К1, К2 и К3", "wastewater_ugo_pdf"),
     ("ios3", "Спецификация К1, К2 и К3", "wastewater_spec_pdf"),
 )
@@ -152,11 +153,47 @@ def _group_documents(documents: list[dict]) -> tuple[list[dict], list[dict]]:
 
 def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
     """Единый каталог фактически выпущенных PDF для результата и Defense."""
-    wastewater_topology = build_wastewater_topology(bundle.project)
-    incomplete_wastewater_documents = {
-        "wastewater_package_pdf",
-        "wastewater_scheme_pdf",
-    }
+    from app.pz.wastewater_k3_scheme_service import (
+        assess_wastewater_k3_scheme_readiness,
+    )
+    from app.pz.wastewater_scheme_service import (
+        assess_wastewater_scheme_readiness,
+    )
+
+    try:
+        k1_k2_ready = assess_wastewater_scheme_readiness(bundle.project).ready
+        k3_readiness = assess_wastewater_k3_scheme_readiness(bundle.project)
+    except AttributeError:
+        # Compatibility for lightweight presentation/test bundles that expose
+        # only the historical topology facade instead of a complete Project.
+        legacy_ready = build_wastewater_topology(bundle.project).ready
+        k1_k2_ready = legacy_ready
+        k3_readiness = type("K3Readiness", (), {
+            "applicable": False,
+            "ready": True,
+            "reasons": (),
+        })()
+
+    def incomplete(attribute: str) -> bool:
+        if attribute == "wastewater_scheme_pdf":
+            return not k1_k2_ready
+        if attribute == "wastewater_k3_scheme_pdf":
+            return not k3_readiness.ready
+        if attribute == "wastewater_package_pdf":
+            return not k1_k2_ready or (
+                k3_readiness.applicable and not k3_readiness.ready
+            )
+        return False
+
+    def state_note(attribute: str) -> str:
+        if attribute == "wastewater_k3_scheme_pdf":
+            return (
+                k3_readiness.reasons[0]
+                if k3_readiness.reasons
+                else "Нужен подтверждённый реестр самостоятельной К3"
+            )
+        return "Каркас: нужны стояки, ветви, магистрали и выпуски К1/К2"
+
     documents = []
     for group, label, attribute in _DOCUMENTS:
         path = getattr(bundle, attribute, None)
@@ -168,18 +205,12 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
             "name": os.path.basename(path),
             "state": (
                 "incomplete"
-                if (
-                    attribute in incomplete_wastewater_documents
-                    and not wastewater_topology.ready
-                )
+                if incomplete(attribute)
                 else "ready"
             ),
             "state_note": (
-                "Каркас: нужны стояки, ветви, магистрали и выпуски К1/К2/К3"
-                if (
-                    attribute in incomplete_wastewater_documents
-                    and not wastewater_topology.ready
-                )
+                state_note(attribute)
+                if incomplete(attribute)
                 else ""
             ),
         }
@@ -961,7 +992,15 @@ def wizard_result(request: Request, run_id: str):
     pdfs, document_groups = _run_documents(run)
     f = b.project.fire
     p = b.project
-    wastewater_topology = build_wastewater_topology(p)
+    from app.pz.wastewater_k3_scheme_service import (
+        assess_wastewater_k3_scheme_readiness,
+    )
+    from app.pz.wastewater_scheme_service import (
+        assess_wastewater_scheme_readiness,
+    )
+
+    wastewater_readiness = assess_wastewater_scheme_readiness(p)
+    wastewater_k3_readiness = assess_wastewater_k3_scheme_readiness(p)
     from app.pz.rules import project_governing_head
     head = project_governing_head(
         p, fallback_h_vod_m=cold_meter_loss(p.meters),
@@ -1020,19 +1059,33 @@ def wizard_result(request: Request, run_id: str):
                 p.sewage.result.checked_risers if p.sewage.result else 0
             ),
             "outlets_count": p.sewage.outlets_count,
-            "scheme_ready": wastewater_topology.ready,
+            "scheme_ready": wastewater_readiness.ready,
             "scheme_missing": (
-                wastewater_topology.errors
-                if wastewater_topology.errors
+                wastewater_readiness.reasons
+                if wastewater_readiness.reasons
                 else (
                     [
                         "Не заполнена направленная топология: стояки, "
                         "этажные ветви с приборами, подвальные магистрали "
                         "и выпуски."
                     ]
-                    if not wastewater_topology.ready else []
+                    if not wastewater_readiness.ready else []
                 )
             ),
+        },
+        "k3": {
+            "applicable": wastewater_k3_readiness.applicable,
+            "scheme_ready": wastewater_k3_readiness.ready,
+            "scheme_missing": wastewater_k3_readiness.reasons,
+            "riser_count": len(wastewater_k3_readiness.project_inputs.risers),
+            "discharge_point": (
+                wastewater_k3_readiness.project_inputs.discharge_point
+            ),
+            "q_max": p.sewage.k3_max_hourly_m3h,
+            "q_min": p.sewage.k3_min_hourly_m3h,
+            "treatment_required": p.sewage.treatment_required,
+            "treatment_type": p.sewage.treatment_type,
+            "treatment_location": p.sewage.treatment_location,
         },
         "storm": {
             "required": p.storm.system_kind == "internal",

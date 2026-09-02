@@ -64,6 +64,7 @@ class IOS2DesignBundle:
     wastewater_pz_pdf: Optional[str] = None
     wastewater_calculation_pdf: Optional[str] = None
     wastewater_scheme_pdf: Optional[str] = None
+    wastewater_k3_scheme_pdf: Optional[str] = None
     wastewater_diagnostic_pdf: Optional[str] = None
     wastewater_ugo_pdf: Optional[str] = None
     wastewater_spec_pdf: Optional[str] = None
@@ -864,6 +865,34 @@ def design_ios2(
         "переходы не подставляются"
     )
 
+    from app.pz.wastewater_k3_project_inputs import k3_is_applicable
+    if k3_is_applicable(project):
+        from app.pz.wastewater_k3_scheme_service import (
+            generate_wastewater_k3_scheme,
+        )
+
+        k3_result = generate_wastewater_k3_scheme(
+            project,
+            os.path.join(output_dir, "Схема_К3.pdf"),
+        )
+        bundle.wastewater_k3_scheme_pdf = k3_result.output_path
+        if k3_result.ready:
+            bundle.status.append(
+                "Схема_К3.pdf собрана отдельным каноническим векторным "
+                "генератором: приборы, локальная очистка, фасонные части, "
+                "стояки и выпуск получены из подтверждённого реестра"
+            )
+        else:
+            bundle.warnings.append(
+                "Схема_К3.pdf: выпущен лист контроля неполноты — "
+                + "; ".join(k3_result.reasons)
+            )
+    else:
+        bundle.status.append(
+            "Схема К3 не формировалась: производственная канализация не "
+            "заявлена исходными данными проекта"
+        )
+
     bundle.wastewater_diagnostic_pdf = generate_wastewater_diagnostic_pdf(
         project, os.path.join(output_dir, "Диагностика_К1_К2.pdf")
     )
@@ -889,17 +918,18 @@ def design_ios2(
     )
 
     bundle.wastewater_package_pdf = merge_pdfs(
-        [
+        [path for path in (
             bundle.wastewater_pz_pdf,
             bundle.wastewater_scheme_pdf,
+            bundle.wastewater_k3_scheme_pdf,
             bundle.wastewater_ugo_pdf,
             bundle.wastewater_spec_pdf,
-        ],
+        ) if path],
         os.path.join(output_dir, "Комплект_К1_К2.pdf"),
     )
     bundle.status.append(
         "Комплект_К1_К2.pdf собран единым файлом: ПЗ с расчётами, "
-        "принципиальная схема, ведомость УГО и спецификация"
+        "канонические схемы К1/К2 и применимой К3, ведомость УГО и спецификация"
     )
 
     bundle.balance_pdf = generate_balance_pdf(
@@ -959,9 +989,10 @@ def design_ios2(
         "Схема вводов и узлов учёта": bool(bundle.metering_scheme_pdf),
         "Схема насосов, зон и ГВС": bool(bundle.pump_zone_scheme_pdf),
         "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
-        "Ведомость УГО К1/К2": bool(bundle.wastewater_ugo_pdf),
-        "Спецификация К1/К2": bool(bundle.wastewater_spec_pdf),
-        "Комплект К1/К2": bool(bundle.wastewater_package_pdf),
+        "Принципиальная схема К3": bool(bundle.wastewater_k3_scheme_pdf),
+        "Ведомость УГО ИОС3": bool(bundle.wastewater_ugo_pdf),
+        "Спецификация ИОС3": bool(bundle.wastewater_spec_pdf),
+        "Комплект ИОС3": bool(bundle.wastewater_package_pdf),
         "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),
     })
     bundle.commission_control_pdf = generate_commission_control_pdf(
