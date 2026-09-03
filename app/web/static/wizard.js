@@ -16,6 +16,29 @@ document.addEventListener("DOMContentLoaded", () => {
   }));
   renderTheme();
 
+  const radarLinks = [...document.querySelectorAll("[data-normative-radar-link]")];
+  if (radarLinks.length) {
+    fetch("/wizard/normatives/status.json", { headers: { "Accept": "application/json" } })
+      .then((response) => {
+        if (!response.ok) throw new Error("radar status unavailable");
+        return response.json();
+      })
+      .then((payload) => {
+        radarLinks.forEach((link) => {
+          const lamp = link.querySelector(".radar-nav-lamp");
+          if (lamp) lamp.dataset.state = payload.overall_indicator || "gray";
+          link.title = `Нормативы: ${payload.summary?.green || 0} актуально, ${payload.summary?.orange || 0} требуют анализа, ${payload.summary?.red || 0} ограничений`;
+        });
+      })
+      .catch(() => {
+        radarLinks.forEach((link) => {
+          const lamp = link.querySelector(".radar-nav-lamp");
+          if (lamp) lamp.dataset.state = "gray";
+          link.title = "Нормативный радар временно недоступен";
+        });
+      });
+  }
+
   const uploadInput = document.querySelector("[data-upload-input]");
   const uploadZone = document.querySelector("[data-upload-zone]");
   const uploadLabel = document.querySelector("[data-upload-label]");

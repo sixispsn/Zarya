@@ -8,7 +8,7 @@ from app.normative.baseline import (
 
 
 EXPECTED_BASELINE_SHA256 = (
-    "6c3ceb9cdd99f7d86d72820f95aa05a48cd39347204bc9122e34a104fd9d9669"
+    "e6f3ad84ca5d0793f2462252ca2b91c92054307c17a33053659d98d9412a9b41"
 )
 
 
@@ -21,6 +21,11 @@ def test_active_baseline_has_stable_fingerprint_and_source_hashes():
     )
     assert all(len(row.local_sha256) == 64 for row in baseline.documents)
     assert all(row.verified_on for row in baseline.documents)
+    assert all(
+        row.source_url.startswith("https://protect.gost.ru/")
+        for row in baseline.documents
+        if row.document_id != "pp87"
+    )
 
 
 def test_sp10_change_is_visible_and_not_silently_adopted():

@@ -10,6 +10,10 @@ services:
       ZARYA_PASSPORTS_DIR: /data/projects/_passports
       ZARYA_ARCHITECTURE_IMPORT_ROOT: /data/projects/_architecture
       ZARYA_RELEASES_DIR: /data/projects/_releases
+      ZARYA_NORMATIVE_RADAR_DIR: /data/projects/_normatives
+      ZARYA_NORMATIVE_MONITOR_ENABLED: "1"
+      ZARYA_NORMATIVE_MONITOR_INTERVAL_SECONDS: "21600"
+      ZARYA_NORMATIVE_MONITOR_INITIAL_DELAY_SECONDS: "30"
       ZARYA_PUBLIC_URL: https://${ZARYA_DOMAIN:-localhost}
       ZARYA_BUILD_COMMIT: ${ZARYA_BUILD_COMMIT:-unknown}
       OSIFONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Заря — нормативный радар</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css?v=20260903-1">
+<script defer src="/static/wizard.js?v=20260903-1"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/architecture">Планы в схему</a><a href="/wizard/analyze">Анализ проекта</a><a class="normative-radar-link" href="/wizard/normatives" aria-current="page" data-normative-radar-link><i class="radar-nav-lamp" data-state="{{ radar.overall_indicator }}"></i>Нормативы</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+</header>
+
+<main class="analysis-shell radar-shell">
+  <section class="radar-hero">
+    <div>
+      <p class="eyebrow">NORMATIVE RADAR / {{ radar.baseline_id }}</p>
+      <h1>Нормативная база ВК под наблюдением</h1>
+      <p>Радар проверяет официальные карточки, фиксирует изменения и никогда не переписывает расчётные правила без инженерного анализа и нового baseline.</p>
+    </div>
+    <form method="post" action="/wizard/normatives/check">
+      <button class="button-primary radar-check-button" type="submit"><span></span>Проверить сейчас</button>
+      <small>Росстандарт · только чтение</small>
+    </form>
+  </section>
+
+  <section class="radar-summary" aria-label="Сводка нормативного контроля">
+    <div data-state="green"><span>Актуально</span><strong>{{ radar.summary.green }}</strong><small>совпадает с baseline</small></div>
+    <div data-state="orange"><span>Изменения</span><strong>{{ radar.summary.orange }}</strong><small>нужен анализ</small></div>
+    <div data-state="red"><span>Ограничения</span><strong>{{ radar.summary.red }}</strong><small>затронутый выпуск закрыт</small></div>
+    <div data-state="gray"><span>Без проверки</span><strong>{{ radar.summary.gray }}</strong><small>нужен источник</small></div>
+  </section>
+
+  <section class="radar-baseline-strip">
+    <div><span>Baseline</span><strong>{{ radar.baseline_id }}</strong></div>
+    <div><span>SHA-256</span><code>{{ radar.baseline_fingerprint }}</code></div>
+    <div><span>Последний проход</span><strong>{{ radar.generated_at[:19].replace('T', ' ') if radar.generated_at else 'онлайн-проверка ожидается' }}</strong></div>
+    <span class="radar-read-only">DETECT · REVIEW · ADOPT</span>
+  </section>
+
+  <div class="radar-layout">
+    <section class="card radar-register">
+      <div class="card-kicker"><h2>Реестр нормативных документов</h2><span class="system-tag">{{ radar.summary.total }} источников</span></div>
+      <div class="radar-document-list">
+        {% for document in radar.entries %}
+        <details class="radar-document" data-state="{{ document.indicator }}"{% if document.indicator in ['red', 'orange'] %} open{% endif %}>
+          <summary>
+            <i class="radar-lamp" data-state="{{ document.indicator }}"></i>
+            <div class="radar-document-copy"><strong>{{ document.designation }}</strong><span>{{ document.title }}</span></div>
+            <b>{{ indicator_labels[document.indicator] }}</b>
+            <small>{{ document.official_status or 'ручная сверка' }}</small>
+            <em></em>
+          </summary>
+          <div class="radar-document-detail">
+            <p>{{ document.reason }}</p>
+            <dl>
+              <div><dt>Принятая редакция</dt><dd>{{ document.edition }}</dd></div>
+              <div><dt>Принятые изменения</dt><dd>{{ document.accepted_amendments|join(', ') if document.accepted_amendments else 'без изменений' }}</dd></div>
+              <div><dt>Найдено в карточке</dt><dd>{{ document.official_amendments|join(', ') if document.official_amendments else 'изменений не найдено' }}{% if document.official_correction_count %}; поправок: {{ document.official_correction_count }}{% endif %}</dd></div>
+              <div><dt>Состояние источника</dt><dd>{{ source_labels[document.source_health] }}</dd></div>
+              <div><dt>Проверено</dt><dd>{{ document.last_checked_at[:19].replace('T', ' ') if document.last_checked_at else 'ожидается фоновая проверка' }}</dd></div>
+              <div><dt>Роль в baseline</dt><dd>{{ document.baseline_state }}</dd></div>
+            </dl>
+            {% if document.error %}<div class="radar-source-error">{{ document.error }}</div>{% endif %}
+            {% if document.source_url %}<a href="{{ document.source_url }}" target="_blank" rel="noopener">Открыть официальную карточку ↗</a>{% else %}<span class="radar-no-source">Официальный автоматический источник не подключён</span>{% endif %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+    </section>
+
+    <aside class="radar-side">
+      <section class="card radar-legend">
+        <div class="card-kicker"><h2>Логика сигналов</h2><span class="system-tag">4 состояния</span></div>
+        <ul>
+          <li><i class="radar-lamp" data-state="green"></i><div><strong>Зелёный</strong><span>Принятая редакция совпадает с официальной карточкой.</span></div></li>
+          <li><i class="radar-lamp" data-state="orange"></i><div><strong>Оранжевый</strong><span>Обнаружено изменение; требуется анализ влияния.</span></div></li>
+          <li><i class="radar-lamp" data-state="red"></i><div><strong>Красный</strong><span>Документ не действует либо актуальное изменение ещё не принято.</span></div></li>
+          <li><i class="radar-lamp" data-state="gray"></i><div><strong>Серый</strong><span>Источник недоступен или ещё не подключён.</span></div></li>
+        </ul>
+      </section>
+
+      <section class="card radar-events">
+        <div class="card-kicker"><h2>Журнал событий</h2><span class="system-tag">append only</span></div>
+        {% if events %}<ol>
+          {% for event in events %}
+          <li data-state="{{ event.indicator }}"><i></i><div><small>{{ event.detected_at[:19].replace('T', ' ') }}</small><strong>{{ event.designation }}</strong><p>{{ event.message }}</p></div></li>
+          {% endfor %}
+        </ol>{% else %}
+        <div class="radar-empty"><strong>Новых событий нет</strong><p>Первый онлайн-проход заполнит журнал только значимыми изменениями.</p></div>
+        {% endif %}
+      </section>
+    </aside>
+  </div>
+
+  <footer class="radar-footer">
+    <p>Обнаружение ≠ принятие. Новая редакция попадает в расчётное ядро только после анализа пунктов, обновления parity/golden-тестов и создания нового baseline.</p>
+    <a href="https://protect.gost.ru" target="_blank" rel="noopener">Официальный портал Росстандарта ↗</a>
+  </footer>
+</main>
+</body></html>
