@@ -10,10 +10,17 @@ from app.intake.advisories import review_request
 from app.intake.facts import FactRegistry, build_fact_registry
 from app.intake.project_intent import IntentLike, as_project_intent
 from app.intake.questions import QuestionState, evaluate_questions
+from app.normative.baseline import NormativeBaseline, get_active_baseline
+from app.normative.verdicts import (
+    NormativeVerdict,
+    NormativeVerdictStatus,
+    evaluate_normative_verdicts,
+)
 
 
 class PreflightLevel(str, Enum):
     BLOCKING = "blocking"
+    RELEASE_BLOCKING = "release_blocking"
     WARNING = "warning"
     STAGE_R = "stage_r"
     INFO = "info"
@@ -44,10 +51,23 @@ class PreflightReport:
     issues: tuple[PreflightIssue, ...]
     facts: FactRegistry
     questions: tuple[QuestionState, ...]
+    normative_baseline: NormativeBaseline
+    normative_verdicts: tuple[NormativeVerdict, ...]
 
     @property
     def blockers(self) -> tuple[PreflightIssue, ...]:
+        """Совместимое имя: блокеры расчёта, не блокеры только выпуска."""
         return tuple(row for row in self.issues if row.level == PreflightLevel.BLOCKING)
+
+    @property
+    def release_blockers(self) -> tuple[PreflightIssue, ...]:
+        return tuple(
+            row for row in self.issues
+            if row.level in {
+                PreflightLevel.BLOCKING,
+                PreflightLevel.RELEASE_BLOCKING,
+            }
+        )
 
     @property
     def can_calculate(self) -> bool:
@@ -55,7 +75,7 @@ class PreflightReport:
 
     @property
     def can_release(self) -> bool:
-        return not self.blockers
+        return not self.release_blockers
 
     @property
     def has_stage_r_boundaries(self) -> bool:
@@ -73,12 +93,21 @@ class PreflightReport:
             "issues": [row.to_dict() for row in self.issues],
             "questions": [row.to_dict() for row in self.questions],
             "facts": self.facts.to_dict(),
+            "normative_baseline": self.normative_baseline.to_dict(),
+            "normative_verdicts": [
+                row.to_dict() for row in self.normative_verdicts
+            ],
         }
 
 
 def preflight_request(value: IntentLike) -> PreflightReport:
     intent = as_project_intent(value)
     req = intent.request
+    normative_baseline = get_active_baseline()
+    normative_verdicts = evaluate_normative_verdicts(
+        req,
+        normative_baseline,
+    )
     issues: list[PreflightIssue] = [
         PreflightIssue(
             level=PreflightLevel.BLOCKING,
@@ -171,8 +200,24 @@ def preflight_request(value: IntentLike) -> PreflightReport:
             fact_ids=("sewage.scheme_geometry",),
         ))
 
+    for verdict in normative_verdicts:
+        if (
+            verdict.status == NormativeVerdictStatus.FAIL
+            and verdict.release_blocking
+        ):
+            issues.append(PreflightIssue(
+                level=PreflightLevel.RELEASE_BLOCKING,
+                code=f"normative.{verdict.rule.rule_id.lower()}",
+                message=verdict.message,
+                reference=verdict.reference,
+                systems=verdict.rule.systems,
+                fact_ids=verdict.rule.fact_ids,
+            ))
+
     return PreflightReport(
         issues=tuple(issues),
         facts=build_fact_registry(intent),
         questions=tuple(evaluate_questions(intent)),
+        normative_baseline=normative_baseline,
+        normative_verdicts=normative_verdicts,
     )

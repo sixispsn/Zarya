@@ -93,6 +93,10 @@ def test_published_passport_survives_new_store_and_detects_tampering(tmp_path):
     )
     assert len(manifest["seal_sha256"]) == 64
     assert len(manifest["documents"][0]["sha256"]) == 64
+    assert manifest["schema_version"] == "1.1"
+    assert manifest["normative_baseline"]["baseline_id"] == (
+        "ru-ios-2026-09-03-v1"
+    )
     assert manifest["proof"]["decisions"][0]["documents"][0][
         "view_url"
     ].startswith(url + "/file/")
@@ -109,6 +113,8 @@ def test_published_passport_survives_new_store_and_detects_tampering(tmp_path):
     assert "Целостность выпуска" in page
     assert "Подтверждена" in page
     assert manifest["seal_sha256"] in page
+    assert "Baseline нормативов" in page
+    assert manifest["normative_baseline"]["fingerprint_sha256"] in page
     path, record = reopened.document(passport_id, "ПЗ.pdf")
     assert path.is_file()
     assert record["label"] == "Пояснительная записка"

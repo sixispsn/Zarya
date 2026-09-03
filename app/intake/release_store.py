@@ -20,6 +20,7 @@ from typing import Any
 from app.intake.advisories import InputAdvisory
 from app.intake.request_dto import IOS2Request
 from app.intake.yaml_io import dump_request, load_request
+from app.normative.baseline import get_active_baseline
 from app.pz.commission import (
     CommissionReport,
     ControlCheck,
@@ -125,6 +126,7 @@ class ReleaseSnapshot:
     documents: list[dict]
     advisories_payload: list[dict]
     preflight_payload: dict
+    normative_baseline_payload: dict
     status: list[str]
     warnings: list[str]
 
@@ -169,6 +171,7 @@ class ReleaseStore:
         status: list[str],
         warnings: list[str],
         preflight: dict | None = None,
+        normative_baseline: dict | None = None,
     ) -> dict:
         destination = self._directory(release_id)
         if destination.exists():
@@ -184,6 +187,10 @@ class ReleaseStore:
         ))
         try:
             source_yaml = dump_request(request)
+            baseline_payload = normative_baseline or (
+                (preflight or {}).get("normative_baseline")
+                or get_active_baseline().to_dict()
+            )
             payloads: dict[str, Any] = {
                 "commission.json": asdict(commission),
                 "proof.json": proof_graph.to_dict(),
@@ -191,6 +198,7 @@ class ReleaseStore:
                 "documents.json": documents,
                 "advisories.json": [asdict(row) for row in advisories],
                 "preflight.json": preflight or {},
+                "normative-baseline.json": baseline_payload,
                 "state.json": {
                     "status": list(status),
                     "warnings": list(warnings),
@@ -214,7 +222,7 @@ class ReleaseStore:
                 if path.is_file()
             }
             manifest = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "release_id": release_id,
                 "project_id": project_id,
                 "passport_id": passport_id,
@@ -223,6 +231,12 @@ class ReleaseStore:
                 "project_fingerprint": commission.project_fingerprint,
                 "legacy_fingerprint": commission.legacy_fingerprint,
                 "build_commit": commission.build_commit,
+                "normative_baseline_id": baseline_payload.get(
+                    "baseline_id", ""
+                ),
+                "normative_baseline_sha256": baseline_payload.get(
+                    "fingerprint_sha256", ""
+                ),
                 "files": files,
             }
             manifest["seal_sha256"] = sha256(
@@ -290,6 +304,10 @@ class ReleaseStore:
             preflight_payload=(
                 read_json("preflight.json")
                 if (directory / "preflight.json").is_file() else {}
+            ),
+            normative_baseline_payload=(
+                read_json("normative-baseline.json")
+                if (directory / "normative-baseline.json").is_file() else {}
             ),
             status=[str(row) for row in state.get("status", [])],
             warnings=[str(row) for row in state.get("warnings", [])],

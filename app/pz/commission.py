@@ -16,17 +16,10 @@ from typing import Optional
 
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import decide_fire_network, project_governing_head
+from app.normative.baseline import get_active_baseline
 
 
 APP_VERSION = "0.6.1"
-NORMATIVE_EDITIONS = (
-    "ПП РФ № 87; ГОСТ Р 21.619-2023; ГОСТ Р 21.620-2023; ГОСТ 21.110-2013; "
-    "ГОСТ 21.601-2011; СП 30.13330.2020; "
-    "СП 10.13130.2020; СП 54.13330.2022; СП 118.13330.2022; "
-    "СП 253.1325800.2016"
-)
-
-
 @dataclass(frozen=True)
 class PassportItem:
     label: str
@@ -275,6 +268,7 @@ def build_commission_report(
     legacy_hash = _file_sha256(repo_root / "legacy" / "sp30_calculator.html")
     commit = _git_commit(repo_root)
     project_hash = _project_fingerprint(project)
+    normative_baseline = get_active_baseline()
     generated_at = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M %Z")
     head = project_governing_head(
         project, fallback_h_vod_m=_cold_meter_loss(project),
@@ -299,7 +293,10 @@ def build_commission_report(
         PassportItem("Расчётное ядро", f"legacy/sp30_calculator.html, SHA-256 {legacy_hash}"),
         PassportItem("Версия приложения / commit", f"Zarya {APP_VERSION} / {commit}"),
         PassportItem("Fingerprint исходных данных", project_hash),
-        PassportItem("Нормативная база", NORMATIVE_EDITIONS),
+        PassportItem(
+            "Нормативная база",
+            normative_baseline.commission_summary(),
+        ),
         PassportItem(
             "Граница стадии",
             "Точные расходы и напоры — по введённым данным; количества и настройки, "

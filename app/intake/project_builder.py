@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import List
 
 from app.intake.project_intent import IntentLike, unwrap_project_intent
+from app.intake.fire_applicability import calculate_request_fire
 from app.pz.project import (
     Project, DocumentInfo, BuildingFlags, BuildingPurpose, FireSystem,
     PumpSystem, FlowsData, FireRoomSpec, FireNetworkSpec,
@@ -43,17 +44,6 @@ _BUILDING_MAP = {
     "public": BuildingPurpose.PUBLIC,
     "industrial": BuildingPurpose.INDUSTRIAL,
 }
-
-_FIRE_CATEGORY_MAP = {
-    "residential_f13": "f13",
-    "office_public": "f_office",
-    "hospital_f11": "f11",
-    "theatre_f21": "f21_theater",
-    "library_sport": "f21_lib",
-    "museum_trade": "f22",
-    "dormitory_f12": "f12_hostel",
-}
-
 
 def build_project(intent: IntentLike) -> Project:
     """ProjectIntent/IOS2Request → Project без изменения рабочего маппинга."""
@@ -138,31 +128,8 @@ def build_project(intent: IntentLike) -> Project:
             branch_electric_valves=req.fire_branch_electric_valves,
         )
     else:
-        from app.calc.fire import FireInput, calculate_fire
         from app.pz.flows_bridge import fire_from_calc
-
-        # Для жилого здания без смешанных частей строка 1 таблицы 7.1
-        # однозначна. Для общественного/смешанного объекта категория приходит
-        # только явным выбором проектировщика и не подменяется «офисом».
-        category = req.fire_category or "residential_f13"
-        fire_type = _FIRE_CATEGORY_MAP[category]
-        corridor_length = next(
-            (room.length_m for room in req.rooms
-             if room.space_kind == "corridor"),
-            None,
-        )
-        fire_result = calculate_fire(FireInput(
-            building_type=fire_type,
-            floors=req.floors,
-            height_m=req.fire_height_m,
-            corridor_length_m=corridor_length,
-            seats=req.fire_hall_seats,
-            area_m2=(req.fire_area_m2 or req.total_area_m2 or None),
-            dn=req.cabinet_dn,
-            nozzle_mm=req.nozzle_mm,
-            hose_m=req.hose_length_m,
-            jet_m=req.compact_jet_m,
-        ))
+        fire_result = calculate_request_fire(req)
         p.fire = fire_from_calc(
             fire_result,
             nozzle_dn=req.cabinet_dn,

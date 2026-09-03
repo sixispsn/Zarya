@@ -981,9 +981,9 @@ async def wizard_design(request: Request):
     advisories = review_request(req)
 
     pid = fv("project_id") or None
-    if not preflight.can_calculate:
+    if not preflight.can_release:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
-            "errors": [item.message for item in preflight.blockers],
+            "errors": [item.message for item in preflight.release_blockers],
             "advisories": advisories,
             "prefill": req,
             "project_id": pid,
@@ -1037,6 +1037,7 @@ async def wizard_design(request: Request):
             defense_payload=defense_payload,
             documents=documents,
             outdir=outdir,
+            normative_baseline=preflight.normative_baseline.to_dict(),
         )
         release_manifest = _RELEASE_STORE.publish(
             release_id=run_id,

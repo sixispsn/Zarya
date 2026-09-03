@@ -56,6 +56,10 @@
           <div><dt>Исходные данные</dt><dd>{{ passport.fingerprints.project }}</dd></div>
           <div><dt>Legacy-эталон</dt><dd>{{ passport.fingerprints.legacy }}</dd></div>
           <div><dt>Commit сборки</dt><dd>{{ passport.fingerprints.build_commit }}</dd></div>
+          {% if passport.normative_baseline %}
+          <div><dt>Baseline нормативов</dt><dd>{{ passport.normative_baseline.baseline_id }}</dd></div>
+          <div><dt>SHA-256 нормативов</dt><dd>{{ passport.normative_baseline.fingerprint_sha256 }}</dd></div>
+          {% endif %}
           <div><dt>Seal манифеста</dt><dd>{{ passport.seal_sha256 }}</dd></div>
           <div><dt>ID выпуска</dt><dd>{{ passport.passport_id }}</dd></div>
         </dl>

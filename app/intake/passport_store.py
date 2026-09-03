@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from app.pz.project import Project
+from app.normative.baseline import get_active_baseline
 
 
 _PROJECTS_ROOT = os.environ.get(
@@ -81,6 +82,7 @@ class PassportStore:
         defense_payload: dict,
         documents: list[dict],
         outdir: str,
+        normative_baseline: dict | None = None,
     ) -> dict:
         """Атомарно сохранить снимок выпуска и вернуть запечатанный манифест."""
         destination = self._passport_dir(passport_id)
@@ -129,8 +131,11 @@ class PassportStore:
                 "value",
                 project.building.purpose,
             )
+            baseline_payload = (
+                normative_baseline or get_active_baseline().to_dict()
+            )
             manifest = {
-                "schema_version": "1.0",
+                "schema_version": "1.1",
                 "passport_id": passport_id,
                 "canonical_url": canonical_url,
                 "created_at": commission.generated_at,
@@ -164,6 +169,7 @@ class PassportStore:
                     "legacy": commission.legacy_fingerprint,
                     "build_commit": commission.build_commit,
                 },
+                "normative_baseline": baseline_payload,
                 "proof": proof,
                 "documents": stored_documents,
             }

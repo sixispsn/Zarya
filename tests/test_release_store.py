@@ -73,6 +73,10 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     assert snapshot.documents[0]["name"] == "ПЗ.pdf"
     assert snapshot.status == ["готово"]
     assert snapshot.preflight_payload["can_release"] is True
+    assert snapshot.normative_baseline_payload["baseline_id"] == (
+        "ru-ios-2026-09-03-v1"
+    )
+    assert len(snapshot.normative_baseline_payload["fingerprint_sha256"]) == 64
 
 
 def test_release_is_append_only(tmp_path):
@@ -98,6 +102,48 @@ def test_answer_path_is_scoped_to_release(tmp_path):
     assert path.parent.name == "answers"
     with pytest.raises(ValueError):
         store.answer_path("a1b2c3d4e5", "../../answer.pdf")
+
+
+def test_release_keeps_explicit_historical_normative_baseline(tmp_path):
+    historical = {
+        "schema_version": "1.0",
+        "baseline_id": "historical-baseline-v1",
+        "accepted_on": "2025-01-01",
+        "documents": [],
+        "status": "accepted",
+        "fingerprint_sha256": "D" * 64,
+    }
+    store = ReleaseStore(tmp_path)
+    commission = CommissionReport(
+        project_fingerprint="A" * 16,
+        legacy_fingerprint="B" * 16,
+        build_commit="C" * 16,
+        generated_at="2025-01-01T12:00:00",
+    )
+    graph = ProofGraph(
+        project_fingerprint=commission.project_fingerprint,
+        legacy_fingerprint=commission.legacy_fingerprint,
+        build_commit=commission.build_commit,
+        generated_at=commission.generated_at,
+    )
+    manifest = store.publish(
+        release_id="0123456789",
+        project_id="f1e2d3c4b5",
+        passport_id="H" * 32,
+        passport_url="https://example.test/p/" + "H" * 32,
+        request=load_request(YAML),
+        commission=commission,
+        proof_graph=graph,
+        defense_payload={"decisions": []},
+        documents=[],
+        advisories=[],
+        status=[],
+        warnings=[],
+        normative_baseline=historical,
+    )
+
+    assert manifest["normative_baseline_id"] == "historical-baseline-v1"
+    assert store.load("0123456789").normative_baseline_payload == historical
 
 
 def test_wizard_restores_release_after_memory_cache_is_cleared(
