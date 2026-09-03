@@ -349,6 +349,10 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     request_dto = load_request_file(str(
         Path(__file__).parents[1] / "demo" / "demo_project.yaml"
     ))
+    # Declare an intentionally incomplete pressure system: the architecture
+    # workspace must expose the same honest status sheet as the full bundle.
+    request_dto.wastewater_pump_required = True
+    request_dto.wastewater_pump_system = "K1"
     project_id = project_store.save(request_dto)
 
     link_request = _web_request(
@@ -367,8 +371,14 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
         import_id,
     )
     body = workspace.body.decode("utf-8")
-    assert "Скачать принципиальную схему PDF" in body
-    assert "Контроль привязки по АР · SVG" in body
+    assert "Схема К1/К2 · PDF" in body
+    assert (
+        f'/wizard/architecture/{import_id}/wastewater/export/k1-k2.pdf'
+        in body
+    )
+    assert "Привязка К1/К2 по АР · SVG" in body
+    assert "Схема К3 · PDF" not in body
+    assert "Контроль данных К1н/К3н · PDF" in body
     assert "Инженерный граф не связан" not in body
 
     control = web.architecture_wastewater_control_svg(import_id)
@@ -382,6 +392,26 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     assert Path(pdf_response.path).is_file()
     assert len(PdfReader(pdf_response.path).pages) == 2
 
+    pressure_response = web.architecture_wastewater_graphic_pdf(
+        import_id,
+        "pressure",
+    )
+    assert pressure_response.status_code == 200
+    assert Path(pressure_response.path).name == "Схема_напорной_канализации.pdf"
+    assert len(PdfReader(pressure_response.path).pages) == 1
+
+    dispatch_response = web.architecture_wastewater_graphic_pdf(
+        import_id,
+        "k1-k2",
+    )
+    assert dispatch_response.status_code == 200
+    assert dispatch_response.path == pdf_response.path
+    assert (
+        web.architecture_wastewater_graphic_pdf(import_id, "legacy")
+        .status_code
+        == 422
+    )
+
     request_dto.apartments += 1
     project_store.save(request_dto, project_id=project_id)
     changed = web.architecture_workspace(
@@ -392,3 +422,8 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     assert "Скачать новую схему PDF" not in changed
     assert web.architecture_wastewater_control_svg(import_id).status_code == 422
     assert web.architecture_wastewater_scheme_pdf(import_id).status_code == 422
+    assert (
+        web.architecture_wastewater_graphic_pdf(import_id, "k1-k2")
+        .status_code
+        == 422
+    )

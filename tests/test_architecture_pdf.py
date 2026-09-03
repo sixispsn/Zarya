@@ -255,7 +255,7 @@ def test_selected_boundaries_and_labeled_intervals_create_confirmed_floor(
     assert "Архитектурный разрез подтверждён" in refreshed_body
     assert 'value="АР-ПДФ-01"' in refreshed_body
     assert 'value="Кухня"' in refreshed_body
-    assert "Привязка К1/К2 к помещениям" in refreshed_body
+    assert "Привязка систем ИОС3 к помещениям" in refreshed_body
 
     riser_request = _request(
         f"/wizard/architecture/{import_id}/wastewater/riser",

@@ -55,7 +55,11 @@ from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
 )
-from app.pz.wastewater_scheme_service import generate_wastewater_scheme
+from app.pz.wastewater_graphic_exports import (
+    assess_wastewater_graphic_exports,
+    generate_wastewater_graphic_export,
+    wastewater_graphic_export,
+)
 
 
 router = APIRouter(prefix="/wizard", tags=["architecture-import"])
@@ -90,6 +94,7 @@ def _context(**values):
         "linked_project": None,
         "linked_project_registry": None,
         "wastewater_control_ready": False,
+        "wastewater_graphic_exports": (),
         "receiver_definitions": tuple(RECEIVER_DEFINITIONS.values()),
         "kind_labels": {
             "vector": "Векторный план",
@@ -292,6 +297,7 @@ def _project_evaluation(
             "linked_project": None,
             "linked_project_registry": None,
             "wastewater_control_ready": False,
+            "wastewater_graphic_exports": (),
             "project": None,
             "layout": None,
             "issues": binding_issues,
@@ -339,6 +345,7 @@ def _project_evaluation(
 
     binding_issues = ()
     registry = None
+    graphic_exports = ()
     if project is not None:
         binding_issues = audit_architecture_wastewater_binding(
             architecture,
@@ -367,6 +374,8 @@ def _project_evaluation(
             "receivers": receiver_rows,
             "pipe_count": len(project.sewage.pipes),
         }
+        if not changed:
+            graphic_exports = assess_wastewater_graphic_exports(project)
         if (
             not changed
             and not any(row.severity == "error" for row in binding_issues)
@@ -413,6 +422,7 @@ def _project_evaluation(
         },
         "linked_project_registry": registry,
         "wastewater_control_ready": ready,
+        "wastewater_graphic_exports": graphic_exports,
         "project": project,
         "layout": layout,
         "issues": all_issues,
@@ -452,6 +462,9 @@ def _wastewater_binding_context(
         "linked_project_registry": evaluation.pop("linked_project_registry"),
         "wastewater_control_ready": evaluation.pop(
             "wastewater_control_ready"
+        ),
+        "wastewater_graphic_exports": evaluation.pop(
+            "wastewater_graphic_exports"
         ),
     }
 
@@ -1091,16 +1104,39 @@ def _ready_wastewater_evaluation(import_id: str) -> dict:
 
 @router.get("/architecture/{import_id}/wastewater/scheme.pdf")
 def architecture_wastewater_scheme_pdf(import_id: str):
+    """Backward-compatible URL for the canonical K1/K2 export."""
+    return _architecture_wastewater_graphic_pdf(import_id, "k1-k2")
+
+
+@router.get("/architecture/{import_id}/wastewater/export/{export_key}.pdf")
+def architecture_wastewater_graphic_pdf(import_id: str, export_key: str):
+    """Export any declared IOS3 scheme through the shared production service."""
+    return _architecture_wastewater_graphic_pdf(import_id, export_key)
+
+
+def _architecture_wastewater_graphic_pdf(import_id: str, export_key: str):
     try:
-        evaluation = _ready_wastewater_evaluation(import_id)
+        # Confirm that the architecture-import session still exists even for
+        # K3/pressure sheets, which currently consume the linked project graph
+        # but not the room-placement overlay.
+        _STORE.survey(import_id)
+        if export_key == "k1-k2":
+            project = _ready_wastewater_evaluation(import_id)["project"]
+        else:
+            project = _linked_project(import_id, require_current=True)
+            if project is None:
+                raise ValueError(
+                    "Сначала свяжите импорт архитектуры с сохранённым проектом."
+                )
+        export = wastewater_graphic_export(project, export_key)
         output_dir = os.path.join(_EXPORT_ROOT, import_id)
         os.makedirs(output_dir, mode=0o700, exist_ok=True)
-        output_path = os.path.join(output_dir, "Схема_К1_К2.pdf")
-        # Экран архитектурной привязки оставляет SVG-контроль подложки, но
-        # кнопка PDF выпускает тот же канонический документ, что и комплект
-        # ПЗ. Так пользователь больше не получает «новую» схему только с
-        # этажами и иную схему из общего мастера.
-        generate_wastewater_scheme(evaluation["project"], output_path)
+        output_path = os.path.join(output_dir, export.filename)
+        generate_wastewater_graphic_export(
+            project,
+            export.key,
+            output_path,
+        )
         os.chmod(output_path, 0o600)
     except FileNotFoundError:
         return PlainTextResponse("Сессия или проект не найдены.", status_code=404)
@@ -1109,7 +1145,7 @@ def architecture_wastewater_scheme_pdf(import_id: str):
     return FileResponse(
         output_path,
         media_type="application/pdf",
-        filename="Схема_К1_К2.pdf",
+        filename=export.filename,
         headers={"Cache-Control": "no-store"},
     )
 

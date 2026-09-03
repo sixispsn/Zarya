@@ -33,12 +33,16 @@ from app.pz.generator import (
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
-    generate_wastewater_scheme_pdf, generate_wastewater_diagnostic_pdf,
+    generate_wastewater_diagnostic_pdf,
     generate_wastewater_ugo_pdf,
     generate_wastewater_spec_pdf,
     generate_wastewater_balance_pdf,
     generate_commission_control_pdf, append_pdf, merge_pdfs,
     generate_metering_scheme_pdf, generate_pump_zone_scheme_pdf,
+)
+from app.pz.wastewater_graphic_exports import (
+    assess_wastewater_graphic_exports,
+    generate_wastewater_graphic_export,
 )
 
 # расчётные слои (импортируются лениво внутри режима 1, чтобы режим 2 не тянул их)
@@ -856,9 +860,15 @@ def design_ios2(
         "расчётные листы и баланс приложения А приложены"
     )
 
-    bundle.wastewater_scheme_pdf = generate_wastewater_scheme_pdf(
-        project, os.path.join(output_dir, "Схема_К1_К2.pdf")
+    graphic_exports = {
+        row.key: row for row in assess_wastewater_graphic_exports(project)
+    }
+    k1_k2_result = generate_wastewater_graphic_export(
+        project,
+        "k1-k2",
+        os.path.join(output_dir, graphic_exports["k1-k2"].filename),
     )
+    bundle.wastewater_scheme_pdf = k1_k2_result.output_path
     bundle.status.append(
         "Схема_К1_К2.pdf собрана каноническим многостраничным векторным "
         "генератором А1: надземная часть и подвал/выпуски; основная надпись "
@@ -866,15 +876,11 @@ def design_ios2(
         "переходы не подставляются"
     )
 
-    from app.pz.wastewater_k3_project_inputs import k3_is_applicable
-    if k3_is_applicable(project):
-        from app.pz.wastewater_k3_scheme_service import (
-            generate_wastewater_k3_scheme,
-        )
-
-        k3_result = generate_wastewater_k3_scheme(
+    if graphic_exports["k3"].applicable:
+        k3_result = generate_wastewater_graphic_export(
             project,
-            os.path.join(output_dir, "Схема_К3.pdf"),
+            "k3",
+            os.path.join(output_dir, graphic_exports["k3"].filename),
         )
         bundle.wastewater_k3_scheme_pdf = k3_result.output_path
         if k3_result.ready:
@@ -894,15 +900,11 @@ def design_ios2(
             "заявлена исходными данными проекта"
         )
 
-    from app.pz.wastewater_pressure_project_inputs import pressure_sewer_is_applicable
-    if pressure_sewer_is_applicable(project):
-        from app.pz.wastewater_pressure_scheme_service import (
-            generate_wastewater_pressure_scheme,
-        )
-
-        pressure_result = generate_wastewater_pressure_scheme(
+    if graphic_exports["pressure"].applicable:
+        pressure_result = generate_wastewater_graphic_export(
             project,
-            os.path.join(output_dir, "Схема_напорной_канализации.pdf"),
+            "pressure",
+            os.path.join(output_dir, graphic_exports["pressure"].filename),
         )
         bundle.wastewater_pressure_scheme_pdf = pressure_result.output_path
         if pressure_result.ready:

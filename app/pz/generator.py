@@ -477,9 +477,15 @@ def generate_wastewater_scheme_pdf(
     реестр или точная геометрия неполны, сервис создаёт отдельный лист статуса
     без вымышленных участков и фасонных частей.
     """
-    from app.pz.wastewater_scheme_service import generate_wastewater_scheme
+    from app.pz.wastewater_graphic_exports import (
+        generate_wastewater_graphic_export,
+    )
 
-    return generate_wastewater_scheme(project, output_path).output_path
+    return generate_wastewater_graphic_export(
+        project,
+        "k1-k2",
+        output_path,
+    ).output_path
 
 
 def generate_wastewater_k3_scheme_pdf(
@@ -491,11 +497,15 @@ def generate_wastewater_k3_scheme_pdf(
     Напорные участки и насосная рабочая точка в этот лист не подмешиваются:
     при их наличии сервис возвращает лист контроля неполноты.
     """
-    from app.pz.wastewater_k3_scheme_service import (
-        generate_wastewater_k3_scheme,
+    from app.pz.wastewater_graphic_exports import (
+        generate_wastewater_graphic_export,
     )
 
-    return generate_wastewater_k3_scheme(project, output_path).output_path
+    return generate_wastewater_graphic_export(
+        project,
+        "k3",
+        output_path,
+    ).output_path
 
 
 def generate_wastewater_pressure_scheme_pdf(
@@ -507,11 +517,15 @@ def generate_wastewater_pressure_scheme_pdf(
     Насос, Q-H кривая, потери, трубопроводы и арматура должны быть явно
     подтверждены исходными данными; каталог насосов В1/В2 не используется.
     """
-    from app.pz.wastewater_pressure_scheme_service import (
-        generate_wastewater_pressure_scheme,
+    from app.pz.wastewater_graphic_exports import (
+        generate_wastewater_graphic_export,
     )
 
-    return generate_wastewater_pressure_scheme(project, output_path).output_path
+    return generate_wastewater_graphic_export(
+        project,
+        "pressure",
+        output_path,
+    ).output_path
 
 
 def generate_architecture_section_node_pdf(
