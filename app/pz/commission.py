@@ -52,6 +52,7 @@ class CommissionReport:
     passport: list[PassportItem] = field(default_factory=list)
     trace_rows: list[TraceRow] = field(default_factory=list)
     checks: list[ControlCheck] = field(default_factory=list)
+    normative_audits: list[dict] = field(default_factory=list)
     project_fingerprint: str = ""
     legacy_fingerprint: str = ""
     build_commit: str = ""
@@ -279,6 +280,16 @@ def build_commission_report(
     head_paths_complete = (
         project.head_paths is None or project.head_paths.complete
     )
+    from app.normative.audit_matrix import build_project_gost_matrices
+
+    gost_matrices = build_project_gost_matrices(
+        project,
+        artifacts=artifacts,
+        baseline=normative_baseline,
+    )
+    gost_by_discipline = {
+        matrix.discipline: matrix for matrix in gost_matrices
+    }
 
     passport = [
         PassportItem("Объект", project.document.object_name or "не задан"),
@@ -811,8 +822,8 @@ def build_commission_report(
             "Расчёты К1/К2",
             "Баланс ИОС3 по ГОСТ Р 21.620",
             "Принципиальная схема К1/К2",
-            "Спецификация К1/К2",
-            "Комплект К1/К2",
+            "Спецификация ИОС3",
+            "Комплект ИОС3",
         )
         missing_wastewater = [
             name for name in wastewater_names if not artifacts.get(name)
@@ -833,25 +844,43 @@ def build_commission_report(
             "ПП РФ № 87, пункт 18; ГОСТ Р 21.620-2023; СП 30.13330.2020",
             blocking=bool(missing_wastewater),
         )
-        from app.pz.wastewater_gost import audit_wastewater_gost
-        wastewater_audit = audit_wastewater_gost(project)
+        wastewater_audit = gost_by_discipline["ИОС3"]
         add(
             "DOC-04", "Состав ИОС3 проверен по ГОСТ Р 21.620-2023",
-            "verified" if wastewater_audit.complete else "missing",
+            "verified" if wastewater_audit.release_ready else "missing",
             (
-                "обязательные сведения текстовой и графической частей заполнены"
-                if wastewater_audit.complete else
+                "машинная матрица требований не содержит блокировок выпуска"
+                if wastewater_audit.release_ready else
                 "не закрыты: " + "; ".join(
-                    f"{row.code} {row.requirement}"
-                    for row in wastewater_audit.missing
+                    f"{row.rule_id} {row.title}"
+                    for row in wastewater_audit.release_blockers
                 )
             ),
             (
-                "Нет действий" if wastewater_audit.complete else
+                "Нет действий" if wastewater_audit.release_ready else
                 "Заполнить обязательные исходные данные ИОС3"
             ),
             "ГОСТ Р 21.620-2023, разделы 5-6",
-            blocking=not wastewater_audit.complete,
+            blocking=not wastewater_audit.release_ready,
+        )
+        water_audit = gost_by_discipline["ИОС2"]
+        add(
+            "DOC-05", "Состав ИОС2 проверен по ГОСТ Р 21.619-2023",
+            "verified" if water_audit.release_ready else "missing",
+            (
+                "машинная матрица требований не содержит блокировок выпуска"
+                if water_audit.release_ready else
+                "не закрыты: " + "; ".join(
+                    f"{row.rule_id} {row.title}"
+                    for row in water_audit.release_blockers
+                )
+            ),
+            (
+                "Нет действий" if water_audit.release_ready else
+                "Заполнить обязательные сведения и артефакты ИОС2"
+            ),
+            "ГОСТ Р 21.619-2023, раздел 5",
+            blocking=not water_audit.release_ready,
         )
         hydraulic_exists = bool(artifacts.get("Гидравлический расчёт В2"))
         add(
@@ -880,6 +909,7 @@ def build_commission_report(
         passport=passport,
         trace_rows=trace_rows,
         checks=checks,
+        normative_audits=[matrix.to_dict() for matrix in gost_matrices],
         project_fingerprint=project_hash,
         legacy_fingerprint=legacy_hash,
         build_commit=commit,

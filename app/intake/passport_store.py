@@ -135,7 +135,7 @@ class PassportStore:
                 normative_baseline or get_active_baseline().to_dict()
             )
             manifest = {
-                "schema_version": "1.1",
+                "schema_version": "1.2",
                 "passport_id": passport_id,
                 "canonical_url": canonical_url,
                 "created_at": commission.generated_at,
@@ -170,6 +170,9 @@ class PassportStore:
                     "build_commit": commission.build_commit,
                 },
                 "normative_baseline": baseline_payload,
+                "normative_audits": list(
+                    getattr(commission, "normative_audits", [])
+                ),
                 "proof": proof,
                 "documents": stored_documents,
             }

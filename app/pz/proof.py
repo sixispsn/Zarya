@@ -1008,6 +1008,7 @@ def build_proof_graph(
         decisions.append(fire_hydraulic)
     decisions.append(_stage_boundary_decision(project))
     decisions.extend(_optional_normative_decisions(project))
+    decisions.extend(_normative_audit_decisions(commission))
     return ProofGraph(
         project_fingerprint=commission.project_fingerprint,
         legacy_fingerprint=commission.legacy_fingerprint,
@@ -1015,3 +1016,93 @@ def build_proof_graph(
         generated_at=commission.generated_at,
         decisions=decisions,
     )
+
+
+def _normative_audit_decisions(
+    commission: CommissionReport,
+) -> list[ProofDecision]:
+    """Представить запечатанные ГОСТ-матрицы как решения Proof."""
+    decisions: list[ProofDecision] = []
+    for audit in commission.normative_audits:
+        discipline = str(audit.get("discipline", "ГОСТ"))
+        summary = audit.get("summary", {})
+        counts = summary.get("counts", {})
+        total = int(summary.get("total", 0))
+        blockers = int(summary.get("release_blockers", 0))
+        verified = int(counts.get("verified", 0)) + int(
+            counts.get("not_applicable", 0)
+        )
+        open_review = int(counts.get("manual_review", 0)) + int(
+            counts.get("pending_build", 0)
+        )
+        status = (
+            "missing" if blockers
+            else "stage_r" if open_review
+            else "verified"
+        )
+        if blockers:
+            result = f"Блокировок выпуска: {blockers}."
+        elif open_review:
+            result = (
+                "Блокировок нет; открытых ручных/этапных проверок: "
+                f"{open_review}."
+            )
+        else:
+            result = "Все применимые требования матрицы подтверждены."
+
+        rows = list(audit.get("rows", []))
+        blocking_ids = [
+            str(row.get("rule_id", ""))
+            for row in rows if row.get("blocks_release")
+        ]
+        document = (
+            rows[0].get("designation", audit.get("document_id", ""))
+            if rows else audit.get("document_id", "")
+        )
+        deliverables = sorted({
+            str(name)
+            for row in rows
+            for name in row.get("deliverables", [])
+            if name
+        })
+        audit_id = {"ИОС2": "ios2", "ИОС3": "ios3"}.get(
+            discipline, "normative"
+        )
+        decisions.append(ProofDecision(
+            id=f"gost-{audit_id}-audit",
+            system=discipline,
+            title=f"Машинный аудит {document}",
+            value=f"{verified}/{total}",
+            unit="правил",
+            status=status,
+            summary=result,
+            steps=[
+                ProofStep(
+                    "source", "Нормативный baseline",
+                    f"{audit.get('baseline_id', '—')}; "
+                    f"SHA-256 {audit.get('baseline_fingerprint', '—')}",
+                    "Матрица хранит точную редакцию документа, принятую этим выпуском.",
+                ),
+                ProofStep(
+                    "norm", "Профильный стандарт",
+                    str(document),
+                    f"Проверено машинных требований: {total}.",
+                ),
+                ProofStep(
+                    "decision", "Вердикт выпуска",
+                    result,
+                    (
+                        "Блокирующие ID: " + ", ".join(blocking_ids)
+                        if blocking_ids else "Блокирующие ID отсутствуют."
+                    ),
+                ),
+                ProofStep(
+                    "artifact", "Запечатанная матрица",
+                    str(audit.get("fingerprint_sha256", "—")),
+                    "Матрица входит в комиссионный отчёт, паспорт и ReleaseStore.",
+                ),
+            ],
+            artifacts=deliverables,
+            impact=["статус выпуска", "комиссионный контроль", "цифровой паспорт"],
+        ))
+    return decisions

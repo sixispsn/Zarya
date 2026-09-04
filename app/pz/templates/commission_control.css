@@ -169,6 +169,14 @@
 .protocol-table th:nth-child(5) { width: 21%; }
 .protocol-table th:nth-child(6) { width: 18%; }
 
+.audit-table { font-size: 6.7pt; }
+.audit-table th:nth-child(1) { width: 12%; }
+.audit-table th:nth-child(2) { width: 18%; }
+.audit-table th:nth-child(3) { width: 17%; }
+.audit-table th:nth-child(4) { width: 23%; }
+.audit-table th:nth-child(5) { width: 17%; }
+.audit-table th:nth-child(6) { width: 13%; }
+
 .status-badge {
   display: inline-block;
   border: .2mm solid currentColor;
@@ -183,6 +191,8 @@
 .status-stage_r { color: #92400e; }
 .status-missing { color: #b91c1c; }
 .status-not_applicable { color: #4b5563; }
+.status-pending_build,
+.status-manual_review { color: #92400e; }
 
 .blocking-row td {
   background: #fff1f1;

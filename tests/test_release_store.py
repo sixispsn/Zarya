@@ -21,6 +21,10 @@ fire: {mode: not_required}
 def _publish(store: ReleaseStore):
     commission = CommissionReport(
         passport=[PassportItem("Версия", "0.6.1")],
+        normative_audits=[{
+            "discipline": "ИОС2",
+            "fingerprint_sha256": "D" * 64,
+        }],
         project_fingerprint="A" * 16,
         legacy_fingerprint="B" * 16,
         build_commit="C" * 16,
@@ -64,7 +68,8 @@ def _publish(store: ReleaseStore):
 
 def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     store = ReleaseStore(tmp_path)
-    _publish(store)
+    manifest = _publish(store)
+    assert manifest["schema_version"] == 3
     snapshot = store.load("a1b2c3d4e5")
     assert snapshot.request().floors == 9
     assert snapshot.commission_report().build_commit == "C" * 16
@@ -77,6 +82,12 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
         "ru-ios-2026-09-03-v1"
     )
     assert len(snapshot.normative_baseline_payload["fingerprint_sha256"]) == 64
+    assert snapshot.normative_audits_payload[0]["discipline"] == "ИОС2"
+    assert (
+        snapshot.commission_report().normative_audits
+        == snapshot.normative_audits_payload
+    )
+    assert (tmp_path / "a1b2c3d4e5" / "normative-audits.json").is_file()
 
 
 def test_release_is_append_only(tmp_path):

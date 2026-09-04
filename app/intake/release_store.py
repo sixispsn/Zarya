@@ -106,6 +106,7 @@ def _commission_from_dict(value: dict) -> CommissionReport:
         passport=[PassportItem(**row) for row in value.get("passport", [])],
         trace_rows=[TraceRow(**row) for row in value.get("trace_rows", [])],
         checks=[ControlCheck(**row) for row in value.get("checks", [])],
+        normative_audits=list(value.get("normative_audits", [])),
         project_fingerprint=str(value.get("project_fingerprint", "")),
         legacy_fingerprint=str(value.get("legacy_fingerprint", "")),
         build_commit=str(value.get("build_commit", "")),
@@ -127,6 +128,7 @@ class ReleaseSnapshot:
     advisories_payload: list[dict]
     preflight_payload: dict
     normative_baseline_payload: dict
+    normative_audits_payload: list[dict]
     status: list[str]
     warnings: list[str]
 
@@ -199,6 +201,7 @@ class ReleaseStore:
                 "advisories.json": [asdict(row) for row in advisories],
                 "preflight.json": preflight or {},
                 "normative-baseline.json": baseline_payload,
+                "normative-audits.json": list(commission.normative_audits),
                 "state.json": {
                     "status": list(status),
                     "warnings": list(warnings),
@@ -222,7 +225,7 @@ class ReleaseStore:
                 if path.is_file()
             }
             manifest = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "release_id": release_id,
                 "project_id": project_id,
                 "passport_id": passport_id,
@@ -308,6 +311,13 @@ class ReleaseStore:
             normative_baseline_payload=(
                 read_json("normative-baseline.json")
                 if (directory / "normative-baseline.json").is_file() else {}
+            ),
+            normative_audits_payload=(
+                read_json("normative-audits.json")
+                if (directory / "normative-audits.json").is_file()
+                else list(
+                    read_json("commission.json").get("normative_audits", [])
+                )
             ),
             status=[str(row) for row in state.get("status", [])],
             warnings=[str(row) for row in state.get("warnings", [])],

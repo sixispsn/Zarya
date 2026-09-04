@@ -8,7 +8,7 @@
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/wizard.css?v=20260730-7">
-  <link rel="stylesheet" href="/static/passport.css?v=20260730-1">
+  <link rel="stylesheet" href="/static/passport.css?v=20260904-1">
   <script defer src="/static/wizard.js?v=20260730-7"></script>
 </head>
 <body>
@@ -106,6 +106,32 @@
           {% endfor %}
         </div>
       </section>
+
+      {% if passport.normative_audits %}
+      <section class="passport-card passport-audits">
+        <header><div><p class="passport-overline">04 · НОРМАТИВНЫЙ АУДИТ</p><h2>Матрицы ГОСТ выпуска</h2></div><span>SEALED</span></header>
+        <div class="passport-audit-grid">
+          {% for audit in passport.normative_audits %}
+          <details {% if loop.first %}open{% endif %}>
+            <summary>
+              <div><strong>{{ audit.discipline }} · {{ audit.rows[0].designation }}</strong><small>{{ audit.baseline_id }} · {{ audit.fingerprint_sha256 }}</small></div>
+              <b>{{ audit.summary.total }} правил · {{ audit.summary.release_blockers }} блок.</b>
+            </summary>
+            <div class="passport-audit-rows">
+              {% for row in audit.rows %}
+              <article data-status="{{ row.status }}">
+                <i></i>
+                <code>{{ row.rule_id }}</code>
+                <div><strong>{{ row.title }}</strong><small>{{ row.reference }}</small><p>{{ row.evidence }}</p></div>
+                <span>{{ row.status }}</span>
+              </article>
+              {% endfor %}
+            </div>
+          </details>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
 
     <footer class="passport-footer">

@@ -891,6 +891,9 @@ _COMMISSION_STATUS_LABELS = {
     "stage_r": "стадия Р",
     "missing": "не хватает данных",
     "not_applicable": "не требуется",
+    "pending_build": "после сборки",
+    "manual_review": "ручная проверка",
+    "fail": "не соответствует",
 }
 
 

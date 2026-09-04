@@ -65,8 +65,41 @@
   </table>
 </section>
 
+{% for audit in report.normative_audits %}
 <section class="commission-page">
-  <h2>3. Протокол автоматических проверок</h2>
+  <h2>{{ 2 + loop.index }}. Машинная матрица {{ audit.discipline }} — {{ audit.rows[0].designation }}</h2>
+  <p class="commission-intro">Baseline {{ audit.baseline_id }} · SHA-256 нормативного снимка
+  {{ audit.baseline_fingerprint }} · SHA-256 матрицы {{ audit.fingerprint_sha256 }}.
+  Всего требований: {{ audit.summary.total }}; блокировок выпуска: {{ audit.summary.release_blockers }}.</p>
+  <table class="commission-table audit-table">
+    <thead>
+      <tr>
+        <th>ID / пункт</th>
+        <th>Требование</th>
+        <th>Факты</th>
+        <th>Результат</th>
+        <th>Документы</th>
+        <th>Статус</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in audit.rows %}
+      <tr class="{{ 'blocking-row' if row.blocks_release else '' }}">
+        <td><b>{{ row.rule_id }}</b><br>{{ row.clauses|join(', ') }}</td>
+        <td>{{ row.title }}</td>
+        <td>{{ row.fact_ids|join(', ') }}</td>
+        <td>{{ row.evidence }}</td>
+        <td>{{ row.deliverables|join(', ') }}</td>
+        <td><span class="status-badge status-{{ row.status }}">{{ status_labels[row.status] }}</span>{% if row.blocks_release %}<small class="blocking-label">блокирует</small>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+
+<section class="commission-page">
+  <h2>5. Протокол автоматических проверок</h2>
   <div class="protocol-summary">
     {% for key in ["verified", "specified", "stage_r", "missing", "not_applicable"] %}
     <div class="status-{{ key }}">
