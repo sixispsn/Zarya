@@ -1,54 +1,58 @@
 :root {
   color-scheme: dark;
-  --canvas: #0b0b0e;
-  --surface: #111115;
-  --surface-raised: #17171c;
-  --surface-hover: #1c1c22;
-  --input: #141419;
-  --ink: #f1f1f3;
-  --ink-soft: #c9c9d0;
-  --muted: #9b9ba6;
-  --quiet: #72727d;
-  --line: #29292f;
-  --line-strong: #3a3a43;
-  --accent: #7775ff;
-  --accent-bright: #9694ff;
-  --accent-pale: rgba(119, 117, 255, .12);
-  --cyan: #58c4dc;
-  --ok: #43c9a6;
-  --ok-pale: rgba(67, 201, 166, .1);
-  --warn: #e7aa58;
-  --warn-pale: rgba(231, 170, 88, .1);
-  --danger: #f07178;
-  --danger-pale: rgba(240, 113, 120, .1);
-  --shadow: 0 16px 48px rgba(0, 0, 0, .24);
+  --canvas: #111625;
+  --surface: #171c2b;
+  --surface-raised: #1d2333;
+  --surface-hover: #242b3c;
+  --input: #141a29;
+  --ink: #f5f7fb;
+  --ink-soft: #d2d8e4;
+  --muted: #a7b0c2;
+  --quiet: #7f8a9f;
+  --line: #2c3241;
+  --line-strong: #3a4150;
+  --accent: #ff6b35;
+  --accent-hover: #ff875e;
+  --accent-bright: #ff936d;
+  --accent-ink: #111625;
+  --accent-pale: rgba(255, 107, 53, .13);
+  --cyan: #00e5ff;
+  --ok: #00f5d4;
+  --ok-pale: rgba(0, 245, 212, .10);
+  --warn: #ffa500;
+  --warn-pale: rgba(255, 165, 0, .11);
+  --danger: #ff5d6c;
+  --danger-pale: rgba(255, 93, 108, .11);
+  --shadow: 0 18px 52px rgba(3, 7, 18, .30);
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 html[data-theme="light"] {
   color-scheme: light;
-  --canvas: #f5f5f7;
+  --canvas: #f2f4f8;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-hover: #f2f2f5;
-  --input: #f7f7f9;
-  --ink: #16161a;
-  --ink-soft: #3f3f47;
-  --muted: #60606b;
-  --quiet: #7b7b86;
-  --line: #dfdfe4;
-  --line-strong: #c9c9d1;
-  --accent: #5e5ce6;
-  --accent-bright: #4846cf;
-  --accent-pale: rgba(94, 92, 230, .09);
-  --cyan: #238aa0;
-  --ok: #087d68;
-  --ok-pale: #ebf7f4;
-  --warn: #9c610d;
-  --warn-pale: #fff7e8;
-  --danger: #b9333a;
-  --danger-pale: #fff0f1;
-  --shadow: 0 16px 40px rgba(25, 25, 35, .08);
+  --surface-hover: #e9edf4;
+  --input: #f7f8fb;
+  --ink: #111625;
+  --ink-soft: #2c3241;
+  --muted: #586273;
+  --quiet: #707b8e;
+  --line: #d7dce5;
+  --line-strong: #b6bfcd;
+  --accent: #ff6b35;
+  --accent-hover: #ff8257;
+  --accent-bright: #c63a0b;
+  --accent-ink: #111625;
+  --accent-pale: rgba(255, 107, 53, .10);
+  --cyan: #007f91;
+  --ok: #007c6b;
+  --ok-pale: #e7f8f5;
+  --warn: #9a6100;
+  --warn-pale: #fff5df;
+  --danger: #b92f3c;
+  --danger-pale: #fff0f2;
+  --shadow: 0 16px 40px rgba(17, 22, 37, .09);
 }
 
 * { box-sizing: border-box; }
@@ -62,7 +66,7 @@ body {
   line-height: 1.55;
   text-rendering: optimizeLegibility;
 }
-::selection { color: #fff; background: var(--accent); }
+::selection { color: var(--accent-ink); background: var(--accent); }
 button, input, select { font: inherit; }
 button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -373,8 +377,8 @@ table.grid .compact-check input[type="checkbox"] {
 .actions-copy strong { display: block; font-size: 14px; }
 .actions-copy span { color: var(--muted); font-size: 12px; }
 .button-primary, .button-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 43px; padding: 0 18px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: -.005em; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
-.button-primary { border: 1px solid color-mix(in srgb, var(--accent) 75%, #fff); color: #fff; background: var(--accent); box-shadow: 0 8px 24px rgba(95, 92, 230, .2); }
-.button-primary:hover { background: var(--accent-bright); transform: translateY(-1px); }
+.button-primary { border: 1px solid color-mix(in srgb, var(--accent) 72%, #fff); color: var(--accent-ink); background: var(--accent); box-shadow: 0 8px 26px rgba(255, 107, 53, .22); }
+.button-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
 .button-primary:disabled { opacity: .65; cursor: wait; transform: none; }
 .button-secondary { border: 1px solid var(--line-strong); color: var(--ink-soft); background: var(--surface); }
 .button-secondary:hover { color: var(--ink); background: var(--surface-hover); }
@@ -669,10 +673,10 @@ table.grid .compact-check input[type="checkbox"] {
 .plan-preview-bg { fill: #f7f7f4; }
 .plan-vector-layer line { stroke: #25252a; stroke-width: 1; opacity: .84; }
 .plan-text-layer text { fill: #404048; font-family: Arial,sans-serif; pointer-events: none; }
-[data-preview-calibration] { stroke: #06a8b5; stroke-width: 3; stroke-dasharray: 7 4; }
+[data-preview-calibration] { stroke: #008fa3; stroke-width: 3; stroke-dasharray: 7 4; }
 [data-preview-cut] { stroke: #e94b64; stroke-width: 3; }
-[data-preview-candidate] circle { fill: #785fff; stroke: white; stroke-width: 1.5; }
-[data-preview-candidate] text { fill: #4b34db; font: 700 10px var(--mono); }
+[data-preview-candidate] circle { fill: #ff6b35; stroke: white; stroke-width: 1.5; }
+[data-preview-candidate] text { fill: #bd3300; font: 700 10px var(--mono); }
 .architecture-plan-svg.is-picking { outline: 2px solid var(--accent); outline-offset: -2px; }
 .architecture-plan-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .architecture-plan-legend span { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--quiet); font: 8px var(--mono); }
@@ -878,7 +882,7 @@ table.grid .compact-check input[type="checkbox"] {
 .radar-hero form { display: grid; flex: 0 0 auto; justify-items: center; gap: 7px; }
 .radar-hero form small { color: var(--quiet); font: 8px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
 .radar-check-button { display: inline-flex; align-items: center; gap: 9px; width: auto; min-width: 175px; }
-.radar-check-button span { width: 7px; height: 7px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.13); }
+.radar-check-button span { width: 7px; height: 7px; border-radius: 999px; background: var(--accent-ink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-ink) 13%, transparent); }
 
 .radar-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .radar-summary > div { position: relative; min-width: 0; padding: 16px 18px 17px; border-left: 1px solid var(--line); }

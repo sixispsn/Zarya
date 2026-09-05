@@ -283,7 +283,11 @@ def test_blueprint_ui_marks_edited_sections():
 def test_dark_theme_is_default_and_responsive():
     css = open("app/web/static/wizard.css", encoding="utf-8").read()
     js = open("app/web/static/wizard.js", encoding="utf-8").read()
-    assert "--canvas: #0b0b0e" in css
+    assert "--canvas: #111625" in css
+    assert "--line: #2c3241" in css
+    assert "--accent: #ff6b35" in css
+    assert "--cyan: #00e5ff" in css
+    assert "--ok: #00f5d4" in css
     assert 'html[data-theme="light"]' in css
     assert "background-image" not in css
     assert "@media (max-width: 1080px)" in css
