@@ -11,12 +11,12 @@ class FireRequest(BaseModel):
     building_type: Literal[
         "f13", "f12_hotel", "f12_hostel", "f11",
         "f21_theater", "f21_lib", "f22", "f_office", "f5",
-    ] = Field(..., description="Тип здания по СП 10")
+    ] = Field(..., description="Тип здания по СП 10.13130.2020, Изм. № 1")
     floors: int = Field(default=1, ge=1, le=100, description="Этажность")
-    height_m: Optional[float] = Field(default=None, gt=0, description="Высота здания, м")
+    height_m: Optional[float] = Field(default=None, gt=0, description="Пожарно-техническая высота по СП 1.13130, м")
     corridor_length_m: Optional[float] = Field(default=None, ge=0, description="Длина коридора (Ф1.3), м")
-    seats: Optional[int] = Field(default=None, ge=0, description="Вместимость зала (Ф2.1 театры)")
-    area_m2: Optional[float] = Field(default=None, ge=0, description="Площадь (Ф2.1 библ./Ф2.2), м²")
+    seats: Optional[int] = Field(default=None, ge=0, description="Вместимость Ф2.1 для строки 5")
+    area_m2: Optional[float] = Field(default=None, ge=0, description="Площадь расчётной части для строк 4/6, м²")
     fire_degree: Literal["I_II", "III", "IV", "V"] = Field(default="I_II", description="Степень огнестойкости")
     category: Literal["AB", "V", "GD"] = Field(default="V", description="Категория пож. опасности")
     construction_class: Literal["C0", "C1", "C2", "C3"] = Field(default="C0", description="Класс констр. опасности")

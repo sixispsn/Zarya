@@ -8,7 +8,7 @@
 
 Источники:
   СП 30.13330.2020 (ред. Изм. №3 от 18.12.2023)
-  СП 10.13130.2020
+  СП 10.13130.2020 с Изменением № 1
   ГОСТ Р 21.619-2023 (оформление)
 """
 from dataclasses import dataclass, field
@@ -19,8 +19,8 @@ from app.pz.project import (
     PipeMaterials, WaterSource,
 )
 
-# Порог рабочего давления, выше которого хоз-питьевую и пожарную сети разделяют
-# (СП 10.13130.2020, пп. 6.1.1–6.1.2; СП 30.13330.2020, 5.4.1)
+# Порог гидростатического давления совмещённого ВПВ/ХПВ, после которого нужны
+# раздельные сети либо регуляторы на ветвях ХПВ (СП 10, п. 6.2.19).
 PRESSURE_LIMIT_MPA = 0.45
 
 # Коэффициент kм местных сопротивлений (∑Hil = i·l·(1+kм)), раздел 8 СП 30.13330.2020
@@ -46,9 +46,9 @@ class FireNetworkDecision:
         if self.combined:
             return (
                 "Система внутреннего противопожарного водопровода (В2) принята "
-                "объединённой с хозяйственно-питьевым водопроводом (В1) — допускается "
-                "при совпадении требований к качеству воды и рабочему давлению "
-                "(СП 30.13330.2020, п. 6.1; СП 10.13130.2020, пп. 4.1, 6.1.8)."
+                "совмещённой с хозяйственно-питьевым водопроводом (В1). Материалы, "
+                "арматура и покрытия, контактирующие с водой, принимаются для воды "
+                "питьевого качества (СП 10.13130.2020, пп. 6.2.19, 14.1.3)."
             )
         if self.topology == "pre_meter_branch":
             basis = self.basis or "решение проектировщика по техническим условиям"
@@ -93,19 +93,14 @@ def decide_fire_network(
         reasons.append(
             f"гидростатическое давление у наиболее низко расположенного "
             f"пожарного крана ({fire.pressure_at_lowest_pk_mpa:.2f} МПа) превышает "
-            f"{PRESSURE_LIMIT_MPA} МПа (СП 10.13130.2020, 6.1.1–6.1.2)"
+            f"{PRESSURE_LIMIT_MPA} МПа; принята раздельная сеть вместо установки "
+            "регуляторов на ветвях ХПВ (СП 10.13130.2020, п. 6.2.19)"
         )
 
     if materials.cold_is_plastic_uncertified:
         reasons.append(
             "хозяйственно-питьевая сеть выполнена из пластиковых труб без "
             "пожарного сертификата (СП 30.13330.2020, 7.1.3)"
-        )
-
-    if fire.has_aupt:
-        reasons.append(
-            "пожарные краны запитываются от трубопроводов установки "
-            "автоматического пожаротушения (СП 10.13130.2020, 12.1)"
         )
 
     requested = fire.network_topology or "auto"
@@ -143,6 +138,8 @@ class WaterInletDecision:
     reasons: List[str]
     compliant: bool
     assessment_complete: bool
+    ring_required: bool = False
+    ring_confirmed: Optional[bool] = None
 
 
 def decide_water_inlets(
@@ -157,10 +154,20 @@ def decide_water_inlets(
     незавершённой.
     """
     reasons: List[str] = []
+    ring_required = False
+    if fire.required and fire.ring_distribution is True:
+        ring_required = True
+        reasons.append(
+            "принята кольцевая/закольцованная разводка ВПВ; требуются два ввода "
+            "от разных участков наружной кольцевой сети "
+            "(СП 10.13130.2020, п. 6.1.7¹)"
+        )
     if fire.required and fire.pk_total >= 12:
+        ring_required = True
         reasons.append(
             f"предусмотрено {fire.pk_total} пожарных кранов (12 и более; "
-            "СП 30.13330.2020, п. 8.4)"
+            "требуются два ввода и кольцевая разводка по "
+            "СП 10.13130.2020, п. 6.1.7²)"
         )
     if (building.purpose == BuildingPurpose.RESIDENTIAL
             and building.apartments > 400):
@@ -173,12 +180,18 @@ def decide_water_inlets(
             "проектировщиком задана двухвводная схема с ответвлением В2 до ВУ В1"
         )
     minimum = 2 if reasons else 1
+    topology_known = not ring_required or fire.ring_distribution is not None
+    topology_ok = not ring_required or fire.ring_distribution is True
     return WaterInletDecision(
         minimum_count=minimum,
         adopted_count=max(int(adopted_count or 1), 1),
         reasons=reasons,
-        compliant=int(adopted_count or 1) >= minimum,
-        assessment_complete=not (fire.required and fire.pk_total <= 0),
+        compliant=int(adopted_count or 1) >= minimum and topology_ok,
+        assessment_complete=(
+            not (fire.required and fire.pk_total <= 0) and topology_known
+        ),
+        ring_required=ring_required,
+        ring_confirmed=fire.ring_distribution,
     )
 
 

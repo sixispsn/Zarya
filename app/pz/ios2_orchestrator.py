@@ -180,9 +180,9 @@ def design_ios2(
     audit = None
     report = hydraulic_report   # может прийти готовым (режим 2)
     if fire.required and network is not None:
-        if required_jets not in (1, 2):
+        if required_jets not in (1, 2, 3, 4):
             raise ValueError(
-                "Для гидравлического расчёта В2 требуется 1 или 2 "
+                "Для гидравлического расчёта В2 требуется от 1 до 4 "
                 f"одновременные струи; получено {required_jets!r}"
             )
         from app.calc.fire_hydraulics import (
@@ -269,15 +269,23 @@ def design_ios2(
         if adopted != project.source.inputs_count:
             project.source.inputs_count = adopted
             inlet_decision.adopted_count = adopted
-            inlet_decision.compliant = True
+            inlet_decision.compliant = (
+                not inlet_decision.ring_required
+                or inlet_decision.ring_confirmed is True
+            )
             bundle.status.append(
-                f"water_inlets: принято {adopted} ввода по п. 8.4 СП 30: "
+                f"water_inlets: принято {adopted} ввода по СП 10/СП 30: "
                 + "; ".join(inlet_decision.reasons)
             )
     if not inlet_decision.assessment_complete:
         bundle.warnings.append(
             "water_inlets: число пожарных кранов не задано; проверка условия "
-            "«12 ПК и более» п. 8.4 СП 30 не завершена"
+            "«12 ПК и более» п. 6.1.7² СП 10 не завершена"
+        )
+    if inlet_decision.ring_required and inlet_decision.ring_confirmed is not True:
+        bundle.warnings.append(
+            "water_inlets: требуется кольцевая разводка В2, но она не подтверждена "
+            "явным графом (п. 6.1.7² СП 10)"
         )
 
     from app.pz.rules import decide_fire_network
@@ -302,6 +310,7 @@ def design_ios2(
             hydraulic_result.pump_duty,
             npsh_a_m=project.source.npsh_available_m,
             maximum_source_head_m=project.source.maximum_head_m,
+            pk_total=project.fire.pk_total,
         )
         if project.fire_pumps.model:
             bundle.status.append(

@@ -223,6 +223,16 @@ def test_scenario_total_flow():
     assert r.dictating_scenario.total_flow_lps == pytest.approx(5.2)
 
 
+def test_scenario_supports_four_simultaneous_cabinets_from_updated_table_7_1():
+    net = _net_with_risers()
+    r = solve_fire_hydraulics_scenario(net, required_jets=4)
+    assert r.dictating_scenario is not None
+    assert len(r.dictating_scenario.active_cabinet_ids) == 4
+    assert r.dictating_scenario.total_flow_lps == pytest.approx(
+        sum(row.flow_lps for row in r.dictating_scenario.cabinets)
+    )
+
+
 def test_scenario_fewer_candidates_than_jets_warns():
     net = _forked_net()
     net.cabinets = [net.cabinets[0]]  # только один ПК

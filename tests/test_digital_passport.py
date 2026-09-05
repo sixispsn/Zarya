@@ -95,7 +95,7 @@ def test_published_passport_survives_new_store_and_detects_tampering(tmp_path):
     assert len(manifest["documents"][0]["sha256"]) == 64
     assert manifest["schema_version"] == "1.2"
     assert manifest["normative_baseline"]["baseline_id"] == (
-        "ru-ios-2026-09-03-v1"
+        "ru-ios-2026-09-05-v1"
     )
     assert manifest["proof"]["decisions"][0]["documents"][0][
         "view_url"

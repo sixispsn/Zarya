@@ -53,14 +53,14 @@ def test_initial_snapshot_exposes_manual_baseline_state(tmp_path):
     snapshot = NormativeRadarStore(tmp_path).load(get_active_baseline())
 
     assert snapshot.summary == {
-        "green": 8,
+        "green": 9,
         "orange": 0,
-        "red": 1,
+        "red": 0,
         "gray": 1,
         "total": 10,
     }
-    assert snapshot.overall_indicator == RadarIndicator.RED
-    assert _entry(snapshot, "sp_10_13130_2020").indicator == RadarIndicator.RED
+    assert snapshot.overall_indicator == RadarIndicator.GRAY
+    assert _entry(snapshot, "sp_10_13130_2020").indicator == RadarIndicator.GREEN
     assert _entry(snapshot, "pp87").source_health == SourceHealth.UNCONFIGURED
 
 
@@ -79,15 +79,15 @@ def test_official_page_parser_extracts_status_changes_and_ignores_zero():
     assert len(probe.semantic_sha256) == 64
 
 
-def test_online_check_confirms_current_documents_and_keeps_sp10_block(tmp_path):
+def test_online_check_confirms_sp10_change_one(tmp_path):
     store = NormativeRadarStore(tmp_path)
 
     snapshot = run_radar_check(store=store, fetcher=_exact_fetcher)
 
     assert snapshot.summary == {
-        "green": 8,
+        "green": 9,
         "orange": 0,
-        "red": 1,
+        "red": 0,
         "gray": 1,
         "total": 10,
     }
@@ -97,9 +97,9 @@ def test_online_check_confirms_current_documents_and_keeps_sp10_block(tmp_path):
     assert sp30.official_amendments == ("1", "2", "3", "4", "5")
     assert _entry(snapshot, "gost_21_110_2013").official_correction_count == 1
     sp10 = _entry(snapshot, "sp_10_13130_2020")
-    assert sp10.indicator == RadarIndicator.RED
+    assert sp10.indicator == RadarIndicator.GREEN
     assert sp10.official_amendments == ("1",)
-    assert "Изменение № 1" in sp10.reason
+    assert "совпадает" in sp10.reason
 
 
 def test_unaccepted_change_is_orange_and_event_is_not_duplicated(tmp_path):
@@ -163,7 +163,7 @@ def test_source_failure_is_gray_without_fabricating_status(tmp_path):
     assert sp30.source_health == SourceHealth.ERROR
     assert sp30.official_status == ""
     assert "network unavailable" in sp30.error
-    assert _entry(snapshot, "sp_10_13130_2020").indicator == RadarIndicator.RED
+    assert _entry(snapshot, "sp_10_13130_2020").indicator == RadarIndicator.GRAY
 
 
 def test_semantic_card_drift_requires_review(tmp_path):

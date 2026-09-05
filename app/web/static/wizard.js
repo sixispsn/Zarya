@@ -142,7 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
       control.dataset.requiredActive = String(active);
       if (active && !valid) {
         const message = control.dataset.requiredRule === "fire-manual"
-          ? "В ручном режиме задайте 1 или 2 расчётные струи."
+          ? "В ручном режиме задайте от 1 до 4 расчётных струй."
           : control.dataset.requiredRule === "fire-category-auto"
             ? "Выберите функциональную категорию по таблице 7.1 СП 10."
             : control.dataset.requiredRule === "fire-theatre"

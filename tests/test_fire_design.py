@@ -19,7 +19,7 @@ def _ctx(**kw):
 
 
 def test_end_to_end_corridor_over_10m():
-    ctx = _ctx()
+    ctx = _ctx(corridor_length_m=48.0)
     room = RectangularRoom("c1", 48.0, 12.0, 3.3)
     res = design_fire_cabinets_from_context(ctx, room)
     assert isinstance(res, FireDesignResult)
@@ -42,16 +42,16 @@ def test_normative_flows_into_layout_without_manual_jet():
     assert res.resolved_normative.cabinet_normative.require_different_risers is False
 
 
-def test_manual_review_propagates():
-    # склад, 2 струи, не-коридор → нормативный слой ставит manual_review.
+def test_non_corridor_does_not_invent_different_risers_review():
+    # Требование разных стояков из п. 6.2.2 относится к коридорам >10 м.
     # высота 6 м, чтобы Rk=6 добивал до верха (H-1.35=4.65 < 6).
     ctx = _ctx(building_kind=FireBuildingKind.WAREHOUSE, space_kind=FireSpaceKind.STORAGE,
                room_height_m=6.0, room_width_m=10.0, building_height_m=24.0,
                placement_mode=PlacementMode.TWO_OPPOSITE_SIDES, required_jets_override=2)
     room = RectangularRoom("s1", 40.0, 10.0, 6.0)
     res = design_fire_cabinets_from_context(ctx, room)
-    assert res.manual_review_required is True
-    assert any("ручная проверка" in n.lower() for n in res.notes)
+    assert res.manual_review_required is False
+    assert res.resolved_normative.cabinet_normative.require_different_risers is False
 
 
 def test_unreachable_geometry_returns_diagnostic():

@@ -79,7 +79,7 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     assert snapshot.status == ["готово"]
     assert snapshot.preflight_payload["can_release"] is True
     assert snapshot.normative_baseline_payload["baseline_id"] == (
-        "ru-ios-2026-09-03-v1"
+        "ru-ios-2026-09-05-v1"
     )
     assert len(snapshot.normative_baseline_payload["fingerprint_sha256"]) == 64
     assert snapshot.normative_audits_payload[0]["discipline"] == "ИОС2"

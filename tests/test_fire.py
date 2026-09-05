@@ -49,7 +49,7 @@ class TestResidentialF13:
         """8 этажей и hпт < 30 м — ВПВ по строке 1 табл. 7.1 не требуется."""
         r = calculate_fire(FireInput(building_type="f13", floors=8, height_m=24))
         assert r.required is False
-        assert "ниже 12 эт. и ниже 30 м" in r.message
+        assert "менее 12 этажей и ниже 30 м" in r.message
 
     def test_eight_floors_at_48m_explains_height_trigger(self):
         r = calculate_fire(FireInput(
@@ -57,8 +57,8 @@ class TestResidentialF13:
             corridor_length_m=42, dn=50, nozzle_mm=13, hose_m=20, jet_m=12,
         ))
         assert r.required is True
-        assert "hпт=48 м" in r.message
-        assert "коридор свыше 10 м" in r.message
+        assert "30–50 м" in r.message
+        assert "коридор более 10 м" in r.message
 
     def test_below_12_floors_not_required(self):
         """Менее 12 этажей — ВПВ не требуется."""
@@ -123,21 +123,23 @@ class TestOffice:
 # ============================================================
 
 class TestTheater:
-    def test_small_one_stream(self):
-        """≤300 мест → 1 струя."""
+    def test_small_two_streams(self):
+        """≤300 мест → 2 струи по строке 5 Изменения № 1."""
         r = calculate_fire(FireInput(
             building_type="f21_theater", seats=200, height_m=20,
             dn=50, nozzle_mm=13, hose_m=20, jet_m=12,
         ))
-        assert r.streams == 1
+        assert r.streams == 2
+        assert r.q_total == 5.2
 
-    def test_large_two_streams(self):
-        """>300 мест → 2 струи."""
+    def test_large_four_streams(self):
+        """>300 мест → 4 струи по строке 5 Изменения № 1."""
         r = calculate_fire(FireInput(
             building_type="f21_theater", seats=500, height_m=20,
             dn=50, nozzle_mm=13, hose_m=20, jet_m=12,
         ))
-        assert r.streams == 2
+        assert r.streams == 4
+        assert r.q_total == 10.4
 
 
 # ============================================================
@@ -187,6 +189,15 @@ class TestProduction:
             dn=65, nozzle_mm=19, hose_m=20, jet_m=20,
         ))
         assert (r.streams, r.q_per_stream, r.q_total) == (4, 7.5, 30.0)
+        assert r.table_used == "п. 7.13"
+
+    def test_high_production_up_to_150_uses_two_streams_by_p_7_13(self):
+        r = calculate_fire(FireInput(
+            building_type="f5", fire_degree="I_II", category="V",
+            construction_class="C0", height_m=55, volume_thousand_m3=150,
+            dn=65, nozzle_mm=19, hose_m=20, jet_m=20,
+        ))
+        assert (r.streams, r.q_per_stream, r.q_total) == (2, 7.5, 15.0)
         assert r.table_used == "п. 7.13"
 
     def test_invalid_nozzle_falls_back_to_normative_minimum_not_legacy_26(self):

@@ -9,7 +9,7 @@ def test_fire_pump_selected_by_main_duty_point():
         source_kind=SourceKind.CITY_MAIN,
     )
     result = compute_fire_pump_from_duty(
-        duty, npsh_a_m=8.0, maximum_source_head_m=30.0)
+        duty, npsh_a_m=8.0, maximum_source_head_m=30.0, pk_total=8)
     assert result.required is True
     assert result.model == "CNP / Aikon PFFS 2 CDM10-9 DS 16 S"
     assert result.wp_q > 0 and result.wp_h > 0
@@ -45,6 +45,34 @@ def test_fire_pump_keeps_required_duty_when_catalog_has_no_candidate():
     assert result.h_design_m == 150.0
     assert "Q=36.00" in result.selection_note
     assert "H=150.0" in result.selection_note
+
+
+def test_mobile_fire_connections_are_required_only_above_ten_lps():
+    low = compute_fire_pump_from_duty(PumpDutyPoint(
+        required_head_m=70.0,
+        flow_lps=10.0,
+        source_kind=SourceKind.CITY_MAIN,
+    ), pk_total=8)
+    high = compute_fire_pump_from_duty(PumpDutyPoint(
+        required_head_m=70.0,
+        flow_lps=10.1,
+        source_kind=SourceKind.CITY_MAIN,
+    ), pk_total=12)
+    low_check = next(c for c in low.sp10_checks if c.clause == "12.17")
+    high_check = next(c for c in high.sp10_checks if c.clause == "12.17")
+    assert "не превышает" in low_check.decision
+    assert "не менее двух" in high_check.decision
+
+
+def test_reserve_fire_pump_has_no_automatic_dry_run_shutdown():
+    result = compute_fire_pump_from_duty(PumpDutyPoint(
+        required_head_m=70.0,
+        flow_lps=2.6,
+        source_kind=SourceKind.CITY_MAIN,
+    ), pk_total=8)
+    check = next(c for c in result.sp10_checks if c.clause == "12.3")
+    assert "не предусматривается" in check.decision
+    assert "сухому ходу" in check.decision
 
 
 def test_fire_pump_not_selected_without_duty():

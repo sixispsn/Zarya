@@ -115,8 +115,8 @@ class NormativeBaseline:
 # Локальные SHA-256 зафиксированы по предоставленным пользователем файлам.
 # Путь пользователя намеренно не попадает в публичный паспорт выпуска.
 _ACTIVE_BASELINE = NormativeBaseline(
-    baseline_id="ru-ios-2026-09-03-v1",
-    accepted_on="2026-09-03",
+    baseline_id="ru-ios-2026-09-05-v1",
+    accepted_on="2026-09-05",
     documents=(
         NormativeDocument(
             document_id="pp87",
@@ -175,18 +175,21 @@ _ACTIVE_BASELINE = NormativeBaseline(
             document_id="sp_10_13130_2020",
             designation="СП 10.13130.2020",
             title="Внутренний противопожарный водопровод",
-            edition="2020, базовая редакция",
-            amendments=(),
-            effective_date="2021-01-27",
-            verified_on="2026-09-03",
+            edition="2020",
+            amendments=("1",),
+            effective_date="2026-09-01",
+            verified_on="2026-09-05",
             source_url="https://protect.gost.ru/sp/details/d048b9cd-eff7-49de-bab0-4aa54eb6b173",
-            local_source_name="SP10.13130.2020.pdf",
-            local_sha256="58126f661c57fe2e53d86c0bc0e202bfba395e8563eaf5c5875db437185ad86a",
-            local_scope="Базовая редакция 2020 года без Изменения № 1.",
-            state=NormativeDocumentState.REVIEW_REQUIRED,
+            local_source_name="sp-10.13130-izm.1.pdf",
+            local_sha256="930d6d249938dba8a9175791ed0576648db367a461e89a246296d596725c2225",
+            local_scope=(
+                "Полный предоставленный PDF Изменения № 1, утверждённого "
+                "приказом МЧС России от 18.05.2026 № 348; применяется совместно "
+                "с базовым текстом СП 10.13130.2020."
+            ),
             current_edition_note=(
-                "Изменение № 1 действует с 01.09.2026; влияние на таблицы, "
-                "область применения и алгоритмы Zarya ещё не принято."
+                "Изменение № 1 действует с 01.09.2026 и принято в расчётное "
+                "ядро Zarya 05.09.2026."
             ),
         ),
         NormativeDocument(

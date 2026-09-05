@@ -41,9 +41,9 @@ def test_residential_eight_floors_below_30m_not_required():
     assert r.vpv_required is False and r.jets == 0
 
 
-def test_residential_above_75m_manual():
+def test_residential_above_75m_stays_in_open_high_band():
     r = resolve_table_7_1(C.RESIDENTIAL_F13, floors=30)
-    assert r.manual_review is True
+    assert r.jets == 2 and not r.manual_review
 
 
 def test_residential_no_corridor_conservative_manual():
@@ -51,11 +51,17 @@ def test_residential_no_corridor_conservative_manual():
     assert r.manual_review is True and r.jets == 2   # консервативно
 
 
-def test_footnote_height_is_determining():
-    # 14 эт. (диапазон 1), но h=55 м (диапазон 2) → определяет ВЫСОТА → 2 ПК
+def test_footnote_uses_more_demanding_of_two_events():
+    # 14 эт. дают нижний диапазон, h=55 м — верхний; берём верхний.
     r = resolve_table_7_1(C.RESIDENTIAL_F13, floors=14, height_m=55.0,
                           corridor_length_m=8.0)
-    assert r.jets == 2 and "свыше 50 до 75" in r.notes[0]
+    assert r.jets == 2 and "выше 50" in r.notes[0]
+
+
+def test_footnote_high_floors_cannot_be_downgraded_by_low_height():
+    r = resolve_table_7_1(C.RESIDENTIAL_F13, floors=18, height_m=29.0,
+                          corridor_length_m=8.0)
+    assert r.jets == 2
 
 
 # ── строка 2: общественные/офисы ─────────────────────────────────────────────
@@ -80,8 +86,8 @@ def test_hospital_bands():
 
 
 def test_theatre_by_seats():
-    assert resolve_table_7_1(C.THEATRE_F21, hall_seats=300).jets == 1
-    assert resolve_table_7_1(C.THEATRE_F21, hall_seats=301).jets == 2
+    assert resolve_table_7_1(C.THEATRE_F21, hall_seats=300).jets == 2
+    assert resolve_table_7_1(C.THEATRE_F21, hall_seats=301).jets == 4
 
 
 def test_theatre_no_seats_manual():
@@ -94,8 +100,9 @@ def test_library_by_area():
 
 
 def test_museum_trade_bands():
-    assert resolve_table_7_1(C.MUSEUM_TRADE, floors=3).jets == 1
-    assert resolve_table_7_1(C.MUSEUM_TRADE, floors=5, height_m=20.0).jets == 2
+    assert resolve_table_7_1(C.MUSEUM_TRADE, total_area_m2=999).vpv_required is False
+    assert resolve_table_7_1(C.MUSEUM_TRADE, total_area_m2=5000).jets == 1
+    assert resolve_table_7_1(C.MUSEUM_TRADE, total_area_m2=5001).jets == 2
 
 
 def test_dormitory_bands():
@@ -124,11 +131,19 @@ def test_t72_four_pk():
 
 
 def test_t72_v_degree():
-    assert resolve_table_7_2("V", "Г", "", 100).jets == 1
+    assert resolve_table_7_2("V", "Г", "", 100).vpv_required is False
 
 
 def test_t72_unknown_combo_manual():
-    assert resolve_table_7_2("I", "Д", "С0", 50).manual_review is True
+    assert resolve_table_7_2("I", "Д", "С0", 50).vpv_required is False
+
+
+def test_t72_below_half_thousand_not_required():
+    assert resolve_table_7_2("II", "В", "С0", 0.49).vpv_required is False
+
+
+def test_t72_third_degree_accepts_c1_for_abv():
+    assert resolve_table_7_2("III", "Б", "С1", 50).jets == 2
 
 
 # ── интеграция в fire_normative ──────────────────────────────────────────────
@@ -161,12 +176,13 @@ def test_normative_corridor_length_priority_over_width():
     assert r.jet_multiplicity.require_different_risers is False
 
 
-def test_normative_fallback_width_flagged():
+def test_normative_never_substitutes_width_for_corridor_length():
     from app.calc.fire_normative import resolve_fire_normative
-    # длина не задана → fallback на ширину, но с пометкой ВНИМАНИЕ
+    # Длина не задана: ширина не может заменить её, нужна ручная проверка.
     r = resolve_fire_normative(_ctx(required_jets_override=2, room_width_m=12.0))
-    assert r.jet_multiplicity.require_different_risers is True
-    assert any("ВНИМАНИЕ" in n for n in r.jet_multiplicity.notes)
+    assert r.jet_multiplicity.require_different_risers is False
+    assert r.jet_multiplicity.manual_review_required is True
+    assert any("длина коридора не задана" in n for n in r.jet_multiplicity.notes)
 
 
 def test_normative_override_beats_table():

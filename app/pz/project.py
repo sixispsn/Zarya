@@ -180,6 +180,8 @@ class FireSystem:
     network_topology: str = "auto"
     topology_basis: str = ""                 # ссылка на ТУ/СКС/задание либо принятое решение
     branch_electric_valves: bool = False      # электроприводы на отводах В2 по ТУ/СКС
+    # Определяется по явному графу сети. None — топология ещё не задана.
+    ring_distribution: Optional[bool] = None
     # --- результаты гидравлического расчёта В2 (из fire_hydraulics) ---
     required_head_m: Optional[float] = None   # требуемый напор на вводе В2, м
     available_head_m: Optional[float] = None  # доступный напор источника, м

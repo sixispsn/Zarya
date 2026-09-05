@@ -45,6 +45,26 @@ _BUILDING_MAP = {
     "industrial": BuildingPurpose.INDUSTRIAL,
 }
 
+
+def _network_has_cycle(runs) -> bool:
+    """Определить кольцевую разводку по явному неориентированному графу."""
+    parent = {}
+
+    def find(node):
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    for run in runs:
+        left = find(run.from_node)
+        right = find(run.to_node)
+        if left == right:
+            return True
+        parent[left] = right
+    return False
+
 def build_project(intent: IntentLike) -> Project:
     """ProjectIntent/IOS2Request → Project без изменения рабочего маппинга."""
     req = unwrap_project_intent(intent)
@@ -164,6 +184,7 @@ def build_project(intent: IntentLike) -> Project:
     # сеть В2: узлы собираются из участков (namespace runs), отметки из карты
     if req.network is not None and p.fire.required:
         n = req.network
+        p.fire.ring_distribution = _network_has_cycle(n.runs)
         node_ids = sorted({x for r in n.runs for x in (r.from_node, r.to_node)})
         nodes = [MainNodeSpec(nid, float(n.node_elevations.get(nid, 0.0)))
                  for nid in node_ids]

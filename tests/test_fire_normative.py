@@ -63,7 +63,8 @@ def test_formula_never_below_minimum():
 # ── кратность и разные стояки по п. 6.2.2 ────────────────────────────────────
 
 def test_corridor_over_10m_requires_different_risers():
-    ctx = _ctx(space_kind=FireSpaceKind.CORRIDOR, room_width_m=12.0, required_jets_override=2)
+    ctx = _ctx(space_kind=FireSpaceKind.CORRIDOR, room_width_m=2.0,
+               corridor_length_m=12.0, required_jets_override=2)
     r = resolve_fire_normative(ctx)
     assert r.jet_multiplicity.required_jets == 2
     assert r.jet_multiplicity.require_different_risers is True
@@ -71,17 +72,19 @@ def test_corridor_over_10m_requires_different_risers():
 
 
 def test_corridor_under_10m_allows_one_riser():
-    ctx = _ctx(space_kind=FireSpaceKind.CORRIDOR, room_width_m=8.0, required_jets_override=2)
+    ctx = _ctx(space_kind=FireSpaceKind.CORRIDOR, room_width_m=2.0,
+               corridor_length_m=8.0, required_jets_override=2)
     r = resolve_fire_normative(ctx)
     assert r.jet_multiplicity.require_different_risers is False
 
 
-def test_non_corridor_two_jets_flags_manual_review():
+def test_non_corridor_two_jets_use_geometry_without_false_riser_rule():
     ctx = _ctx(space_kind=FireSpaceKind.STORAGE, room_width_m=24.0, required_jets_override=2)
     r = resolve_fire_normative(ctx)
-    # СП не нормирует разные стояки вне коридора → False + manual_review
+    # СП не нормирует разные стояки вне коридора; покрытие всё равно двойное.
     assert r.jet_multiplicity.require_different_risers is False
-    assert r.jet_multiplicity.manual_review_required is True
+    assert r.jet_multiplicity.manual_review_required is False
+    assert r.cabinet_normative.required_jets == 2
 
 
 def test_one_jet_no_different_risers():
@@ -108,9 +111,11 @@ def test_formula_mode_requires_pressure_and_nozzle():
         validate_context(_ctx(jet_radius_mode=FireJetRadiusMode.FORMULA_7_16))
 
 
-def test_override_rejects_three():
-    with pytest.raises(ValueError):
-        validate_context(_ctx(required_jets_override=3))
+def test_override_accepts_three_but_layout_coverage_remains_two():
+    r = resolve_fire_normative(_ctx(required_jets_override=3))
+    assert r.jet_multiplicity.required_jets == 3
+    assert r.jet_multiplicity.coverage_jets == 2
+    assert r.cabinet_normative.required_jets == 2
 
 
 def test_table_7_1_not_implemented_without_override():

@@ -1,5 +1,6 @@
 """
-Расчёт расхода на внутреннее пожаротушение (ВПВ) по СП 10.13130.2020.
+Расчёт расхода на внутреннее пожаротушение (ВПВ) по СП 10.13130.2020
+с Изменением № 1.
 
 Числовая таблица 7.3 перенесена 1-в-1 из legacy/sp30_calculator.html. Область
 применения и нормативные минимумы проверяются по СП 10.13130.2020: legacy
@@ -29,11 +30,11 @@ from app.data.fire_tables import get_nozzle_data
 BuildingType = Literal[
     "f13",          # Ф1.3 многоквартирные жилые
     "f12_hotel",    # Ф1.2 гостиницы
-    "f12_hostel",   # Ф1.2 общежития коридорного типа
+    "f12_hostel",   # Ф1.2 (строка 2 в редакции Изм. № 1)
     "f11",          # Ф1.1 больницы, дома престарелых, интернаты
-    "f21_theater",  # Ф2.1 театры, кинотеатры, концертные залы, клубы, цирки
-    "f21_lib",      # Ф2.1 библиотеки, архивы, спортивные сооружения
-    "f22",          # Ф2.2 музеи, выставки / Ф3.1 магазины
+    "f21_theater",  # Ф2.1, кроме объектов строки 4 (по числу мест)
+    "f21_lib",      # спорт/библиотеки/архивы/лаборатории (по площади)
+    "f22",          # Ф2.2 / Ф3.1–Ф3.3 / многофункциональные (по площади)
     "f_office",     # Ф1.2/Ф3.4/Ф3.6/Ф4.2/Ф4.3 офисы и пр.
     "f5",           # Ф5.1/Ф5.2 производственные и складские
 ]
@@ -44,7 +45,7 @@ class FireInput:
     """Входные данные расчёта ВПВ."""
     building_type: BuildingType
     floors: int = 1                     # этажность
-    height_m: Optional[float] = None     # высота здания; определяющая по сноске **
+    height_m: Optional[float] = None     # пожарно-техническая высота; событие по сноске **
     # Доп. параметры (нужны для отдельных типов)
     corridor_length_m: Optional[float] = None  # длина коридора (для Ф1.3)
     seats: Optional[int] = None               # вместимость зала (для Ф2.1 театры)
@@ -91,11 +92,11 @@ def _get_t71(
         "f13": Table71Category.RESIDENTIAL_F13,
         "f_office": Table71Category.OFFICE_PUBLIC,
         "f12_hotel": Table71Category.OFFICE_PUBLIC,
-        "f12_hostel": Table71Category.DORMITORY_F12,
+        "f12_hostel": Table71Category.OFFICE_PUBLIC,
         "f11": Table71Category.HOSPITAL_F11,
-        "f21_theater": Table71Category.THEATRE_F21,
-        "f21_lib": Table71Category.LIBRARY_SPORT,
-        "f22": Table71Category.MUSEUM_TRADE,
+        "f21_theater": Table71Category.F21_AUDITORIUM,
+        "f21_lib": Table71Category.SPORTS_LIBRARY_LAB,
+        "f22": Table71Category.TRADE_PUBLIC_MULTI,
     }
     category = categories.get(building_type)
     if category is None:
@@ -130,12 +131,8 @@ def _get_t72(
             "таблица 7.2 СП 10 применима только до 50 м включительно"
         )
     if height_m > 50.0:
-        if volume_thousand_m3 > 150.0:
-            return 4, 5.0  # п. 7.13 СП 10
-        raise ValueError(
-            "Производственное здание выше 50 м при объёме не более 150 тыс. м³ "
-            "находится вне таблицы 7.2 и условия п. 7.13 СП 10"
-        )
+        # П. 7.13 в редакции Изменения № 1 охватывает оба диапазона объёма.
+        return (2, 5.0) if volume_thousand_m3 <= 150.0 else (4, 5.0)
     if fire_degree == "I_II" and category == "GD":
         return None  # правило canonical legacy для отсутствующей строки таблицы
     degree = "I" if fire_degree == "I_II" else fire_degree
@@ -164,10 +161,7 @@ def calculate_fire(data: FireInput) -> FireResult:
             data.fire_degree, data.category,
             data.construction_class, data.volume_thousand_m3, data.height_m,
         )
-        table_used = (
-            "п. 7.13" if (data.height_m or 0) > 50 and data.volume_thousand_m3 > 150
-            else "7.2"
-        )
+        table_used = "п. 7.13" if (data.height_m or 0) > 50 else "7.2"
         normative_note = ""
     else:
         table_result = _get_t71(
@@ -187,7 +181,9 @@ def calculate_fire(data: FireInput) -> FireResult:
             table_used=table_used,
             message=((normative_note + ". ") if normative_note else "") +
                     "Внутренний противопожарный водопровод не требуется "
-                    "(по таблице {} СП 10.13130.2020)".format(table_used),
+                    "(по {} СП 10.13130.2020 с Изменением № 1)".format(
+                        "таблице " + table_used if not table_used.startswith("п.") else table_used
+                    ),
         )
 
     n_streams, q_base = res

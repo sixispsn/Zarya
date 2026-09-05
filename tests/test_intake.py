@@ -40,7 +40,11 @@ def test_bad_building_type():
 
 
 def test_bad_streams():
-    assert any("streams" in p for p in _req(streams=3).validate())
+    assert any("streams" in p for p in _req(streams=5).validate())
+
+
+def test_four_streams_are_supported_by_updated_sp10():
+    assert not any("streams" in p for p in _req(streams=4).validate())
 
 
 def test_technology_questionnaire_requires_confirmed_followups():

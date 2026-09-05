@@ -115,9 +115,9 @@ def evaluate_normative_verdicts(
         status = NormativeVerdictStatus.FAIL
         blocking = True
         message = (
-            "Выпуск с В2 остановлен: локальное ядро и таблицы относятся к базовой "
-            "редакции СП 10.13130.2020, а Изменение № 1 действует с 01.09.2026. "
-            "Нужны анализ влияния, parity/golden-тесты и явное принятие нового baseline."
+            "Выпуск с В2 остановлен: обнаруженная действующая редакция СП 10 "
+            "ещё не принята локальным расчётным ядром. Нужны анализ влияния, "
+            "regression/golden-тесты и новый baseline."
         )
     else:
         status = NormativeVerdictStatus.PASS

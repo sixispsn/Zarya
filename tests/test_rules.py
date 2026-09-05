@@ -31,16 +31,16 @@ def test_fire_separate_plastic():
     assert not d.combined
 
 
-def test_fire_separate_aupt():
+def test_fire_aupt_does_not_force_false_separation():
     d = decide_fire_network(FireSystem(required=True, has_aupt=True), PipeMaterials())
-    assert not d.combined
+    assert d.combined
 
 
-def test_fire_separate_all_three_reasons():
+def test_fire_separate_for_pressure_and_material_even_with_aupt():
     d = decide_fire_network(
         FireSystem(required=True, pressure_at_lowest_pk_mpa=0.6, has_aupt=True),
         PipeMaterials(cold_is_plastic_uncertified=True))
-    assert not d.combined and len(d.reasons) == 3
+    assert not d.combined and len(d.reasons) == 2
 
 
 def test_fire_separate_in_high_rise_even_without_other_reasons():
@@ -86,13 +86,34 @@ def test_explicit_combined_does_not_override_mandatory_separation():
 
 
 def test_two_inlets_required_from_pk_or_apartments():
-    fire = FireSystem(required=True, pk_total=12)
+    fire = FireSystem(required=True, pk_total=12, ring_distribution=True)
     building = BuildingFlags(
         purpose=BuildingPurpose.RESIDENTIAL, apartments=401,
     )
     d = decide_water_inlets(building, fire, adopted_count=1)
     assert d.minimum_count == 2 and not d.compliant
-    assert len(d.reasons) == 2
+    assert len(d.reasons) == 3
+    assert d.ring_required and d.ring_confirmed
+
+
+def test_twelve_cabinets_fail_without_confirmed_ring():
+    d = decide_water_inlets(
+        BuildingFlags(purpose=BuildingPurpose.PUBLIC),
+        FireSystem(required=True, pk_total=12, ring_distribution=False),
+        adopted_count=2,
+    )
+    assert d.minimum_count == 2
+    assert d.ring_required and not d.compliant
+
+
+def test_ring_with_fewer_than_twelve_cabinets_still_requires_two_inlets():
+    d = decide_water_inlets(
+        BuildingFlags(purpose=BuildingPurpose.PUBLIC),
+        FireSystem(required=True, pk_total=8, ring_distribution=True),
+        adopted_count=1,
+    )
+    assert d.minimum_count == 2
+    assert d.ring_required and not d.compliant
 
 
 def test_head_paths_include_all_meters_and_heater_and_keep_legacy_aggregate():

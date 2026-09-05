@@ -4,7 +4,7 @@ app/calc/fire_normative.py — нормативный резолвер ВПВ (�
 
 Убирает ручной ввод Rk и кратности струй: из контекста объекта/помещения
 резолвит JetParams (Rk по п. 7.15 или формуле (3) п. 7.16) и FireCabinetNormative
-(число струй + требование разных стояков по п. 6.2.2). Дальше эти параметры идут
+(кратность покрытия + требование разных стояков по пп. 6.1.13 и 6.2.2). Дальше параметры идут
 в fire_layout.py, а не задаются пользователем «галочкой».
 
 Каркас и логика — авторства Антона. Модели JetParams/FireCabinetNormative/
@@ -99,6 +99,8 @@ class FireNormativeContext:
     building_height_m: float
 
     hose_length_m: float = 20.0
+    # Проектный геометрический параметр. Изм. № 1 исключило прежний п. 6.2.12,
+    # поэтому значение не выдаётся за требование действующей редакции СП 10.
     valve_axis_height_m: float = 1.35
     placement_mode: PlacementMode = PlacementMode.ONE_SIDE
 
@@ -121,8 +123,9 @@ class FireNormativeContext:
 
 @dataclass
 class ResolvedJetMultiplicity:
-    """Кратность расчётных ПК/струй + признак обязательности разных стояков."""
+    """Расчётное число ПК-с и отдельная кратность покрытия точки."""
     required_jets: int
+    coverage_jets: int
     require_different_risers: bool
     manual_review_required: bool = False
     source: FireJetMultiplicitySource = FireJetMultiplicitySource.MANUAL
@@ -153,8 +156,8 @@ def validate_context(ctx: FireNormativeContext) -> None:
         raise ValueError("hose_length_m must be > 0")
     if ctx.valve_axis_height_m <= 0:
         raise ValueError("valve_axis_height_m must be > 0")
-    if ctx.required_jets_override is not None and ctx.required_jets_override not in (1, 2):
-        raise ValueError("required_jets_override must be 1 or 2")
+    if ctx.required_jets_override is not None and ctx.required_jets_override not in (1, 2, 3, 4):
+        raise ValueError("required_jets_override must be from 1 to 4")
     if ctx.jet_radius_mode == FireJetRadiusMode.FORMULA_7_16:
         if ctx.nozzle_diameter_mm is None:
             raise ValueError("nozzle_diameter_mm is required when jet_radius_mode=FORMULA_7_16")
@@ -278,10 +281,10 @@ def resolve_required_jets_from_context(ctx: FireNormativeContext) -> tuple[int, 
                              "; ".join(res.notes))
         if res.manual_review:
             notes.append("ТРЕБУЕТСЯ ручная проверка числа ПК (см. примечание выше).")
-        if res.jets not in (1, 2):
-            raise ValueError(f"табл. 7.1/7.2 дала {res.jets} ПК — конвейр MVP "
-                             "поддерживает 1–2 (расширение: solve-сценарии умеют N, "
-                             "но покрытие layout ограничено).")
+        if res.jets not in (1, 2, 3, 4):
+            raise ValueError(
+                f"табл. 7.1/7.2 дала неподдерживаемое число ПК-с: {res.jets}"
+            )
         return res.jets, notes
     raise NotImplementedError(
         "Автоопределение required_jets: передайте required_jets_override либо "
@@ -290,59 +293,64 @@ def resolve_required_jets_from_context(ctx: FireNormativeContext) -> tuple[int, 
 
 
 def resolve_required_jets(ctx: FireNormativeContext) -> ResolvedJetMultiplicity:
-    """Кратность + признак разных стояков.
+    """Разделить расчётное число ПК-с и кратность покрытия.
 
-    required_jets=1 → False. required_jets=2:
-    - коридор >10 м → разные стояки (п. 6.2.2);
-    - коридор ≤10 м → один стояк допустим;
-    - не-коридор → False + manual_review_required (СП не нормирует разные стояки
-      для не-коридорных пространств; кратность обеспечивается геометрией).
+    По п. 6.1.13 при одном расчётном ПК-с каждая точка защищается одной струёй,
+    при двух и более — двумя. Для коридора длиной более 10 м п. 6.2.2 требует
+    эти две струи от разных стояков/опусков.
     """
     required_jets, req_notes = resolve_required_jets_from_context(ctx)
     notes = list(req_notes)
     src_manual = FireJetMultiplicitySource.MANUAL
 
     if required_jets == 1:
-        notes.append("required_jets=1 → require_different_risers=False.")
+        notes.append("П. 6.1.13: один расчётный ПК-с → одна струя в каждой точке.")
         return ResolvedJetMultiplicity(
-            required_jets=1, require_different_risers=False, manual_review_required=False,
+            required_jets=1, coverage_jets=1, require_different_risers=False,
+            manual_review_required=False,
             source=(FireJetMultiplicitySource.TABLE_7_1 if ctx.required_jets_override is None else src_manual),
             notes=notes)
 
+    coverage_jets = 2
+    notes.append(
+        f"П. 6.1.13: расчётных ПК-с {required_jets} → две струи в каждой точке."
+    )
     if ctx.space_kind == FireSpaceKind.CORRIDOR:
-        # П. 6.2.2 нормирует общую ДЛИНУ коридора. corridor_length_m — правильный
-        # вход; room_width_m — исторический fallback (семантически неверный),
-        # оставлен для совместимости с явной пометкой.
         corridor_metric = ctx.corridor_length_m
-        metric_note = "по общей длине коридора"
         if corridor_metric is None:
-            corridor_metric = ctx.room_width_m
-            metric_note = ("ВНИМАНИЕ: длина коридора не задана, использована ширина "
-                           "помещения как замена — задайте corridor_length_m")
-        if corridor_metric is None:
-            notes.append("Коридор, но ни длина, ни ширина не заданы; п. 6.2.2 не "
-                         "применён точно. Fallback: require_different_risers=False, "
-                         "нужна ручная проверка.")
+            notes.append(
+                "Общая длина коридора не задана; требование разных стояков "
+                "по п. 6.2.2 требует ручной проверки."
+            )
             return ResolvedJetMultiplicity(
-                required_jets=2, require_different_risers=False, manual_review_required=True,
+                required_jets=required_jets, coverage_jets=coverage_jets,
+                require_different_risers=False, manual_review_required=True,
                 source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
         if corridor_metric > 10.0:
-            notes.append(f"П. 6.2.2 ({metric_note}): коридор >10 м — каждая точка "
-                         "из двух ПК на разных стояках.")
+            notes.append(
+                "П. 6.2.2: общая длина коридора более 10 м — каждая точка "
+                "защищается двумя ПК-с на разных стояках/опусках."
+            )
             return ResolvedJetMultiplicity(
-                required_jets=2, require_different_risers=True, manual_review_required=False,
+                required_jets=required_jets, coverage_jets=coverage_jets,
+                require_different_risers=True, manual_review_required=False,
                 source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
-        notes.append(f"П. 6.2.2 ({metric_note}): коридор ≤10 м — два ПК допускаются "
-                     "на одном стояке.")
+        notes.append(
+            "П. 6.2.2: общая длина коридора до 10 м включительно — "
+            "требование разных стояков не установлено."
+        )
         return ResolvedJetMultiplicity(
-            required_jets=2, require_different_risers=False, manual_review_required=False,
+            required_jets=required_jets, coverage_jets=coverage_jets,
+            require_different_risers=False, manual_review_required=False,
             source=FireJetMultiplicitySource.TABLE_7_1_AND_P_6_2_2, notes=notes)
 
-    notes.append("required_jets=2 для не-коридорного пространства. Требование разных "
-                 "стояков из СП для такого пространства автоматически не выведено; "
-                 "кратность обеспечивается геометрией, стояковый принцип — на уровне сети.")
+    notes.append(
+        "Для не-коридорного пространства обязательность разных стояков не "
+        "установлена; двойное покрытие проверяется геометрически."
+    )
     return ResolvedJetMultiplicity(
-        required_jets=2, require_different_risers=False, manual_review_required=True,
+        required_jets=required_jets, coverage_jets=coverage_jets,
+        require_different_risers=False, manual_review_required=False,
         source=(FireJetMultiplicitySource.TABLE_7_1 if ctx.required_jets_override is None else src_manual),
         notes=notes)
 
@@ -368,7 +376,7 @@ def resolve_fire_normative(ctx: FireNormativeContext) -> ResolvedFireNormative:
         valve_axis_height_m=ctx.valve_axis_height_m,
     )
     cabinet_normative = FireCabinetNormative(
-        required_jets=jm.required_jets,
+        required_jets=jm.coverage_jets,
         require_different_risers=jm.require_different_risers,
         placement_mode=ctx.placement_mode,
     )

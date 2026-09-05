@@ -48,7 +48,7 @@ def test_every_row_is_bound_to_baseline_clause_fact_and_stable_id(tmp_path):
     for matrix in matrices:
         ids = [row.rule_id for row in matrix.rows]
         assert len(ids) == len(set(ids))
-        assert matrix.baseline_id == "ru-ios-2026-09-03-v1"
+        assert matrix.baseline_id == "ru-ios-2026-09-05-v1"
         assert len(matrix.baseline_fingerprint) == 64
         assert len(matrix.fingerprint) == 64
         for row in matrix.rows:

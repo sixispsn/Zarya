@@ -70,6 +70,17 @@ def test_layout_requires_streams():
         build_layout_inputs(p)
 
 
+def test_layout_separates_four_demand_jets_from_two_jet_coverage():
+    p = _project()
+    p.fire.streams = 4
+    ctx, _ = build_layout_inputs(p)[0]
+    from app.calc.fire_normative import resolve_fire_normative
+    resolved = resolve_fire_normative(ctx)
+    assert resolved.jet_multiplicity.required_jets == 4
+    assert resolved.jet_multiplicity.coverage_jets == 2
+    assert resolved.cabinet_normative.required_jets == 2
+
+
 def test_layout_empty_rooms_raises():
     p = _project()
     p.fire_rooms = []

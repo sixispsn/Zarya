@@ -51,9 +51,11 @@ def build_layout_inputs(project: Project) -> List[Tuple[object, object]]:
             "высота для СП 10"
         )
     streams = project.fire.streams
-    if streams not in (1, 2):
-        raise ValueError(f"fire.streams={streams}: нужен 1 или 2 "
-                         "(число расчётных струй, табл. 7.1)")
+    if streams not in (1, 2, 3, 4):
+        raise ValueError(
+            f"fire.streams={streams}: нужно число от 1 до 4 "
+            "(одновременно действующие ПК-с, табл. 7.1/7.2)"
+        )
 
     bk = FireBuildingKind(_PURPOSE_TO_FIRE_KIND[b.purpose])
     out: List[Tuple[object, object]] = []
@@ -63,6 +65,9 @@ def build_layout_inputs(project: Project) -> List[Tuple[object, object]]:
             space_kind=FireSpaceKind(spec.space_kind),
             room_height_m=spec.height_m,
             room_width_m=spec.width_m,
+            corridor_length_m=(
+                spec.length_m if spec.space_kind == "corridor" else None
+            ),
             building_height_m=fire_height_m,
             hose_length_m=float(project.fire.hose_length_m),
             placement_mode=PlacementMode(spec.placement_mode),

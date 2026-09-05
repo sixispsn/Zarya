@@ -35,7 +35,7 @@ FIRE_CATEGORIES = (
     "theatre_f21",
     "library_sport",
     "museum_trade",
-    "dormitory_f12",
+    "dormitory_f12",  # legacy-значение; в Изм. № 1 относится к строке 2
 )
 ROOF_TYPES = ("not_set", "flat", "sloped")
 WASTEWATER_ROOF_KINDS = (
@@ -425,7 +425,7 @@ class IOS2Request:
     # ВПВ
     fire_mode: str = "auto"                       # auto / not_required / manual
     fire_height_m: Optional[float] = None          # пожарно-техническая высота
-    fire_category: str = ""                        # строка таблицы 7.1 СП 10
+    fire_category: str = ""                        # строка табл. 7.1 СП 10, Изм. № 1
     fire_hall_seats: Optional[int] = None           # для Ф2.1
     fire_area_m2: Optional[float] = None            # площадь расчётной части
     fire_geometry_confirmed: bool = True            # геометрия явно введена/импортирована
@@ -622,14 +622,14 @@ class IOS2Request:
                 and (self.fire_hall_seats is None or self.fire_hall_seats <= 0)
             ):
                 p.append(
-                    "для театра/кино/клуба Ф2.1 задайте вместимость зала"
+                    "для объекта Ф2.1 строки 5 задайте вместимость зала"
                 )
             if (
-                self.fire_category == "library_sport"
+                self.fire_category in ("library_sport", "museum_trade")
                 and (self.fire_area_m2 or self.total_area_m2) <= 0
             ):
                 p.append(
-                    "для библиотеки/архива/спортивной части задайте её площадь"
+                    "для выбранной строки таблицы 7.1 задайте площадь расчётной части"
                 )
         if self.fire_hall_seats is not None and self.fire_hall_seats <= 0:
             p.append("fire_hall_seats должен быть > 0")
@@ -640,10 +640,10 @@ class IOS2Request:
                 "геометрия В2 должна быть явно подтверждена как введённая "
                 "по плану/расчётной схеме"
             )
-        if self.fire_mode == "manual" and self.streams not in (1, 2):
-            p.append("для ручного режима В2 задайте streams=1 или 2")
-        if self.streams is not None and self.streams not in (1, 2):
-            p.append(f"streams={self.streams}: поддерживается 1 или 2")
+        if self.fire_mode == "manual" and self.streams not in (1, 2, 3, 4):
+            p.append("для ручного режима В2 задайте streams от 1 до 4")
+        if self.streams is not None and self.streams not in (1, 2, 3, 4):
+            p.append(f"streams={self.streams}: поддерживается диапазон 1–4")
         if self.nozzle_mm not in (13, 16, 19):
             p.append("nozzle_mm должен быть 13, 16 или 19")
         if self.compact_jet_m not in (6, 8, 10, 12, 14, 16, 18, 20):
