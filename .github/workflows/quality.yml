@@ -7,13 +7,73 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: zarya-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+  calculation-contracts:
+    name: calculation-contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-quality.txt
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements-quality.txt
+      - name: Legacy parity gate
+        run: |
+          python -m pytest -q \
+            tests/test_legacy_sp30_source_parity.py \
+            tests/test_water_demand.py \
+            tests/test_pumps.py \
+            tests/test_insulation.py
+      - name: Normative contract gate
+        run: |
+          python -m pytest -q \
+            tests/test_normative_baseline.py \
+            tests/test_normative_audit_matrix.py \
+            tests/test_normative_requirements.py \
+            tests/test_fire_normative.py \
+            tests/test_fire_table_7_1.py \
+            tests/test_wastewater_sp30.py \
+            tests/test_wastewater_gost_21620.py
+      - name: New-code lint and type gate
+        run: |
+          python -m compileall -q app scripts
+          ruff check \
+            app/quality_gates.py \
+            scripts/verify_control_release.py \
+            tests/test_quality_gates.py
+          mypy --strict --follow-imports=skip --ignore-missing-imports \
+            app/quality_gates.py \
+            scripts/verify_control_release.py
+      - name: Critical-module coverage gate
+        run: |
+          python -m pytest -q \
+            --cov=app.quality_gates \
+            --cov=app.intake.questions \
+            --cov=app.intake.preflight \
+            --cov-report=term \
+            --cov-fail-under=70 \
+            tests/test_quality_gates.py \
+            tests/test_preflight.py \
+            tests/test_fact_registry.py
+
+  regression:
+    name: full-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -26,18 +86,58 @@ jobs:
             libpangoft2-1.0-0 shared-mime-info
       - name: Install dependencies
         run: python -m pip install --requirement requirements.txt
-      - name: Legacy parity gate
-        run: |
-          python -m pytest -q \
-            tests/test_legacy_sp30_source_parity.py \
-            tests/test_water_demand.py \
-            tests/test_pumps.py \
-            tests/test_insulation.py
       - name: Full test suite
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=pytest-results.xml
+      - name: Publish test protocol
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-protocol-${{ github.sha }}
+          path: pytest-results.xml
+          if-no-files-found: error
+          retention-days: 14
+
+  document-release:
+    name: document-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install document runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            fonts-dejavu-core fonts-liberation libcairo2 libpango-1.0-0 \
+            libpangoft2-1.0-0 poppler-utils shared-mime-info
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements.txt
+      - name: Approved visual regression gate
+        run: python -m pytest -q tests/test_wastewater_visual_golden.py
+      - name: Build complete control release
+        env:
+          ZARYA_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          python scripts/verify_control_release.py \
+            --output ci-artifacts/control-release \
+            --allow-blocker SP54-01 \
+            --allow-blocker DOC-04 \
+            --allow-blocker DOC-05
+      - name: Publish control release
+        uses: actions/upload-artifact@v4
+        with:
+          name: zarya-control-release-${{ github.sha }}
+          path: ci-artifacts/control-release
+          if-no-files-found: error
+          retention-days: 14
 
   container-smoke:
+    name: container-smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Build traceable image
@@ -45,15 +145,49 @@ jobs:
           docker build \
             --build-arg ZARYA_BUILD_COMMIT=${{ github.sha }} \
             --tag zarya:${{ github.sha }} .
-      - name: Verify embedded commit and health
+      - name: Verify embedded commit and application routes
         run: |
           test "$(docker run --rm zarya:${{ github.sha }} printenv ZARYA_BUILD_COMMIT)" = "${{ github.sha }}"
+          test "$(docker run --rm zarya:${{ github.sha }} id -u)" = "10001"
           docker run --detach --name zarya-smoke --publish 18000:8000 zarya:${{ github.sha }}
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18000/health; then
-              exit 0
+              break
+            fi
+            if test "$attempt" = "30"; then
+              docker logs zarya-smoke
+              exit 1
             fi
             sleep 2
           done
-          docker logs zarya-smoke
-          exit 1
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          base = "http://127.0.0.1:18000"
+          wizard = urllib.request.urlopen(base + "/wizard", timeout=10).read().decode()
+          assert "ZARYA / IOS2 + IOS3" in wizard
+          questions = json.load(urllib.request.urlopen(
+              base + "/api/project/preflight/questions", timeout=10
+          ))
+          assert len(questions) >= 4
+          request = urllib.request.Request(
+              base + "/api/project/preflight/live",
+              data=json.dumps({
+                  "building_type": "residential",
+                  "floors": 9,
+                  "building_height_m": 27,
+                  "fire_mode": "not_required",
+              }).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          live = json.load(urllib.request.urlopen(request, timeout=10))
+          assert "summary" in live and "questions" in live
+          PY
+      - name: Container logs
+        if: failure()
+        run: docker logs zarya-smoke
+      - name: Stop smoke container
+        if: always()
+        run: docker rm --force zarya-smoke || true

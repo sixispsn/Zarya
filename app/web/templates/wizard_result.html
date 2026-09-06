@@ -5,7 +5,7 @@
 <title>Заря — комплект ИОС2 + ИОС3 готов</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260905-1">
+<link rel="stylesheet" href="/static/wizard.css?v=20260906-1">
 <script defer src="/static/wizard.js?v=20260903-1"></script>
 </head><body>
 <header class="topbar">
@@ -163,6 +163,21 @@
     </section>
 
     {% if commission %}
+    {% if quality %}
+    <section class="card full quality-gates" data-state="{{ quality.state }}" id="quality-gates">
+      <div class="quality-gates-head"><div><p class="proof-overline">Zarya Quality Gates 1.0 · {{ 'боевой режим' if quality_hard_enabled else 'контрольный режим' }}</p><h2>{{ quality.release_status }}</h2></div><a class="button-secondary" href="/wizard/quality/{{ run_id }}" download>Скачать отчёт JSON</a></div>
+      <div class="quality-gate-grid">
+        {% for gate in quality.gates %}
+        <details class="quality-gate" data-state="{{ gate.state }}">
+          <summary><i aria-hidden="true"></i><span><strong>{{ gate.title }}</strong><small>{{ gate.description }}</small></span><b>{{ gate.state_label }}</b></summary>
+          <div class="quality-findings">
+            {% for item in gate.findings %}<article data-state="{{ item.state }}"><span>{{ item.code }}</span><div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.action %}<small>{{ item.action }}</small>{% endif %}{% if item.reference %}<em>{{ item.reference }}</em>{% endif %}</div></article>{% else %}<p>Замечаний нет.</p>{% endfor %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
     <section class="card full">
       <div class="card-kicker"><h2>Готовность к комиссии</h2><span class="system-tag">{{ 'готово' if commission.blocking_count == 0 else 'есть замечания' }}</span></div>
       <div class="metric-grid">

@@ -142,6 +142,7 @@ class ReleaseSnapshot:
     documents: list[dict]
     advisories_payload: list[dict]
     preflight_payload: dict
+    quality_payload: dict
     normative_baseline_payload: dict
     normative_audits_payload: list[dict]
     status: list[str]
@@ -188,6 +189,7 @@ class ReleaseStore:
         status: list[str],
         warnings: list[str],
         preflight: dict | None = None,
+        quality: dict | None = None,
         normative_baseline: dict | None = None,
     ) -> dict:
         destination = self._directory(release_id)
@@ -215,6 +217,7 @@ class ReleaseStore:
                 "documents.json": documents,
                 "advisories.json": [asdict(row) for row in advisories],
                 "preflight.json": preflight or {},
+                "quality-gates.json": quality or {},
                 "normative-baseline.json": baseline_payload,
                 "normative-audits.json": list(commission.normative_audits),
                 "state.json": {
@@ -240,7 +243,7 @@ class ReleaseStore:
                 if path.is_file()
             }
             manifest = {
-                "schema_version": 3,
+                "schema_version": 4,
                 "release_id": release_id,
                 "project_id": project_id,
                 "passport_id": passport_id,
@@ -322,6 +325,10 @@ class ReleaseStore:
             preflight_payload=(
                 read_json("preflight.json")
                 if (directory / "preflight.json").is_file() else {}
+            ),
+            quality_payload=(
+                read_json("quality-gates.json")
+                if (directory / "quality-gates.json").is_file() else {}
             ),
             normative_baseline_payload=(
                 read_json("normative-baseline.json")

@@ -16,6 +16,7 @@ services:
       ZARYA_NORMATIVE_MONITOR_INITIAL_DELAY_SECONDS: "30"
       ZARYA_PUBLIC_URL: https://${ZARYA_DOMAIN:-localhost}
       ZARYA_BUILD_COMMIT: ${ZARYA_BUILD_COMMIT:-unknown}
+      ZARYA_HARD_QUALITY_GATES: ${ZARYA_HARD_QUALITY_GATES:-0}
       OSIFONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
       TZ: Europe/Moscow
     volumes:

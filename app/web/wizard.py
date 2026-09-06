@@ -21,6 +21,7 @@ MVP-упрощения (осознанные):
 from __future__ import annotations
 
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import Dict
@@ -57,6 +58,7 @@ from app.pz.impact import (
     impact_form_context,
 )
 from app.pz.proof import build_proof_graph
+from app.quality_gates import build_release_quality_report
 from app.pz.wastewater_topology import build_wastewater_topology
 from app.pz.defense import (
     build_defense_payload,
@@ -82,6 +84,9 @@ _RELEASE_STORE = ReleaseStore()
 _CONSUMER_NORMS = list_consumer_norms()
 _STORM_CITIES = list_cities()
 _DEMO_PROJECT = Path(__file__).parents[2] / "demo" / "demo_project.yaml"
+_HARD_QUALITY_GATES = os.environ.get(
+    "ZARYA_HARD_QUALITY_GATES", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 _DOCUMENT_GROUPS = (
     ("common", "00", "Основной комплект",
@@ -283,6 +288,7 @@ def _restore_run(run_id: str) -> dict:
         "documents": snapshot.documents,
         "release_id": run_id,
         "preflight": snapshot.preflight_payload,
+        "quality": snapshot.quality_payload,
     }
     _RUNS[run_id] = run
     return run
@@ -982,12 +988,14 @@ async def wizard_design(request: Request):
 
     pid = fv("project_id") or None
     if not preflight.can_release:
+        quality = build_release_quality_report(preflight)
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
             "errors": [item.message for item in preflight.release_blockers],
             "advisories": advisories,
             "prefill": req,
             "project_id": pid,
             "preflight": preflight,
+            "quality": quality.to_dict(),
         }))
     try:
         project = build_project(req)
@@ -1016,6 +1024,20 @@ async def wizard_design(request: Request):
             "advisories": advisories,
             "prefill": req,
             "project_id": project_id,
+        }), status_code=422)
+    quality = build_release_quality_report(preflight, bundle.commission_report)
+    if not quality.can_release and _HARD_QUALITY_GATES:
+        shutil.rmtree(outdir, ignore_errors=True)
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
+            "errors": [
+                f"{item.code}: {item.title}. {item.action}"
+                for item in quality.blocking_findings
+            ],
+            "advisories": advisories,
+            "prefill": req,
+            "project_id": project_id,
+            "preflight": preflight,
+            "quality": quality.to_dict(),
         }), status_code=422)
     proof_graph = build_proof_graph(
         bundle.project, bundle.commission_report, preflight.facts,
@@ -1053,6 +1075,7 @@ async def wizard_design(request: Request):
             status=bundle.status,
             warnings=bundle.warnings,
             preflight=preflight.to_dict(),
+            quality=quality.to_dict(),
         )
     except Exception as exc:
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
@@ -1074,6 +1097,7 @@ async def wizard_design(request: Request):
         "release_id": run_id,
         "documents": documents,
         "preflight": preflight.to_dict(),
+        "quality": quality.to_dict(),
     }
     return RedirectResponse(url=f"/wizard/result/{run_id}", status_code=303)
 
@@ -1088,6 +1112,10 @@ def wizard_result(request: Request, run_id: str):
     pdfs, document_groups = _run_documents(run)
     f = b.project.fire
     p = b.project
+    quality = run.get("quality") or build_release_quality_report(
+        run.get("preflight", {}),
+        getattr(b, "commission_report", None),
+    ).to_dict()
     from app.pz.wastewater_k3_scheme_service import (
         assess_wastewater_k3_scheme_readiness,
     )
@@ -1113,6 +1141,8 @@ def wizard_result(request: Request, run_id: str):
         "status": b.status,
         "commission": getattr(b, "commission_report", None),
         "preflight": run.get("preflight", {}),
+        "quality": quality,
+        "quality_hard_enabled": _HARD_QUALITY_GATES,
         "proof": proof_graph,
         "impact": impact_form_context(run["request"]),
         "warnings": b.warnings + [
@@ -1228,6 +1258,26 @@ def wizard_proof(run_id: str):
     return JSONResponse(
         graph.to_dict(),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/quality/{run_id}")
+def wizard_quality(run_id: str):
+    """Скачать машиночитаемый отчёт семи ворот качества выпуска."""
+    run = _get_run(run_id)
+    if run is None:
+        return JSONResponse({"detail": "прогон не найден"}, status_code=404)
+    quality = run.get("quality") or build_release_quality_report(
+        run.get("preflight", {}),
+        getattr(run["bundle"], "commission_report", None),
+    ).to_dict()
+    return JSONResponse(
+        quality,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="zarya-quality-{run_id}.json"'
+            ),
+        },
     )
 
 

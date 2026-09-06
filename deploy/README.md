@@ -53,6 +53,7 @@ nano .env
 ZARYA_DOMAIN=zarya.example.ru
 ZARYA_USERNAME=zarya
 ZARYA_PASSWORD_HASH='$2a$14$...'
+ZARYA_HARD_QUALITY_GATES=0
 ```
 
 ## 4. Запустить
@@ -84,6 +85,11 @@ docker image prune -f
 ```bash
 docker compose exec app printenv ZARYA_BUILD_COMMIT
 ```
+
+`ZARYA_HARD_QUALITY_GATES=0` оставляет пострасчётные ворота в контрольном
+режиме: красные замечания видны, но комплект можно исследовать. Значение `1`
+запрещает публикацию цифрового паспорта при любом красном результате. Его
+следует включать после того, как контрольный проект проходит все семь ворот.
 
 ## Резервная копия проектов
 

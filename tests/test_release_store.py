@@ -9,6 +9,7 @@ from app.intake.yaml_io import load_request
 from app.intake.preflight import preflight_request
 from app.pz.commission import CommissionReport, PassportItem
 from app.pz.proof import ProofDecision, ProofFact, ProofGraph, ProofStep
+from app.quality_gates import build_release_quality_report
 
 
 YAML = """
@@ -57,6 +58,8 @@ def _publish(store: ReleaseStore):
             )],
         )],
     )
+    preflight = preflight_request(load_request(YAML))
+    quality = build_release_quality_report(preflight, commission)
     return store.publish(
         release_id="a1b2c3d4e5",
         project_id="f1e2d3c4b5",
@@ -73,14 +76,15 @@ def _publish(store: ReleaseStore):
         advisories=[InputAdvisory("warning", "x", "Проверить", "СП")],
         status=["готово"],
         warnings=["уточнить"],
-        preflight=preflight_request(load_request(YAML)).to_dict(),
+        preflight=preflight.to_dict(),
+        quality=quality.to_dict(),
     )
 
 
 def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     store = ReleaseStore(tmp_path)
     manifest = _publish(store)
-    assert manifest["schema_version"] == 3
+    assert manifest["schema_version"] == 4
     snapshot = store.load("a1b2c3d4e5")
     assert snapshot.request().floors == 9
     assert snapshot.commission_report().build_commit == "C" * 16
@@ -90,6 +94,8 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     assert snapshot.documents[0]["name"] == "ПЗ.pdf"
     assert snapshot.status == ["готово"]
     assert snapshot.preflight_payload["can_release"] is True
+    assert snapshot.quality_payload["schema_version"] == "1.0"
+    assert len(snapshot.quality_payload["gates"]) == 7
     assert snapshot.normative_baseline_payload["baseline_id"] == (
         "ru-ios-2026-09-05-v1"
     )
@@ -100,6 +106,7 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
         == snapshot.normative_audits_payload
     )
     assert (tmp_path / "a1b2c3d4e5" / "normative-audits.json").is_file()
+    assert (tmp_path / "a1b2c3d4e5" / "quality-gates.json").is_file()
 
 
 def test_release_is_append_only(tmp_path):
@@ -215,3 +222,4 @@ def test_wizard_restores_release_after_memory_cache_is_cleared(
     assert restored["documents"][0]["name"] == "ПЗ.pdf"
     # Вызов publish без отчёта сохраняет совместимое пустое значение.
     assert restored["preflight"] == {}
+    assert restored["quality"] == {}

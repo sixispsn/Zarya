@@ -5,7 +5,7 @@
 <title>Заря — проектирование ИОС2 + ИОС3</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260905-1">
+<link rel="stylesheet" href="/static/wizard.css?v=20260906-1">
 <script defer src="/static/wizard.js?v=20260903-1"></script>
 </head><body>
 <header class="topbar">
@@ -28,6 +28,14 @@
 </nav>
 <div class="form-stack">
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+{% if quality %}
+<section class="quality-gates quality-gates-compact" data-state="{{ quality.state }}" aria-live="polite">
+  <header class="quality-gates-head"><div><span>Предвыпускной шлюз</span><strong>{{ quality.release_status }}</strong></div><b>{{ quality.blocking_count }} блок.</b></header>
+  <div class="quality-gate-grid">
+    {% for gate in quality.gates %}<article class="quality-gate" data-state="{{ gate.state }}"><i aria-hidden="true"></i><div><strong>{{ gate.title }}</strong><small>{{ gate.state_label }}</small></div></article>{% endfor %}
+  </div>
+</section>
+{% endif %}
 <form method="post" action="/wizard/design" data-design-form novalidate>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
 <div class="required-legend"><span class="required-lamp" aria-hidden="true"></span><span>нужно заполнить</span><span class="required-lamp is-complete" aria-hidden="true"></span><span>готово</span></div>

@@ -131,6 +131,33 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
   color: var(--quiet);
   font: 7px var(--mono);
 }
+.quality-gates { border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
+.quality-gates[data-state="ready"] { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.quality-gates[data-state="conditional"] { border-color: color-mix(in srgb, var(--warn) 52%, var(--line)); }
+.quality-gates[data-state="blocked"] { border-color: color-mix(in srgb, var(--danger) 58%, var(--line)); }
+.quality-gates-compact { margin-bottom: 16px; padding: 14px; }
+.quality-gates-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.quality-gates-head > div > span { display: block; color: var(--quiet); font: 700 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.quality-gates-head h2, .quality-gates-head strong { margin: 3px 0 0; font-size: 15px; }
+.quality-gates-head > b { color: var(--danger); font: 700 10px var(--mono); }
+.quality-gate-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 14px; }
+.quality-gate { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
+.quality-gate > summary, article.quality-gate { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 10px; list-style: none; }
+.quality-gate > summary { cursor: pointer; }
+.quality-gate > summary::-webkit-details-marker { display: none; }
+.quality-gate i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 99px; background: var(--ok); box-shadow: 0 0 9px color-mix(in srgb, var(--ok) 45%, transparent); }
+.quality-gate[data-state="conditional"] i { background: var(--warn); box-shadow: 0 0 9px color-mix(in srgb, var(--warn) 45%, transparent); }
+.quality-gate[data-state="blocked"] i { background: var(--danger); box-shadow: 0 0 9px color-mix(in srgb, var(--danger) 45%, transparent); }
+.quality-gate summary span, article.quality-gate div { min-width: 0; }
+.quality-gate strong, .quality-gate small { display: block; }
+.quality-gate strong { font-size: 11px; }
+.quality-gate small { margin-top: 2px; color: var(--quiet); font: 9px var(--mono); }
+.quality-gate summary > b { margin-left: auto; color: var(--quiet); font: 700 8px var(--mono); text-align: right; }
+.quality-findings { padding: 0 10px 10px; }
+.quality-findings article { display: grid; grid-template-columns: 70px minmax(0,1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.quality-findings article > span { color: var(--quiet); font: 700 8px var(--mono); }
+.quality-findings p { margin: 3px 0; color: var(--muted); font-size: 10px; }
+.quality-findings em { display: block; margin-top: 4px; color: var(--quiet); font: normal 8px var(--mono); }
 .example-actions { flex-basis: 100%; display: flex; justify-content: flex-end; }
 .example-actions a { color: var(--accent-bright); font: 700 9px var(--mono); letter-spacing: .04em; text-decoration: none; text-transform: uppercase; }
 .example-actions a:hover { text-decoration: underline; }
@@ -984,6 +1011,7 @@ table.grid .compact-check input[type="checkbox"] {
   .stepnav a { flex: 0 0 auto; min-height: 40px; padding: 7px 11px; }
   .radar-layout { grid-template-columns: 1fr; }
   .radar-side { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .quality-gate-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
 }
 
 @media (max-width: 820px) {
@@ -1006,6 +1034,7 @@ table.grid .compact-check input[type="checkbox"] {
   .analysis-steps div:nth-child(odd) { border-left: 0; }
   .radar-baseline-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .radar-baseline-strip .radar-read-only { justify-self: start; }
+  .quality-gate-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -1025,6 +1054,8 @@ table.grid .compact-check input[type="checkbox"] {
   .result-hero-actions { align-items: stretch; flex-direction: column; }
   .result-hero-actions .button-primary { width: 100%; }
   .passport-release-link { justify-content: center; }
+  .quality-gates-head { align-items: stretch; flex-direction: column; }
+  .quality-gate-grid { grid-template-columns: 1fr; }
   .section-head { grid-template-columns: 38px minmax(0,1fr) 20px; min-height: 74px; gap: 9px; padding: 12px; }
   .section-meta { display: none; }
   .section-title { font-size: 14px; }
