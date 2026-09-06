@@ -8,7 +8,7 @@ from app.intake.release_store import (
 from app.intake.yaml_io import load_request
 from app.intake.preflight import preflight_request
 from app.pz.commission import CommissionReport, PassportItem
-from app.pz.proof import ProofDecision, ProofGraph, ProofStep
+from app.pz.proof import ProofDecision, ProofFact, ProofGraph, ProofStep
 
 
 YAML = """
@@ -44,6 +44,17 @@ def _publish(store: ReleaseStore):
             status="verified",
             summary="Проверено",
             steps=[ProofStep("source", "Жители", "500")],
+            fact_ids=("consumers.total",),
+            facts=[ProofFact(
+                id="consumers.total",
+                label="Суммарное число потребителей",
+                value="500",
+                unit="чел.",
+                status="derived",
+                status_label="выведено из фактов",
+                source_kind="derived_from_consumers",
+                source_label="расчёт из групп потребителей",
+            )],
         )],
     )
     return store.publish(
@@ -74,6 +85,7 @@ def test_release_roundtrip_restores_typed_snapshot(tmp_path):
     assert snapshot.request().floors == 9
     assert snapshot.commission_report().build_commit == "C" * 16
     assert snapshot.proof_graph().decisions[0].steps[0].value == "500"
+    assert snapshot.proof_graph().decisions[0].facts[0].id == "consumers.total"
     assert snapshot.advisories()[0].reference == "СП"
     assert snapshot.documents[0]["name"] == "ПЗ.pdf"
     assert snapshot.status == ["готово"]

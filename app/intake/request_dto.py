@@ -1373,12 +1373,6 @@ class IOS2Request:
                 p.append(f"{name} '{value}' не из {APPLICABILITY_ANSWERS}")
         if self.group_showers_count < 0:
             p.append("group_showers_count не может быть отрицательным")
-        if self.group_showers_answer == "yes" and self.group_showers_count <= 0:
-            p.append(
-                "для групповых душевых задайте число душевых сеток больше нуля"
-            )
-        if self.food_service_answer == "yes" and self.catering_type == "none":
-            p.append("для предприятия питания задайте тип приготовления пищи")
         if self.food_service_answer == "no" and self.catering_type != "none":
             p.append(
                 "тип общепита задан, хотя предприятие питания отмечено как отсутствующее"
@@ -1392,42 +1386,12 @@ class IOS2Request:
                 f"grease_trap_location '{self.grease_trap_location}' не из "
                 f"{GREASE_TRAP_LOCATIONS}"
             )
-        # Триггер только задаёт вопрос; ответ всегда принимает проектировщик.
-        # Локальный импорт сохраняет одно направление зависимости DTO → rules.
-        from app.intake.applicability import infer_applicability_scope
-        applicability = infer_applicability_scope(
-            self.consumers,
-            group_showers_answer=self.group_showers_answer,
-            food_service_answer=self.food_service_answer,
-            catering_type=self.catering_type,
-        )
-        if applicability.group_showers and self.group_showers_answer == "unknown":
-            p.append(
-                "подтвердите наличие групповых душевых по технологической анкете"
-            )
-        if (
-            applicability.food_service
-            and self.food_service_answer == "unknown"
-            and self.catering_type == "none"
-        ):
-            p.append(
-                "подтвердите наличие предприятия питания по технологической анкете"
-            )
-        if (
-            self.food_service_answer == "yes"
-            and self.grease_wastewater_answer == "unknown"
-        ):
-            p.append(
-                "подтвердите наличие жиросодержащих производственных стоков"
-            )
-        if (
-            self.grease_wastewater_answer == "yes"
-            and self.grease_trap_location == "unknown"
-        ):
-            p.append(
-                "для жиросодержащих стоков выберите место жироуловителя "
-                "либо явно укажите уточнение на стадии Р"
-            )
+        # Триггеры, обязательность и тексты вопросов принадлежат единому
+        # декларативному реестру; DTO только включает его результат в общий
+        # список ошибок для совместимых входов Builder/YAML/CLI.
+        from app.intake.questions import evaluate_questions
+        for state in evaluate_questions(self):
+            p.extend(state.missing_messages)
         seen_v1 = set()
         for i, s in enumerate(self.v1_sections):
             if not s.section_id or s.section_id in seen_v1:

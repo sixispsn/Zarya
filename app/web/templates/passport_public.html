@@ -81,6 +81,18 @@
               <li><span>{{ "%02d"|format(loop.index) }}</span><div><small>{{ step.kind_label }}</small><strong>{{ step.label }}</strong><p>{{ step.value }}</p>{% if step.detail %}<em>{{ step.detail }}</em>{% endif %}</div></li>
               {% endfor %}
             </ol>
+            {% if decision.facts %}
+            <div class="passport-facts">
+              <h3>Исходные факты</h3>
+              {% for fact in decision.facts %}
+              <article data-status="{{ fact.status }}">
+                <div><small>{{ fact.id }}</small><strong>{{ fact.label }}</strong></div>
+                <b>{{ fact.value }}{% if fact.unit %} {{ fact.unit }}{% endif %}</b>
+                <p>{{ fact.source_label }}{% if fact.source_ref %} · {{ fact.source_ref }}{% endif %}</p>
+              </article>
+              {% endfor %}
+            </div>
+            {% endif %}
             {% if decision.documents %}
             <footer>
               {% for document in decision.documents %}

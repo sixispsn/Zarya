@@ -97,6 +97,9 @@ def test_builder_maps_sp54_118_253_inputs_without_changing_calculations():
         storm_roof_area_m2=1200,
         catering_type="raw",
         catering_seats=200,
+        food_service_answer="yes",
+        grease_wastewater_answer="yes",
+        grease_trap_location="stage_r",
         wastewater_basement_floor_elevation_m=-3.2,
         consumers=[
             ConsumerGroupRequest("residential_full_bath", 500, "Жильё"),

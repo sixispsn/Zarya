@@ -50,6 +50,24 @@
       {% endfor %}
     </ol>
 
+    {% if decision.facts %}
+    <section class="documents facts">
+      <h2>Исходные факты решения</h2>
+      <table>
+        <thead><tr><th>Факт</th><th>Значение</th><th>Происхождение</th></tr></thead>
+        <tbody>
+        {% for fact in decision.facts %}
+          <tr>
+            <td>{{ fact.id }} · {{ fact.label }}</td>
+            <td>{{ fact.value }}{% if fact.unit %} {{ fact.unit }}{% endif %}</td>
+            <td>{{ fact.source_label }}{% if fact.source_ref %} · {{ fact.source_ref }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
     <section class="documents">
       <h2>Проверяемые места в комплекте</h2>
       {% if documents %}

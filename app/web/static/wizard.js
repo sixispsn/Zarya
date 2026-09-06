@@ -423,15 +423,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const applicabilityRulesNode = document.querySelector(
-    "[data-applicability-rules]"
-  );
-  let applicabilityRules = {};
-  try {
-    applicabilityRules = JSON.parse(applicabilityRulesNode?.textContent || "{}");
-  } catch (_) {
-    applicabilityRules = {};
-  }
   const applicabilityDialog = document.querySelector(
     "[data-applicability-dialog]"
   );
@@ -459,138 +450,93 @@ document.addEventListener("DOMContentLoaded", () => {
   const applicabilityFootNote = document.querySelector(
     "[data-applicability-foot-note]"
   );
-  const questionShowers = document.querySelector(
-    '[data-applicability-question="group-showers"]'
-  );
-  const questionFood = document.querySelector(
-    '[data-applicability-question="food-service"]'
-  );
-  const followupShowers = document.querySelector(
-    '[data-applicability-followup="group-showers"]'
-  );
-  const followupFood = document.querySelector(
-    '[data-applicability-followup="food-service"]'
-  );
-  const greaseLocation = document.querySelector(
-    "[data-applicability-grease-location]"
-  );
+  const questionCards = [...document.querySelectorAll("[data-question-id]")];
+  const questionFields = [...document.querySelectorAll("[data-question-field]")];
+  const foodServiceDetails = document.querySelector("[data-food-service-details]");
   const answerValue = (name) =>
     document.querySelector(`input[name="${name}"]:checked`)?.value || "unknown";
   const answerControl = (name, value) =>
     document.querySelector(`input[name="${name}"][value="${value}"]`);
   const valueControl = (name) => document.querySelector(`[name="${name}"]`);
-  const positiveIntegerValue = (name) => {
-    const value = Number.parseInt(valueControl(name)?.value || "0", 10);
-    return Number.isFinite(value) && value > 0;
+  let livePreflightState = {
+    questions: [],
+    advisories: [],
+    summary: { total: 0, completed: 0, missing: 0, missing_fields: [] }
   };
-  const normaliseApplicabilityText = (value) =>
-    String(value || "").toLocaleLowerCase("ru-RU").replaceAll("ё", "е")
-      .replace(/\s+/g, " ").trim();
-  const matchesApplicabilityKeywords = (value, keywords = []) => {
-    const text = normaliseApplicabilityText(value);
-    return keywords.some((keyword) => text.includes(keyword));
+  let livePreflightRevision = 0;
+  let livePreflightTimer = null;
+  let livePreflightPending = null;
+  let livePreflightDirty = true;
+  const numberFromControl = (name, fallback = 0) => {
+    const raw = valueControl(name)?.value || "";
+    const value = Number.parseFloat(raw.replace(",", "."));
+    return Number.isFinite(value) ? value : fallback;
   };
-  const applicabilityScope = () => {
-    const rows = [...document.querySelectorAll("[data-consumer-row]")];
-    const codes = new Set(rows.map((row) =>
-      row.querySelector("[data-consumer-select]")?.value || ""
-    ));
-    const names = rows.map((row) =>
-      row.querySelector('input[name$="_name"]')?.value || ""
-    );
-    const showers = answerValue("group_showers_answer") === "yes"
-      || (applicabilityRules.group_showers_consumer_codes || [])
-        .some((code) => codes.has(code))
-      || names.some((name) => matchesApplicabilityKeywords(
-        name, applicabilityRules.group_showers_keywords || []
-      ));
-    const cateringType = valueControl("catering_type")?.value || "none";
-    const food = answerValue("food_service_answer") === "yes"
-      || cateringType !== "none"
-      || (applicabilityRules.food_service_consumer_codes || [])
-        .some((code) => codes.has(code))
-      || names.some((name) => matchesApplicabilityKeywords(
-        name, applicabilityRules.food_service_keywords || []
-      ));
-    return { showers, food };
+  const integerFromControl = (name, fallback = 0) => {
+    const value = Number.parseInt(valueControl(name)?.value || "", 10);
+    return Number.isFinite(value) ? value : fallback;
   };
+  const collectLivePreflightInput = () => ({
+    building_type: valueControl("building_type")?.value || "residential",
+    floors: integerFromControl("floors"),
+    building_height_m: numberFromControl("height"),
+    total_area_m2: numberFromControl("total_area"),
+    fire_mode: valueControl("fire_mode")?.value || "auto",
+    fire_height_m: valueControl("fire_height")?.value.trim()
+      ? numberFromControl("fire_height") : null,
+    fire_category: valueControl("fire_category")?.value || "",
+    apartments: integerFromControl("apartments"),
+    roof_type: valueControl("roof_type")?.value || "not_set",
+    storm_city: valueControl("storm_city")?.value || "",
+    storm_roof_area_m2: numberFromControl("storm_roof_area"),
+    consumers: [...document.querySelectorAll("[data-consumer-row]")].map((row) => ({
+      code: row.querySelector("[data-consumer-select]")?.value || "",
+      name: row.querySelector('input[name$="_name"]')?.value || "",
+      count: Number.parseInt(row.querySelector('input[name$="_count"]')?.value || "0", 10) || 0
+    })),
+    group_showers_answer: answerValue("group_showers_answer"),
+    group_showers_count: integerFromControl("group_showers_count"),
+    food_service_answer: answerValue("food_service_answer"),
+    catering_type: valueControl("catering_type")?.value || "none",
+    catering_seats: integerFromControl("catering_seats"),
+    catering_conditional_dishes: integerFromControl("catering_conditional_dishes"),
+    school_grease_by_assignment: Boolean(valueControl("school_grease_by_assignment")?.checked),
+    grease_wastewater_answer: answerValue("grease_wastewater_answer"),
+    grease_trap_location: valueControl("grease_trap_location")?.value || "unknown"
+  });
+  const liveQuestion = (id) => livePreflightState.questions.find(
+    (item) => item.id === id
+  );
   const focusApplicabilityMissing = (missing) => {
-    const controls = {
-      group_showers_answer: answerControl("group_showers_answer", "yes"),
-      group_showers_count: valueControl("group_showers_count"),
-      food_service_answer: answerControl("food_service_answer", "yes"),
-      catering_type: valueControl("catering_type"),
-      grease_wastewater_answer: answerControl("grease_wastewater_answer", "yes"),
-      grease_trap_location: valueControl("grease_trap_location"),
-    };
-    window.setTimeout(() => controls[missing[0]]?.focus(), 80);
+    const field = missing[0];
+    const control = answerControl(field, "yes") || valueControl(field);
+    window.setTimeout(() => control?.focus(), 80);
   };
 
   syncApplicability = () => {
     if (!applicabilityGate || !applicabilityDialog) return { missing: [] };
-    const scope = applicabilityScope();
-    const showersAnswer = answerValue("group_showers_answer");
-    let foodAnswer = answerValue("food_service_answer");
-    const cateringType = valueControl("catering_type")?.value || "none";
-    if (foodAnswer === "unknown" && cateringType !== "none") {
-      const yes = answerControl("food_service_answer", "yes");
-      if (yes) yes.checked = true;
-      foodAnswer = "yes";
-    }
-    const greaseAnswer = answerValue("grease_wastewater_answer");
-    const greasePlacement = valueControl("grease_trap_location")?.value
-      || "unknown";
-    const missing = [];
-    let total = 0;
-    let completed = 0;
-
-    questionShowers.hidden = !scope.showers;
-    followupShowers.hidden = showersAnswer !== "yes";
-    if (scope.showers) {
-      total += 1;
-      if (["yes", "no"].includes(showersAnswer)) completed += 1;
-      else missing.push("group_showers_answer");
-      if (showersAnswer === "yes") {
-        total += 1;
-        if (positiveIntegerValue("group_showers_count")) completed += 1;
-        else missing.push("group_showers_count");
-      }
-      questionShowers.classList.toggle(
-        "is-complete",
-        showersAnswer === "no"
-          || (showersAnswer === "yes" && positiveIntegerValue("group_showers_count"))
-      );
+    const food = liveQuestion("technology.food_service");
+    const missing = livePreflightState.summary.missing_fields || [];
+    const total = livePreflightState.summary.total || 0;
+    const completed = livePreflightState.summary.completed || 0;
+    const applicableQuestions = livePreflightState.questions.filter(
+      (question) => question.applicable
+    );
+    questionCards.forEach((card) => {
+      const state = liveQuestion(card.dataset.questionId);
+      card.hidden = !state?.applicable;
+      card.classList.toggle("is-complete", Boolean(state?.applicable && state.answered));
+    });
+    questionFields.forEach((field) => {
+      const card = field.closest("[data-question-id]");
+      const state = liveQuestion(card?.dataset.questionId);
+      field.hidden = !state?.active_fields?.includes(field.dataset.questionField);
+    });
+    if (foodServiceDetails) {
+      foodServiceDetails.hidden = !food?.active_fields?.includes("catering_type");
     }
 
-    questionFood.hidden = !scope.food;
-    followupFood.hidden = foodAnswer !== "yes";
-    greaseLocation.hidden = greaseAnswer !== "yes";
-    if (scope.food) {
-      total += 1;
-      if (["yes", "no"].includes(foodAnswer)) completed += 1;
-      else missing.push("food_service_answer");
-      if (foodAnswer === "yes") {
-        total += 2;
-        if (cateringType !== "none") completed += 1;
-        else missing.push("catering_type");
-        if (["yes", "no"].includes(greaseAnswer)) completed += 1;
-        else missing.push("grease_wastewater_answer");
-        if (greaseAnswer === "yes") {
-          total += 1;
-          if (greasePlacement !== "unknown") completed += 1;
-          else missing.push("grease_trap_location");
-        }
-      }
-      questionFood.classList.toggle(
-        "is-complete",
-        foodAnswer === "no"
-          || (foodAnswer === "yes" && cateringType !== "none"
-            && ["yes", "no"].includes(greaseAnswer)
-            && (greaseAnswer !== "yes" || greasePlacement !== "unknown"))
-      );
-    }
-
-    const relevant = scope.showers || scope.food;
+    const relevant = applicableQuestions.length > 0;
     applicabilityGate.hidden = !relevant;
     applicabilityGate.classList.toggle("is-complete", relevant && !missing.length);
     if (applicabilityCount) applicabilityCount.textContent = String(missing.length);
@@ -601,9 +547,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (applicabilitySummary) {
       const topics = [
-        scope.showers ? "групповые душевые" : "",
-        scope.food ? "общепит и К3" : "",
-      ].filter(Boolean).join(" · ");
+        ...applicableQuestions.map((question) => question.title.toLocaleLowerCase("ru-RU"))
+      ].join(" · ");
       applicabilitySummary.textContent = missing.length
         ? `${topics} · осталось ${missing.length}`
         : `${topics} · ответы сохранены`;
@@ -626,7 +571,69 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "Красная лампа останется активной"
         : "Ответы войдут в анкету проекта";
     }
-    return { missing, scope, completed, total };
+    return { missing, completed, total };
+  };
+
+  const validationPanel = document.querySelector("[data-validation-panel]");
+  const validationList = document.querySelector("[data-validation-list]");
+  const validationCount = document.querySelector("[data-validation-count]");
+  const renderLiveAdvisories = () => {
+    if (!validationPanel || !validationList || !validationCount) return;
+    const advisories = livePreflightState.advisories || [];
+    validationList.replaceChildren(...advisories.map((item) => {
+      const li = document.createElement("li");
+      li.dataset.level = item.level;
+      const message = document.createElement("span");
+      message.textContent = item.message;
+      const reference = document.createElement("small");
+      reference.textContent = item.reference;
+      li.append(message, reference);
+      return li;
+    }));
+    validationCount.textContent = String(advisories.length);
+    validationPanel.hidden = advisories.length === 0;
+  };
+  const refreshLivePreflight = async () => {
+    const revision = ++livePreflightRevision;
+    livePreflightDirty = false;
+    const pending = fetch("/api/project/preflight/live", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(collectLivePreflightInput())
+    }).then((response) => {
+      if (!response.ok) throw new Error("live preflight unavailable");
+      return response.json();
+    }).then((payload) => {
+      if (revision !== livePreflightRevision) return livePreflightState;
+      livePreflightState = payload;
+      syncApplicability();
+      renderLiveAdvisories();
+      return payload;
+    }).catch(() => {
+      if (revision !== livePreflightRevision) return livePreflightState;
+      livePreflightState = {
+        ...livePreflightState,
+        advisories: [{
+          level: "warning",
+          message: "Онлайн-проверка исходных данных временно недоступна. Итоговый серверный Preflight будет выполнен перед расчётом.",
+          reference: "Zarya Preflight"
+        }]
+      };
+      renderLiveAdvisories();
+      return livePreflightState;
+    }).finally(() => {
+      if (livePreflightPending === pending) livePreflightPending = null;
+    });
+    livePreflightPending = pending;
+    return pending;
+  };
+  const scheduleLivePreflight = () => {
+    livePreflightDirty = true;
+    window.clearTimeout(livePreflightTimer);
+    livePreflightTimer = window.setTimeout(refreshLivePreflight, 120);
   };
 
   openApplicability = () => {
@@ -652,7 +659,10 @@ document.addEventListener("DOMContentLoaded", () => {
     "[data-applicability-close], [data-applicability-later]"
   ).forEach((button) => button.addEventListener("click", closeApplicability));
   document.querySelector("[data-applicability-save]")?.addEventListener(
-    "click", () => {
+    "click", async () => {
+      window.clearTimeout(livePreflightTimer);
+      if (livePreflightPending) await livePreflightPending;
+      if (livePreflightDirty) await refreshLivePreflight();
       const state = syncApplicability();
       if (state.missing.length) {
         focusApplicabilityMissing(state.missing);
@@ -684,124 +694,15 @@ document.addEventListener("DOMContentLoaded", () => {
         valueControl("grease_trap_location").value = "unknown";
       }
       markChanged(control);
-      syncApplicability();
+      scheduleLivePreflight();
     };
     control.addEventListener("input", update);
     control.addEventListener("change", update);
   });
   syncApplicability();
 
-  const validationPanel = document.querySelector("[data-validation-panel]");
-  const validationList = document.querySelector("[data-validation-list]");
-  const validationCount = document.querySelector("[data-validation-count]");
-  runAdvisories = () => {
-    if (!validationPanel || !validationList || !validationCount) return;
-    const heightRaw = document.querySelector('[name="height"]')?.value || "0";
-    const height = Number.parseFloat(heightRaw.replace(",", ".")) || 0;
-    const floors = Number.parseInt(
-      document.querySelector('[name="floors"]')?.value || "0", 10
-    ) || 0;
-    const fireHeightRaw = document.querySelector('[name="fire_height"]')?.value || "0";
-    const fireHeight = Number.parseFloat(fireHeightRaw.replace(",", ".")) || 0;
-    const fireMode = document.querySelector('[name="fire_mode"]')?.value || "auto";
-    const fireCategory = document.querySelector('[name="fire_category"]')?.value || "";
-    const buildingType = document.querySelector('[name="building_type"]')?.value;
-    const purposes = new Set(
-      [...document.querySelectorAll("[data-consumer-select]")]
-        .map((select) => select.selectedOptions[0]?.dataset.purpose)
-        .filter(Boolean)
-    );
-    const advisories = [];
-    if (fireMode === "auto" && !fireHeight) {
-      advisories.push({
-        level: "warning",
-        message: "Укажите пожарно-техническую высоту по АР: без неё автоматическая проверка ВПВ невозможна.",
-        reference: "СП 10.13130.2020, таблица 7.1"
-      });
-    } else if (fireMode === "auto" && buildingType === "residential"
-        && floors < 12 && fireHeight >= 30) {
-      advisories.push({
-        level: "warning",
-        message: `При ${floors} этажах ВПВ включается по пожарно-технической высоте ${fireHeight} м. Подтвердите показатель по АР.`,
-        reference: "СП 10.13130.2020, таблица 7.1, строка 1"
-      });
-    }
-    if (fireMode === "auto" && !fireCategory) {
-      advisories.push({
-        level: "warning",
-        message: "Выберите диктующую функциональную категорию В2: Заря больше не подменяет общественное здание офисной строкой.",
-        reference: "СП 10.13130.2020, таблица 7.1"
-      });
-    }
-    if (buildingType === "residential" && height > 75) {
-      advisories.push({
-        level: "warning",
-        message: `Жилое здание высотой ${height} м выше 75 м: СП 30 применяется совместно с СП 253.1325800.`,
-        reference: "СП 30.13330.2020, п. 4.1"
-      });
-      advisories.push({
-        level: "info",
-        message: "Для высотного здания будут приняты раздельные В1/В2, изоляция 10/25 мм, 100%-ный резерв, частотный привод и диспетчеризация насосов.",
-        reference: "СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27"
-      });
-    } else if (buildingType === "public" && height > 50) {
-      advisories.push({
-        level: "warning",
-        message: `Общественное здание высотой ${height} м выше 50 м: СП 30 применяется совместно с СП 253.1325800.`,
-        reference: "СП 30.13330.2020, п. 4.1"
-      });
-      advisories.push({
-        level: "info",
-        message: "Для высотного здания будут приняты раздельные В1/В2, изоляция 10/25 мм, 100%-ный резерв, частотный привод и диспетчеризация насосов.",
-        reference: "СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27"
-      });
-    }
-    const apartments = Number.parseInt(
-      document.querySelector('[name="apartments"]')?.value || "0", 10
-    ) || 0;
-    if (buildingType === "residential" && apartments <= 0) {
-      advisories.push({
-        level: "info",
-        message: "Задайте число квартир для квартирных кранов Ду15 со шлангом.",
-        reference: "СП 54.13330.2022, п. 6.2.4.3"
-      });
-    }
-    const roofType = document.querySelector('[name="roof_type"]')?.value || "not_set";
-    const stormCity = document.querySelector('[name="storm_city"]')?.value || "";
-    const roofAreaRaw = document.querySelector('[name="storm_roof_area"]')?.value || "0";
-    const roofArea = Number.parseFloat(roofAreaRaw.replace(",", ".")) || 0;
-    if (roofType !== "not_set" && (!stormCity || roofArea <= 0)) {
-      advisories.push({
-        level: "warning",
-        message: "Для расчёта К2 задайте город и площадь кровли.",
-        reference: "СП 30.13330.2020, раздел 21"
-      });
-    }
-    const mixed = purposes.size > 1;
-    const mismatch = purposes.size > 0
-      && ["residential", "public"].includes(buildingType)
-      && !purposes.has(buildingType);
-    if (mixed || mismatch) {
-      advisories.push({
-        level: "info",
-        message: "Обнаружен смешанный функциональный состав. Подтвердите назначение частей и пожарные отсеки по АР/ТЗ; расход В2 проверяется отдельно для соответствующих частей.",
-        reference: "СП 30.13330.2020, пп. 1.1, 7.5–7.6"
-      });
-    }
-    validationList.replaceChildren(...advisories.map((item) => {
-      const li = document.createElement("li");
-      li.dataset.level = item.level;
-      const message = document.createElement("span");
-      message.textContent = item.message;
-      const reference = document.createElement("small");
-      reference.textContent = item.reference;
-      li.append(message, reference);
-      return li;
-    }));
-    validationCount.textContent = String(advisories.length);
-    validationPanel.hidden = advisories.length === 0;
-  };
-  runAdvisories();
+  runAdvisories = scheduleLivePreflight;
+  refreshLivePreflight();
 
   if (links.length && sections.length && "IntersectionObserver" in window) {
     const activate = (id) => links.forEach((link) => {
@@ -1029,7 +930,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const form = document.querySelector("form[data-design-form]");
   if (form) {
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       const firstMissing = syncRequiredFields();
       if (firstMissing) {
         event.preventDefault();
@@ -1042,6 +943,21 @@ document.addEventListener("DOMContentLoaded", () => {
         firstMissing.reportValidity();
         return;
       }
+      if (form.dataset.livePreflightReady !== "true") {
+        event.preventDefault();
+        window.clearTimeout(livePreflightTimer);
+        if (livePreflightPending) await livePreflightPending;
+        if (livePreflightDirty) await refreshLivePreflight();
+        const currentState = syncApplicability();
+        if (currentState.missing.length) {
+          openApplicability();
+          return;
+        }
+        form.dataset.livePreflightReady = "true";
+        form.requestSubmit();
+        return;
+      }
+      delete form.dataset.livePreflightReady;
       const applicabilityState = syncApplicability();
       if (applicabilityState.missing.length) {
         event.preventDefault();

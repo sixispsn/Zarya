@@ -209,7 +209,7 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .applicability-progress i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--danger), var(--accent-bright)); transition: width .22s ease; }
 .applicability-questions { display: grid; gap: 12px; padding: 18px 26px 5px; }
 .applicability-question { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 15px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--input); }
-.applicability-question[hidden], .applicability-followup[hidden], [data-applicability-grease-location][hidden] { display: none; }
+.applicability-question[hidden], .applicability-field[hidden], .applicability-followup[hidden], [data-food-service-details][hidden] { display: none; }
 .applicability-question-index { padding-top: 3px; color: var(--quiet); font: 800 9px var(--mono); letter-spacing: .08em; }
 .applicability-question-body { min-width: 0; }
 .applicability-question-title { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
@@ -228,9 +228,10 @@ button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
 .applicability-choice.is-compact { grid-template-columns: repeat(2,82px); }
 .applicability-choice.is-compact span { min-height: 35px; }
 .applicability-followup { display: grid; gap: 12px; margin-top: 13px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 8px; background: var(--surface); animation: reveal .16s ease-out; }
-.applicability-followup > label, [data-applicability-grease-location] { display: grid; gap: 7px; min-width: 0; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .03em; text-transform: uppercase; }
-.applicability-followup > label input, .applicability-followup > label select, [data-applicability-grease-location] select { width: 100%; }
+.applicability-field > label, .applicability-followup > label { display: grid; gap: 7px; min-width: 0; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .03em; text-transform: uppercase; }
+.applicability-field > label input, .applicability-field > label select, .applicability-followup > label input, .applicability-followup > label select { width: 100%; }
 .applicability-followup > small { color: var(--quiet); font-size: 9px; line-height: 1.5; }
+.applicability-reference { display: block; margin-top: 12px; color: var(--quiet); font: 8px/1.45 var(--mono); }
 .applicability-field-grid { display: grid; grid-template-columns: 1.35fr .7fr .7fr; gap: 9px; }
 .applicability-field-grid label { display: grid; gap: 7px; min-width: 0; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .03em; text-transform: uppercase; }
 .applicability-check { display: flex !important; flex-direction: row; align-items: center; gap: 9px !important; min-height: 34px; color: var(--ink-soft) !important; font-family: Inter, ui-sans-serif, sans-serif !important; font-size: 10px !important; letter-spacing: 0 !important; text-transform: none !important; }
@@ -482,6 +483,22 @@ table.grid .compact-check input[type="checkbox"] {
 .proof-step b { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .proof-step strong { display: block; margin-top: 3px; overflow-wrap: anywhere; font: 650 13px/1.5 var(--mono); }
 .proof-step p { max-width: 760px; margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.proof-facts { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.proof-facts-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.proof-facts-head h3 { margin: 0; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.proof-facts-head span { color: var(--cyan); font: 700 8px var(--mono); text-transform: uppercase; }
+.proof-fact-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.proof-fact { position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--input); }
+.proof-fact::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; border-radius: 7px 0 0 7px; background: var(--cyan); }
+.proof-fact[data-status="not_provided"]::before { background: var(--danger); }
+.proof-fact[data-status="stage_r"]::before { background: var(--warn); }
+.proof-fact > div { min-width: 0; }
+.proof-fact small { display: block; overflow: hidden; color: var(--quiet); font: 7px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.proof-fact b { display: block; margin-top: 2px; color: var(--ink-soft); font-size: 10px; }
+.proof-fact > strong { align-self: center; max-width: 250px; overflow-wrap: anywhere; font: 650 10px/1.4 var(--mono); text-align: right; }
+.proof-fact p { grid-column: 1/-1; margin: 3px 0 0; overflow-wrap: anywhere; color: var(--quiet); font-size: 9px; }
+.proof-fact > span { position: absolute; right: 10px; bottom: 8px; color: var(--cyan); font: 700 7px var(--mono); text-transform: uppercase; }
+.proof-fact p + span { position: static; grid-column: 2; grid-row: 3; justify-self: end; }
 .proof-impact-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-top: 16px; padding-top: 20px; border-top: 1px solid var(--line); }
 .proof-impact-grid section { padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--input); }
 .proof-impact-grid h3 { margin: 0 0 11px; color: var(--muted); font: 700 9px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
@@ -1069,6 +1086,7 @@ table.grid .compact-check input[type="checkbox"] {
   .proof-panel-head { grid-template-columns: 1fr; gap: 12px; padding-right: 44px; }
   .proof-panel-head h2 { font-size: 23px; }
   .proof-panel-result { align-items: flex-start; text-align: left; }
+  .proof-fact-list { grid-template-columns: 1fr; }
   .proof-impact-grid { grid-template-columns: 1fr; }
   .proof-panel-foot { flex-direction: column; }
   .impact-dialog { width: 100%; }

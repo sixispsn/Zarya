@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from app.api.preflight import ProjectPreflightInput, run_preflight
+from app.api.preflight import (
+    LiveConsumerInput,
+    LivePreflightInput,
+    ProjectPreflightInput,
+    run_live_preflight,
+    run_preflight,
+)
 from app.intake.preflight import PreflightLevel, preflight_request
 from app.intake.project_intent import ProjectIntent
 from app.intake.questions import evaluate_questions, questions_for_web
@@ -49,7 +55,12 @@ def test_applicable_unanswered_question_is_a_blocker():
     assert group_showers.applicable
     assert not group_showers.answered
     assert not report.can_calculate
-    assert any("групповых душевых" in row.message for row in report.blockers)
+    blocker = next(
+        row for row in report.blockers
+        if row.code.startswith("question.technology.group_showers")
+    )
+    assert "групповых душевых" in blocker.message
+    assert blocker.fact_ids == ("technology.group_showers",)
 
 
 def test_missing_ios3_topology_is_explicit_stage_r_not_invented():
@@ -93,6 +104,39 @@ def test_question_registry_keeps_legacy_js_triggers_and_metadata():
     assert any(
         row["id"] == "technology.grease_trap_location"
         for row in payload["questions"]
+    )
+    showers = next(
+        row for row in payload["questions"]
+        if row["id"] == "technology.group_showers"
+    )
+    assert showers["applicable_when"] == {
+        "kind": "scope", "key": "group_showers", "value": True,
+    }
+    assert showers["requirements"][1]["field"] == "group_showers_count"
+
+
+def test_live_preflight_uses_server_question_graph_and_advisories():
+    payload = run_live_preflight(LivePreflightInput(
+        building_type="public",
+        floors=4,
+        building_height_m=18,
+        fire_height_m=18,
+        fire_category="library_sport",
+        consumers=[LiveConsumerInput(
+            code="sport_pool", count=120, name="Спортивный комплекс",
+        )],
+    ))
+
+    showers = next(
+        row for row in payload["questions"]
+        if row["id"] == "technology.group_showers"
+    )
+    assert showers["applicable"] is True
+    assert showers["missing_fields"] == ["group_showers_answer"]
+    assert payload["summary"]["missing_fields"] == ["group_showers_answer"]
+    assert all(
+        not row["code"].startswith("technology_")
+        for row in payload["advisories"]
     )
 
 

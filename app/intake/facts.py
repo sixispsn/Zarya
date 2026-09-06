@@ -66,6 +66,12 @@ class FactRegistry:
     def get(self, fact_id: str) -> ProjectFact | None:
         return next((row for row in self.facts if row.fact_id == fact_id), None)
 
+    def require(self, fact_id: str) -> ProjectFact:
+        fact = self.get(fact_id)
+        if fact is None:
+            raise KeyError(f"факт '{fact_id}' не зарегистрирован")
+        return fact
+
     def select(
         self,
         *,
@@ -140,12 +146,20 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
     add("document.cipher", "document", "Шифр проекта", req.document.cipher)
     add("document.object_name", "document", "Наименование объекта", req.document.object_name)
     add("document.organization", "document", "Проектная организация", req.document.organization)
+    add("document.stage", "document", "Стадия проектирования", req.document.stage)
+    add("document.address", "document", "Адрес объекта", req.document.object_address)
     add("building.type", "building", "Назначение здания", req.building_type,
         systems=("V1", "V2", "T3", "T4", "K1", "K2", "K3"))
     add("building.floors", "building", "Этажность", req.floors, unit="эт.",
         systems=("V1", "V2", "K1", "K2"), required_for=("design",))
     add("building.height", "building", "Высота здания", req.building_height_m,
         unit="м", systems=("V1", "V2", "K1"), required_for=("design",))
+    add("building.area", "building", "Общая площадь", req.total_area_m2,
+        unit="м²", systems=("V2",), required_for=("fire_applicability",))
+    add("building.hws_type", "building", "Тип приготовления ГВС", req.hws_type,
+        systems=("T3", "T4"), required_for=("hws_decisions",))
+    add("building.apartments", "building", "Количество квартир", req.apartments,
+        unit="шт.", systems=("V1",), required_for=("apartment_hose_taps",))
     add("consumers.groups", "loads", "Группы потребителей", [
         {"code": row.code, "name": row.name, "count": row.count}
         for row in req.consumers
@@ -169,6 +183,11 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
         ("head.h_geom", "Геометрическая составляющая напора", source.h_geom_m if source else None, "м"),
         ("head.h_internal", "Потери во внутренней сети", source.h_il_m if source else None, "м"),
         ("head.h_inlet", "Потери на вводе", source.h_vvod_m if source else None, "м"),
+        ("head.h_heater", "Потери в водонагревателе/теплообменнике", source.h_tepl_m if source else None, "м"),
+        ("head.h_apartment_c", "Потери в квартирном узле учёта ХВС", source.h_apartment_c_meter_m if source else None, "м"),
+        ("head.h_apartment_h", "Потери в квартирном узле учёта ГВС", source.h_apartment_h_meter_m if source else None, "м"),
+        ("source.inputs_count", "Количество вводов водопровода", source.inputs_count if source else None, "шт."),
+        ("source.npsh_available", "Располагаемый кавитационный запас", source.npsh_available_m if source else None, "м"),
     ):
         add(fact_id, "source_data", label, fact_value, unit=unit,
             source_kind="tu_or_design_assignment", source_ref=tu_ref,
@@ -178,6 +197,25 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
         source_kind="legacy_compatible_input",
         source_ref="legacy/sp30_calculator.html",
         systems=("V1", "T3"), required_for=("head",))
+    add("source.network_kind", "source_data", "Расчётный вид сети", source.network_kind if source else "",
+        source_kind="design_assignment", systems=("V1", "V2", "T3"),
+        required_for=("head", "metering"))
+    add("source.hws_heater_scope", "source_data", "Водонагреватель входит в расчётную ветвь",
+        source.hws_heater_in_scope if source else None,
+        source_kind="design_assignment", systems=("V1", "T3"), required_for=("head",))
+
+    add("v1.sections", "water_network", "Расчётные участки В1", len(req.v1_sections),
+        unit="уч.", status=(FactStatus.USER_DECLARED if req.v1_sections else FactStatus.STAGE_R),
+        source_kind="design_input", systems=("V1",), required_for=("v1_hydraulics",))
+    add("v1.network", "water_network", "Расчётная топология В1",
+        {
+            "nodes": len(req.v1_network.nodes) if req.v1_network else 0,
+            "sections": len(req.v1_network.sections) if req.v1_network else 0,
+            "inlets": len(req.v1_network.inlets) if req.v1_network else 0,
+        },
+        status=(FactStatus.USER_DECLARED if req.v1_network else FactStatus.STAGE_R),
+        source_kind="design_input", systems=("V1",),
+        required_for=("v1_hydraulics", "head", "diameter"))
 
     add("fire.mode", "fire", "Режим определения В2", req.fire_mode,
         systems=("V2",), normative_refs=("СП 10.13130.2020",))
@@ -186,6 +224,25 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
         required_for=("fire_applicability",))
     add("fire.category", "fire", "Функциональная категория В2", req.fire_category,
         systems=("V2",), normative_refs=("СП 10.13130.2020, таблица 7.1",))
+    add("fire.hall_seats", "fire", "Вместимость зала Ф2.1", req.fire_hall_seats,
+        unit="мест", systems=("V2",), normative_refs=("СП 10.13130.2020, таблица 7.1",))
+    add("fire.area", "fire", "Площадь расчётной части В2", req.fire_area_m2,
+        unit="м²", systems=("V2",), normative_refs=("СП 10.13130.2020, таблица 7.1",))
+    add("fire.geometry", "fire", "Плановая геометрия В2",
+        {"confirmed": req.fire_geometry_confirmed, "rooms": len(req.rooms)},
+        status=(FactStatus.USER_DECLARED if req.fire_geometry_confirmed and req.rooms else FactStatus.STAGE_R),
+        source_kind="architecture_input", systems=("V2",), required_for=("fire_hydraulics",))
+    add("fire.network", "fire", "Расчётная топология В2",
+        {
+            "runs": len(req.network.runs) if req.network else 0,
+            "risers": len(req.network.risers) if req.network else 0,
+            "source": req.network.source_node if req.network else "",
+        },
+        status=(FactStatus.USER_DECLARED if req.network else FactStatus.STAGE_R),
+        source_kind="design_input", systems=("V2",), required_for=("fire_hydraulics",))
+    add("fire.topology", "fire", "Разделение В1/В2", req.fire_topology,
+        source_kind="design_decision", systems=("V1", "V2"),
+        normative_refs=("СП 10.13130.2020",))
 
     add("storm.roof_type", "storm", "Тип кровли", req.roof_type, systems=("K2",))
     storm_status = (
@@ -197,15 +254,50 @@ def build_fact_registry(value: IntentLike) -> FactRegistry:
     add("storm.roof_area", "storm", "Площадь кровли", req.storm_roof_area_m2,
         unit="м²", status=(FactStatus.NOT_APPLICABLE if req.roof_type == "not_set" else None),
         systems=("K2",), required_for=("storm_flow",))
+    add("storm.walls_area", "storm", "Площадь примыкающих стен", req.storm_walls_area_m2,
+        unit="м²", status=(FactStatus.NOT_APPLICABLE if req.roof_type == "not_set" else None),
+        systems=("K2",), required_for=("storm_flow",))
+    add("storm.period", "storm", "Период однократного превышения", req.storm_period_years,
+        unit="лет", status=(FactStatus.NOT_APPLICABLE if req.roof_type == "not_set" else None),
+        systems=("K2",), required_for=("storm_flow",))
+    add("storm.network", "storm", "Явные параметры воронок и стояков К2",
+        {
+            "sections": req.storm_roof_sections,
+            "funnels": req.storm_funnels_count,
+            "risers": req.storm_risers_count,
+            "riser_dn": req.storm_selected_riser_dn_mm,
+        },
+        status=(
+            FactStatus.NOT_APPLICABLE if req.roof_type == "not_set"
+            else FactStatus.USER_DECLARED
+            if req.storm_funnels_count and req.storm_risers_count
+            else FactStatus.STAGE_R
+        ),
+        source_kind="roof_plan_input", systems=("K2",), required_for=("storm_network",))
 
     add("technology.group_showers", "technology", "Наличие групповых душевых",
         req.group_showers_answer, systems=("V1", "T3", "K1"))
+    add("technology.group_showers_count", "technology", "Количество душевых сеток",
+        req.group_showers_count, unit="шт.", systems=("V1", "T3", "K1"))
     add("technology.food_service", "technology", "Наличие предприятия питания",
         req.food_service_answer, systems=("V1", "T3", "K1"))
+    add("technology.catering_type", "technology", "Тип приготовления пищи",
+        req.catering_type, systems=("V1", "T3", "K1", "K3"))
+    add("technology.catering_loads", "technology", "Производственная программа общепита",
+        {"seats": req.catering_seats, "conditional_dishes": req.catering_conditional_dishes},
+        status=(FactStatus.USER_DECLARED if req.catering_seats or req.catering_conditional_dishes else FactStatus.NOT_PROVIDED),
+        systems=("V1", "T3", "K1", "K3"))
     add("technology.grease_wastewater", "technology", "Жиросодержащие стоки",
         req.grease_wastewater_answer, systems=("K1",))
     add("technology.grease_trap_location", "technology", "Место жироуловителя",
         req.grease_trap_location, systems=("K1",))
+
+    add("sewage.max_fixture", "sewage", "Максимальный секундный расход прибора",
+        req.sewage_max_fixture_lps, unit="л/с", systems=("K1",),
+        normative_refs=("СП 30.13330.2020, п. 5.5",), required_for=("wastewater_flow",))
+    add("sewage.risers", "sewage", "Расчётные стояки К1/К3", len(req.sewage_risers),
+        unit="шт.", status=(FactStatus.USER_DECLARED if req.sewage_risers else FactStatus.STAGE_R),
+        source_kind="design_input", systems=("K1", "K3"), required_for=("riser_capacity",))
 
     topology_status = FactStatus.USER_DECLARED
     if not req.sewer_pipes:

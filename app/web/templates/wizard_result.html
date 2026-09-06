@@ -237,6 +237,27 @@
         </li>
         {% endfor %}
       </ol>
+      {% if item.facts %}
+      <section class="proof-facts">
+        <div class="proof-facts-head">
+          <h3>Исходные факты решения</h3>
+          <span>{{ item.facts|length }} прослежено</span>
+        </div>
+        <div class="proof-fact-list">
+          {% for fact in item.facts %}
+          <article class="proof-fact" data-status="{{ fact.status }}">
+            <div>
+              <small>{{ fact.id }}</small>
+              <b>{{ fact.label }}</b>
+            </div>
+            <strong>{{ fact.value }}{% if fact.unit %} {{ fact.unit }}{% endif %}</strong>
+            <p>{{ fact.source_label }}{% if fact.source_ref %} · {{ fact.source_ref }}{% endif %}</p>
+            <span>{{ fact.status_label }}</span>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
       <div class="proof-impact-grid">
         <section>
           <h3>Связанные документы</h3>

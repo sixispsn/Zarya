@@ -7,11 +7,13 @@
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+import json
 from typing import Optional
 
 from app.calc.water_demand import ConsumerGroup, calculate_water_demand
 from app.data.sp30_tables import get_consumer_norm
+from app.intake.facts import FactRegistry, ProjectFact
 from app.pz.commission import CommissionReport
 from app.pz.project import Project
 from app.pz.rules import decide_fire_network, project_governing_head
@@ -34,6 +36,27 @@ KIND_LABELS = {
     "artifact": "Комплект",
 }
 
+FACT_STATUS_LABELS = {
+    "confirmed": "подтверждено",
+    "user_declared": "введено",
+    "derived": "выведено из фактов",
+    "not_provided": "не задано",
+    "stage_r": "стадия Р",
+    "not_applicable": "не применяется",
+}
+
+SOURCE_KIND_LABELS = {
+    "user_input": "анкета проекта",
+    "yaml": "файл проекта",
+    "tu_or_design_assignment": "ТУ / задание на проектирование",
+    "legacy_compatible_input": "вход legacy-алгоритма",
+    "derived_from_consumers": "расчёт из групп потребителей",
+    "design_assignment": "задание на проектирование",
+    "design_input": "расчётная схема проектировщика",
+    "architecture_input": "архитектурные данные",
+    "roof_plan_input": "план кровли",
+}
+
 
 @dataclass(frozen=True)
 class ProofStep:
@@ -48,6 +71,19 @@ class ProofStep:
 
 
 @dataclass(frozen=True)
+class ProofFact:
+    id: str
+    label: str
+    value: str
+    unit: str
+    status: str
+    status_label: str
+    source_kind: str
+    source_label: str
+    source_ref: str = ""
+
+
+@dataclass(frozen=True)
 class ProofDecision:
     id: str
     system: str
@@ -59,6 +95,8 @@ class ProofDecision:
     steps: list[ProofStep] = field(default_factory=list)
     artifacts: list[str] = field(default_factory=list)
     impact: list[str] = field(default_factory=list)
+    fact_ids: tuple[str, ...] = ()
+    facts: list[ProofFact] = field(default_factory=list)
 
     @property
     def status_label(self) -> str:
@@ -72,7 +110,7 @@ class ProofGraph:
     build_commit: str
     generated_at: str
     decisions: list[ProofDecision] = field(default_factory=list)
-    version: str = "1.0"
+    version: str = "1.1"
 
     @property
     def proven_count(self) -> int:
@@ -988,9 +1026,106 @@ def _optional_normative_decisions(project: Project) -> list[ProofDecision]:
     return decisions
 
 
+DECISION_FACT_IDS: dict[str, tuple[str, ...]] = {
+    "v1-q-day": ("consumers.groups", "consumers.total"),
+    "v1-q-sec": ("consumers.groups", "v1.network"),
+    "v1-meter": (
+        "consumers.groups", "source.inputs_count", "source.network_kind",
+        "fire.mode",
+    ),
+    "v1-diameter": ("v1.network", "v1.sections", "source.inputs_count"),
+    "v1-head": (
+        "source.guaranteed_head", "head.h_geom", "head.h_internal",
+        "head.h_inlet", "head.free_fixture", "head.h_heater",
+        "head.h_apartment_c", "head.h_apartment_h",
+        "source.hws_heater_scope", "v1.network",
+    ),
+    "v1-pump": (
+        "source.guaranteed_head", "source.npsh_available",
+        "head.h_geom", "head.h_internal", "head.h_inlet",
+        "head.free_fixture", "head.h_heater", "head.h_apartment_c",
+        "head.h_apartment_h",
+    ),
+    "v2-requirement": (
+        "building.type", "building.floors", "building.height",
+        "building.area", "fire.mode", "fire.height", "fire.category",
+        "fire.hall_seats", "fire.area",
+    ),
+    "v2-hydraulics": (
+        "fire.geometry", "fire.network", "source.guaranteed_head",
+    ),
+    "t3-t4-stage": ("document.stage", "building.hws_type", "v1.network"),
+    "high-rise-systems": (
+        "building.type", "building.height", "fire.topology",
+    ),
+    "apartment-hose-tap": ("building.type", "building.apartments"),
+    "k1-flow": ("consumers.groups", "sewage.max_fixture"),
+    "k2-flow": (
+        "storm.roof_type", "storm.city", "storm.roof_area",
+        "storm.walls_area", "storm.period",
+    ),
+    "k2-network": ("storm.network", "sewage.topology"),
+    "k1-grease": (
+        "technology.food_service", "technology.catering_type",
+        "technology.catering_loads", "technology.grease_wastewater",
+        "technology.grease_trap_location",
+    ),
+    "gost-ios2-audit": ("document.stage", "document.object_name"),
+    "gost-ios3-audit": ("document.stage", "document.object_name"),
+}
+
+
+def _fact_value(fact: ProjectFact) -> str:
+    value = fact.value
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, bool):
+        return "да" if value else "нет"
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
+def _proof_fact(fact: ProjectFact) -> ProofFact:
+    status = fact.status.value
+    source_label = SOURCE_KIND_LABELS.get(
+        fact.source_kind,
+        fact.source_kind or "источник не указан",
+    )
+    return ProofFact(
+        id=fact.fact_id,
+        label=fact.label,
+        value=_fact_value(fact),
+        unit=fact.unit,
+        status=status,
+        status_label=FACT_STATUS_LABELS.get(status, status),
+        source_kind=fact.source_kind,
+        source_label=source_label,
+        source_ref=fact.source_ref,
+    )
+
+
+def _attach_fact_provenance(
+    decision: ProofDecision,
+    registry: FactRegistry | None,
+) -> ProofDecision:
+    if registry is None:
+        return decision
+    fact_ids = DECISION_FACT_IDS.get(decision.id, ())
+    if decision.id.startswith("k1-riser-"):
+        fact_ids = ("sewage.risers", "sewage.topology")
+    facts = [
+        _proof_fact(fact)
+        for fact_id in fact_ids
+        if (fact := registry.get(fact_id)) is not None
+    ]
+    return replace(decision, fact_ids=fact_ids, facts=facts)
+
+
 def build_proof_graph(
     project: Project,
     commission: CommissionReport,
+    fact_registry: FactRegistry | None = None,
 ) -> ProofGraph:
     """Собрать доказательную модель без изменения Project."""
     source_steps, demand_result = _consumer_source_steps(project)
@@ -1009,6 +1144,10 @@ def build_proof_graph(
     decisions.append(_stage_boundary_decision(project))
     decisions.extend(_optional_normative_decisions(project))
     decisions.extend(_normative_audit_decisions(commission))
+    decisions = [
+        _attach_fact_provenance(row, fact_registry)
+        for row in decisions
+    ]
     return ProofGraph(
         project_fingerprint=commission.project_fingerprint,
         legacy_fingerprint=commission.legacy_fingerprint,

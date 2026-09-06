@@ -1,6 +1,7 @@
 """Доказательный граф проекта не меняет расчёты и раскрывает их происхождение."""
 from pathlib import Path
 
+from app.intake.facts import build_fact_registry
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request
 from app.pz.commission import build_commission_report
@@ -92,3 +93,28 @@ def test_machine_readable_proof_has_fingerprints_and_summary():
         for item in payload["decisions"]
         for step in item["steps"]
     )
+
+
+def test_proof_decision_contains_fact_values_status_and_origin():
+    request = load_request(
+        Path("demo/demo_project.yaml").read_text(encoding="utf-8")
+    )
+    project = build_project(request)
+    project.flows = compute_flows(project.consumer_groups)
+    graph = build_proof_graph(
+        project,
+        build_commission_report(project),
+        build_fact_registry(request),
+    )
+    head = next(item for item in graph.decisions if item.id == "v1-head")
+
+    assert "head.free_fixture" in head.fact_ids
+    free_head = next(
+        fact for fact in head.facts if fact.id == "head.free_fixture"
+    )
+    assert free_head.value == "20.0"
+    assert free_head.unit == "м"
+    assert free_head.status == "user_declared"
+    assert free_head.source_label == "вход legacy-алгоритма"
+    assert "legacy/sp30_calculator.html" in free_head.source_ref
+    assert graph.to_dict()["version"] == "1.1"

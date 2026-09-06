@@ -53,3 +53,29 @@ def test_fact_registry_is_json_ready():
     payload = registry.to_dict()
     assert payload["counts"]["user_declared"] > 0
     assert all(isinstance(row["systems"], list) for row in payload["facts"])
+
+
+def test_fact_registry_covers_head_fire_storm_and_question_inputs():
+    registry = build_fact_registry(
+        ProjectIntent.from_yaml(DEMO.read_text(encoding="utf-8"))
+    )
+
+    expected = {
+        "head.h_heater",
+        "head.h_apartment_c",
+        "head.h_apartment_h",
+        "source.inputs_count",
+        "source.npsh_available",
+        "v1.network",
+        "fire.geometry",
+        "fire.network",
+        "sewage.max_fixture",
+        "sewage.risers",
+        "storm.walls_area",
+        "storm.period",
+        "storm.network",
+        "technology.group_showers_count",
+        "technology.catering_type",
+    }
+    assert expected <= {row.fact_id for row in registry.facts}
+    assert registry.require("head.free_fixture").value == 20.0

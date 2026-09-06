@@ -38,6 +38,33 @@ def review_request(req: IOS2Request) -> list[InputAdvisory]:
     result: list[InputAdvisory] = []
     height = req.building_height_m
 
+    if req.fire_mode == "auto" and not req.fire_height_m:
+        result.append(InputAdvisory(
+            level="warning",
+            code="sp10_fire_height_missing",
+            message=(
+                "Укажите пожарно-техническую высоту по АР: без неё "
+                "автоматическая проверка ВПВ невозможна."
+            ),
+            reference="СП 10.13130.2020, таблица 7.1",
+        ))
+    elif (
+        req.fire_mode == "auto"
+        and req.building_type == "residential"
+        and req.floors < 12
+        and (req.fire_height_m or 0) >= 30
+    ):
+        result.append(InputAdvisory(
+            level="warning",
+            code="sp10_fire_height_floor_mismatch",
+            message=(
+                f"При {req.floors} этажах ВПВ включается по "
+                f"пожарно-технической высоте {req.fire_height_m:g} м. "
+                "Подтвердите показатель по АР."
+            ),
+            reference="СП 10.13130.2020, таблица 7.1, строка 1",
+        ))
+
     if req.building_type == "residential" and height > 75:
         result.append(InputAdvisory(
             level="warning",
@@ -101,6 +128,14 @@ def review_request(req: IOS2Request) -> list[InputAdvisory]:
                 "100%-ный резерв, частотный привод и диспетчеризация насосов."
             ),
             reference="СП 253.1325800.2016, пп. 10.3, 10.15, 10.23, 10.25, 10.27",
+        ))
+
+    if req.building_type == "residential" and req.apartments <= 0:
+        result.append(InputAdvisory(
+            level="info",
+            code="sp54_apartments_missing",
+            message="Задайте число квартир для квартирных кранов DN15 со шлангом.",
+            reference="СП 54.13330.2022, п. 6.2.4.3",
         ))
 
     if req.roof_type != "not_set" and (

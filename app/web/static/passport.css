@@ -324,6 +324,15 @@
   font-size: 8px;
   font-style: normal;
 }
+.passport-facts { margin: 0 13px 12px 54px; padding: 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--input); }
+.passport-facts h3 { margin: 0 0 7px; color: var(--quiet); font: 700 8px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.passport-facts article { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 12px; padding: 7px 0; border-top: 1px solid var(--line); }
+.passport-facts article:first-of-type { border-top: 0; }
+.passport-facts article div small, .passport-facts article div strong { display: block; }
+.passport-facts article div small { color: var(--quiet); font: 7px var(--mono); }
+.passport-facts article div strong { margin-top: 2px; font-size: 9px; }
+.passport-facts article > b { align-self: center; font: 650 9px var(--mono); text-align: right; }
+.passport-facts article > p { grid-column: 1/-1; margin: 0; color: var(--muted); font-size: 8px; }
 .passport-decisions details footer {
   display: flex;
   flex-wrap: wrap;

@@ -40,7 +40,7 @@ from app.intake.request_dto import (
 from app.intake.project_builder import build_project, RequestValidationError
 from app.intake.advisories import review_request
 from app.intake.preflight import preflight_request
-from app.intake.questions import questions_for_web
+from app.intake.questions import QUESTION_DEFINITIONS
 from app.pz.ios2_orchestrator import design_ios2
 from app.intake.project_store import ProjectStore
 from app.intake.passport_store import PassportStore
@@ -123,7 +123,7 @@ def _form_context(**values):
     return {
         "consumer_norms": _CONSUMER_NORMS,
         "storm_cities": _STORM_CITIES,
-        "applicability_rules": questions_for_web(),
+        "question_definitions": QUESTION_DEFINITIONS,
         "advisories": [],
         "example_mode": False,
         **values,
@@ -1018,7 +1018,7 @@ async def wizard_design(request: Request):
             "project_id": project_id,
         }), status_code=422)
     proof_graph = build_proof_graph(
-        bundle.project, bundle.commission_report,
+        bundle.project, bundle.commission_report, preflight.facts,
     )
     documents, _ = _bundle_documents(bundle)
     defense_payload = build_defense_payload(

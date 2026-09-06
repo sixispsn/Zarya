@@ -172,6 +172,21 @@ def build_defense_payload(
                 }
                 for step in decision.steps
             ],
+            "fact_ids": list(decision.fact_ids),
+            "facts": [
+                {
+                    "id": fact.id,
+                    "label": fact.label,
+                    "value": fact.value,
+                    "unit": fact.unit,
+                    "status": fact.status,
+                    "status_label": fact.status_label,
+                    "source_kind": fact.source_kind,
+                    "source_label": fact.source_label,
+                    "source_ref": fact.source_ref,
+                }
+                for fact in decision.facts
+            ],
             "impact": list(decision.impact),
             "default_question": DEFAULT_QUESTIONS.get(
                 decision.id, f"Чем подтверждено решение «{decision.title}»?",
@@ -202,7 +217,7 @@ def build_defense_payload(
         decisions.append(encoded)
 
     return {
-        "version": "1.0",
+        "version": graph.version,
         "project_fingerprint": graph.project_fingerprint,
         "legacy_fingerprint": graph.legacy_fingerprint,
         "build_commit": graph.build_commit,

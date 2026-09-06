@@ -30,7 +30,6 @@
 {% if errors %}<div class="errors" role="alert"><strong>Проверьте исходные данные</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" action="/wizard/design" data-design-form novalidate>
 {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-<script type="application/json" data-applicability-rules>{{ applicability_rules|default({})|tojson }}</script>
 <div class="required-legend"><span class="required-lamp" aria-hidden="true"></span><span>нужно заполнить</span><span class="required-lamp is-complete" aria-hidden="true"></span><span>готово</span></div>
 <details class="validation-panel" data-validation-panel{% if not advisories %} hidden{% endif %}{% if errors %} open{% endif %} aria-live="polite">
   <summary class="validation-heading"><span>Нормативный контроль</span><b data-validation-count>{{ advisories|length }}</b></summary>
@@ -415,50 +414,44 @@
       <div class="applicability-progress"><span data-applicability-progress>0 из 0 заполнено</span><div><i data-applicability-progress-bar></i></div></div>
     </header>
 
-    <div class="applicability-questions">
-      <section class="applicability-question" data-applicability-question="group-showers" hidden>
-        <div class="applicability-question-index">01</div>
+    <div class="applicability-questions" data-applicability-questions>
+      {% for question in question_definitions %}
+      <section class="applicability-question" data-question-id="{{ question.question_id }}" hidden>
+        <div class="applicability-question-index">{{ '%02d'|format(loop.index) }}</div>
         <div class="applicability-question-body">
-          <div class="applicability-question-title"><div><span>В1 · Т3/Т4 · К1</span><h3>Предусмотрены групповые душевые?</h3></div><span class="required-lamp applicability-question-lamp" aria-hidden="true"></span></div>
-          <p>Вопрос появляется для спорта, бассейна, общежития, школы, производственной части или явного упоминания душевых.</p>
-          <div class="applicability-choice" role="radiogroup" aria-label="Наличие групповых душевых">
-            <label><input type="radio" name="group_showers_answer" value="yes"{% if prefill and prefill.group_showers_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
-            <label><input type="radio" name="group_showers_answer" value="no"{% if prefill and prefill.group_showers_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
+          <div class="applicability-question-title"><div><span>{{ question.systems|join(' · ') }}</span><h3>{{ question.title }}</h3></div><span class="required-lamp applicability-question-lamp" aria-hidden="true"></span></div>
+          <p>{{ question.prompt }}</p>
+          {% for requirement in question.requirements %}
+          {% set current = (prefill|attr(requirement.field)) if prefill else none %}
+          {% set controller = (prefill|attr(requirement.when.key)) if prefill and requirement.when else none %}
+          <div class="applicability-field{% if requirement.field != question.answer_field %} applicability-followup{% endif %}" data-question-field="{{ requirement.field }}"{% if requirement.when and controller != requirement.when.value %} hidden{% endif %}>
+            {% if requirement.widget == 'radio' %}
+            <div class="applicability-choice" role="radiogroup" aria-label="{{ requirement.label }}">
+              {% for option in requirement.values %}
+              <label><input type="radio" name="{{ requirement.field }}" value="{{ option }}"{% if current == option %} checked{% endif %}><span>{{ requirement.option_labels[loop.index0] }}</span></label>
+              {% endfor %}
+            </div>
+            {% elif requirement.widget == 'select' %}
+            <label><span>{{ requirement.label }}</span><select name="{{ requirement.field }}"><option value="{{ 'none' if requirement.field == 'catering_type' else 'unknown' }}"{% if current in (none, 'none', 'unknown') %} selected{% endif %}>{{ requirement.placeholder }}</option>{% for option in requirement.values %}<option value="{{ option }}"{% if current == option %} selected{% endif %}>{{ requirement.option_labels[loop.index0] }}</option>{% endfor %}</select></label>
+            {% elif requirement.widget == 'number' %}
+            <label><span>{{ requirement.label }}</span><input type="number" min="1" step="1" name="{{ requirement.field }}" value="{{ current if current else '' }}" placeholder="{{ requirement.placeholder }}"></label>
+            {% endif %}
+            {% if requirement.help_text %}<small>{{ requirement.help_text }}</small>{% endif %}
           </div>
-          <div class="applicability-followup" data-applicability-followup="group-showers"{% if not prefill or prefill.group_showers_answer != 'yes' %} hidden{% endif %}>
-            <label><span>Количество душевых сеток, шт.</span><input type="number" min="1" step="1" name="group_showers_count" value="{{ prefill.group_showers_count if prefill and prefill.group_showers_count else '' }}" placeholder="По ТХ / ТЗ"></label>
-            <small>Количество фиксируется как исходное ТХ. Расходы считаются только по выбранным строкам таблицы А.2 СП 30 и алгоритму legacy.</small>
-          </div>
-        </div>
-      </section>
-
-      <section class="applicability-question" data-applicability-question="food-service" hidden>
-        <div class="applicability-question-index">02</div>
-        <div class="applicability-question-body">
-          <div class="applicability-question-title"><div><span>В1 · Т3 · К1 · К3</span><h3>Есть предприятие питания или пищеблок?</h3></div><span class="required-lamp applicability-question-lamp" aria-hidden="true"></span></div>
-          <p>Наличие общепита влияет на норму водопотребления, производственные стоки и проверку необходимости жироуловителя.</p>
-          <div class="applicability-choice" role="radiogroup" aria-label="Наличие предприятия питания">
-            <label><input type="radio" name="food_service_answer" value="yes"{% if prefill and prefill.food_service_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
-            <label><input type="radio" name="food_service_answer" value="no"{% if prefill and prefill.food_service_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
-          </div>
-          <div class="applicability-followup" data-applicability-followup="food-service"{% if not prefill or prefill.food_service_answer != 'yes' %} hidden{% endif %}>
+          {% endfor %}
+          {% if question.question_id == 'technology.food_service' %}
+          <div class="applicability-followup applicability-food-loads" data-food-service-details{% if not prefill or prefill.food_service_answer != 'yes' %} hidden{% endif %}>
             <div class="applicability-field-grid">
-              <label><span>Тип приготовления</span><select name="catering_type"><option value="none"{% if not prefill or prefill.catering_type == 'none' %} selected{% endif %}>Выберите по ТХ</option><option value="semi_finished"{% if prefill and prefill.catering_type == 'semi_finished' %} selected{% endif %}>На полуфабрикатах</option><option value="raw"{% if prefill and prefill.catering_type == 'raw' %} selected{% endif %}>На сырье</option><option value="school"{% if prefill and prefill.catering_type == 'school' %} selected{% endif %}>Пищеблок школы / ДОО</option></select></label>
               <label><span>Мест в залах</span><input type="number" min="0" step="1" name="catering_seats" value="{{ prefill.catering_seats if prefill else 0 }}"></label>
               <label><span>Условных блюд</span><input type="number" min="0" step="1" name="catering_conditional_dishes" value="{{ prefill.catering_conditional_dishes if prefill else 0 }}"></label>
             </div>
             <label class="applicability-check"><input type="checkbox" name="school_grease_by_assignment"{% if prefill and prefill.school_grease_by_assignment %} checked{% endif %}><span>Для школы / ДОО жироуловитель прямо задан ТХ/ТЗ</span></label>
-            <div class="applicability-subquestion">
-              <div><strong>Есть жиросодержащие производственные стоки?</strong><small>Необходимость оборудования проверяется по СП 118; ответ не подменяет нормативное решение.</small></div>
-              <div class="applicability-choice is-compact" role="radiogroup" aria-label="Наличие жиросодержащих стоков">
-                <label><input type="radio" name="grease_wastewater_answer" value="yes"{% if prefill and prefill.grease_wastewater_answer == 'yes' %} checked{% endif %}><span>Да</span></label>
-                <label><input type="radio" name="grease_wastewater_answer" value="no"{% if prefill and prefill.grease_wastewater_answer == 'no' %} checked{% endif %}><span>Нет</span></label>
-              </div>
-            </div>
-            <label data-applicability-grease-location{% if not prefill or prefill.grease_wastewater_answer != 'yes' %} hidden{% endif %}><span>Предварительное размещение жироуловителя</span><select name="grease_trap_location"><option value="unknown"{% if not prefill or prefill.grease_trap_location == 'unknown' %} selected{% endif %}>Выберите решение</option><option value="under_sink"{% if prefill and prefill.grease_trap_location == 'under_sink' %} selected{% endif %}>Локально под мойками</option><option value="technical_room"{% if prefill and prefill.grease_trap_location == 'technical_room' %} selected{% endif %}>В техническом помещении здания</option><option value="outside_building"{% if prefill and prefill.grease_trap_location == 'outside_building' %} selected{% endif %}>За пределами здания</option><option value="stage_r"{% if prefill and prefill.grease_trap_location == 'stage_r' %} selected{% endif %}>Уточнить по ТХ и аксонометрии стадии Р</option></select></label>
           </div>
+          {% endif %}
+          <small class="applicability-reference">{{ question.reference }}</small>
         </div>
       </section>
+      {% endfor %}
     </div>
 
     <footer class="applicability-foot">

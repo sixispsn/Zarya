@@ -29,6 +29,7 @@ def test_wizard_included_in_app():
     assert "/wizard/design" in paths
     assert "/api/project/preflight" in paths
     assert "/api/project/preflight/questions" in paths
+    assert "/api/project/preflight/live" in paths
 
 
 def test_root_redirects_to_workspace():
@@ -317,11 +318,10 @@ def test_live_normative_advisories_are_wired():
     assert "data-validation-panel" in html
     assert 'data-purpose="residential"' in html
     assert 'data-purpose="public"' in html
-    assert "height > 75" in js
-    assert "height > 50" in js
-    assert "fireHeight >= 30" in js
-    assert "пп. 1.1, 7.5–7.6" in js
-    assert "больше не подменяет общественное здание офисной строкой" in js
+    assert 'fetch("/api/project/preflight/live"' in js
+    assert "collectLivePreflightInput" in js
+    assert "height > 75" not in js
+    assert "пп. 1.1, 7.5–7.6" not in js
 
 
 def test_demo_is_available_only_by_explicit_query():

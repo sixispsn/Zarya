@@ -9,7 +9,11 @@ from typing import Any
 from app.intake.advisories import review_request
 from app.intake.facts import FactRegistry, build_fact_registry
 from app.intake.project_intent import IntentLike, as_project_intent
-from app.intake.questions import QuestionState, evaluate_questions
+from app.intake.questions import (
+    QuestionState,
+    evaluate_questions,
+    question_owned_validation_messages,
+)
 from app.normative.baseline import NormativeBaseline, get_active_baseline
 from app.normative.verdicts import (
     NormativeVerdict,
@@ -108,14 +112,49 @@ def preflight_request(value: IntentLike) -> PreflightReport:
         req,
         normative_baseline,
     )
+    questions = tuple(evaluate_questions(intent))
+    question_messages = question_owned_validation_messages()
     issues: list[PreflightIssue] = [
         PreflightIssue(
             level=PreflightLevel.BLOCKING,
             code=f"input.validation.{index:03d}",
             message=message,
         )
-        for index, message in enumerate(req.validate(), start=1)
+        for index, message in enumerate(
+            (
+                row for row in req.validate()
+                if row not in question_messages
+            ),
+            start=1,
+        )
     ]
+
+    # Уточняющие вопросы владеют своей применимостью, полнотой и связью с
+    # Fact Registry. Это устраняет обезличенные дубликаты DTO-валидации.
+    for state in questions:
+        if not state.applicable:
+            continue
+        missing = {
+            row.field: row
+            for row in state.definition.requirements
+            if row.field in state.missing_fields
+        }
+        for field_name, message in zip(
+            state.missing_fields,
+            state.missing_messages,
+        ):
+            requirement = missing[field_name]
+            issues.append(PreflightIssue(
+                level=PreflightLevel.BLOCKING,
+                code=(
+                    f"question.{state.definition.question_id}."
+                    f"{field_name}"
+                ),
+                message=message,
+                reference=state.definition.reference,
+                systems=state.definition.systems,
+                fact_ids=(requirement.fact_id,),
+            ))
 
     # Технологические advisories уже представлены строгой DTO-валидацией.
     # Остальные нормативные сигналы остаются неблокирующими.
@@ -217,7 +256,7 @@ def preflight_request(value: IntentLike) -> PreflightReport:
     return PreflightReport(
         issues=tuple(issues),
         facts=build_fact_registry(intent),
-        questions=tuple(evaluate_questions(intent)),
+        questions=questions,
         normative_baseline=normative_baseline,
         normative_verdicts=normative_verdicts,
     )

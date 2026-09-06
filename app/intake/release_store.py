@@ -27,7 +27,7 @@ from app.pz.commission import (
     PassportItem,
     TraceRow,
 )
-from app.pz.proof import ProofDecision, ProofGraph, ProofStep
+from app.pz.proof import ProofDecision, ProofFact, ProofGraph, ProofStep
 
 
 _PROJECTS_ROOT = os.environ.get(
@@ -90,6 +90,21 @@ def _proof_from_dict(value: dict) -> ProofGraph:
             ],
             artifacts=[str(item) for item in raw.get("artifacts", [])],
             impact=[str(item) for item in raw.get("impact", [])],
+            fact_ids=tuple(str(item) for item in raw.get("fact_ids", [])),
+            facts=[
+                ProofFact(
+                    id=str(fact["id"]),
+                    label=str(fact.get("label", "")),
+                    value=str(fact.get("value", "")),
+                    unit=str(fact.get("unit", "")),
+                    status=str(fact.get("status", "")),
+                    status_label=str(fact.get("status_label", "")),
+                    source_kind=str(fact.get("source_kind", "")),
+                    source_label=str(fact.get("source_label", "")),
+                    source_ref=str(fact.get("source_ref", "")),
+                )
+                for fact in raw.get("facts", [])
+            ],
         ))
     return ProofGraph(
         project_fingerprint=str(value["project_fingerprint"]),
