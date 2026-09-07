@@ -1,6 +1,8 @@
 import asyncio
+from io import BytesIO
 import json
 
+from pypdf import PdfReader
 from starlette.datastructures import FormData
 from starlette.requests import Request
 
@@ -13,6 +15,7 @@ from app.web.building_model import (
     building_model_save,
     router,
     saved_building_model_page,
+    saved_building_model_report_pdf,
 )
 
 
@@ -72,6 +75,7 @@ def test_building_model_routes_are_included_in_application():
         "/wizard/building-model/{model_id}",
         "/wizard/building-model/{model_id}/confirm",
         "/wizard/building-model/{model_id}/model.json",
+        "/wizard/building-model/{model_id}/report.pdf",
     }
     assert router_paths <= app_paths
 
@@ -206,3 +210,9 @@ def test_building_model_can_be_saved_loaded_and_confirmed(tmp_path, monkeypatch)
     assert "Иванов И.И." in confirmed_body
     assert "состав готов" in confirmed_body
     assert "схема ждёт АР" in confirmed_body
+    assert f'/wizard/building-model/{model_id}/report.pdf' in confirmed_body
+
+    report = saved_building_model_report_pdf(model_id)
+    assert report.status_code == 200
+    assert report.media_type == "application/pdf"
+    assert len(PdfReader(BytesIO(report.body)).pages) == 2

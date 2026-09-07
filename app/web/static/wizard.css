@@ -1081,6 +1081,8 @@ table.grid .compact-check input[type="checkbox"] {
 .building-model-confirm-check span { margin: 0 !important; color: var(--ink-soft) !important; font-size: 9px !important; line-height: 1.5; }
 .building-model-confirm-form button { grid-column: 1/-1; width: 100%; }
 .building-model-confirmed { display: grid; grid-template-columns: 15px minmax(0,1fr); gap: 10px; align-items: start; }
+.building-model-export-links { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.building-model-export-links a { color: var(--accent-bright); font: 8px var(--mono); text-decoration: none; }
 .building-model-confirmed .verdict-light { margin-top: 5px; }
 .building-model-confirmed strong, .building-model-confirmed small { display: block; }
 .building-model-confirmed strong { font-size: 11px; }

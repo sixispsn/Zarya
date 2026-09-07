@@ -5,7 +5,7 @@
 <title>Заря — модель здания</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260907-3">
+<link rel="stylesheet" href="/static/wizard.css?v=20260907-4">
 <script defer src="/static/wizard.js?v=20260907-2"></script>
 </head><body>
 <header class="topbar">
@@ -67,7 +67,7 @@
       <div class="building-model-systems">{% for status in handoff.systems %}<article data-state="{{ 'ready' if status.quantities_ready else 'blocked' }}"><strong>{{ status.system }}</strong><span>{{ status.fixture_source_count }}</span><small>источников</small><b>{{ 'состав готов' if status.quantities_ready else status.quantity_blockers|length ~ ' блок.' }}</b><em>схема ждёт АР</em></article>{% endfor %}</div>
 
       {% if saved_draft %}<section class="building-model-confirmation" data-state="{{ 'ready' if saved_draft.basis_confirmed else 'warning' }}">
-        <div class="card-kicker"><div><p class="eyebrow">Контроль передачи</p><h2>{{ 'Основа принята' if saved_draft.basis_confirmed else 'Подтвердить основу' }}</h2></div><a href="/wizard/building-model/{{ saved_draft.model_id }}/model.json">JSON</a></div>
+        <div class="card-kicker"><div><p class="eyebrow">Контроль передачи</p><h2>{{ 'Основа принята' if saved_draft.basis_confirmed else 'Подтвердить основу' }}</h2></div><span class="building-model-export-links"><a href="/wizard/building-model/{{ saved_draft.model_id }}/report.pdf" target="_blank">PDF контроля</a><a href="/wizard/building-model/{{ saved_draft.model_id }}/model.json">JSON</a></span></div>
         <dl><div><dt>ID модели</dt><dd>{{ saved_draft.model_id }}</dd></div><div><dt>SHA-256 топологии</dt><dd title="{{ saved_draft.topology_sha256 }}">{{ saved_draft.topology_sha256[:16] }}…</dd></div></dl>
         {% if saved_draft.basis_confirmed %}<div class="building-model-confirmed"><span class="verdict-light" data-state="ok"></span><div><strong>{{ saved_draft.confirmed_by }}</strong><small>{{ saved_draft.confirmed_at }}{% if saved_draft.confirmation_note %} · {{ saved_draft.confirmation_note }}{% endif %}</small></div></div><p>Подтверждение открывает только готовые реестры источников. Генерация схем остаётся заблокирована до подтверждённых планов АР.</p>
         {% else %}<form method="post" action="/wizard/building-model/{{ saved_draft.model_id }}/confirm" class="building-model-confirm-form"><input type="hidden" name="expected_topology_sha256" value="{{ saved_draft.topology_sha256 }}"><label><span>Проверил</span><input name="confirmed_by" required placeholder="Фамилия И.О. / роль"></label><label><span>Примечание</span><input name="confirmation_note" placeholder="Основание проверки"></label><label class="building-model-confirm-check"><input type="checkbox" name="confirm_typological_basis" value="yes" required><span>Состав помещений, приборов, квартир и условное распределение по шахтам проверены. Понимаю, что это не подтверждение геометрии АР.</span></label><button class="button-primary" type="submit">Подтвердить типологическую основу</button></form>{% endif %}

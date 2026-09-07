@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import re
+import tempfile
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -17,6 +19,7 @@ from app.architecture.program_store import (
     BuildingProgramDraft,
     BuildingProgramStore,
 )
+from app.architecture.program_report import generate_building_program_report_pdf
 from app.architecture.residential_program import (
     BuildingProgramTopology,
     ResidentialProgramInput,
@@ -346,6 +349,27 @@ def saved_building_model_json(model_id: str) -> JSONResponse:
         headers={
             "Content-Disposition": (
                 f'attachment; filename="zarya-building-program-{model_id}.json"'
+            ),
+        },
+    )
+
+
+@router.get("/building-model/{model_id}/report.pdf")
+def saved_building_model_report_pdf(model_id: str) -> Response:
+    try:
+        draft = _PROGRAM_STORE.load(model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    with tempfile.TemporaryDirectory(prefix="zarya-building-report-web-") as tmp_dir:
+        path = Path(tmp_dir) / f"building-program-{model_id}.pdf"
+        generate_building_program_report_pdf(draft, path)
+        content = path.read_bytes()
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="zarya-building-program-{model_id}.pdf"'
             ),
         },
     )

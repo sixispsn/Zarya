@@ -9,6 +9,7 @@ from app.architecture.engineering_handoff import (
     build_engineering_handoff,
 )
 from app.architecture.program_store import BuildingProgramStore
+from app.architecture.program_report import generate_building_program_report_pdf
 from app.architecture.residential_program import (
     BuildingProgramTopology,
     ResidentialProgramInput,
@@ -25,5 +26,6 @@ __all__ = [
     "audit_building_program",
     "build_residential_program",
     "build_engineering_handoff",
+    "generate_building_program_report_pdf",
     "load_building_typology_catalog",
 ]
