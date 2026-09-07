@@ -398,6 +398,38 @@ def _revision_svg(
     return "".join(body)
 
 
+def _revision_on_break_svg(
+    *,
+    revision_key: str,
+    floor_no: int,
+    x: float,
+    y: float,
+    floor_height_m: float,
+    label_suffix: str = "",
+) -> str:
+    """Show a registered revision on an omitted run without inventing a floor."""
+    placement = resolve_riser_revision_placement(
+        floor_height_m=floor_height_m,
+        requested_height_m=None,
+    )
+    height_mm = int(round(placement.height_above_clean_floor_m * 1000))
+    suffix = f"; {label_suffix}" if label_suffix else ""
+    return "".join((
+        f'<g data-building-revision="{escape(revision_key)}" '
+        'data-revision-on-break="true" '
+        f'data-revision-floor="{floor_no}" '
+        'data-floor-reference="clean-floor" '
+        f'data-height-above-floor-mm="{height_mm}" '
+        f'data-height-source="{escape(placement.source)}" '
+        f'data-height-rule="{REVISION_PLACEMENT_RULE_ID}">',
+        render_ugo("revision", x, y, scale=0.72, rotation=90.0),
+        f'<text x="{x+24:.1f}" y="{y-7:.1f}" '
+        f'font-family="{FONT}" font-size="11" font-weight="bold">Р · '
+        f'эт. {floor_no}{escape(suffix)}</text>',
+        '</g>',
+    ))
+
+
 def _floor_origins(floors: tuple[int, ...]) -> dict[int, float]:
     presets = {
         1: (760.0,),
@@ -425,7 +457,7 @@ def build_wastewater_building_floors_svg(
     errors = assembly.validate()
     if errors:
         raise ValueError("cannot render invalid building assembly: " + "; ".join(errors))
-    width, height = 2800, 1980
+    width = 2800
     margin = 50
     floors = assembly.displayed_floor_numbers
     origins = _floor_origins(floors)
@@ -559,6 +591,39 @@ def build_wastewater_building_floors_svg(
                         label=f"этажи {lower+1}-{upper-1} - типовые, не показаны",
                     )
                 )
+                omitted_revisions = tuple(
+                    floor_no
+                    for floor_no in stack.revision_floors
+                    if lower < floor_no < upper
+                )
+                if omitted_revisions:
+                    # Registered revisions on collapsed typical floors remain
+                    # visible and are spread along the omitted run.
+                    available_top = upper_bottom + 42.0
+                    available_bottom = lower_top - 42.0
+                    step = (
+                        (available_bottom - available_top)
+                        / (len(omitted_revisions) - 1)
+                        if len(omitted_revisions) > 1
+                        else 0.0
+                    )
+                    for revision_index, revision_floor in enumerate(
+                        sorted(omitted_revisions, reverse=True)
+                    ):
+                        revision_y = (
+                            (upper_bottom + lower_top) / 2
+                            if len(omitted_revisions) == 1
+                            else available_top + step * revision_index
+                        )
+                        body.append(
+                            _revision_on_break_svg(
+                                revision_key=f"{stack.riser_id}-{revision_floor}",
+                                floor_no=revision_floor,
+                                x=riser_x,
+                                y=revision_y,
+                                floor_height_m=assembly.floor_height_m,
+                            )
+                        )
         last_floor = stack.floor(floors[-1])
         last_bottom = origins[floors[-1]] + last_floor.port("riser_bottom").point.y_mm
         body.append(
@@ -583,7 +648,6 @@ def build_wastewater_building_floors_svg(
         )
 
     first_origin = origins[floors[0]]
-    last_origin = origins[floors[-1]]
     for index, riser in enumerate(selected_k2):
         x = k2_xs[index]
         body.append(
@@ -839,7 +903,6 @@ def _build_two_riser_basement_reference_svg(
         raise ValueError("current basement sheet requires one collector per system")
     assert inputs.k1_outlet is not None
     assert inputs.k2_outlet is not None
-    width, height = 2800, 1980
     margin = 50
     first_floor_y = 260.0
     basement_floor_y = 1560.0
@@ -1239,6 +1302,7 @@ def _render_basement_system_fragment(
     first_floor_y: float,
     wall_left: float,
     wall_right: float,
+    floor_height_m: float,
     previous_sheet_no: int | None,
     next_sheet_no: int | None,
 ) -> None:
@@ -1268,6 +1332,60 @@ def _render_basement_system_fragment(
         f'font-family="{FONT}" font-size="20" font-weight="bold">'
         f'{_system_mark(system)} · {range_label}</text>'
     )
+
+    def first_floor_revision_reference(
+        row: BuildingK1RiserProjectInput | BuildingK2RiserProjectInput,
+    ) -> tuple[str, int] | None:
+        if isinstance(row, BuildingK1RiserProjectInput):
+            if 1 not in row.revision_floors:
+                return None
+            placement = resolve_riser_revision_placement(
+                floor_height_m=floor_height_m,
+                requested_height_m=None,
+            )
+            return f"{row.stack.riser_id}-1", int(
+                round(placement.height_above_clean_floor_m * 1000)
+            )
+        revision = next(
+            (revision for revision in row.revisions if revision.floor_no == 1),
+            None,
+        )
+        if revision is None:
+            return None
+        return revision.element_id, int(round(revision.elevation_m * 1000))
+
+    def wall_sleeve_svg(
+        *,
+        section_id: str,
+        start: tuple[float, float],
+        end: tuple[float, float],
+    ) -> str:
+        if not (start[0] < wall_right < end[0]):
+            return ""
+        ratio = (wall_right - start[0]) / (end[0] - start[0])
+        sleeve_y = start[1] + (end[1] - start[1]) * ratio
+        wall_width = 55.0
+        outer_x = wall_right + wall_width
+        outer_y = sleeve_y + (end[1] - start[1]) * (
+            wall_width / (end[0] - start[0])
+        )
+        return "".join((
+            f'<g data-wall-sleeve="{escape(section_id)}" '
+            'data-sleeve-scope="foundation-crossing">',
+            f'<rect x="{wall_right-8:.1f}" y="{sleeve_y-15:.1f}" '
+            f'width="{wall_width+16:.1f}" height="30" fill="white" '
+            f'stroke="{BLACK}" stroke-width="1.7"/>',
+            f'<line x1="{wall_right-8:.1f}" y1="{sleeve_y:.1f}" '
+            f'x2="{outer_x+8:.1f}" y2="{outer_y:.1f}" '
+            f'stroke="{BLACK}" stroke-width="4"/>',
+            f'<path d="M{wall_right+wall_width/2:.1f},{sleeve_y-16:.1f} '
+            f'V{sleeve_y-52:.1f} H{wall_right-26:.1f}" fill="none" '
+            f'stroke="{BLACK}" stroke-width="1.2"/>',
+            f'<text x="{wall_right-34:.1f}" y="{sleeve_y-58:.1f}" '
+            f'text-anchor="end" font-family="{FONT}" font-size="12">'
+            'Гильза в фундаментной стене; по узлу КР/ИОС3</text>',
+            '</g>',
+        ))
 
     incoming_stub: tuple[tuple[float, float], tuple[float, float]] | None = None
     if start_index > 0:
@@ -1317,6 +1435,20 @@ def _render_basement_system_fragment(
                 position=0.52,
             )
         )
+        revision_reference = first_floor_revision_reference(riser)
+        if revision_reference is not None:
+            revision_id, revision_height_mm = revision_reference
+            reference_offset_y = 42.0 if system == "K1" else 72.0
+            body.append(
+                f'<g data-basement-revision-reference="{escape(revision_id)}" '
+                f'data-height-above-floor-mm="{revision_height_mm}">'
+                f'<path d="M{x:.1f},{first_floor_y+12:.1f} '
+                f'H{x+28:.1f} V{first_floor_y+reference_offset_y:.1f}" fill="none" '
+                f'stroke="{BLACK}" stroke-width="1.1"/>'
+                f'<text x="{x+36:.1f}" y="{first_floor_y+reference_offset_y+6:.1f}" '
+                f'font-family="{FONT}" font-size="12">Ревизия на 1 этаже '
+                f'+{revision_height_mm} — см. лист 1</text></g>'
+            )
         if riser.lower_cleanout_element_ids:
             cleanout_id = riser.lower_cleanout_element_ids[0]
             node = build_lower_turn_cleanout_assembly(
@@ -1340,10 +1472,21 @@ def _render_basement_system_fragment(
                 )
                 + '</g>'
             )
+            elbow_ids = ", ".join(riser.lower_elbow_element_ids)
             body.append(
-                f'<text x="{x-12:.1f}" y="{main_y-55:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="11">Прочистка '
-                f'{escape(cleanout_id)}; соосно</text>'
+                f'<g data-lower-node-callout="{escape(cleanout_id)}">'
+                f'<path d="M{x+25:.1f},{main_y-31:.1f} L{x+82:.1f},{main_y-96:.1f} '
+                f'H{x+245:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.2"/>'
+                f'<text x="{x+254:.1f}" y="{main_y-105:.1f}" '
+                f'font-family="{FONT}" font-size="13" font-weight="bold">'
+                f'Прочистка {escape(cleanout_id)} DN{dn}</text>'
+                f'<text x="{x+254:.1f}" y="{main_y-84:.1f}" '
+                f'font-family="{FONT}" font-size="11">косой тройник 45° с заглушкой; '
+                'свободный соосный конец</text>'
+                f'<text data-lower-elbow-reference="{escape(elbow_ids)}" '
+                f'x="{x+254:.1f}" y="{main_y-64:.1f}" '
+                f'font-family="{FONT}" font-size="11">Отвод 45°: '
+                f'{escape(elbow_ids)}</text></g>'
             )
         else:
             junction_id = riser.lower_junction_element_ids[0]
@@ -1367,6 +1510,22 @@ def _render_basement_system_fragment(
                     pipe_width=4.0,
                 )
                 + '</g>'
+            )
+            elbow_ids = ", ".join(riser.lower_elbow_element_ids)
+            body.append(
+                f'<g data-lower-node-callout="{escape(junction_id)}">'
+                f'<path d="M{x+25:.1f},{main_y-31:.1f} L{x+74:.1f},{main_y+48:.1f} '
+                f'H{x-155:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.2"/>'
+                f'<text x="{x-164:.1f}" y="{main_y+66:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="13" font-weight="bold">'
+                f'Проточный узел {escape(junction_id)} DN{dn}</text>'
+                f'<text x="{x-164:.1f}" y="{main_y+87:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="11">косой тройник 45°; '
+                'проходная ось открыта, без заглушки</text>'
+                f'<text data-lower-elbow-reference="{escape(elbow_ids)}" '
+                f'x="{x-164:.1f}" y="{main_y+107:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="11">Отвод 45°: '
+                f'{escape(elbow_ids)}</text></g>'
             )
 
         outgoing = collectors[global_index] if global_index < len(collectors) else outlet
@@ -1402,6 +1561,14 @@ def _render_basement_system_fragment(
                 position=0.55,
             )
         )
+        if global_index == len(risers) - 1:
+            body.append(
+                wall_sleeve_svg(
+                    section_id=outlet.section_id,
+                    start=outgoing_start,
+                    end=outgoing_end,
+                )
+            )
 
         transition = _transition_for_node(
             transitions,
@@ -1481,7 +1648,6 @@ def build_wastewater_building_basement_fragment_svg(
     inputs = assembly.project_inputs
     assert inputs.k1_outlet is not None
     assert inputs.k2_outlet is not None
-    width = 2800
     margin = 50
     first_floor_y = 260.0
     basement_floor_y = 1560.0
@@ -1540,6 +1706,7 @@ def build_wastewater_building_basement_fragment_svg(
         first_floor_y=first_floor_y,
         wall_left=wall_left,
         wall_right=wall_right,
+        floor_height_m=assembly.floor_height_m,
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
     )
@@ -1556,6 +1723,7 @@ def build_wastewater_building_basement_fragment_svg(
         first_floor_y=first_floor_y,
         wall_left=wall_left,
         wall_right=wall_right,
+        floor_height_m=assembly.floor_height_m,
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
     )
@@ -1796,6 +1964,19 @@ def audit_wastewater_building_svgs(
     }
     if drawn_k2_floor_revisions != expected_k2_floor_revisions:
         findings.append("sheet 1: K2 revisions differ from project registry")
+    drawn_k1_floor_revisions = {
+        row.get("data-building-revision")
+        for root in floor_roots
+        for row in root.iter()
+        if row.get("data-building-revision", "").startswith("К1")
+    }
+    expected_k1_floor_revisions = {
+        f"{riser.stack.riser_id}-{floor_no}"
+        for riser in assembly.project_inputs.k1_risers
+        for floor_no in riser.revision_floors
+    }
+    if drawn_k1_floor_revisions != expected_k1_floor_revisions:
+        findings.append("sheet 1: K1 revisions differ from project registry")
     drawn_k2_lower_revisions = {
         row.get("data-basement-revision")
         for root in basement_roots
@@ -1850,6 +2031,23 @@ def audit_wastewater_building_svgs(
                 and row.get("data-through-axis") != "open"
             ):
                 findings.append("basement: through junction was incorrectly capped")
+
+    sleeve_ids = {
+        row.get("data-wall-sleeve")
+        for root in basement_roots
+        for row in root.iter()
+        if row.get("data-wall-sleeve")
+    }
+    expected_sleeve_ids = {
+        row.section_id
+        for row in (
+            assembly.project_inputs.k1_outlet,
+            assembly.project_inputs.k2_outlet,
+        )
+        if row is not None
+    }
+    if sleeve_ids != expected_sleeve_ids:
+        findings.append("sheet 2: foundation sleeves differ from building outlets")
 
     basement_line_ids = {
         row.get("data-building-pipe-line")

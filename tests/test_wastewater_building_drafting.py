@@ -378,15 +378,18 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
     assert 'data-floor-assembly="К1-Ст2-Сборка-Этаж-16"' in floors_svg
     assert floors_svg.count('data-ugo="roof_funnel_heated"') == 2
     assert "К2-Вр1" in floors_svg and "2 шт.; DN100" in floors_svg
-    assert floors_svg.count('data-building-revision="К1-') == 4
+    assert floors_svg.count('data-building-revision="К1-') == 12
     assert 'data-building-revision="К2-Р1-Н"' in floors_svg
     assert 'data-building-revision="К2-Р2-Н"' in floors_svg
     assert 'data-building-revision="К2-Р1-40"' in floors_svg
     assert 'data-building-revision="К2-Р2-40"' in floors_svg
-    assert floors_svg.count('data-floor-reference="clean-floor"') == 8
+    assert floors_svg.count('data-floor-reference="clean-floor"') == 16
     assert floors_svg.count('data-height-above-floor-mm="800"') == 4
-    assert floors_svg.count('data-height-above-floor-mm="1000"') == 4
-    assert floors_svg.count('data-revision-on-break="true"') == 2
+    assert floors_svg.count('data-height-above-floor-mm="1000"') == 12
+    assert floors_svg.count('data-revision-on-break="true"') == 10
+    for riser_id in ("К1-Ст1", "К1-Ст2"):
+        for floor_no in (1, 4, 7, 10, 13, 16):
+            assert f'data-building-revision="{riser_id}-{floor_no}"' in floors_svg
     assert "эт. 14; отм. 39,800" in floors_svg
     assert "К2 ⌀100" in floors_svg
     assert "К2 не соединяется с К1" in floors_svg
@@ -418,6 +421,15 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert basement_svg.count('data-basement-through-junction=') == 2
     assert basement_svg.count('data-through-axis="open"') == 2
     assert basement_svg.count('data-fitting="cleanout_cap_fitting"') == 2
+    assert basement_svg.count('data-wall-sleeve=') == 2
+    assert 'data-wall-sleeve="К1-Вып1"' in basement_svg
+    assert 'data-wall-sleeve="К2-Вып1"' in basement_svg
+    assert basement_svg.count('data-basement-revision-reference=') == 4
+    assert "Ревизия на 1 этаже +1000 — см. лист 1" in basement_svg
+    assert "Ревизия на 1 этаже +800 — см. лист 1" in basement_svg
+    assert basement_svg.count('data-lower-node-callout=') == 4
+    assert "косой тройник 45° с заглушкой" in basement_svg
+    assert "проходная ось открыта, без заглушки" in basement_svg
     for element_id in ("К1-ПрНП1", "К2-ПрНП1"):
         assert f'data-basement-cleanout="{element_id}"' in basement_svg
     for element_id in ("К1-ТрСт2", "К2-ТрСт2"):
