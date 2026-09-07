@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Заря — модель здания</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/wizard.css?v=20260907-2">
+<script defer src="/static/wizard.js?v=20260907-2"></script>
+</head><body>
+<header class="topbar">
+  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
+  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/building-model" aria-current="page">Модель здания</a><a href="/wizard/architecture">Планы в схему</a><a href="/wizard/analyze">Анализ проекта</a><a class="normative-radar-link" href="/wizard/normatives" data-normative-radar-link><i class="radar-nav-lamp" data-state="gray"></i>Нормативы</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
+</header>
+
+<main class="building-model-shell">
+  <section class="building-model-hero">
+    <div><p class="eyebrow">BUILDING PROGRAM / 01</p><h1>Модель здания</h1><p>Черновая функциональная топология для ранней стадии П. Она связывает этажи, квартиры, помещения, приборы и шахты, но не подменяет планы АР.</p></div>
+    <div class="building-model-priority"><span class="verdict-light" data-state="warning"></span><div><strong>АР всегда главнее шаблона</strong><small>После загрузки и подтверждения планов типологическая модель заменяется фактической.</small></div></div>
+  </section>
+
+  {% if errors %}<div class="errors building-model-errors" role="alert"><strong>Модель не построена</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+
+  <div class="building-model-workspace">
+    <section class="card building-model-inputs">
+      <div class="card-kicker"><div><p class="eyebrow">Минимальные исходные</p><h2>Жилой дом</h2></div><span class="system-tag">ТИПОЛОГИЯ</span></div>
+      <form method="post" action="/wizard/building-model" data-building-model-form>
+        <div class="building-model-grid">
+          <label><span>Этажей<span class="required-lamp" data-required-for="floors_above" aria-hidden="true"></span></span><input name="floors_above" type="number" min="1" max="200" data-required-rule="positive" required value="{{ values.floors_above }}"></label>
+          <label><span>Квартир<span class="required-lamp" data-required-for="apartments_total" aria-hidden="true"></span></span><input name="apartments_total" type="number" min="1" data-required-rule="positive" required value="{{ values.apartments_total }}"></label>
+          <label><span>Подземных этажей<span class="required-lamp" data-required-for="floors_below" aria-hidden="true"></span></span><input name="floors_below" type="number" min="0" max="20" data-required-rule="nonnegative" required value="{{ values.floors_below }}"></label>
+          <label><span>Секций<span class="required-lamp" data-required-for="sections_count" aria-hidden="true"></span></span><input name="sections_count" type="number" min="1" max="40" data-required-rule="positive" required value="{{ values.sections_count }}"></label>
+          <label><span>Сантехнических шахт / секцию<span class="required-lamp" data-required-for="sanitary_shafts_per_section" aria-hidden="true"></span></span><input name="sanitary_shafts_per_section" type="number" min="1" max="40" data-required-rule="positive" required value="{{ values.sanitary_shafts_per_section }}"></label>
+          <label><span>Лифтовых шахт / секцию<span class="required-lamp" data-required-for="lift_shafts_per_section" aria-hidden="true"></span></span><input name="lift_shafts_per_section" type="number" min="0" max="20" data-required-rule="nonnegative" required value="{{ values.lift_shafts_per_section }}"></label>
+        </div>
+
+        <details class="building-model-advanced"><summary>Уточнить распределение квартир</summary><label><span>Квартиры по этажам</span><textarea name="apartments_by_floor" rows="3" placeholder="1: 4, 2: 4, 3: 4">{{ values.apartments_by_floor }}</textarea><small>Если поле пустое, количество временно распределяется равномерно и помечается для подтверждения.</small></label></details>
+
+        <div class="building-model-options">
+          <label><span>Тип санузла квартиры</span><select name="apartment_sanitary_room_id"><option value="apartment_sanitary_unit_shower"{% if values.apartment_sanitary_room_id == 'apartment_sanitary_unit_shower' %} selected{% endif %}>Унитаз + умывальник + душ</option><option value="apartment_sanitary_unit_bath"{% if values.apartment_sanitary_room_id == 'apartment_sanitary_unit_bath' %} selected{% endif %}>Унитаз + умывальник + ванна</option></select></label>
+          {% set tri = [('unknown','Не подтверждено'),('yes','Да'),('no','Нет')] %}
+          <label><span>Мусорокамера</span><select name="has_refuse_chamber">{% for key, label in tri %}<option value="{{ key }}"{% if values.has_refuse_chamber == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label><span>Подземный паркинг</span><select name="has_underground_parking">{% for key, label in tri %}<option value="{{ key }}"{% if values.has_underground_parking == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label><span>Стиральная машина</span><select name="apartment_has_washing_machine">{% for key, label in tri %}<option value="{{ key }}"{% if values.apartment_has_washing_machine == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label><span>Посудомоечная машина</span><select name="apartment_has_dishwasher">{% for key, label in tri %}<option value="{{ key }}"{% if values.apartment_has_dishwasher == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label><span>Трап мусорокамеры</span><select name="refuse_chamber_has_drain">{% for key, label in tri %}<option value="{{ key }}"{% if values.refuse_chamber_has_drain == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        </div>
+
+        <label class="building-model-source"><span>Основание данных<span class="required-lamp" data-required-for="source_ref" aria-hidden="true"></span></span><input name="source_ref" data-required-rule="nonempty" required value="{{ values.source_ref }}" placeholder="ТЗ, АР или ввод проектировщика"></label>
+        <div class="building-model-actions"><button class="button-primary" type="submit">Построить модель</button><button class="button-secondary" type="submit" formaction="/wizard/building-model.json">Скачать JSON</button></div>
+      </form>
+    </section>
+
+    <section class="building-model-output">
+      {% if model %}
+      <div class="building-model-status" data-state="warning"><span class="applicability-beacon" aria-hidden="true"><i></i></span><div><strong>Модель построена · требуется подтверждение</strong><small>{{ model.typology_id }} · {{ model.catalogue_id }}</small></div></div>
+
+      <div class="building-model-metrics">
+        <article><span>{{ model.levels|length }}</span><small>уровней с кровлей</small></article>
+        <article><span>{{ model.apartments|length }}</span><small>квартир</small></article>
+        <article><span>{{ model.rooms|length }}</span><small>помещений</small></article>
+        <article><span>{{ model.sanitary_shafts|length }}</span><small>сантехшахт</small></article>
+      </div>
+
+      <div class="building-model-systems">{% for system, count in system_counts.items() %}<article data-active="{{ count > 0 and 'true' or 'false' }}"><strong>{{ system }}</strong><span>{{ count }}</span><small>источников</small></article>{% endfor %}</div>
+
+      <section class="building-model-questions">
+        <div class="card-kicker"><div><p class="eyebrow">Уточняющий оркестратор</p><h2>Нужно подтвердить</h2></div><span>{{ model.questions|length }}</span></div>
+        {% if model.questions %}<div class="building-model-question-list">{% for question in model.questions %}<article><span class="required-lamp" aria-hidden="true"></span><div><strong>{{ question.prompt }}</strong><small>{{ question.question_id }} · {{ question.related_archetype_id }}</small></div></article>{% endfor %}</div>{% else %}<p class="building-model-clean">Все условные вопросы этого шаблона закрыты.</p>{% endif %}
+      </section>
+
+      <details class="building-model-decisions"><summary>Почему модель ещё не является планом АР · {{ model.decisions|length }}</summary>{% for decision in model.decisions %}<article><strong>{{ decision.code }}</strong><span>{{ decision.message }}</span></article>{% endfor %}</details>
+
+      <section class="building-model-levels">
+        <div class="card-kicker"><div><p class="eyebrow">Вертикальная структура</p><h2>Уровни здания</h2></div><span>{{ levels|length }}</span></div>
+        <div class="building-model-level-list">{% for level in levels %}<details{% if loop.index <= 3 %} open{% endif %}><summary><strong>{{ level.display_label }}</strong><span>{{ level.apartments }} кв. · {{ level.rooms }} пом. · {{ level.fixtures }} приб.</span></summary><div><small>{{ level.room_labels|join(' · ') }}</small>{% if level.shafts %}<b>{{ level.shafts }} сантехнических шахт проходят через уровень</b>{% endif %}</div></details>{% endfor %}</div>
+      </section>
+      {% else %}
+      <div class="building-model-empty"><span>01</span><h2>Здесь появится модель</h2><p>Задайте только подтверждённые количества. Заря развернёт этажи и приборы, а все допущения вынесет отдельными вопросами.</p><small>На этом шаге сети, диаметры и трассы ещё не строятся.</small></div>
+      {% endif %}
+    </section>
+  </div>
+</main>
+</body></html>

@@ -51,12 +51,15 @@ jobs:
           python -m compileall -q app scripts
           ruff check \
             app/architecture \
+            app/web/building_model.py \
             app/quality_gates.py \
             scripts/verify_control_release.py \
             tests/test_building_program.py \
+            tests/test_building_model_web.py \
             tests/test_quality_gates.py
           mypy --strict --follow-imports=skip --ignore-missing-imports \
             app/architecture \
+            app/web/building_model.py \
             app/quality_gates.py \
             scripts/verify_control_release.py
       - name: Critical-module coverage gate
@@ -173,6 +176,10 @@ jobs:
           base = "http://127.0.0.1:18000"
           wizard = urllib.request.urlopen(base + "/wizard", timeout=10).read().decode()
           assert "ZARYA / IOS2 + IOS3" in wizard
+          building_model = urllib.request.urlopen(
+              base + "/wizard/building-model", timeout=10
+          ).read().decode()
+          assert "Модель здания" in building_model
           questions = json.load(urllib.request.urlopen(
               base + "/api/project/preflight/questions", timeout=10
           ))

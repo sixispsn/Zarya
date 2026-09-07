@@ -126,6 +126,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (["nonempty", "fire-category-auto"].includes(rule)) {
       return Boolean(control.value.trim());
     }
+    if (rule === "nonnegative") {
+      const value = Number.parseFloat((control.value || "").replace(",", "."));
+      return Number.isFinite(value) && value >= 0;
+    }
     if (rule === "fire-manual") {
       return ["1", "2"].includes(control.value.trim());
     }

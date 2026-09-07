@@ -23,6 +23,7 @@ from app.api import (
 from app.normative.radar import run_radar_check
 from app.web import (
     architecture_import,
+    building_model,
     normative_radar,
     passport,
     reference_analysis,
@@ -97,6 +98,7 @@ app.include_router(storm.router)
 app.include_router(water_meters.router)
 app.include_router(fire.router)
 app.include_router(wizard.router)
+app.include_router(building_model.router)
 app.include_router(architecture_import.router)
 app.include_router(reference_analysis.router)
 app.include_router(normative_radar.router)
