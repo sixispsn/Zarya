@@ -5,7 +5,7 @@
 <title>Заря — модель здания</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/wizard.css?v=20260907-2">
+<link rel="stylesheet" href="/static/wizard.css?v=20260907-3">
 <script defer src="/static/wizard.js?v=20260907-2"></script>
 </head><body>
 <header class="topbar">
@@ -25,6 +25,7 @@
     <section class="card building-model-inputs">
       <div class="card-kicker"><div><p class="eyebrow">Минимальные исходные</p><h2>Жилой дом</h2></div><span class="system-tag">ТИПОЛОГИЯ</span></div>
       <form method="post" action="/wizard/building-model" data-building-model-form>
+        <label class="building-model-title"><span>Название модели<span class="required-lamp" data-required-for="model_title" aria-hidden="true"></span></span><input name="model_title" data-required-rule="nonempty" required value="{{ values.model_title }}" placeholder="Например: Корпус 1"></label>
         <div class="building-model-grid">
           <label><span>Этажей<span class="required-lamp" data-required-for="floors_above" aria-hidden="true"></span></span><input name="floors_above" type="number" min="1" max="200" data-required-rule="positive" required value="{{ values.floors_above }}"></label>
           <label><span>Квартир<span class="required-lamp" data-required-for="apartments_total" aria-hidden="true"></span></span><input name="apartments_total" type="number" min="1" data-required-rule="positive" required value="{{ values.apartments_total }}"></label>
@@ -47,13 +48,14 @@
         </div>
 
         <label class="building-model-source"><span>Основание данных<span class="required-lamp" data-required-for="source_ref" aria-hidden="true"></span></span><input name="source_ref" data-required-rule="nonempty" required value="{{ values.source_ref }}" placeholder="ТЗ, АР или ввод проектировщика"></label>
-        <div class="building-model-actions"><button class="button-primary" type="submit">Построить модель</button><button class="button-secondary" type="submit" formaction="/wizard/building-model.json">Скачать JSON</button></div>
+        <div class="building-model-actions"><button class="button-primary" type="submit">Построить модель</button><button class="button-secondary" type="submit" formaction="/wizard/building-model/save">Сохранить черновик</button><button class="button-secondary" type="submit" formaction="/wizard/building-model.json">Скачать JSON</button></div>
       </form>
+      {% if recent_models %}<details class="building-model-recent"><summary>Сохранённые модели · {{ recent_models|length }}</summary>{% for recent in recent_models %}<a href="/wizard/building-model/{{ recent.model_id }}"><span class="verdict-light" data-state="{{ 'ok' if recent.basis_confirmed else 'warning' }}"></span><span><strong>{{ recent.title }}</strong><small>{{ recent.model_id }} · {{ recent.updated_at }}</small></span></a>{% endfor %}</details>{% endif %}
     </section>
 
     <section class="building-model-output">
       {% if model %}
-      <div class="building-model-status" data-state="warning"><span class="applicability-beacon" aria-hidden="true"><i></i></span><div><strong>Модель построена · требуется подтверждение</strong><small>{{ model.typology_id }} · {{ model.catalogue_id }}</small></div></div>
+      <div class="building-model-status" data-state="{{ 'ready' if saved_draft and saved_draft.basis_confirmed else 'warning' }}"><span class="applicability-beacon" aria-hidden="true"><i></i></span><div><strong>{% if saved_draft and saved_draft.basis_confirmed %}Типологическая основа подтверждена{% elif saved_draft %}Черновик сохранён · основа не подтверждена{% else %}Модель построена · требуется подтверждение{% endif %}</strong><small>{{ model.typology_id }} · {{ model.catalogue_id }}{% if saved_draft %} · {{ saved_draft.model_id }}{% endif %}</small></div></div>
 
       <div class="building-model-metrics">
         <article><span>{{ model.levels|length }}</span><small>уровней с кровлей</small></article>
@@ -62,7 +64,14 @@
         <article><span>{{ model.sanitary_shafts|length }}</span><small>сантехшахт</small></article>
       </div>
 
-      <div class="building-model-systems">{% for system, count in system_counts.items() %}<article data-active="{{ count > 0 and 'true' or 'false' }}"><strong>{{ system }}</strong><span>{{ count }}</span><small>источников</small></article>{% endfor %}</div>
+      <div class="building-model-systems">{% for status in handoff.systems %}<article data-state="{{ 'ready' if status.quantities_ready else 'blocked' }}"><strong>{{ status.system }}</strong><span>{{ status.fixture_source_count }}</span><small>источников</small><b>{{ 'состав готов' if status.quantities_ready else status.quantity_blockers|length ~ ' блок.' }}</b><em>схема ждёт АР</em></article>{% endfor %}</div>
+
+      {% if saved_draft %}<section class="building-model-confirmation" data-state="{{ 'ready' if saved_draft.basis_confirmed else 'warning' }}">
+        <div class="card-kicker"><div><p class="eyebrow">Контроль передачи</p><h2>{{ 'Основа принята' if saved_draft.basis_confirmed else 'Подтвердить основу' }}</h2></div><a href="/wizard/building-model/{{ saved_draft.model_id }}/model.json">JSON</a></div>
+        <dl><div><dt>ID модели</dt><dd>{{ saved_draft.model_id }}</dd></div><div><dt>SHA-256 топологии</dt><dd title="{{ saved_draft.topology_sha256 }}">{{ saved_draft.topology_sha256[:16] }}…</dd></div></dl>
+        {% if saved_draft.basis_confirmed %}<div class="building-model-confirmed"><span class="verdict-light" data-state="ok"></span><div><strong>{{ saved_draft.confirmed_by }}</strong><small>{{ saved_draft.confirmed_at }}{% if saved_draft.confirmation_note %} · {{ saved_draft.confirmation_note }}{% endif %}</small></div></div><p>Подтверждение открывает только готовые реестры источников. Генерация схем остаётся заблокирована до подтверждённых планов АР.</p>
+        {% else %}<form method="post" action="/wizard/building-model/{{ saved_draft.model_id }}/confirm" class="building-model-confirm-form"><input type="hidden" name="expected_topology_sha256" value="{{ saved_draft.topology_sha256 }}"><label><span>Проверил</span><input name="confirmed_by" required placeholder="Фамилия И.О. / роль"></label><label><span>Примечание</span><input name="confirmation_note" placeholder="Основание проверки"></label><label class="building-model-confirm-check"><input type="checkbox" name="confirm_typological_basis" value="yes" required><span>Состав помещений, приборов, квартир и условное распределение по шахтам проверены. Понимаю, что это не подтверждение геометрии АР.</span></label><button class="button-primary" type="submit">Подтвердить типологическую основу</button></form>{% endif %}
+      </section>{% endif %}
 
       <section class="building-model-questions">
         <div class="card-kicker"><div><p class="eyebrow">Уточняющий оркестратор</p><h2>Нужно подтвердить</h2></div><span>{{ model.questions|length }}</span></div>

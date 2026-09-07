@@ -6,10 +6,13 @@ from starlette.requests import Request
 
 from app.web.building_model import (
     _TPL,
+    building_model_confirm,
     building_model_json,
     building_model_page,
     building_model_preview,
+    building_model_save,
     router,
+    saved_building_model_page,
 )
 
 
@@ -30,6 +33,7 @@ def _request(path: str, method: str = "GET") -> Request:
 
 def _form(**changes: str) -> FormData:
     values = {
+        "model_title": "Контрольный жилой дом",
         "floors_above": "9",
         "apartments_total": "36",
         "floors_below": "1",
@@ -64,6 +68,10 @@ def test_building_model_routes_are_included_in_application():
     assert router_paths == {
         "/wizard/building-model",
         "/wizard/building-model.json",
+        "/wizard/building-model/save",
+        "/wizard/building-model/{model_id}",
+        "/wizard/building-model/{model_id}/confirm",
+        "/wizard/building-model/{model_id}/model.json",
     }
     assert router_paths <= app_paths
 
@@ -145,3 +153,56 @@ def test_building_model_rejects_unknown_tristate_without_server_error():
 
     assert response.status_code == 422
     assert "неизвестный вариант" in response.body.decode("utf-8")
+
+
+def test_building_model_can_be_saved_loaded_and_confirmed(tmp_path, monkeypatch):
+    from app.architecture.program_store import BuildingProgramStore
+    from app.web import building_model
+
+    store = BuildingProgramStore(tmp_path / "models")
+    monkeypatch.setattr(building_model, "_PROGRAM_STORE", store)
+    save_response = _post(
+        "/wizard/building-model/save",
+        _form(
+            floors_below="0",
+            has_refuse_chamber="no",
+            has_underground_parking="no",
+            apartment_has_washing_machine="no",
+            apartment_has_dishwasher="no",
+            refuse_chamber_has_drain="no",
+        ),
+        building_model_save,
+    )
+
+    assert save_response.status_code == 303
+    location = save_response.headers["location"]
+    model_id = location.rsplit("/", 1)[-1]
+    saved_page = saved_building_model_page(
+        _request(location),
+        model_id,
+    )
+    body = saved_page.body.decode("utf-8")
+    assert "Черновик сохранён · основа не подтверждена" in body
+    assert "Контроль передачи" in body
+    draft = store.load(model_id)
+
+    confirmation = _post(
+        f"/wizard/building-model/{model_id}/confirm",
+        FormData({
+            "expected_topology_sha256": draft.topology_sha256,
+            "confirmed_by": "Иванов И.И.",
+            "confirmation_note": "Сверено с ТЗ",
+            "confirm_typological_basis": "yes",
+        }),
+        lambda request: building_model_confirm(request, model_id),
+    )
+    assert confirmation.status_code == 303
+    confirmed_page = saved_building_model_page(
+        _request(location),
+        model_id,
+    )
+    confirmed_body = confirmed_page.body.decode("utf-8")
+    assert "Типологическая основа подтверждена" in confirmed_body
+    assert "Иванов И.И." in confirmed_body
+    assert "состав готов" in confirmed_body
+    assert "схема ждёт АР" in confirmed_body

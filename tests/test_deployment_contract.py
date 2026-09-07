@@ -28,5 +28,6 @@ def test_ci_has_parity_full_suite_and_container_smoke_gates():
     assert "app/architecture" in workflow
     assert "app/web/building_model.py" in workflow
     assert "tests/test_building_program.py" in workflow
+    assert "tests/test_building_program_handoff.py" in workflow
     assert "tests/test_building_model_web.py" in workflow
     assert "/wizard/building-model" in workflow

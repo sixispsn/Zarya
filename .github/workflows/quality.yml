@@ -55,6 +55,7 @@ jobs:
             app/quality_gates.py \
             scripts/verify_control_release.py \
             tests/test_building_program.py \
+            tests/test_building_program_handoff.py \
             tests/test_building_model_web.py \
             tests/test_quality_gates.py
           mypy --strict --follow-imports=skip --ignore-missing-imports \
@@ -67,12 +68,16 @@ jobs:
           python -m pytest -q \
             --cov=app.quality_gates \
             --cov=app.architecture.catalog \
+            --cov=app.architecture.engineering_handoff \
+            --cov=app.architecture.program_store \
             --cov=app.architecture.residential_program \
             --cov=app.intake.questions \
             --cov=app.intake.preflight \
             --cov-report=term \
             --cov-fail-under=70 \
             tests/test_building_program.py \
+            tests/test_building_program_handoff.py \
+            tests/test_building_model_web.py \
             tests/test_quality_gates.py \
             tests/test_preflight.py \
             tests/test_fact_registry.py

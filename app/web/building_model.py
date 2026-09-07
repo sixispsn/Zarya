@@ -5,10 +5,18 @@ import os
 import re
 from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.architecture.engineering_handoff import (
+    BuildingProgramHandoff,
+    build_engineering_handoff,
+)
+from app.architecture.program_store import (
+    BuildingProgramDraft,
+    BuildingProgramStore,
+)
 from app.architecture.residential_program import (
     BuildingProgramTopology,
     ResidentialProgramInput,
@@ -20,8 +28,10 @@ router = APIRouter(prefix="/wizard", tags=["building-model"])
 _TPL = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
 )
+_PROGRAM_STORE = BuildingProgramStore()
 
 _DEFAULTS = {
+    "model_title": "Жилой дом",
     "floors_above": "9",
     "apartments_total": "36",
     "floors_below": "1",
@@ -163,22 +173,74 @@ def _context(
     *,
     values: dict[str, str] | None = None,
     model: BuildingProgramTopology | None = None,
+    saved_draft: BuildingProgramDraft | None = None,
     errors: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     system_counts = {
         system: len(model.fixtures_for_system(system)) if model else 0
         for system in ("V1", "T3", "K1", "K2", "K3")
     }
+    handoff: BuildingProgramHandoff | None = None
+    if model is not None:
+        handoff = build_engineering_handoff(
+            model,
+            basis_confirmed=(
+                saved_draft.basis_confirmed if saved_draft is not None else False
+            ),
+        )
     return {
         "values": values or dict(_DEFAULTS),
         "model": model,
+        "saved_draft": saved_draft,
         "errors": errors,
         "system_counts": system_counts,
+        "handoff": handoff,
         "levels": _level_summary(model) if model else (),
+        "recent_models": _PROGRAM_STORE.list()[:5],
     }
 
 
-@router.get("/building-model", response_class=HTMLResponse)  # type: ignore[misc]
+def _tristate_value(value: bool | None) -> str:
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    return "unknown"
+
+
+def _values_from_draft(draft: BuildingProgramDraft) -> dict[str, str]:
+    value = draft.program_input
+    fixture_answers = dict(value.fixture_condition_answers)
+    return {
+        "model_title": draft.title,
+        "floors_above": str(value.floors_above),
+        "apartments_total": str(value.apartments_total),
+        "floors_below": str(value.floors_below),
+        "sections_count": str(value.sections_count),
+        "sanitary_shafts_per_section": str(value.sanitary_shafts_per_section),
+        "lift_shafts_per_section": str(value.lift_shafts_per_section),
+        "apartments_by_floor": ", ".join(
+            f"{floor}: {count}" for floor, count in value.apartments_by_floor
+        ),
+        "apartment_sanitary_room_id": value.apartment_sanitary_room_id,
+        "has_refuse_chamber": _tristate_value(value.has_refuse_chamber),
+        "has_underground_parking": _tristate_value(
+            value.has_underground_parking
+        ),
+        "apartment_has_washing_machine": _tristate_value(
+            fixture_answers.get("apartment_has_washing_machine")
+        ),
+        "apartment_has_dishwasher": _tristate_value(
+            fixture_answers.get("apartment_has_dishwasher")
+        ),
+        "refuse_chamber_has_drain": _tristate_value(
+            fixture_answers.get("refuse_chamber_has_drain")
+        ),
+        "source_ref": value.source_ref,
+    }
+
+
+@router.get("/building-model", response_class=HTMLResponse)
 def building_model_page(request: Request) -> HTMLResponse:
     return _TPL.TemplateResponse(
         request,
@@ -187,7 +249,7 @@ def building_model_page(request: Request) -> HTMLResponse:
     )
 
 
-@router.post("/building-model", response_class=HTMLResponse)  # type: ignore[misc]
+@router.post("/building-model", response_class=HTMLResponse)
 async def building_model_preview(request: Request) -> HTMLResponse:
     form = await request.form()
     values = _form_values(form)
@@ -207,7 +269,106 @@ async def building_model_preview(request: Request) -> HTMLResponse:
     )
 
 
-@router.post("/building-model.json")  # type: ignore[misc]
+@router.post("/building-model/save")
+async def building_model_save(request: Request) -> Response:
+    form = await request.form()
+    values = _form_values(form)
+    model: BuildingProgramTopology | None = None
+    try:
+        program_input = _program_input(values)
+        model = build_residential_program(program_input)
+        draft = _PROGRAM_STORE.save(
+            program_input,
+            title=values.get("model_title", ""),
+        )
+    except (ValueError, RuntimeError) as exc:
+        return _TPL.TemplateResponse(
+            request,
+            "wizard_building_model.html",
+            _context(values=values, model=model, errors=(str(exc),)),
+            status_code=422,
+        )
+    return RedirectResponse(
+        url=f"/wizard/building-model/{draft.model_id}",
+        status_code=303,
+    )
+
+
+@router.post("/building-model/{model_id}/confirm")
+async def building_model_confirm(
+    request: Request,
+    model_id: str,
+) -> Response:
+    try:
+        draft = _PROGRAM_STORE.load(model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    form = await request.form()
+    try:
+        if str(form.get("confirm_typological_basis") or "") != "yes":
+            raise ValueError(
+                "Подтвердите, что состав и распределение проверены проектировщиком."
+            )
+        _PROGRAM_STORE.confirm_basis(
+            model_id,
+            expected_topology_sha256=str(
+                form.get("expected_topology_sha256") or ""
+            ),
+            confirmed_by=str(form.get("confirmed_by") or ""),
+            confirmation_note=str(form.get("confirmation_note") or ""),
+        )
+    except ValueError as exc:
+        return _TPL.TemplateResponse(
+            request,
+            "wizard_building_model.html",
+            _context(
+                values=_values_from_draft(draft),
+                model=draft.topology,
+                saved_draft=draft,
+                errors=(str(exc),),
+            ),
+            status_code=422,
+        )
+    return RedirectResponse(
+        url=f"/wizard/building-model/{model_id}",
+        status_code=303,
+    )
+
+
+@router.get("/building-model/{model_id}/model.json")
+def saved_building_model_json(model_id: str) -> JSONResponse:
+    try:
+        draft = _PROGRAM_STORE.load(model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return JSONResponse(
+        draft.topology.to_dict(),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="zarya-building-program-{model_id}.json"'
+            ),
+        },
+    )
+
+
+@router.get("/building-model/{model_id}", response_class=HTMLResponse)
+def saved_building_model_page(request: Request, model_id: str) -> HTMLResponse:
+    try:
+        draft = _PROGRAM_STORE.load(model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _TPL.TemplateResponse(
+        request,
+        "wizard_building_model.html",
+        _context(
+            values=_values_from_draft(draft),
+            model=draft.topology,
+            saved_draft=draft,
+        ),
+    )
+
+
+@router.post("/building-model.json")
 async def building_model_json(request: Request) -> JSONResponse:
     form = await request.form()
     values = _form_values(form)
