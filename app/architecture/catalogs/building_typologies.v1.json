@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "catalog_id": "zarya.building-typologies.v1",
+  "service_ports": ["V1", "T3", "K1", "K2", "K3"],
+  "fixtures": [
+    {
+      "id": "toilet",
+      "label": "Унитаз",
+      "service_ports": ["V1", "K1"]
+    },
+    {
+      "id": "washbasin",
+      "label": "Умывальник",
+      "service_ports": ["V1", "T3", "K1"]
+    },
+    {
+      "id": "shower",
+      "label": "Душ",
+      "service_ports": ["V1", "T3", "K1"]
+    },
+    {
+      "id": "bath",
+      "label": "Ванна",
+      "service_ports": ["V1", "T3", "K1"]
+    },
+    {
+      "id": "kitchen_sink",
+      "label": "Мойка кухонная",
+      "service_ports": ["V1", "T3", "K1"]
+    },
+    {
+      "id": "washing_machine",
+      "label": "Стиральная машина",
+      "service_ports": ["V1", "K1"]
+    },
+    {
+      "id": "dishwasher",
+      "label": "Посудомоечная машина",
+      "service_ports": ["V1", "K1"]
+    },
+    {
+      "id": "floor_drain",
+      "label": "Трап",
+      "service_ports": ["K1"]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "apartment_kitchen",
+      "label": "Кухня квартиры",
+      "role": "wet_room",
+      "requires_sanitary_shaft": true,
+      "fixture_slots": [
+        {"fixture_id": "kitchen_sink", "count": 1, "required": true},
+        {"fixture_id": "dishwasher", "count": 1, "required": false, "condition_key": "apartment_has_dishwasher", "question": "Есть ли посудомоечная машина?"}
+      ],
+      "questions": []
+    },
+    {
+      "id": "apartment_sanitary_unit_shower",
+      "label": "Санузел квартиры с душем",
+      "role": "wet_room",
+      "requires_sanitary_shaft": true,
+      "fixture_slots": [
+        {"fixture_id": "toilet", "count": 1, "required": true},
+        {"fixture_id": "washbasin", "count": 1, "required": true},
+        {"fixture_id": "shower", "count": 1, "required": true},
+        {"fixture_id": "washing_machine", "count": 1, "required": false, "condition_key": "apartment_has_washing_machine", "question": "Есть ли стиральная машина в санузле?"}
+      ],
+      "questions": []
+    },
+    {
+      "id": "apartment_sanitary_unit_bath",
+      "label": "Санузел квартиры с ванной",
+      "role": "wet_room",
+      "requires_sanitary_shaft": true,
+      "fixture_slots": [
+        {"fixture_id": "toilet", "count": 1, "required": true},
+        {"fixture_id": "washbasin", "count": 1, "required": true},
+        {"fixture_id": "bath", "count": 1, "required": true},
+        {"fixture_id": "washing_machine", "count": 1, "required": false, "condition_key": "apartment_has_washing_machine", "question": "Есть ли стиральная машина в санузле?"}
+      ],
+      "questions": []
+    },
+    {
+      "id": "common_corridor",
+      "label": "Межквартирный коридор",
+      "role": "circulation",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": []
+    },
+    {
+      "id": "stair_lift_hall",
+      "label": "Лестнично-лифтовой холл",
+      "role": "circulation",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": []
+    },
+    {
+      "id": "lift_shaft",
+      "label": "Лифтовая шахта",
+      "role": "vertical_core",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": []
+    },
+    {
+      "id": "refuse_chamber",
+      "label": "Мусорокамера",
+      "role": "service",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [
+        {"fixture_id": "floor_drain", "count": 1, "required": false, "condition_key": "refuse_chamber_has_drain", "question": "Предусмотрены ли мойка и трап мусорокамеры?"}
+      ],
+      "questions": []
+    },
+    {
+      "id": "technical_basement",
+      "label": "Технический подвал",
+      "role": "technical",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": [
+        {"id": "technical_basement_special_drainage", "prompt": "Есть ли приямки, трапы или санитарные приборы?"}
+      ]
+    },
+    {
+      "id": "underground_parking",
+      "label": "Подземный паркинг",
+      "role": "parking",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": [
+        {"id": "parking_special_drainage", "prompt": "Есть ли мойка машин, трапы или водосборные приямки?"}
+      ]
+    },
+    {
+      "id": "roof",
+      "label": "Кровля",
+      "role": "roof",
+      "requires_sanitary_shaft": false,
+      "fixture_slots": [],
+      "questions": [
+        {"id": "roof_k2_inputs", "prompt": "Уточнить тип, площади водосбора и число воронок К2"}
+      ]
+    }
+  ],
+  "building_typologies": [
+    {
+      "id": "residential_multi_apartment",
+      "label": "Многоквартирный жилой дом",
+      "apartment_rooms": [
+        "apartment_kitchen",
+        "apartment_sanitary_unit_shower"
+      ],
+      "common_rooms_per_section": [
+        "common_corridor",
+        "stair_lift_hall"
+      ],
+      "optional_rooms": [
+        "refuse_chamber",
+        "technical_basement",
+        "underground_parking",
+        "roof"
+      ]
+    }
+  ]
+}

@@ -50,20 +50,26 @@ jobs:
         run: |
           python -m compileall -q app scripts
           ruff check \
+            app/architecture \
             app/quality_gates.py \
             scripts/verify_control_release.py \
+            tests/test_building_program.py \
             tests/test_quality_gates.py
           mypy --strict --follow-imports=skip --ignore-missing-imports \
+            app/architecture \
             app/quality_gates.py \
             scripts/verify_control_release.py
       - name: Critical-module coverage gate
         run: |
           python -m pytest -q \
             --cov=app.quality_gates \
+            --cov=app.architecture.catalog \
+            --cov=app.architecture.residential_program \
             --cov=app.intake.questions \
             --cov=app.intake.preflight \
             --cov-report=term \
             --cov-fail-under=70 \
+            tests/test_building_program.py \
             tests/test_quality_gates.py \
             tests/test_preflight.py \
             tests/test_fact_registry.py
