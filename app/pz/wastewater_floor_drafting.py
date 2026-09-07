@@ -1109,42 +1109,70 @@ def render_typical_floor_assembly_svg(
         f'data-floor="{assembly.floor_no}" data-system="{assembly.system}">'
     ]
 
-    # Architectural context is intentionally restrained: room boundaries,
-    # floor slab and shaft.  It follows the hierarchy of the GOST appendix
-    # example without pretending to be a plan-derived layout.
+    # This is a schematic fallback, not plan-derived architecture.  Still,
+    # every fixture group must sit inside a closed room cell: disconnected
+    # wall strokes make the section unreadable and look like drafting debris.
     first_x = assembly.port("cleanout_cap").point.x_mm - 18.0
     riser_x = assembly.port("riser_join").point.x_mm
+    room_top = 20.0
     slab_y = 228.0
-    room_split = (
-        assembly.port(assembly.fixtures[0].junction_port_id).point.x_mm
-        + assembly.port(assembly.fixtures[1].junction_port_id).point.x_mm
-    ) / 2
     shaft_left = riser_x - 30.0
+
+    contiguous_rooms: list[tuple[str, list[float]]] = []
+    for fixture in assembly.fixtures:
+        fixture_x = assembly.port(fixture.junction_port_id).point.x_mm
+        room_label = fixture.room_label.strip() or "Помещение"
+        if contiguous_rooms and contiguous_rooms[-1][0] == room_label:
+            contiguous_rooms[-1][1].append(fixture_x)
+        else:
+            contiguous_rooms.append((room_label, [fixture_x]))
+    room_boundaries = [first_x]
+    for (_, left_points), (_, right_points) in zip(
+        contiguous_rooms,
+        contiguous_rooms[1:],
+    ):
+        room_boundaries.append((max(left_points) + min(right_points)) / 2)
+    room_boundaries.append(shaft_left)
+
     sx1, sy1 = xy(DraftPoint(first_x, slab_y))
     sx2, _ = xy(DraftPoint(riser_x + 22.0, slab_y))
-    body.extend(
-        (
-            f'<line data-architecture="floor" x1="{sx1:.1f}" y1="{sy1:.1f}" '
-            f'x2="{sx2:.1f}" y2="{sy1:.1f}" stroke="#777" stroke-width="1"/>',
-            f'<line data-architecture="wall" x1="{xy(DraftPoint(room_split, 20))[0]:.1f}" '
-            f'y1="{xy(DraftPoint(room_split, 20))[1]:.1f}" '
-            f'x2="{xy(DraftPoint(room_split, slab_y))[0]:.1f}" '
-            f'y2="{sy1:.1f}" stroke="#777" stroke-width="1"/>',
-            f'<line data-architecture="shaft" x1="{xy(DraftPoint(shaft_left, 20))[0]:.1f}" '
-            f'y1="{xy(DraftPoint(shaft_left, 20))[1]:.1f}" '
-            f'x2="{xy(DraftPoint(shaft_left, slab_y))[0]:.1f}" '
-            f'y2="{sy1:.1f}" stroke="#777" stroke-width="1"/>',
-            f'<text x="{xy(DraftPoint(first_x+20, 16))[0]:.1f}" '
-            f'y="{xy(DraftPoint(first_x+20, 16))[1]:.1f}" font-family="{FONT}" '
-            'font-size="12" fill="#555">Кухня</text>',
-            f'<text x="{xy(DraftPoint(room_split+10, 16))[0]:.1f}" '
-            f'y="{xy(DraftPoint(room_split+10, 16))[1]:.1f}" font-family="{FONT}" '
-            'font-size="12" fill="#555">Санузел</text>',
-            f'<text x="{xy(DraftPoint(shaft_left+4, 30))[0]:.1f}" '
-            f'y="{xy(DraftPoint(shaft_left+4, 30))[1]:.1f}" font-family="{FONT}" '
-            'font-size="9.5" fill="#555">шахта</text>',
-        )
-    )
+    for room_index, ((room_label, _), room_left, room_right) in enumerate(
+        zip(contiguous_rooms, room_boundaries, room_boundaries[1:]),
+        start=1,
+    ):
+        room_x, room_y = xy(DraftPoint(room_left, room_top))
+        room_x2, room_y2 = xy(DraftPoint(room_right, slab_y))
+        label_x = (room_x + room_x2) / 2
+        label_y = room_y + 22.0
+        body.extend((
+            f'<rect data-architecture="room" data-room-index="{room_index}" '
+            f'data-room-name="{escape(room_label)}" '
+            'data-geometry-source="schematic-fixture-groups" '
+            f'x="{room_x:.1f}" y="{room_y:.1f}" '
+            f'width="{room_x2-room_x:.1f}" height="{room_y2-room_y:.1f}" '
+            'fill="#fbfbfb" stroke="#777" stroke-width="1"/>',
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="11" fill="#555">'
+            f'{escape(room_label)}</text>',
+        ))
+
+    shaft_x, shaft_y = xy(DraftPoint(shaft_left, room_top))
+    shaft_x2, shaft_y2 = xy(DraftPoint(riser_x + 22.0, slab_y))
+    shaft_label_x = (shaft_x + shaft_x2) / 2
+    shaft_label_y = (shaft_y + shaft_y2) / 2
+    body.extend((
+        f'<rect data-architecture="shaft" '
+        'data-geometry-source="schematic-fixture-groups" '
+        f'x="{shaft_x:.1f}" y="{shaft_y:.1f}" '
+        f'width="{shaft_x2-shaft_x:.1f}" height="{shaft_y2-shaft_y:.1f}" '
+        'fill="#f7f7f7" stroke="#777" stroke-width="1"/>',
+        f'<text x="{shaft_label_x:.1f}" y="{shaft_label_y:.1f}" '
+        f'text-anchor="middle" font-family="{FONT}" font-size="9.5" '
+        f'fill="#555" transform="rotate(-90 {shaft_label_x:.1f} '
+        f'{shaft_label_y:.1f})">шахта</text>',
+        f'<line data-architecture="floor" x1="{sx1:.1f}" y1="{sy1:.1f}" '
+        f'x2="{sx2:.1f}" y2="{sy1:.1f}" stroke="#666" stroke-width="1.2"/>',
+    ))
 
     for segment in assembly.segments:
         x1, y1 = xy(segment.start_port_id)

@@ -54,6 +54,34 @@ def test_repeated_fixture_quantity_is_one_symbol_with_a_count_label():
     assert "Мойка; К1 ⌀50; 1 шт." not in svg
 
 
+def test_schematic_rooms_are_closed_cells_derived_from_fixture_groups():
+    floor = build_typical_floor_assembly()
+    root = ElementTree.fromstring(
+        render_typical_floor_assembly_svg(floor, diagnostics=False)
+    )
+
+    rooms = [
+        row for row in root.iter("rect")
+        if row.get("data-architecture") == "room"
+    ]
+    assert [row.get("data-room-name") for row in rooms] == [
+        "Кухня",
+        "Санузел",
+    ]
+    assert all(
+        row.get("data-geometry-source") == "schematic-fixture-groups"
+        and float(row.get("width", "0")) > 0
+        and float(row.get("height", "0")) > 0
+        for row in rooms
+    )
+    shafts = [
+        row for row in root.iter("rect")
+        if row.get("data-architecture") == "shaft"
+    ]
+    assert len(shafts) == 1
+    assert float(shafts[0].get("width", "0")) > 0
+
+
 def test_each_fixture_starts_a_real_connection_and_reaches_common_branch():
     floor = build_typical_floor_assembly()
 
