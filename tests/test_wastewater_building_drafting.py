@@ -197,6 +197,10 @@ def _project_with_linear_riser_count(count: int):
         row.section_id = f"К2-М{index}"
         row.from_node = f"К2-Ст{index}"
         row.to_node = f"К2-Ст{index+1}"
+        if index > 1:
+            row.nominal_diameter_mm = 150
+            row.outer_diameter_mm = 160.0
+            row.wall_thickness_mm = 9.5
         pipes.append(row)
     k1_outlet.from_node = f"К1-Ст{count}"
     k2_outlet.from_node = f"К2-Ст{count}"
@@ -222,8 +226,8 @@ def _project_with_linear_riser_count(count: int):
             tee.type_mark = "DN150×100; 45°; PN10; без заглушки"
     k1_transition.section_id = "К1-М2" if count > 2 else "К1-Вып1"
     k1_transition.connects_to = "К1-Ст2"
-    k2_transition.section_id = "К2-М1"
-    k2_transition.connects_to = "К2-Ст1"
+    k2_transition.section_id = "К2-М2" if count > 2 else "К2-Вып1"
+    k2_transition.connects_to = "К2-Ст2"
     return project
 
 
@@ -279,7 +283,32 @@ def test_building_resolver_keeps_two_independent_k1_stacks_and_exact_k2():
     assert result.k1_collectors[0].section_id == "К1-М1"
     assert result.k1_outlet.section_id == "К1-Вып1"
     assert result.k2_collectors[0].section_id == "К2-М1"
+    assert result.k2_collectors[0].dn_mm == 100
     assert result.k2_outlet.section_id == "К2-Вып1"
+    assert result.k2_outlet.dn_mm == 150
+    assert [
+        (row.node_id, row.section_id, row.placement)
+        for row in result.k2_transitions
+    ] == [("К2-Ст2", "К2-Вып1", "upstream-before-junction")]
+
+
+def test_building_resolver_rejects_k2_transition_after_first_equal_dn_node():
+    project = _demo_project()
+    transition = next(
+        row for row in project.sewage.elements
+        if row.element_id == "К2-Пер1"
+    )
+    transition.section_id = "К2-М1"
+    transition.connects_to = "К2-Ст1"
+
+    result = resolve_wastewater_building_project_inputs(project)
+
+    assert not result.complete
+    assert result.k2_transitions == ()
+    assert any(
+        "К2-Пер1" in row and "отдельный переход" in row
+        for row in result.diagnostics
+    )
 
 
 @pytest.mark.parametrize("count", (1, 2, 5))
@@ -409,13 +438,14 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert 'data-building-transition="К1-Пер1"' in basement_svg
     assert 'data-building-transition="К2-Пер1"' in basement_svg
     assert 'data-transition-placement="upstream-before-junction"' in basement_svg
-    assert 'data-transition-placement="downstream-after-terminal-turn"' in basement_svg
+    assert 'data-transition-placement="downstream-after-terminal-turn"' not in basement_svg
+    assert basement_svg.count('data-transition-placement="upstream-before-junction"') == 2
     assert basement_svg.count('data-transition-shape="open-triangle"') == 2
     assert basement_svg.count('data-transition-fill="none"') == 2
     assert basement_svg.count('data-transition-joint="direct"') == 2
     assert basement_svg.count('data-fitting-gap-mm="0"') == 2
     assert 'data-adjacent-node="К1-Ст2"' in basement_svg
-    assert 'data-adjacent-node="К2-Ст1"' in basement_svg
+    assert 'data-adjacent-node="К2-Ст2"' in basement_svg
     assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
     assert basement_svg.count('data-fitting="service_wye_45"') == 2
     assert basement_svg.count('data-fitting="through_wye_45"') == 2

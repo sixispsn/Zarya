@@ -104,8 +104,10 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     assert 'data-element-id="К2-Пер2"' not in result.svg
     assert 'data-transition-host-section="К1-М1"' in result.svg
     assert 'data-transition-node="К1-Ст2"' in result.svg
+    assert 'data-transition-host-section="К2-М1"' in result.svg
+    assert 'data-transition-node="К2-Ст2"' in result.svg
     assert 'data-transition-placement="upstream-before-junction"' in result.svg
-    assert 'data-transition-placement="downstream-after-terminal-turn"' in result.svg
+    assert 'data-transition-placement="downstream-after-terminal-turn"' not in result.svg
     assert result.svg.count('data-transition-shape="open-triangle"') >= 2
     assert result.svg.count('data-transition-fill="none"') >= 2
     assert 'data-element-id="К1-ОтвСт1"' in result.svg
@@ -215,22 +217,24 @@ def test_missing_terminal_cleanout_is_blocking_and_never_synthesized():
     assert sum("не имеет права дорисовывать" in row for row in result.warnings) == 2
 
 
-def test_redundant_transition_after_reducing_through_wye_is_rejected():
+def test_transition_after_first_k2_node_is_rejected_when_dn_is_unchanged():
     project = deepcopy(build_project(_request()))
     redundant = deepcopy(next(
         row for row in project.sewage.elements
         if row.element_id == "К2-Пер1"
     ))
-    redundant.element_id = "К2-Пер2-Лишний"
-    redundant.section_id = "К2-Вып1"
-    redundant.connects_to = "К2-Ст2"
+    redundant.element_id = "К2-ПерПослеПервогоУзла-Лишний"
+    redundant.section_id = "К2-М1"
+    redundant.connects_to = "К2-Ст1"
+    redundant.dn_mm = 100
+    redundant.type_mark = "DN100×100; PN10"
     project.sewage.elements.append(redundant)
 
     result = generate_wastewater_scheme_result(project)
 
-    assert 'data-element-id="К2-Пер2-Лишний"' not in result.svg
+    assert 'data-element-id="К2-ПерПослеПервогоУзла-Лишний"' not in result.svg
     assert any(
-        "К2-Пер2-Лишний" in row and "отдельный переход" in row
+        "К2-ПерПослеПервогоУзла-Лишний" in row and "отдельный переход" in row
         for row in result.warnings
     )
 

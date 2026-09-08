@@ -1231,8 +1231,10 @@ def build_wastewater_scheme(
         horizontal main immediately before the reducing wye.  The registry
         still links the fitting to the downstream section whose DN it starts;
         ``connects_to`` identifies the junction.  At a terminal start without
-        an incoming main (for example the first K2 riser), the reducer remains
-        on the outgoing main after the lower turn.
+        an incoming main, a reducer remains on the outgoing main after the
+        lower turn only when that first section actually has a larger DN.
+        With equal DN it is rejected as redundant so the smaller confirmed
+        section is not replaced prematurely.
         """
         outgoing = next(
             (item for item in topology.mains if item.section_id == row.section_id),
@@ -1241,6 +1243,8 @@ def build_wastewater_scheme(
         if outgoing is None:
             return None
         junction = row.connects_to or outgoing.from_node
+        if outgoing.from_node != junction:
+            return None
         incoming = [
             item for item in topology.mains
             if item.system == outgoing.system and item.to_node == junction
@@ -1283,6 +1287,25 @@ def build_wastewater_scheme(
                     "upstream_dn": upstream_dn,
                     "downstream_dn": downstream_dn,
                 }
+        riser = topology.risers.get(junction)
+        upstream_dn = (
+            riser.nominal_diameter_mm
+            if riser is not None and riser.system == outgoing.system
+            else None
+        )
+        downstream_dn = outgoing.nominal_diameter_mm
+        if (
+            upstream_dn is not None
+            and downstream_dn is not None
+            and upstream_dn == downstream_dn
+        ):
+            return {
+                "status": "redundant",
+                "node": junction,
+                "host_section": outgoing.section_id,
+                "upstream_dn": upstream_dn,
+                "downstream_dn": downstream_dn,
+            }
         if outgoing.from_node not in node_x or outgoing.to_node not in node_x:
             return None
         x1, x2 = node_x[outgoing.from_node], node_x[outgoing.to_node]
@@ -1295,8 +1318,8 @@ def build_wastewater_scheme(
             "x": x1 + flow_direction * min(42.0, abs(x2 - x1) * 0.18),
             "y": main_y[outgoing.system],
             "callout_side": flow_direction,
-            "upstream_dn": None,
-            "downstream_dn": outgoing.nominal_diameter_mm,
+            "upstream_dn": upstream_dn,
+            "downstream_dn": downstream_dn,
         }
 
     stage_focus = focus_section_id
