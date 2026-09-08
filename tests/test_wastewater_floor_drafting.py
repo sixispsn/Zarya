@@ -30,9 +30,14 @@ def test_floor_module_is_one_connected_branch_with_toilet_last():
     ]
     assert floor.fixtures[-1].dn_mm == 100
     branch = [floor.segment(row) for row in floor.branch_segment_ids]
-    assert [row.dn_mm for row in branch] == [50, 50, 50, 100, 100]
+    assert [row.dn_mm for row in branch] == [50, 50, 50, 100]
     assert all(
         upstream.end_port_id == downstream.start_port_id
+        or any(
+            joint.start_port_id == upstream.end_port_id
+            and joint.end_port_id == downstream.start_port_id
+            for joint in floor.direct_fitting_joints
+        )
         for upstream, downstream in zip(branch, branch[1:])
     )
 
@@ -111,7 +116,7 @@ def test_fixture_elbows_are_directly_socketed_into_wyes_without_pipe_spools():
 
     assert audit_floor_simplification(floor) == ()
     assert all("_diagonal" not in row.segment_id for row in floor.segments)
-    assert len(floor.direct_fitting_joints) == len(floor.fixtures) + 1
+    assert len(floor.direct_fitting_joints) == len(floor.fixtures) + 2
     for fixture in floor.fixtures:
         joint = floor.direct_fitting_joint(fixture.connection_joint_id)
         start = floor.port(joint.start_port_id).point
@@ -181,11 +186,22 @@ def test_floor_annotations_derive_slopes_and_dn_transition_from_topology():
     toilet_join = floor.port(toilet.junction_port_id).point
     assert transition.port_id == "transition_before_junction_4"
     assert transition_point.x_mm < toilet_join.x_mm
+    assert toilet_join.x_mm - transition_point.x_mm <= 8.0
     assert (transition.upstream_dn_mm, transition.downstream_dn_mm) == (50, 100)
 
     toilet_wye = floor.fitting(f"{toilet.fixture_id}_wye_45")
     toilet_main = [floor.segment(row) for row in toilet_wye.connected_segment_ids]
-    assert [row.dn_mm for row in toilet_main] == [100, 100]
+    assert [row.dn_mm for row in toilet_main] == [100]
+    transition_joint = next(
+        row
+        for row in floor.direct_fitting_joints
+        if row.start_port_id == transition.port_id
+        and row.end_port_id == toilet.junction_port_id
+    )
+    assert transition_joint.dn_mm == 100
+    assert transition_joint.end_fitting_id == toilet_wye.fitting_id
+    assert transition.adjacent_fitting_id == toilet_wye.fitting_id
+    assert not any("after_transition" in row.segment_id for row in floor.segments)
 
 
 def test_floor_validation_rejects_dn_increase_after_toilet_connection():
@@ -203,6 +219,47 @@ def test_floor_validation_rejects_dn_increase_after_toilet_connection():
 
     assert any(
         "collector must increase to DN100 before the toilet connection" in error
+        for error in wrong.validate()
+    )
+
+
+def test_floor_validation_rejects_pipe_piece_between_transition_and_toilet_wye():
+    floor = build_typical_floor_assembly()
+    _, transitions = build_floor_graphic_annotations(floor)
+    transition = transitions[0]
+    direct_joint = next(
+        row
+        for row in floor.direct_fitting_joints
+        if row.start_port_id == transition.port_id
+        and row.end_fitting_id == transition.adjacent_fitting_id
+    )
+    spool = DraftPipeSegment(
+        "obsolete_reducer_spool",
+        direct_joint.start_port_id,
+        direct_joint.end_port_id,
+        direct_joint.dn_mm,
+        "common_floor_branch",
+    )
+    upstream_index = floor.branch_segment_ids.index(
+        transition.upstream_segment_id
+    )
+    wrong = replace(
+        floor,
+        segments=(*floor.segments, spool),
+        direct_fitting_joints=tuple(
+            row
+            for row in floor.direct_fitting_joints
+            if row.joint_id != direct_joint.joint_id
+        ),
+        branch_segment_ids=(
+            *floor.branch_segment_ids[: upstream_index + 1],
+            spool.segment_id,
+            *floor.branch_segment_ids[upstream_index + 1 :],
+        ),
+    )
+
+    assert any(
+        "diameter transition must directly adjoin" in error
         for error in wrong.validate()
     )
 
@@ -270,12 +327,17 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert normative.count('data-floor-fixture=') == 4
     assert normative.count('data-ugo="trap"') == 3
     assert 'data-trap-mode="integral"' in normative
-    assert normative.count('_wye_45">') == 5
-    assert normative.count('_elbow_45">') == 5
+    fitting_ids = [
+        row.get("data-floor-fitting")
+        for row in ElementTree.fromstring(normative).iter()
+        if row.get("data-floor-fitting")
+    ]
+    assert sum(row.endswith("_wye_45") for row in fitting_ids) == 5
+    assert sum(row.endswith("_elbow_45") for row in fitting_ids) == 5
     assert 'data-floor-fitting="riser_branch_elbow_45"' in normative
     assert 'data-floor-fitting="riser_branch_wye_45"' in normative
     assert 'data-direct-fitting-joint="riser_elbow_to_wye"' in normative
-    assert normative.count('data-direct-fitting-joint=') == 5
+    assert normative.count('data-direct-fitting-joint=') == 6
     assert 'data-floor-segment="riser_branch_diagonal"' not in normative
     assert 'data-floor-segment="К1-Мой1_diagonal"' not in normative
     assert 'data-fitting-boundary="riser_elbow_outlet_45"' in normative
@@ -290,6 +352,9 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert normative.count('data-slope-angle="true"') == 2
     assert normative.count('data-diameter-transition=') == 1
     assert normative.count('data-diameter-transition-mask=') == 1
+    assert 'data-transition-joint="direct"' in normative
+    assert 'data-fitting-gap-mm="0"' in normative
+    assert 'data-adjacent-fitting="К1-Ун1_wye_45"' in normative
     assert 'data-upstream-dn="50"' in normative
     assert 'data-downstream-dn="100"' in normative
     assert 'data-role="cleanout_access"' in normative
@@ -344,6 +409,20 @@ def test_graphic_convention_audit_rejects_legacy_i_and_missing_open_triangle():
         "legacy_slope_notation",
         "missing_diameter_transition",
     }
+
+
+def test_graphic_convention_audit_rejects_pipe_spool_after_transition():
+    floor = build_typical_floor_assembly()
+    normative = render_typical_floor_assembly_svg(floor, diagnostics=False)
+    broken = normative.replace(
+        'data-fitting-gap-mm="0"', 'data-fitting-gap-mm="20"', 1
+    )
+
+    findings = audit_floor_rendering_conventions(floor, broken)
+
+    assert [row.code for row in findings] == [
+        "diameter_transition_not_direct"
+    ]
 
 
 def test_graphic_convention_audit_rejects_an_unlabelled_pipe_line():
@@ -442,17 +521,24 @@ def test_fixture_fitting_ticks_do_not_create_false_pipe_spools():
         direct_joint = endpoints(
             line_with("data-direct-fitting-joint", fixture.connection_joint_id)
         )
-        upstream_tick = endpoints(
-            line_with(
-                "data-fitting-boundary", f"{fixture.fixture_id}_wye_upstream"
-            )
-        )
         outlet_tick = endpoints(
             line_with(
                 "data-fitting-boundary", f"{fixture.fixture_id}_elbow_outlet_45"
             )
         )
-        assert not intersects(upstream_tick, direct_joint)
+        if fixture.kind == "toilet":
+            assert not any(
+                row.get("data-fitting-boundary")
+                == f"{fixture.fixture_id}_wye_upstream"
+                for row in root.iter("line")
+            )
+        else:
+            upstream_tick = endpoints(
+                line_with(
+                    "data-fitting-boundary", f"{fixture.fixture_id}_wye_upstream"
+                )
+            )
+            assert not intersects(upstream_tick, direct_joint)
         assert intersects(outlet_tick, direct_joint)
 
 

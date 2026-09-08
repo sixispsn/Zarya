@@ -847,6 +847,67 @@ def _transition_svg(
     )
 
 
+def _direct_transition_svg(
+    *,
+    element_id: str,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    upstream_dn: int,
+    downstream_dn: int,
+    placement: str,
+    adjacent_node_id: str,
+) -> str:
+    """Draw a reducer directly against the adjacent junction fitting.
+
+    A diameter increase on an incoming main ends at the junction coordinate:
+    the open triangular wedge touches the wye/tee and no graphic pipe spool is
+    left between the two fittings.  The exceptional terminal-turn placement is
+    the mirror case: the transition starts at the turn and opens downstream.
+    """
+    from math import hypot
+
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = hypot(dx, dy)
+    if length <= 1e-9:
+        raise ValueError(f"{element_id}: transition segment has zero length")
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+    depth = min(24.0, length)
+    half_width = 10.0
+    if placement == "upstream-before-junction":
+        apex_x, apex_y = end
+        base_x, base_y = end[0] - ux * depth, end[1] - uy * depth
+    elif placement == "downstream-after-terminal-turn":
+        base_x, base_y = start
+        apex_x, apex_y = start[0] + ux * depth, start[1] + uy * depth
+    else:
+        raise ValueError(f"{element_id}: unsupported transition placement {placement}")
+    triangle = (
+        f"M{base_x+px*half_width:.1f},{base_y+py*half_width:.1f} "
+        f"L{apex_x:.1f},{apex_y:.1f} "
+        f"L{base_x-px*half_width:.1f},{base_y-py*half_width:.1f} Z"
+    )
+    label_x = (base_x + apex_x) / 2 + px * 20.0
+    label_y = (base_y + apex_y) / 2 + py * 20.0
+    return "".join(
+        (
+            f'<g data-building-transition="{escape(element_id)}" '
+            f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}" '
+            f'data-transition-placement="{escape(placement)}" '
+            f'data-transition-shape="open-triangle" data-transition-fill="none" '
+            f'data-transition-joint="direct" '
+            f'data-adjacent-node="{escape(adjacent_node_id)}" '
+            'data-fitting-gap-mm="0">',
+            f'<path d="{triangle}" fill="white" stroke="white" stroke-width="4"/>',
+            f'<path data-diameter-transition="{escape(element_id)}" '
+            f'd="{triangle}" fill="none" stroke="{BLACK}" stroke-width="1.7"/>',
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
+            f'font-family="{FONT}" font-size="11">DN{upstream_dn}×{downstream_dn}</text>',
+            "</g>",
+        )
+    )
+
+
 def _fitting_boundary(
     *,
     fitting_id: str,
@@ -1586,24 +1647,17 @@ def _render_basement_system_fragment(
                     raise ValueError(
                         f"{transition.element_id}: no incoming graphic segment"
                     )
-                position = 0.86
             else:
                 transition_start, transition_end = outgoing_start, outgoing_end
-                position = 0.18
-            transition_x = transition_start[0] + (
-                transition_end[0] - transition_start[0]
-            ) * position
-            transition_y = transition_start[1] + (
-                transition_end[1] - transition_start[1]
-            ) * position
             body.append(
-                _transition_svg(
+                _direct_transition_svg(
                     element_id=transition.element_id,
-                    x=transition_x,
-                    y=transition_y,
+                    start=transition_start,
+                    end=transition_end,
                     upstream_dn=transition.upstream_dn_mm,
                     downstream_dn=transition.downstream_dn_mm,
                     placement=transition.placement,
+                    adjacent_node_id=riser_id,
                 )
             )
 
@@ -2091,6 +2145,30 @@ def audit_wastewater_building_svgs(
     }
     if drawn_transition_ids != expected_transition_ids:
         findings.append("basement: DN transitions differ from project registry")
+    expected_transitions = {
+        row.element_id: row
+        for row in (
+            assembly.project_inputs.k1_transitions
+            + assembly.project_inputs.k2_transitions
+        )
+    }
+    for root in basement_roots:
+        for group in root.iter():
+            transition_id = group.get("data-building-transition")
+            if not transition_id:
+                continue
+            expected = expected_transitions.get(transition_id)
+            if expected is None:
+                continue
+            if (
+                group.get("data-transition-joint") != "direct"
+                or group.get("data-fitting-gap-mm") != "0"
+                or group.get("data-adjacent-node") != expected.node_id
+            ):
+                findings.append(
+                    f"basement: transition {transition_id} must directly adjoin "
+                    f"junction {expected.node_id} with zero pipe gap"
+                )
 
     for outlet in (
         assembly.project_inputs.k1_outlet,

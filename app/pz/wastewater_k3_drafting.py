@@ -1,13 +1,12 @@
 """Registry-driven A1 drafting for the separate gravity K3 system."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from html import escape
 from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree
 
-from app.pz.project import DocumentInfo, Project, SewerElementSpec
+from app.pz.project import Project, SewerElementSpec
 from app.pz.wastewater_building_drafting import (
     _FRAME_BOTTOM,
     _FRAME_LEFT,
@@ -17,7 +16,7 @@ from app.pz.wastewater_building_drafting import (
     _line_with_label,
     _slope_sign_svg,
     _title_block_svg,
-    _transition_svg,
+    _direct_transition_svg,
 )
 from app.pz.wastewater_drafting import (
     BLACK,
@@ -661,23 +660,16 @@ def build_wastewater_k3_basement_fragment_svg(
                     raise ValueError(
                         f"{transition.element_id}: no incoming K3 graphic segment"
                     )
-                fraction = 0.86
             else:
                 transition_start, transition_end = start, end
-                fraction = 0.18
-            tx = transition_start[0] + (
-                transition_end[0] - transition_start[0]
-            ) * fraction
-            ty = transition_start[1] + (
-                transition_end[1] - transition_start[1]
-            ) * fraction
-            body.append(_transition_svg(
+            body.append(_direct_transition_svg(
                 element_id=transition.element_id,
-                x=tx,
-                y=ty,
+                start=transition_start,
+                end=transition_end,
                 upstream_dn=transition.upstream_dn_mm,
                 downstream_dn=transition.downstream_dn_mm,
                 placement=transition.placement,
+                adjacent_node_id=riser.riser_id,
             ))
         if global_index < len(inputs.collectors) and local_index == count - 1:
             body.append(
@@ -921,6 +913,23 @@ def audit_wastewater_k3_svgs(
     }
     if drawn_transitions != {row.element_id for row in inputs.transitions}:
         findings.append("K3 DN transitions differ from the project register")
+    expected_transitions = {row.element_id: row for row in inputs.transitions}
+    for group in all_groups:
+        transition_id = group.get("data-building-transition")
+        if not transition_id:
+            continue
+        expected = expected_transitions.get(transition_id)
+        if expected is None:
+            continue
+        if (
+            group.get("data-transition-joint") != "direct"
+            or group.get("data-fitting-gap-mm") != "0"
+            or group.get("data-adjacent-node") != expected.node_id
+        ):
+            findings.append(
+                f"K3 transition {transition_id} must directly adjoin junction "
+                f"{expected.node_id} with zero pipe gap"
+            )
 
     if inputs.outlet is not None:
         root_and_group = next(

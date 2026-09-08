@@ -412,6 +412,10 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert 'data-transition-placement="downstream-after-terminal-turn"' in basement_svg
     assert basement_svg.count('data-transition-shape="open-triangle"') == 2
     assert basement_svg.count('data-transition-fill="none"') == 2
+    assert basement_svg.count('data-transition-joint="direct"') == 2
+    assert basement_svg.count('data-fitting-gap-mm="0"') == 2
+    assert 'data-adjacent-node="К1-Ст2"' in basement_svg
+    assert 'data-adjacent-node="К2-Ст1"' in basement_svg
     assert basement_svg.count('data-fitting="lower_elbow_45"') == 4
     assert basement_svg.count('data-fitting="service_wye_45"') == 2
     assert basement_svg.count('data-fitting="through_wye_45"') == 2
@@ -451,6 +455,18 @@ def test_combined_graphic_audit_passes_for_registry_driven_demo():
     svgs = build_wastewater_building_svgs(assembly)
 
     assert audit_wastewater_building_svgs(assembly, svgs) == ()
+
+
+def test_combined_graphic_audit_rejects_pipe_gap_between_transition_and_junction():
+    assembly = _demo_assembly()
+    floors_svg, basement_svg = build_wastewater_building_svgs(assembly)
+    broken = basement_svg.replace(
+        'data-fitting-gap-mm="0"', 'data-fitting-gap-mm="40"', 1
+    )
+
+    findings = audit_wastewater_building_svgs(assembly, (floors_svg, broken))
+
+    assert any("must directly adjoin junction" in row for row in findings)
 
 
 def test_combined_building_pdf_has_two_a1_landscape_pages(tmp_path):

@@ -146,6 +146,7 @@ class FloorDiameterTransitionDraft:
     downstream_segment_id: str
     upstream_dn_mm: int
     downstream_dn_mm: int
+    adjacent_fitting_id: str
 
 
 @dataclass(frozen=True)
@@ -332,13 +333,24 @@ class WastewaterFloorAssembly:
             if fixture.kind == "toilet":
                 try:
                     wye = self.fitting(f"{fixture.fixture_id}_wye_45")
-                    main_run = [
-                        self.segment(row) for row in wye.connected_segment_ids[:2]
+                    main_run_dn = [
+                        self.segment(row).dn_mm
+                        for row in wye.connected_segment_ids
+                        if self.segment(row).role == "common_floor_branch"
                     ]
+                    main_run_dn.extend(
+                        row.dn_mm
+                        for row in self.direct_fitting_joints
+                        if row.end_fitting_id == wye.fitting_id
+                        and self.fitting(row.start_fitting_id).kind
+                        == "diameter_transition"
+                    )
                 except KeyError as exc:
                     errors.append(str(exc))
                 else:
-                    if any(row.dn_mm < fixture.dn_mm for row in main_run):
+                    if len(main_run_dn) < 2 or any(
+                        dn < fixture.dn_mm for dn in main_run_dn
+                    ):
                         errors.append(
                             f"{fixture.fixture_id}: collector must increase to "
                             f"DN{fixture.dn_mm} before the toilet connection"
@@ -350,11 +362,42 @@ class WastewaterFloorAssembly:
             errors.append(str(exc))
             branch = []
         for upstream, downstream in zip(branch, branch[1:]):
-            if upstream.end_port_id != downstream.start_port_id:
+            bridge = next(
+                (
+                    row
+                    for row in self.direct_fitting_joints
+                    if row.start_port_id == upstream.end_port_id
+                    and row.end_port_id == downstream.start_port_id
+                ),
+                None,
+            )
+            if upstream.end_port_id != downstream.start_port_id and bridge is None:
                 errors.append(
                     f"branch discontinuity: {upstream.segment_id} -> "
                     f"{downstream.segment_id}"
                 )
+            if upstream.dn_mm != downstream.dn_mm:
+                if bridge is None:
+                    errors.append(
+                        f"{upstream.segment_id}: diameter transition must "
+                        "directly adjoin the next junction without a pipe spool"
+                    )
+                else:
+                    try:
+                        start_fitting = self.fitting(bridge.start_fitting_id)
+                        end_fitting = self.fitting(bridge.end_fitting_id)
+                    except KeyError as exc:
+                        errors.append(str(exc))
+                    else:
+                        if (
+                            start_fitting.kind != "diameter_transition"
+                            or end_fitting.kind != "wye_45"
+                            or bridge.dn_mm != downstream.dn_mm
+                        ):
+                            errors.append(
+                                f"{bridge.joint_id}: DN change must be a direct "
+                                "diameter-transition-to-wye joint"
+                            )
             if downstream.dn_mm < upstream.dn_mm:
                 errors.append(
                     f"branch diameter decreases: DN{upstream.dn_mm} -> "
@@ -505,6 +548,12 @@ def build_floor_graphic_annotations(
             downstream.segment_id,
             upstream.dn_mm,
             downstream.dn_mm,
+            next(
+                row.end_fitting_id
+                for row in assembly.direct_fitting_joints
+                if row.start_port_id == upstream.end_port_id
+                and row.end_port_id == downstream.start_port_id
+            ),
         )
         for index, (upstream, downstream) in enumerate(
             zip(branch, branch[1:]), start=1
@@ -606,10 +655,10 @@ def build_typical_floor_assembly(
             # Increase the collector diameter before the larger fixture joins
             # it.  In particular, a DN100 toilet must enter an already-DN100
             # main, never a DN50 run enlarged only after the toilet wye.
-            # Leave enough visible DN100 run before a toilet wye for the
-            # required inline system/DN mark.  The transition remains before
-            # the toilet and no extra fitting or pipe branch is invented.
-            setback = min(60.0, dx * 0.4)
+            # The reducer is socketed directly into the next wye.  Eight
+            # millimetres are fitting-body centreline geometry, not a measured
+            # pipe spool; labels belong on the real collector sections.
+            setback = min(8.0, dx * 0.15)
             transition_x = junction_x[index + 1] - setback
             upstream_slope = slope_dn100 if upstream_dn >= 100 else slope_dn50
             downstream_slope = (
@@ -641,8 +690,11 @@ def build_typical_floor_assembly(
             ports.append(DraftPort(port_id, point, "diameter_transition"))
 
     outlet_slope = slope_dn100 if outlet_dn >= 100 else slope_dn50
-    riser_elbow_x = junction_x[-1] + 30.0
-    riser_elbow_y = junction_y[-1] + 30.0 * outlet_slope
+    # Keep a readable real collector run after the last fixture wye.  The
+    # additional length is downstream of the direct reducer/wye joint and is
+    # needed for the K1/DN and slope marks without colliding with the fittings.
+    riser_elbow_x = junction_x[-1] + 55.0
+    riser_elbow_y = junction_y[-1] + 55.0 * outlet_slope
     # One-sided floor branch: a 45-degree elbow turns the shallow collector
     # into the branch of an oblique 45-degree tee on the vertical riser.
     # The hubs are adjacent in the drawing: this is a direct socketed joint,
@@ -690,6 +742,7 @@ def build_typical_floor_assembly(
         junction_ids[0]: "cleanout_access"
     }
     junction_downstream_segment: dict[str, str] = {}
+    junction_upstream_transition: dict[str, str] = {}
     for index, (upstream_dn, downstream_dn, transition_id, transition_point) in enumerate(
         interval_data
     ):
@@ -712,37 +765,28 @@ def build_typical_floor_assembly(
             continue
 
         before_id = f"collector_{index + 1}_before_transition"
-        after_id = f"collector_{index + 1}_after_transition"
-        branch_segment_ids.extend((before_id, after_id))
-        segments.extend(
-            (
-                DraftPipeSegment(
-                    before_id,
-                    start_id,
-                    transition_id,
-                    upstream_dn,
-                    "common_floor_branch",
-                ),
-                DraftPipeSegment(
-                    after_id,
-                    transition_id,
-                    end_id,
-                    downstream_dn,
-                    "common_floor_branch",
-                ),
+        branch_segment_ids.append(before_id)
+        segments.append(
+            DraftPipeSegment(
+                before_id,
+                start_id,
+                transition_id,
+                upstream_dn,
+                "common_floor_branch",
             )
         )
+        transition_fitting_id = f"diameter_transition_{index + 1}"
         fittings.append(
             DraftFitting(
-                f"diameter_transition_{index + 1}",
+                transition_fitting_id,
                 "diameter_transition",
                 transition_point,
                 downstream_dn,
-                (before_id, after_id),
+                (before_id,),
             )
         )
         junction_downstream_segment[start_id] = before_id
-        junction_upstream_segment[end_id] = after_id
+        junction_upstream_transition[end_id] = transition_fitting_id
     branch_segment_ids.append("collector_to_riser")
     segments.append(
         DraftPipeSegment(
@@ -860,7 +904,7 @@ def build_typical_floor_assembly(
                 (connection_ids[-1],),
             )
         )
-        upstream_segment = junction_upstream_segment[junction_id]
+        upstream_segment = junction_upstream_segment.get(junction_id, "")
         downstream_segment = junction_downstream_segment[junction_id]
         wye_fitting_id = f"{source.fixture_id}_wye_45"
         fittings.append(
@@ -869,9 +913,34 @@ def build_typical_floor_assembly(
                 "wye_45",
                 junction,
                 max(value for _, value in resolved[:index]),
-                (upstream_segment, downstream_segment),
+                tuple(
+                    row
+                    for row in (upstream_segment, downstream_segment)
+                    if row
+                ),
             )
         )
+        transition_fitting_id = junction_upstream_transition.get(junction_id)
+        if transition_fitting_id:
+            transition_fitting = next(
+                row for row in fittings if row.fitting_id == transition_fitting_id
+            )
+            transition_port_id = next(
+                row.port_id
+                for row in ports
+                if row.point == transition_fitting.point
+                and row.role == "diameter_transition"
+            )
+            direct_fitting_joints.append(
+                DirectFittingJointDraft(
+                    f"{transition_fitting_id}_to_{wye_fitting_id}",
+                    transition_fitting_id,
+                    wye_fitting_id,
+                    transition_port_id,
+                    junction_id,
+                    max(value for _, value in resolved[:index]),
+                )
+            )
         connection_joint_id = f"{source.fixture_id}_elbow_to_wye"
         direct_fitting_joints.append(
             DirectFittingJointDraft(
@@ -937,6 +1006,12 @@ def build_typical_floor_assembly(
         )
     )
 
+    branch_path_points: list[str] = [junction_ids[0]]
+    for index, (_, _, transition_id, transition_point) in enumerate(interval_data):
+        if transition_point is not None:
+            branch_path_points.append(transition_id)
+        branch_path_points.append(junction_ids[index + 1])
+
     assembly = WastewaterFloorAssembly(
         assembly_id=assembly_id,
         system=system,
@@ -956,7 +1031,7 @@ def build_typical_floor_assembly(
             f"{floor_fixtures[0].fixture_id}_wye_45",
             (
                 "cleanout_cap",
-                *junction_ids,
+                *branch_path_points,
                 "riser_branch_elbow",
                 "riser_join",
             ),
@@ -1070,7 +1145,9 @@ def _diameter_transition_svg(
         f"L{base_x-px*half_width:.1f},{base_y-py*half_width:.1f} Z"
     )
     return (
-        f'<g data-diameter-transition-group="{escape(transition.transition_id)}">'
+        f'<g data-diameter-transition-group="{escape(transition.transition_id)}" '
+        f'data-transition-joint="direct" data-fitting-gap-mm="0" '
+        f'data-adjacent-fitting="{escape(transition.adjacent_fitting_id)}">'
         f'<path data-diameter-transition-mask="{escape(transition.transition_id)}" '
         f'd="{triangle_d}" fill="white" stroke="white" stroke-width="3"/>'
         f'<path data-diameter-transition="{escape(transition.transition_id)}" '
@@ -1102,7 +1179,6 @@ def render_typical_floor_assembly_svg(
     slope_annotations, diameter_transitions = build_floor_graphic_annotations(
         assembly
     )
-    diameter_transition_ports = {row.port_id for row in diameter_transitions}
 
     body: list[str] = [
         f'<g data-floor-assembly="{escape(assembly.assembly_id)}" '
@@ -1258,37 +1334,56 @@ def render_typical_floor_assembly_svg(
         connection = assembly.segment(fixture.connection_segment_ids[-1])
         vertical_start = assembly.port(connection.start_port_id).point
         wye = assembly.fitting(f"{fixture.fixture_id}_wye_45")
-        upstream_segment = assembly.segment(wye.connected_segment_ids[0])
-        downstream_segment = assembly.segment(wye.connected_segment_ids[1])
+        upstream_segment = next(
+            (
+                row
+                for row in assembly.segments
+                if row.end_port_id == fixture.junction_port_id
+                and row.role in {"cleanout_access", "common_floor_branch"}
+            ),
+            None,
+        )
+        upstream_transition_joint = next(
+            (
+                row
+                for row in assembly.direct_fitting_joints
+                if row.end_fitting_id == wye.fitting_id
+                and assembly.fitting(row.start_fitting_id).kind
+                == "diameter_transition"
+            ),
+            None,
+        )
+        downstream_segment = next(
+            row
+            for row in assembly.segments
+            if row.start_port_id == fixture.junction_port_id
+            and row.role == "common_floor_branch"
+        )
         upstream_id = (
             upstream_segment.start_port_id
-            if upstream_segment.end_port_id == fixture.junction_port_id
-            else upstream_segment.end_port_id
+            if upstream_segment is not None
+            else upstream_transition_joint.start_port_id
         )
-        downstream_id = (
-            downstream_segment.end_port_id
-            if downstream_segment.start_port_id == fixture.junction_port_id
-            else downstream_segment.start_port_id
-        )
+        downstream_id = downstream_segment.end_port_id
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_wye_45">')
-        body.append(
-            _tick_svg(
-                joint,
-                assembly.port(upstream_id).point,
-                xy=xy,
-                offset_mm=10.0,
-                marker_id=f"{fixture.fixture_id}_wye_upstream",
-            )
-        )
-        if fixture.junction_port_id not in diameter_transition_ports:
+        if upstream_transition_joint is None:
             body.append(
                 _tick_svg(
                     joint,
-                    assembly.port(downstream_id).point,
+                    assembly.port(upstream_id).point,
                     xy=xy,
-                    marker_id=f"{fixture.fixture_id}_wye_downstream",
+                    offset_mm=10.0,
+                    marker_id=f"{fixture.fixture_id}_wye_upstream",
                 )
             )
+        body.append(
+            _tick_svg(
+                joint,
+                assembly.port(downstream_id).point,
+                xy=xy,
+                marker_id=f"{fixture.fixture_id}_wye_downstream",
+            )
+        )
         body.append("</g>")
 
         body.append(f'<g data-floor-fitting="{escape(fixture.fixture_id)}_elbow_45">')
@@ -1408,7 +1503,7 @@ def render_typical_floor_assembly_svg(
                 ),
                 start=xy(start),
                 end=xy(end),
-                position=0.35 if annotation.dn_mm >= 100 else 0.56,
+                position=0.42 if annotation.dn_mm >= 100 else 0.56,
                 font_size=9.5,
             )
         )
@@ -1447,9 +1542,9 @@ def render_typical_floor_assembly_svg(
     flow_x, flow_y = xy(
         DraftPoint(
             collector_start.x_mm
-            + (collector_end.x_mm - collector_start.x_mm) * 0.78,
+            + (collector_end.x_mm - collector_start.x_mm) * 0.84,
             collector_start.y_mm
-            + (collector_end.y_mm - collector_start.y_mm) * 0.78,
+            + (collector_end.y_mm - collector_start.y_mm) * 0.84,
         )
     )
     body.extend(
@@ -1565,8 +1660,14 @@ def audit_floor_rendering_conventions(
         for row in root.iter()
         if row.get("data-diameter-transition")
     }
+    transition_groups = {
+        row.get("data-diameter-transition-group"): row
+        for row in root.iter()
+        if row.get("data-diameter-transition-group")
+    }
     for expected in expected_transitions:
         element = transition_elements.get(expected.transition_id)
+        group = transition_groups.get(expected.transition_id)
         if element is None:
             findings.append(
                 DraftingConventionFinding(
@@ -1582,6 +1683,18 @@ def audit_floor_rendering_conventions(
                     "filled_diameter_transition",
                     expected.transition_id,
                     "знак перехода диаметра должен быть незалитым треугольником",
+                )
+            )
+        if group is not None and (
+            group.get("data-transition-joint") != "direct"
+            or group.get("data-fitting-gap-mm") != "0"
+            or group.get("data-adjacent-fitting") != expected.adjacent_fitting_id
+        ):
+            findings.append(
+                DraftingConventionFinding(
+                    "diameter_transition_not_direct",
+                    expected.transition_id,
+                    "после перехода должен сразу следовать тройник без вставки трубы",
                 )
             )
 
