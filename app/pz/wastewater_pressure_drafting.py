@@ -12,8 +12,14 @@ from app.pz.wastewater_building_drafting import (
     _FRAME_LEFT,
     _FRAME_RIGHT,
     _FRAME_TOP,
+    _SHEET_HEIGHT,
+    _SHEET_HEIGHT_MM,
+    _SHEET_SCALE,
+    _SHEET_WIDTH,
+    _SHEET_WIDTH_MM,
     _title_block_svg,
 )
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_drafting import BLACK, FONT, GRAY
 from app.pz.wastewater_pressure_project_inputs import (
     WastewaterPressureProjectInputs,
@@ -35,10 +41,15 @@ def _short(value: str, limit: int = 24) -> str:
 
 def _svg_page(body: str, project: Project, *, page: int, title: str) -> str:
     return "".join((
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        'viewBox="0 0 2800 1980">',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
+        f'viewBox="0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}" '
+        'data-sheet-format="A1" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale">',
+        f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="3"/>',
@@ -334,6 +345,7 @@ def generate_wastewater_pressure_pdf_from_project(
     output_path: str,
     project: Project,
 ) -> str:
+    ensure_drafting_font_registered()
     import cairosvg
     from pypdf import PdfReader, PdfWriter
 

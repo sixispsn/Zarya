@@ -5,6 +5,10 @@ from dataclasses import replace
 from enum import Enum
 from html import escape
 
+from app.pz.drafting_font import (
+    DRAFTING_FONT_FAMILY,
+    ensure_drafting_font_registered,
+)
 from app.pz.project import Project
 from app.pz.wastewater_layout import (
     PointMm,
@@ -18,7 +22,7 @@ from app.pz.wastewater_ugo import (
 )
 
 
-FONT = "osifont"
+FONT = DRAFTING_FONT_FAMILY
 BLACK = "#000"
 
 
@@ -331,6 +335,7 @@ def generate_wastewater_structure_pdf(
     output_path: str,
     scope: WastewaterStructureScope = WastewaterStructureScope.FOUNDATION,
 ) -> str:
+    ensure_drafting_font_registered()
     import cairosvg
 
     svg = build_wastewater_structure_svg(project, layout, scope=scope)

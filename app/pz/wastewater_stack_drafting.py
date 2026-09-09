@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_basement_drafting import (
     WastewaterBasementAssembly,
     build_wastewater_basement_assembly,
@@ -797,6 +798,7 @@ def generate_wastewater_stack_control_pdf(
     outlet_dn_mm: int | None = None,
 ) -> str:
     """Write all A1 pages to one vector PDF."""
+    ensure_drafting_font_registered()
     import cairosvg
     from pypdf import PdfReader, PdfWriter
 

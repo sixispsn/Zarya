@@ -15,6 +15,7 @@ from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.project import DocumentInfo, Project
 from app.pz.wastewater_drafting import (
     BLACK,
@@ -53,11 +54,29 @@ _ROOF_VENT_HEIGHT_M = {
     "flat_accessible": 3.0,
 }
 
+_SHEET_WIDTH_MM = 841.0
+_SHEET_HEIGHT_MM = 594.0
 _SHEET_SCALE = 10.0 / 3.0
+_SHEET_WIDTH = _SHEET_WIDTH_MM * _SHEET_SCALE
+_SHEET_HEIGHT = _SHEET_HEIGHT_MM * _SHEET_SCALE
 _FRAME_LEFT = 20.0 * _SHEET_SCALE
 _FRAME_TOP = 5.0 * _SHEET_SCALE
-_FRAME_RIGHT = 2800.0 - 5.0 * _SHEET_SCALE
-_FRAME_BOTTOM = 1980.0 - 5.0 * _SHEET_SCALE
+_FRAME_RIGHT = _SHEET_WIDTH - 5.0 * _SHEET_SCALE
+_FRAME_BOTTOM = _SHEET_HEIGHT - 5.0 * _SHEET_SCALE
+_OPENGOST_CAP_HEIGHT_RATIO = 0.823
+
+
+def _font_size_for_height(height_mm: float) -> float:
+    """SVG font-size that gives the requested OpenGOST capital height in mm."""
+    return height_mm * _SHEET_SCALE / _OPENGOST_CAP_HEIGHT_RATIO
+
+
+_FONT_H_2_5 = _font_size_for_height(2.5)
+_FONT_H_3_5 = _font_size_for_height(3.5)
+_FONT_H_5 = _font_size_for_height(5.0)
+_FONT_H_7 = _font_size_for_height(7.0)
+_LINE_THIN = 0.35 * _SHEET_SCALE
+_LINE_MAIN = 0.7 * _SHEET_SCALE
 _FLOOR_K1_PAGE_CAPACITY = 2
 _FLOOR_K2_PAGE_CAPACITY = 2
 _BASEMENT_RISER_PAGE_CAPACITY = 4
@@ -101,7 +120,13 @@ def _title_block_svg(
     def y(mm: float) -> float:
         return y0 + mm * scale
 
-    def line(x1: float, y1: float, x2: float, y2: float, width: float = 1.0) -> str:
+    def line(
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        width: float = _LINE_THIN,
+    ) -> str:
         return (
             f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" '
             f'y2="{y2:.1f}" stroke="{BLACK}" stroke-width="{width:.1f}"/>'
@@ -126,14 +151,14 @@ def _title_block_svg(
         f'data-sheet-total="{sheet_total}">',
         f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{185*scale:.1f}" '
         f'height="{55*scale:.1f}" fill="white" stroke="{BLACK}" '
-        'stroke-width="2.0"/>',
-        line(x(65), y(0), x(65), y(55), 1.5),
+        f'stroke-width="{_LINE_MAIN:.1f}"/>',
+        line(x(65), y(0), x(65), y(55), _LINE_MAIN),
     ]
     for column in (7, 17, 25, 37, 53):
         rows.append(line(x(column), y(0), x(column), y(25)))
     for column in (17, 37, 53):
         rows.append(line(x(column), y(25), x(column), y(55)))
-    rows.append(line(x(135), y(25), x(135), y(55), 1.4))
+    rows.append(line(x(135), y(25), x(135), y(55), _LINE_MAIN))
     for column in (150, 165):
         rows.append(line(x(column), y(25), x(column), y(40)))
     for row_mm in range(5, 55, 5):
@@ -144,7 +169,7 @@ def _title_block_svg(
         ("Изм.", 0, 7), ("Кол.уч.", 7, 17), ("Лист", 17, 25),
         ("№ док.", 25, 37), ("Подп.", 37, 53), ("Дата", 53, 65),
     ):
-        rows.append(text_svg(x((c0 + c1) / 2), y(23.4), label, 7.0))
+        rows.append(text_svg(x((c0 + c1) / 2), y(23.4), label, _FONT_H_2_5))
     signers = (
         ("Разраб.", doc.developer_name, 30),
         ("Проверил", doc.inspector_name, 35),
@@ -153,22 +178,26 @@ def _title_block_svg(
         ("Н. контр.", doc.norm_control_name, 55),
     )
     for label, name, row_mm in signers:
-        rows.append(text_svg(x(1), y(row_mm - 1.5), label, 7.4, "start"))
+        rows.append(text_svg(
+            x(1), y(row_mm - 1.5), label, _FONT_H_2_5, "start"
+        ))
         if name:
-            rows.append(text_svg(x(27), y(row_mm - 1.5), _short(name, 18), 7.4))
+            rows.append(text_svg(
+                x(27), y(row_mm - 1.5), _short(name, 18), _FONT_H_2_5
+            ))
     rows.extend((
-        text_svg(x(125), y(7), _short(doc.cipher or "", 34), 13.0),
-        text_svg(x(125), y(18), _short(doc.object_name or "", 68), 8.5),
-        text_svg(x(100), y(34.5), _short(doc.object_part or "", 38), 9.5),
-        text_svg(x(142.5), y(28.5), "Стадия", 6.7),
-        text_svg(x(157.5), y(28.5), "Лист", 6.7),
-        text_svg(x(175), y(28.5), "Листов", 6.7),
-        text_svg(x(142.5), y(37.3), doc.stage_label or "П", 10.0),
-        text_svg(x(157.5), y(37.3), str(sheet_no), 10.0),
-        text_svg(x(175), y(37.3), str(sheet_total), 10.0),
-        text_svg(x(100), y(47), _short(title, 48), 8.8),
-        text_svg(x(100), y(53), system_label, 10.5, weight="bold"),
-        text_svg(x(160), y(49), _short(doc.organization or "", 28), 8.0),
+        text_svg(x(125), y(7), _short(doc.cipher or "", 34), _FONT_H_3_5),
+        text_svg(x(125), y(18), _short(doc.object_name or "", 68), _FONT_H_2_5),
+        text_svg(x(100), y(34.5), _short(doc.object_part or "", 38), _FONT_H_2_5),
+        text_svg(x(142.5), y(28.5), "Стадия", _FONT_H_2_5),
+        text_svg(x(157.5), y(28.5), "Лист", _FONT_H_2_5),
+        text_svg(x(175), y(28.5), "Листов", _FONT_H_2_5),
+        text_svg(x(142.5), y(37.3), doc.stage_label or "П", _FONT_H_3_5),
+        text_svg(x(157.5), y(37.3), str(sheet_no), _FONT_H_3_5),
+        text_svg(x(175), y(37.3), str(sheet_total), _FONT_H_3_5),
+        text_svg(x(100), y(47), _short(title, 48), _FONT_H_2_5),
+        text_svg(x(100), y(53), system_label, _FONT_H_3_5),
+        text_svg(x(160), y(49), _short(doc.organization or "", 28), _FONT_H_2_5),
         "</g>",
     ))
     return "".join(rows)
@@ -457,7 +486,7 @@ def build_wastewater_building_floors_svg(
     errors = assembly.validate()
     if errors:
         raise ValueError("cannot render invalid building assembly: " + "; ".join(errors))
-    width = 2800
+    width = _SHEET_WIDTH
     margin = 50
     floors = assembly.displayed_floor_numbers
     origins = _floor_origins(floors)
@@ -482,26 +511,33 @@ def build_wastewater_building_floors_svg(
     roof_y = 220.0
     bottom_y = 1660.0
     body: list[str] = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        f'viewBox="0 0 2800 1980" data-sheet-role="floors" '
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
+        f'viewBox="0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}" '
+        'data-sheet-format="A1" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale" '
+        'data-font-standard="GOST-2.304-81" data-font-type="B" '
+        f'data-sheet-role="floors" '
         f'data-fragment-index="{fragment_index}" '
         f'data-fragment-total="{fragment_total}">',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        f'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
-        f'stroke="{BLACK}" stroke-width="3"/>',
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
         f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Принципиальная схема внутренних систем '
+        f'font-size="{_FONT_H_7:.3f}">Принципиальная схема внутренних систем '
         'канализации и водоотведения. Надземная часть</text>',
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
-        f'font-size="16" fill="{GRAY}">Этажей: {assembly.project_inputs.floors_above}; '
+        f'font-size="{_FONT_H_3_5:.3f}" fill="{GRAY}">Этажей: {assembly.project_inputs.floors_above}; '
         f'фрагмент {fragment_index}/{fragment_total}; характерные этажи; '
-        'самотечная К1 и внутренний водосток К2</text>',
+        'самотечная К1 и внутренний водосток К2; схема без масштаба</text>',
         f'<line data-architecture="roof" x1="{margin+30}" y1="{roof_y}" '
         f'x2="{width-margin-30}" y2="{roof_y}" stroke="#777" stroke-width="2"/>',
         f'<text x="{margin+38}" y="{roof_y-18}" font-family="{FONT}" '
-        'font-size="15" font-weight="bold">Кровля</text>',
+        f'font-size="{_FONT_H_3_5:.3f}">Кровля</text>',
     ]
 
     for floor_no, origin_y in origins.items():
@@ -513,9 +549,9 @@ def build_wastewater_building_floors_svg(
                 f'y1="{slab_y:.1f}" x2="{width-margin-30}" y2="{slab_y:.1f}" '
                 'stroke="#aaa" stroke-width="1"/>',
                 f'<text x="{margin+38}" y="{slab_y-28:.1f}" font-family="{FONT}" '
-                f'font-size="15" font-weight="bold">{floor_no} этаж</text>',
+                f'font-size="{_FONT_H_3_5:.3f}">{floor_no} этаж</text>',
                 f'<text x="{margin+38}" y="{slab_y-9:.1f}" font-family="{FONT}" '
-                f'font-size="12">отм. {_fmt(elevation)}</text>',
+                f'font-size="{_FONT_H_2_5:.3f}">отм. {_fmt(elevation)}</text>',
             )
         )
 
@@ -832,13 +868,14 @@ def _transition_svg(
             f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}" '
             f'data-transition-placement="{escape(placement)}" '
             f'data-transition-shape="open-triangle" '
-            f'data-transition-fill="none">',
-            f'<path d="M{x-12:.1f},{y-10:.1f} L{x+12:.1f},{y:.1f} '
-            f'L{x-12:.1f},{y+10:.1f} Z" fill="white" stroke="white" '
+            f'data-transition-fill="none" data-flat-side="downstream" '
+            f'data-apex-side="upstream">',
+            f'<path d="M{x-12:.1f},{y:.1f} L{x+12:.1f},{y-10:.1f} '
+            f'L{x+12:.1f},{y+10:.1f} Z" fill="white" stroke="white" '
             'stroke-width="4"/>',
             f'<path data-diameter-transition="{escape(element_id)}" '
-            f'd="M{x-12:.1f},{y-10:.1f} L{x+12:.1f},{y:.1f} '
-            f'L{x-12:.1f},{y+10:.1f} Z" fill="none" stroke="{BLACK}" '
+            f'd="M{x-12:.1f},{y:.1f} L{x+12:.1f},{y-10:.1f} '
+            f'L{x+12:.1f},{y+10:.1f} Z" fill="none" stroke="{BLACK}" '
             'stroke-width="1.7"/>',
             f'<text x="{x:.1f}" y="{y-18:.1f}" text-anchor="middle" '
             f'font-family="{FONT}" font-size="11">DN{upstream_dn}×{downstream_dn}</text>',
@@ -859,10 +896,10 @@ def _direct_transition_svg(
 ) -> str:
     """Draw a reducer directly against the adjacent junction fitting.
 
-    A diameter increase on an incoming main ends at the junction coordinate:
-    the open triangular wedge touches the wye/tee and no graphic pipe spool is
-    left between the two fittings.  The exceptional terminal-turn placement is
-    the mirror case: the transition starts at the turn and opens downstream.
+    A diameter increase on an incoming main ends at the junction coordinate.
+    Its flat side faces the larger downstream diameter; its apex faces the
+    smaller upstream diameter.  No graphic pipe spool is left between the
+    transition and the adjacent fitting.
     """
     from math import hypot
 
@@ -875,11 +912,11 @@ def _direct_transition_svg(
     depth = min(24.0, length)
     half_width = 10.0
     if placement == "upstream-before-junction":
-        apex_x, apex_y = end
-        base_x, base_y = end[0] - ux * depth, end[1] - uy * depth
+        base_x, base_y = end
+        apex_x, apex_y = end[0] - ux * depth, end[1] - uy * depth
     elif placement == "downstream-after-terminal-turn":
-        base_x, base_y = start
-        apex_x, apex_y = start[0] + ux * depth, start[1] + uy * depth
+        apex_x, apex_y = start
+        base_x, base_y = start[0] + ux * depth, start[1] + uy * depth
     else:
         raise ValueError(f"{element_id}: unsupported transition placement {placement}")
     triangle = (
@@ -895,6 +932,7 @@ def _direct_transition_svg(
             f'data-upstream-dn="{upstream_dn}" data-downstream-dn="{downstream_dn}" '
             f'data-transition-placement="{escape(placement)}" '
             f'data-transition-shape="open-triangle" data-transition-fill="none" '
+            f'data-flat-side="downstream" data-apex-side="upstream" '
             f'data-transition-joint="direct" '
             f'data-adjacent-node="{escape(adjacent_node_id)}" '
             'data-fitting-gap-mm="0">',
@@ -982,7 +1020,9 @@ def _build_two_riser_basement_reference_svg(
         '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
         '</pattern></defs>',
         '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        f'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="3"/>',
@@ -1486,6 +1526,19 @@ def _render_basement_system_fragment(
         turn_origin_y = main_y - turn_offset_y
         riser_id = _riser_id(riser)
         dn = _riser_dn(riser)
+        outgoing = collectors[global_index] if global_index < len(collectors) else outlet
+        outgoing_start = joins[local_index]
+        if local_index + 1 < len(fragment):
+            outgoing_end = joins[local_index + 1]
+        elif global_index < len(collectors):
+            outgoing_end = (wall_right - 80.0, outgoing_start[1] + 5.0)
+        else:
+            horizontal = 2660.0 - outgoing_start[0]
+            drop = max(
+                2.0,
+                min(14.0, horizontal * float(outgoing.slope_per_mille or 0) / 1000.0),
+            )
+            outgoing_end = (2660.0, outgoing_start[1] + drop)
         body.append(
             _line_with_label(
                 line_id=f"{riser_id}-basement-riser",
@@ -1534,19 +1587,27 @@ def _render_basement_system_fragment(
                 + '</g>'
             )
             elbow_ids = ", ".join(riser.lower_elbow_element_ids)
+            cleanout_target_x = x + 12.0 * turn_scale
+            cleanout_target_y = main_y
             body.append(
-                f'<g data-lower-node-callout="{escape(cleanout_id)}">'
-                f'<path d="M{x+25:.1f},{main_y-31:.1f} L{x+82:.1f},{main_y-96:.1f} '
-                f'H{x+245:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.2"/>'
-                f'<text x="{x+254:.1f}" y="{main_y-105:.1f}" '
-                f'font-family="{FONT}" font-size="13" font-weight="bold">'
+                f'<g data-lower-node-callout="{escape(cleanout_id)}" '
+                f'data-callout-target-id="{escape(cleanout_id)}" '
+                f'data-callout-target-kind="cleanout-cap" '
+                f'data-callout-target-x="{cleanout_target_x:.1f}" '
+                f'data-callout-target-y="{cleanout_target_y:.1f}">'
+                f'<path d="M{cleanout_target_x:.1f},{cleanout_target_y:.1f} '
+                f'L{x+82:.1f},{main_y-96:.1f} H{x+345:.1f}" '
+                f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>'
+                f'<text x="{x+336:.1f}" y="{main_y-105:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">'
                 f'Прочистка {escape(cleanout_id)} DN{dn}</text>'
-                f'<text x="{x+254:.1f}" y="{main_y-84:.1f}" '
-                f'font-family="{FONT}" font-size="11">косой тройник 45° с заглушкой; '
+                f'<text x="{x+336:.1f}" y="{main_y-72:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
+                f'косой тройник 45° с заглушкой, DN{dn}; '
                 'свободный соосный конец</text>'
                 f'<text data-lower-elbow-reference="{escape(elbow_ids)}" '
-                f'x="{x+254:.1f}" y="{main_y-64:.1f}" '
-                f'font-family="{FONT}" font-size="11">Отвод 45°: '
+                f'x="{x+336:.1f}" y="{main_y-49:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">Отвод 45° DN{dn}: '
                 f'{escape(elbow_ids)}</text></g>'
             )
         else:
@@ -1558,7 +1619,8 @@ def _render_basement_system_fragment(
             )
             body.append(
                 f'<g data-basement-through-junction="{escape(junction_id)}" '
-                'data-through-axis="open">'
+                f'data-through-axis="open" data-main-dn="{outgoing.dn_mm}" '
+                f'data-branch-dn="{dn}">'
                 + render_lower_turn_assembly_svg(
                     node,
                     pipe_labels=False,
@@ -1573,35 +1635,35 @@ def _render_basement_system_fragment(
                 + '</g>'
             )
             elbow_ids = ", ".join(riser.lower_elbow_element_ids)
+            junction_target_x = x + turn_offset_x
+            junction_target_y = main_y
+            junction_dn = (
+                f"DN{outgoing.dn_mm}×{dn}"
+                if outgoing.dn_mm != dn
+                else f"DN{dn}"
+            )
             body.append(
-                f'<g data-lower-node-callout="{escape(junction_id)}">'
-                f'<path d="M{x+25:.1f},{main_y-31:.1f} L{x+74:.1f},{main_y+48:.1f} '
-                f'H{x-155:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.2"/>'
-                f'<text x="{x-164:.1f}" y="{main_y+66:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="13" font-weight="bold">'
-                f'Проточный узел {escape(junction_id)} DN{dn}</text>'
-                f'<text x="{x-164:.1f}" y="{main_y+87:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="11">косой тройник 45°; '
+                f'<g data-lower-node-callout="{escape(junction_id)}" '
+                f'data-callout-target-id="{escape(junction_id)}" '
+                f'data-callout-target-kind="through-wye" '
+                f'data-callout-target-x="{junction_target_x:.1f}" '
+                f'data-callout-target-y="{junction_target_y:.1f}">'
+                f'<path d="M{junction_target_x:.1f},{junction_target_y:.1f} '
+                f'L{x+74:.1f},{main_y+48:.1f} H{x-155:.1f}" '
+                f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>'
+                f'<text x="{x+65:.1f}" y="{main_y+39:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">'
+                f'Проточный узел {escape(junction_id)}</text>'
+                f'<text x="{x+65:.1f}" y="{main_y+72:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
+                f'косой тройник {junction_dn}, 45°; '
                 'проходная ось открыта, без заглушки</text>'
                 f'<text data-lower-elbow-reference="{escape(elbow_ids)}" '
-                f'x="{x-164:.1f}" y="{main_y+107:.1f}" text-anchor="end" '
-                f'font-family="{FONT}" font-size="11">Отвод 45°: '
+                f'x="{x+65:.1f}" y="{main_y+95:.1f}" text-anchor="end" '
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
+                f'Отвод 45° DN{dn}: '
                 f'{escape(elbow_ids)}</text></g>'
             )
-
-        outgoing = collectors[global_index] if global_index < len(collectors) else outlet
-        outgoing_start = joins[local_index]
-        if local_index + 1 < len(fragment):
-            outgoing_end = joins[local_index + 1]
-        elif global_index < len(collectors):
-            outgoing_end = (wall_right - 80.0, outgoing_start[1] + 5.0)
-        else:
-            horizontal = 2660.0 - outgoing_start[0]
-            drop = max(
-                2.0,
-                min(14.0, horizontal * float(outgoing.slope_per_mille or 0) / 1000.0),
-            )
-            outgoing_end = (2660.0, outgoing_start[1] + drop)
 
         body.append(
             _line_with_label(
@@ -1707,29 +1769,36 @@ def build_wastewater_building_basement_fragment_svg(
     basement_floor_y = 1560.0
     wall_left, wall_right = 230.0, 2440.0
     body: list[str] = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        f'viewBox="0 0 2800 1980" data-sheet-role="basement" '
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
+        f'viewBox="0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}" '
+        'data-sheet-format="A1" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale" '
+        'data-font-standard="GOST-2.304-81" data-font-type="B" '
+        f'data-sheet-role="basement" '
         f'data-fragment-index="{fragment_index}" '
         f'data-fragment-total="{fragment_total}">',
         '<defs><pattern id="basement-hatch" width="22" height="22" '
         'patternUnits="userSpaceOnUse" patternTransform="rotate(35)">'
         '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
         '</pattern></defs>',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        f'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
-        f'stroke="{BLACK}" stroke-width="3"/>',
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
         f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
-        'font-size="30" font-weight="bold">Принципиальная схема внутренних систем '
+        f'font-size="{_FONT_H_7:.3f}">Принципиальная схема внутренних систем '
         'канализации и водоотведения. Подвал и выпуски</text>',
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
-        f'font-size="16" fill="{GRAY}">Фрагмент {fragment_index}/{fragment_total}; '
-        'подтверждённая линейная топология реестра</text>',
+        f'font-size="{_FONT_H_3_5:.3f}" fill="{GRAY}">Фрагмент {fragment_index}/{fragment_total}; '
+        'подтверждённая линейная топология реестра; схема без масштаба</text>',
         f'<line data-architecture="first-floor" x1="{wall_left}" y1="{first_floor_y}" '
         f'x2="{wall_right}" y2="{first_floor_y}" stroke="#777" stroke-width="2"/>',
         f'<text x="{wall_left-20}" y="{first_floor_y-14}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="13">1 этаж; отм. 0,000</text>',
+        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">1 этаж; отм. 0,000</text>',
         f'<rect data-architecture="basement-slab" x="{wall_left}" '
         f'y="{basement_floor_y}" width="{wall_right-wall_left}" height="82" '
         'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
@@ -1740,10 +1809,10 @@ def build_wastewater_building_basement_fragment_svg(
         f'y="{first_floor_y}" width="55" height="{basement_floor_y-first_floor_y+82}" '
         'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
         f'<text x="{wall_left-20}" y="{basement_floor_y-10}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="13">Пол подвала; отм. '
+        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">Пол подвала; отм. '
         f'{_fmt(float(inputs.basement_floor_elevation_m or 0))}</text>',
         f'<text x="{wall_right+82}" y="{first_floor_y+35}" font-family="{FONT}" '
-        'font-size="12">наружная грань здания</text>',
+        f'font-size="{_FONT_H_2_5:.3f}">наружная грань здания</text>',
     ]
     previous_sheet_no = sheet_no - 1 if fragment_index > 1 else None
     next_sheet_no = sheet_no + 1 if fragment_index < fragment_total else None
@@ -1947,6 +2016,28 @@ def audit_wastewater_building_svgs(
     expected_sheet_total = str(len(roots) + 1)
     for page_no, root in enumerate(roots, start=1):
         visible_text = " ".join(root.itertext())
+        if (
+            root.get("width") != f"{_SHEET_WIDTH_MM:g}mm"
+            or root.get("height") != f"{_SHEET_HEIGHT_MM:g}mm"
+            or root.get("viewBox")
+            != f"0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}"
+            or root.get("data-sheet-format") != "A1"
+            or root.get("data-schematic-scale") != "not-to-scale"
+        ):
+            findings.append(
+                f"sheet {page_no}: A1 physical page geometry is not canonical"
+            )
+        frames = [
+            row for row in root.iter()
+            if row.get("data-drawing-frame") == "GOST-R-21.101"
+        ]
+        if len(frames) != 1 or (
+            frames[0].get("data-left-margin-mm") != "20"
+            or frames[0].get("data-other-margin-mm") != "5"
+        ):
+            findings.append(
+                f"sheet {page_no}: drawing frame margins are not canonical"
+            )
         title_blocks = [
             row for row in root.iter()
             if row.get("data-title-block") == "form-3"
@@ -2164,10 +2255,34 @@ def audit_wastewater_building_svgs(
                 group.get("data-transition-joint") != "direct"
                 or group.get("data-fitting-gap-mm") != "0"
                 or group.get("data-adjacent-node") != expected.node_id
+                or group.get("data-flat-side") != "downstream"
+                or group.get("data-apex-side") != "upstream"
             ):
                 findings.append(
                     f"basement: transition {transition_id} must directly adjoin "
-                    f"junction {expected.node_id} with zero pipe gap"
+                    f"junction {expected.node_id} with zero pipe gap and face "
+                    "its flat side toward the larger downstream diameter"
+                )
+
+    for root in basement_roots:
+        for group in root.iter():
+            callout_id = group.get("data-lower-node-callout")
+            if not callout_id:
+                continue
+            target_x = group.get("data-callout-target-x")
+            target_y = group.get("data-callout-target-y")
+            path = next(
+                (row for row in group if row.tag.endswith("path")),
+                None,
+            )
+            if (
+                not target_x
+                or not target_y
+                or path is None
+                or not (path.get("d") or "").startswith(f"M{target_x},{target_y}")
+            ):
+                findings.append(
+                    f"basement: callout {callout_id} is not anchored to its element"
                 )
 
     for outlet in (
@@ -2220,6 +2335,7 @@ def generate_wastewater_building_pdf_from_project(
     roof_kind: str,
 ) -> str:
     """Write the combined registry-backed paginated vector PDF."""
+    ensure_drafting_font_registered()
     import cairosvg
     from pypdf import PdfReader, PdfWriter
 

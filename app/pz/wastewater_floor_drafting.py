@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Iterable
 from xml.etree import ElementTree
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_drafting import (
     BLACK,
     FONT,
@@ -39,6 +40,11 @@ from app.pz.wastewater_ugo import (
     get_ugo_connection_anchor,
     render_ugo,
 )
+
+
+_COMBINED_SHEET_UNITS_PER_MM = 10.0 / 3.0
+_OPENGOST_CAP_HEIGHT_RATIO = 0.823
+_FONT_H_2_5 = 2.5 * _COMBINED_SHEET_UNITS_PER_MM / _OPENGOST_CAP_HEIGHT_RATIO
 
 
 _FIXTURE_DEFAULT_DN = {
@@ -1115,7 +1121,8 @@ def _slope_sign_svg(
         f'L{arm_x:.1f},{sign_y+6.0:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="1.3"/>'
         f'<text x="{text_x:.1f}" y="{sign_y+3.5:.1f}" '
-        f'text-anchor="{text_anchor}" font-family="{FONT}" font-size="9.5">'
+        f'text-anchor="{text_anchor}" font-family="{FONT}" '
+        f'font-size="{_FONT_H_2_5:.3f}">'
         f'{value}</text></g>'
     )
 
@@ -1147,6 +1154,7 @@ def _diameter_transition_svg(
     return (
         f'<g data-diameter-transition-group="{escape(transition.transition_id)}" '
         f'data-transition-joint="direct" data-fitting-gap-mm="0" '
+        f'data-flat-side="downstream" data-apex-side="upstream" '
         f'data-adjacent-fitting="{escape(transition.adjacent_fitting_id)}">'
         f'<path data-diameter-transition-mask="{escape(transition.transition_id)}" '
         f'd="{triangle_d}" fill="white" stroke="white" stroke-width="3"/>'
@@ -1228,7 +1236,7 @@ def render_typical_floor_assembly_svg(
             f'width="{room_x2-room_x:.1f}" height="{room_y2-room_y:.1f}" '
             'fill="#fbfbfb" stroke="#777" stroke-width="1"/>',
             f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
-            f'font-family="{FONT}" font-size="11" fill="#555">'
+            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}" fill="#555">'
             f'{escape(room_label)}</text>',
         ))
 
@@ -1243,7 +1251,8 @@ def render_typical_floor_assembly_svg(
         f'width="{shaft_x2-shaft_x:.1f}" height="{shaft_y2-shaft_y:.1f}" '
         'fill="#f7f7f7" stroke="#777" stroke-width="1"/>',
         f'<text x="{shaft_label_x:.1f}" y="{shaft_label_y:.1f}" '
-        f'text-anchor="middle" font-family="{FONT}" font-size="9.5" '
+        f'text-anchor="middle" font-family="{FONT}" '
+        f'font-size="{_FONT_H_2_5:.3f}" '
         f'fill="#555" transform="rotate(-90 {shaft_label_x:.1f} '
         f'{shaft_label_y:.1f})">шахта</text>',
         f'<line data-architecture="floor" x1="{sx1:.1f}" y1="{sy1:.1f}" '
@@ -1313,10 +1322,10 @@ def render_typical_floor_assembly_svg(
         body.extend(
             (
                 f'<text x="{fx:.1f}" y="{fy-68:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="9.5" font-weight="bold">'
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
                 f'{escape(fixture.fixture_id)}</text>',
                 f'<text x="{fx:.1f}" y="{fy-54:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="8.5">'
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
                 f'{escape(_FIXTURE_LABEL[fixture.kind])}; '
                 f'{_system_mark(assembly.system)} ⌀{fixture.dn_mm}'
                 f'{quantity_label}</text>',
@@ -1483,9 +1492,9 @@ def render_typical_floor_assembly_svg(
             f'<path d="M{cap_x:.1f},{cap_y:.1f} L{cap_x-30:.1f},{cap_y-34:.1f} '
             f'H{cap_x-112:.1f}" fill="none" stroke="{BLACK}" stroke-width="1.2"/>',
             f'<text x="{cap_x-108:.1f}" y="{cap_y-42:.1f}" text-anchor="start" '
-            f'font-family="{FONT}" font-size="11" font-weight="bold">Прочистка</text>',
+            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">Прочистка</text>',
             f'<text x="{cap_x-108:.1f}" y="{cap_y-27:.1f}" text-anchor="start" '
-            f'font-family="{FONT}" font-size="9">'
+            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
             f'{_system_mark(assembly.system)} ⌀{assembly.fixtures[0].dn_mm}</text>',
         )
     )
@@ -1504,7 +1513,7 @@ def render_typical_floor_assembly_svg(
                 start=xy(start),
                 end=xy(end),
                 position=0.42 if annotation.dn_mm >= 100 else 0.56,
-                font_size=9.5,
+                font_size=_FONT_H_2_5,
             )
         )
         body.append(
@@ -1533,7 +1542,7 @@ def render_typical_floor_assembly_svg(
             start=xy("riser_top"),
             end=xy("riser_join"),
             position=0.48,
-            font_size=9.5,
+            font_size=_FONT_H_2_5,
         )
     )
     collector_to_riser = assembly.segment("collector_to_riser")
@@ -1559,7 +1568,7 @@ def render_typical_floor_assembly_svg(
             f'L{riser_join_x+6:.1f},{riser_join_y+42:.1f} Z" fill="{BLACK}"/>',
             f'<text data-fitting-label="riser_branch_wye_45" '
             f'x="{riser_join_x+17:.1f}" y="{riser_join_y-14:.1f}" '
-            f'font-family="{FONT}" font-size="8.5">Тр. 45°</text>',
+            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">Тр. 45°</text>',
         )
     )
 
@@ -1575,7 +1584,8 @@ def render_typical_floor_assembly_svg(
                 f'fill="none" stroke="{SERVICE}" stroke-width="5" '
                 'stroke-dasharray="12 8" opacity="0.8"/>',
                 f'<text x="{cap_x:.1f}" y="{cap_y+52:.1f}" font-family="{FONT}" '
-                f'font-size="10" fill="{SERVICE}">контрольный путь троса до стояка</text>',
+                f'font-size="{_FONT_H_2_5:.3f}" fill="{SERVICE}">'
+                'контрольный путь троса до стояка</text>',
             )
         )
     body.append("</g>")
@@ -1849,6 +1859,7 @@ def generate_typical_floor_control_pdf(
     riser_id: str = "К1-Ст1",
 ) -> str:
     """Write the isolated floor approval sheet as a vector A4 PDF."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     assembly = build_typical_floor_assembly(

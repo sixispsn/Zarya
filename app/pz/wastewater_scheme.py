@@ -11,6 +11,10 @@ from enum import Enum
 from html import escape
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from app.pz.drafting_font import (
+    DRAFTING_FONT_FAMILY,
+    ensure_drafting_font_registered,
+)
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.section_scaffold import build_section_scaffold
 from app.pz.wastewater_drafting import (
@@ -41,7 +45,7 @@ from app.pz.wastewater_ugo import (
 
 W, H = 2803, 1980  # А1, 841×594 мм
 PXMM = W / 841
-FONT = "osifont"
+FONT = DRAFTING_FONT_FAMILY
 BLACK = "#000"
 GRAY = "#555"
 LIGHT = "#999"
@@ -2123,6 +2127,7 @@ def render_wastewater_scheme_png(
     path: str,
     scale: float = 1.0,
 ) -> str:
+    ensure_drafting_font_registered()
     import cairosvg
 
     cairosvg.svg2png(bytestring=result.svg.encode("utf-8"), write_to=path, scale=scale)

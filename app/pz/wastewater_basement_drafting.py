@@ -12,6 +12,7 @@ from html import escape
 from pathlib import Path
 from xml.etree import ElementTree
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_drafting import (
     BLACK,
     FONT,
@@ -666,6 +667,7 @@ def generate_wastewater_basement_control_pdf(
     outlet_dn_mm: int | None = None,
 ) -> str:
     """Write the isolated vector A3 basement approval sheet."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     basement = build_wastewater_basement_assembly(

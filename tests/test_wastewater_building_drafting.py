@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+import re
 from xml.etree import ElementTree
 
 import pytest
@@ -399,6 +400,22 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
 
     assert root.get("width") == "841mm"
     assert root.get("height") == "594mm"
+    assert root.get("viewBox") == "0 0 2803.333 1980.000"
+    assert root.get("data-sheet-format") == "A1"
+    assert root.get("data-sheet-units") == "mm"
+    assert root.get("data-schematic-scale") == "not-to-scale"
+    assert root.get("data-font-standard") == "GOST-2.304-81"
+    frame = next(
+        row for row in root.iter()
+        if row.get("data-drawing-frame") == "GOST-R-21.101"
+    )
+    scale = 10.0 / 3.0
+    assert float(frame.get("x")) == pytest.approx(20.0 * scale, abs=0.1)
+    assert float(frame.get("y")) == pytest.approx(5.0 * scale, abs=0.1)
+    assert float(frame.get("x")) + float(frame.get("width")) == pytest.approx(
+        841.0 * scale - 5.0 * scale,
+        abs=0.1,
+    )
     assert floors_svg.count('data-title-block="form-3"') == 1
     assert 'data-sheet-no="1" data-sheet-total="3"' in floors_svg
     assert floors_svg.count('data-floor-assembly="') == 6
@@ -442,6 +459,8 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert basement_svg.count('data-transition-placement="upstream-before-junction"') == 2
     assert basement_svg.count('data-transition-shape="open-triangle"') == 2
     assert basement_svg.count('data-transition-fill="none"') == 2
+    assert basement_svg.count('data-flat-side="downstream"') == 2
+    assert basement_svg.count('data-apex-side="upstream"') == 2
     assert basement_svg.count('data-transition-joint="direct"') == 2
     assert basement_svg.count('data-fitting-gap-mm="0"') == 2
     assert 'data-adjacent-node="К1-Ст2"' in basement_svg
@@ -462,8 +481,13 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert "Ревизия на 1 этаже +1000 — см. лист 1" in basement_svg
     assert "Ревизия на 1 этаже +800 — см. лист 1" in basement_svg
     assert basement_svg.count('data-lower-node-callout=') == 4
+    assert basement_svg.count('data-callout-target-kind="cleanout-cap"') == 2
+    assert basement_svg.count('data-callout-target-kind="through-wye"') == 2
     assert "косой тройник 45° с заглушкой" in basement_svg
     assert "проходная ось открыта, без заглушки" in basement_svg
+    assert "Проточный узел К1-ТрСт2" in basement_svg
+    assert "Проточный узел К2-ТрСт2" in basement_svg
+    assert basement_svg.count("косой тройник DN150×100, 45°") == 2
     for element_id in ("К1-ПрНП1", "К2-ПрНП1"):
         assert f'data-basement-cleanout="{element_id}"' in basement_svg
     for element_id in ("К1-ТрСт2", "К2-ТрСт2"):
@@ -478,6 +502,34 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert basement_svg.count('data-sign-shape="acute-angle"') == 4
     assert basement_svg.count('data-lower-leg-horizontal="true"') == 4
     assert basement_svg.count('data-lower-leg-parallel-to-text="true"') == 4
+
+    for group in (
+        row for row in root.iter() if row.get("data-lower-node-callout")
+    ):
+        target_x = float(group.get("data-callout-target-x"))
+        target_y = float(group.get("data-callout-target-y"))
+        path = next(row for row in group if row.tag.endswith("path"))
+        match = re.match(r"M([\d.]+),([\d.]+)", path.get("d", ""))
+        assert match is not None
+        assert float(match.group(1)) == pytest.approx(target_x, abs=0.05)
+        assert float(match.group(2)) == pytest.approx(target_y, abs=0.05)
+
+    for group in (
+        row for row in root.iter() if row.get("data-building-transition")
+    ):
+        contour = next(
+            row for row in group.iter()
+            if row.get("data-diameter-transition")
+        )
+        points = [
+            (float(x), float(y))
+            for x, y in re.findall(r"[ML]([\d.]+),([\d.]+)", contour.get("d", ""))
+        ]
+        assert len(points) == 3
+        # For the left-to-right basement mains, the flat side is the first
+        # and third point at the larger downstream DN; the apex is upstream.
+        assert points[0][0] == pytest.approx(points[2][0], abs=0.3)
+        assert points[1][0] < points[0][0]
 
 
 def test_combined_graphic_audit_passes_for_registry_driven_demo():
@@ -522,3 +574,27 @@ def test_combined_building_pdf_has_two_a1_landscape_pages(tmp_path):
     assert "К2-Вр1" in text and "К2-Вр2" in text
     assert "ВыпускК1-Вып1DN150заграньздания" in compact
     assert "ВыпускК2-Вып1DN150заграньздания" in compact
+
+    font_names: list[str] = []
+    embedded_opengost = False
+    for page in pages:
+        fonts = page["/Resources"].get("/Font", {})
+        for reference in fonts.values():
+            font = reference.get_object()
+            candidates = [font]
+            candidates.extend(
+                descendant.get_object()
+                for descendant in font.get("/DescendantFonts", [])
+            )
+            for candidate in candidates:
+                font_names.append(str(candidate.get("/BaseFont", "")))
+                descriptor = candidate.get("/FontDescriptor")
+                if descriptor is not None:
+                    descriptor = descriptor.get_object()
+                    if (
+                        "OpenGOSTtypeB-Regular" in str(candidate.get("/BaseFont", ""))
+                        and descriptor.get("/FontFile2") is not None
+                    ):
+                        embedded_opengost = True
+    assert any("OpenGOSTtypeB-Regular" in name for name in font_names)
+    assert embedded_opengost

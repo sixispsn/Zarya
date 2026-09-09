@@ -18,10 +18,14 @@ from dataclasses import dataclass
 from html import escape
 from math import acos, atan2, ceil, degrees, hypot
 from pathlib import Path
+from app.pz.drafting_font import (
+    DRAFTING_FONT_FAMILY,
+    ensure_drafting_font_registered,
+)
 BLACK = "#000"
 GRAY = "#555"
 SERVICE = "#7650b8"
-FONT = "osifont"
+FONT = DRAFTING_FONT_FAMILY
 
 
 def render_inline_pipe_label(
@@ -58,10 +62,8 @@ def render_inline_pipe_label(
     mask_height = font_size * 1.55
     label_parts = label.split("⌀", 1)
     if len(label_parts) == 2:
-        # ``osifont`` embedded by CairoSVG does not contain U+2300.  A text
-        # fallback therefore turns the diameter mark into an empty square in
-        # macOS Preview.  Draw the sign as vector geometry so it remains
-        # identical in SVG, browser preview and the exported PDF.
+        # Keep the diameter sign as vector geometry so it stays identical in
+        # SVG, browser preview and PDF regardless of the text renderer.
         prefix = label_parts[0].rstrip()
         suffix = label_parts[1].lstrip()
         prefix_width = len(prefix) * font_size * 0.56
@@ -862,6 +864,7 @@ def generate_lower_turn_control_pdf(
     dn_mm: int = 100,
 ) -> str:
     """Write the approval sheet as a vector A4 landscape PDF."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     assembly = build_lower_turn_cleanout_assembly(system=system, dn_mm=dn_mm)

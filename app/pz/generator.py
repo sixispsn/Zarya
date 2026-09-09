@@ -13,6 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import CSS, HTML
 from dataclasses import replace
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import (
     check_tu_limits, decide_fire_network,
@@ -581,6 +582,7 @@ def generate_wastewater_diagnostic_pdf(
     output_path: str,
 ) -> str:
     """Сформировать ненормативный цветной лист проверки потока и прочистки."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     svg = _svg_to_a1_mm(generate_wastewater_scheme_svg(
@@ -596,6 +598,7 @@ def generate_wastewater_ugo_pdf(
     output_path: str,
 ) -> str:
     """Лист 2 — ведомость УГО К1/К2/К3 с нормативной трассировкой."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     from app.pz.wastewater_ugo import build_wastewater_ugo_sheet

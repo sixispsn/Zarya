@@ -12,12 +12,18 @@ from app.pz.wastewater_building_drafting import (
     _FRAME_LEFT,
     _FRAME_RIGHT,
     _FRAME_TOP,
+    _SHEET_HEIGHT,
+    _SHEET_HEIGHT_MM,
+    _SHEET_SCALE,
+    _SHEET_WIDTH,
+    _SHEET_WIDTH_MM,
     _break_overlay,
     _line_with_label,
     _slope_sign_svg,
     _title_block_svg,
     _direct_transition_svg,
 )
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_drafting import (
     BLACK,
     FONT,
@@ -287,16 +293,22 @@ def build_wastewater_k3_floor_fragment_svg(
         raise ValueError("cannot render incomplete K3 project inputs")
     origins = _floor_origins(floors)
     riser_xs = _riser_positions(len(risers))
-    width = 2800
+    width = _SHEET_WIDTH
     margin = 50
     roof_y = 190.0
     continuation_y = 1635.0
     body = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        f'viewBox="0 0 2800 1980" data-sheet-role="k3-floors" '
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
+        f'viewBox="0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}" '
+        'data-sheet-format="A1" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale" '
+        f'data-sheet-role="k3-floors" '
         f'data-fragment-index="{fragment_index}" data-fragment-total="{fragment_total}">',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="3"/>',
@@ -477,19 +489,25 @@ def build_wastewater_k3_basement_fragment_svg(
         ))
     joins = tuple((x + turn_dx, y) for x, y in zip(xs, node_ys))
     body = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        f'viewBox="0 0 2800 1980" data-sheet-role="k3-basement" '
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
+        f'viewBox="0 0 {_SHEET_WIDTH:.3f} {_SHEET_HEIGHT:.3f}" '
+        'data-sheet-format="A1" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale" '
+        f'data-sheet-role="k3-basement" '
         f'data-fragment-index="{fragment_index}" data-fragment-total="{fragment_total}">',
         '<defs><pattern id="k3-basement-hatch" width="22" height="22" '
         'patternUnits="userSpaceOnUse" patternTransform="rotate(35)">'
         '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
         '</pattern></defs>',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
         f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
         f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="3"/>',
-        '<text x="88" y="100" font-family="osifont" font-size="30" '
+        f'<text x="88" y="100" font-family="{FONT}" font-size="30" '
         'font-weight="bold">Принципиальная схема производственной канализации К3. '
         'Подвал и выпуск</text>',
         f'<text x="88" y="134" font-family="{FONT}" font-size="16" '
@@ -976,6 +994,7 @@ def generate_wastewater_k3_pdf_from_project(
     project: Project,
 ) -> str:
     """Write the strict paginated K3 vector PDF."""
+    ensure_drafting_font_registered()
     import cairosvg
     from pypdf import PdfReader, PdfWriter
 

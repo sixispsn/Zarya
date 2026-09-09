@@ -12,6 +12,7 @@ from html import escape
 from pathlib import Path
 from textwrap import wrap
 
+from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.project import Project
 from app.pz.wastewater_building_drafting import (
     generate_wastewater_building_pdf_from_project,
@@ -107,6 +108,7 @@ def _generate_incomplete_status_pdf(
     output_path: str,
     reasons: tuple[str, ...],
 ) -> str:
+    ensure_drafting_font_registered()
     import cairosvg
 
     path = Path(output_path)

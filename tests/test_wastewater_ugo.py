@@ -161,7 +161,9 @@ def test_normative_fixture_shapes_match_gost_21205_geometry():
     transition = render_ugo("transition", 0, 0)
     assert 'data-transition-shape="open-triangle"' in transition
     assert 'data-transition-fill="none"' in transition
-    assert 'd="M-17,-10 L17,0 L-17,10 Z"' in transition
+    assert 'data-flat-side="downstream"' in transition
+    assert 'data-apex-side="upstream"' in transition
+    assert 'd="M-17,0 L17,-10 L17,10 Z"' in transition
     assert 'fill="none"' in transition
 
     trap = render_ugo("trap", 0, 0)

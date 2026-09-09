@@ -16,12 +16,13 @@ from dataclasses import dataclass
 from html import escape
 from typing import Dict, Iterable, List, Tuple
 
+from app.pz.drafting_font import DRAFTING_FONT_FAMILY
 from app.pz.project import Project
 
 
 BLACK = "#000"
 GRAY = "#555"
-FONT = "osifont"
+FONT = DRAFTING_FONT_FAMILY
 
 
 @dataclass(frozen=True)
@@ -423,10 +424,11 @@ def _shape(kind: str) -> str:
         # видимый контур остаётся незалитым.
         return (
             '<g data-transition-shape="open-triangle" '
-            'data-transition-fill="none">'
-            f'<path d="M-17,-10 L17,0 L-17,10 Z" fill="white" '
+            'data-transition-fill="none" data-flat-side="downstream" '
+            'data-apex-side="upstream">'
+            f'<path d="M-17,0 L17,-10 L17,10 Z" fill="white" '
             'stroke="white" stroke-width="5"/>'
-            f'<path d="M-17,-10 L17,0 L-17,10 Z" fill="none" '
+            f'<path d="M-17,0 L17,-10 L17,10 Z" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/></g>'
         )
     return (
