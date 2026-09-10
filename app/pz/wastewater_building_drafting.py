@@ -496,6 +496,92 @@ def _floor_origins(floors: tuple[int, ...]) -> dict[int, float]:
     return dict(zip(floors, presets[len(floors)]))
 
 
+def _fmt_level(value: float) -> str:
+    """Format an architectural level mark in the GOST section style."""
+    if abs(value) < 0.0005:
+        return "±0,000"
+    sign = "+" if value > 0 else "-"
+    return f"{sign}{_fmt(abs(value))}"
+
+
+def _building_level_mark_svg(
+    *,
+    marker_id: str,
+    y: float,
+    elevation_m: float,
+    caption: str,
+    wall_x: float,
+    line_start_x: float = 88.0,
+) -> str:
+    """Draw an elevation/storey mark terminating at the building contour."""
+    text_x = (line_start_x + wall_x - 18.0) / 2
+    return "".join((
+        f'<g data-building-level-mark="{escape(marker_id)}" '
+        'data-level-reference="clean-floor">',
+        f'<line x1="{line_start_x:.1f}" y1="{y:.1f}" '
+        f'x2="{wall_x-11.0:.1f}" y2="{y:.1f}" stroke="{BLACK}" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+        f'<path d="M{wall_x-19.0:.1f},{y-8.0:.1f} '
+        f'L{wall_x-3.0:.1f},{y:.1f} L{wall_x-19.0:.1f},{y+8.0:.1f}" '
+        f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>',
+        f'<text x="{text_x:.1f}" y="{y-10.0:.1f}" text-anchor="middle" '
+        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">'
+        f'{_fmt_level(elevation_m)}</text>',
+        f'<text x="{text_x:.1f}" y="{y+19.0:.1f}" text-anchor="middle" '
+        f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
+        f'{escape(caption)}</text>',
+        '</g>',
+    ))
+
+
+def _building_storey_svg(
+    *,
+    floor_no: int,
+    origin_y: float,
+    elevation_m: float,
+    wall_left: float,
+    wall_right: float,
+    k2_axes: tuple[tuple[str, float], ...],
+) -> str:
+    """Draw one confirmed storey cell behind the engineering topology."""
+    storey_top = origin_y + 20.0
+    slab_y = origin_y + 228.0
+    rows = [
+        f'<g data-building-storey="{floor_no}" data-floor-no="{floor_no}">',
+        f'<rect data-architecture="storey-contour" x="{wall_left:.1f}" '
+        f'y="{storey_top:.1f}" width="{wall_right-wall_left:.1f}" '
+        f'height="{slab_y-storey_top:.1f}" fill="none" stroke="{BLACK}" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+    ]
+    for riser_id, axis_x in k2_axes:
+        shaft_left = max(wall_left, axis_x - 28.0)
+        shaft_right = min(wall_right, axis_x + 28.0)
+        rows.append(
+            f'<rect data-building-shaft="{escape(riser_id)}" '
+            f'data-building-shaft-system="K2" data-floor-no="{floor_no}" '
+            f'x="{shaft_left:.1f}" y="{storey_top:.1f}" '
+            f'width="{shaft_right-shaft_left:.1f}" '
+            f'height="{slab_y-storey_top:.1f}" fill="none" stroke="{BLACK}" '
+            f'stroke-width="{_LINE_THIN:.3f}"/>'
+        )
+    rows.extend((
+        f'<rect data-building-slab="{floor_no}" '
+        f'data-building-floor="{floor_no}" x="{wall_left:.1f}" '
+        f'y="{slab_y:.1f}" width="{wall_right-wall_left:.1f}" height="10" '
+        'fill="url(#building-slab-hatch)" stroke="black" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+        _building_level_mark_svg(
+            marker_id=f"floor-{floor_no}",
+            y=slab_y,
+            elevation_m=elevation_m,
+            caption=f"{floor_no} этаж",
+            wall_x=wall_left,
+        ),
+        '</g>',
+    ))
+    return "".join(rows)
+
+
 def build_wastewater_building_floors_svg(
     assembly: WastewaterBuildingAssembly,
     *,
@@ -513,7 +599,6 @@ def build_wastewater_building_floors_svg(
     errors = assembly.validate()
     if errors:
         raise ValueError("cannot render invalid building assembly: " + "; ".join(errors))
-    width = _SHEET_WIDTH
     margin = 50
     floors = assembly.displayed_floor_numbers
     origins = _floor_origins(floors)
@@ -536,6 +621,11 @@ def build_wastewater_building_floors_svg(
     scale = 1.0
     roof_y = 220.0
     bottom_y = 1660.0
+    wall_left, wall_right = 230.0, 2440.0
+    roof_elevation_m = assembly.project_inputs.floors_above * assembly.floor_height_m
+    k2_architecture_axes = tuple(
+        (riser.riser_id, axis_register[riser.riser_id]) for riser in selected_k2
+    )
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{_SHEET_WIDTH_MM:g}mm" height="{_SHEET_HEIGHT_MM:g}mm" '
@@ -546,6 +636,10 @@ def build_wastewater_building_floors_svg(
         f'data-sheet-role="floors" '
         f'data-fragment-index="{fragment_index}" '
         f'data-fragment-total="{fragment_total}">',
+        '<defs><pattern id="building-slab-hatch" width="16" height="16" '
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        '<line x1="0" y1="0" x2="0" y2="16" stroke="#8a8a8a" '
+        'stroke-width="1"/></pattern></defs>',
         f'<rect width="{_SHEET_WIDTH:.3f}" height="{_SHEET_HEIGHT:.3f}" fill="white"/>',
         f'<rect data-drawing-frame="GOST-R-21.101" '
         f'data-left-margin-mm="20" data-other-margin-mm="5" '
@@ -560,24 +654,36 @@ def build_wastewater_building_floors_svg(
         f'font-size="{_FONT_H_3_5:.3f}" fill="{GRAY}">Этажей: {assembly.project_inputs.floors_above}; '
         f'фрагмент {fragment_index}/{fragment_total}; характерные этажи; '
         'самотечная К1 и внутренний водосток К2; схема без масштаба</text>',
-        f'<line data-architecture="roof" x1="{margin+30}" y1="{roof_y}" '
-        f'x2="{width-margin-30}" y2="{roof_y}" stroke="#777" stroke-width="2"/>',
-        f'<text x="{margin+38}" y="{roof_y-18}" font-family="{FONT}" '
-        f'font-size="{_FONT_H_3_5:.3f}">Кровля</text>',
+        f'<rect data-building-roof-boundary="true" data-architecture="roof-slab" '
+        f'x="{wall_left:.1f}" y="{roof_y-5.0:.1f}" '
+        f'width="{wall_right-wall_left:.1f}" height="10" '
+        'fill="url(#building-slab-hatch)" stroke="black" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+        f'<line data-building-envelope="left" x1="{wall_left:.1f}" '
+        f'y1="{roof_y:.1f}" x2="{wall_left:.1f}" y2="{bottom_y-130:.1f}" '
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        f'<line data-building-envelope="right" x1="{wall_right:.1f}" '
+        f'y1="{roof_y:.1f}" x2="{wall_right:.1f}" y2="{bottom_y-130:.1f}" '
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        _building_level_mark_svg(
+            marker_id="roof",
+            y=roof_y,
+            elevation_m=roof_elevation_m,
+            caption="кровля",
+            wall_x=wall_left,
+        ),
     ]
 
     for floor_no, origin_y in origins.items():
-        slab_y = origin_y + 228.0 * scale
         elevation = (floor_no - 1) * assembly.floor_height_m
-        body.extend(
-            (
-                f'<line data-building-floor="{floor_no}" x1="{margin+30}" '
-                f'y1="{slab_y:.1f}" x2="{width-margin-30}" y2="{slab_y:.1f}" '
-                'stroke="#aaa" stroke-width="1"/>',
-                f'<text x="{margin+38}" y="{slab_y-28:.1f}" font-family="{FONT}" '
-                f'font-size="{_FONT_H_3_5:.3f}">{floor_no} этаж</text>',
-                f'<text x="{margin+38}" y="{slab_y-9:.1f}" font-family="{FONT}" '
-                f'font-size="{_FONT_H_2_5:.3f}">отм. {_fmt(elevation)}</text>',
+        body.append(
+            _building_storey_svg(
+                floor_no=floor_no,
+                origin_y=origin_y,
+                elevation_m=elevation,
+                wall_left=wall_left,
+                wall_right=wall_right,
+                k2_axes=k2_architecture_axes,
             )
         )
 
@@ -1855,10 +1961,23 @@ def build_wastewater_building_basement_fragment_svg(
         f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
         f'font-size="{_FONT_H_3_5:.3f}" fill="{GRAY}">Фрагмент {fragment_index}/{fragment_total}; '
         'подтверждённая линейная топология реестра; схема без масштаба</text>',
-        f'<line data-architecture="first-floor" x1="{wall_left}" y1="{first_floor_y}" '
-        f'x2="{wall_right}" y2="{first_floor_y}" stroke="#777" stroke-width="2"/>',
-        f'<text x="{wall_left-20}" y="{first_floor_y-14}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">1 этаж; отм. 0,000</text>',
+        f'<rect data-building-slab="first-floor" '
+        f'data-architecture="first-floor-slab" x="{wall_left}" '
+        f'y="{first_floor_y-5.0:.1f}" width="{wall_right-wall_left}" height="10" '
+        'fill="url(#basement-hatch)" stroke="black" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+        f'<rect data-building-storey="basement" data-architecture="basement-contour" '
+        f'x="{wall_left}" y="{first_floor_y+5.0:.1f}" '
+        f'width="{wall_right-wall_left}" '
+        f'height="{basement_floor_y-first_floor_y-5.0:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        _building_level_mark_svg(
+            marker_id="floor-1",
+            y=first_floor_y,
+            elevation_m=0.0,
+            caption="1 этаж",
+            wall_x=wall_left,
+        ),
         f'<rect data-architecture="basement-slab" x="{wall_left}" '
         f'y="{basement_floor_y}" width="{wall_right-wall_left}" height="82" '
         'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
@@ -1868,9 +1987,15 @@ def build_wastewater_building_basement_fragment_svg(
         f'<rect data-architecture="foundation-right" x="{wall_right}" '
         f'y="{first_floor_y}" width="55" height="{basement_floor_y-first_floor_y+82}" '
         'fill="url(#basement-hatch)" stroke="#777" stroke-width="1.5"/>',
-        f'<text x="{wall_left-20}" y="{basement_floor_y-10}" text-anchor="end" '
-        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">Пол подвала; отм. '
-        f'{_fmt(float(inputs.basement_floor_elevation_m or 0))}</text>',
+        _building_level_mark_svg(
+            marker_id="basement-floor",
+            y=basement_floor_y,
+            elevation_m=float(inputs.basement_floor_elevation_m or 0),
+            caption="пол подвала",
+            wall_x=wall_left,
+        ),
+        f'<text x="{wall_left+24:.1f}" y="{first_floor_y+42:.1f}" '
+        f'font-family="{FONT}" font-size="{_FONT_H_3_5:.3f}">Подвал</text>',
         f'<text x="{wall_right+82}" y="{first_floor_y+35}" font-family="{FONT}" '
         f'font-size="{_FONT_H_2_5:.3f}">наружная грань здания</text>',
     ]
@@ -2113,6 +2238,80 @@ def audit_wastewater_building_svgs(
         findings.append("assembly has no above-ground sheet")
     if not basement_roots:
         findings.append("assembly has no basement sheet")
+
+    expected_storeys = {str(row) for row in assembly.displayed_floor_numbers}
+    expected_level_marks = {"roof"} | {
+        f"floor-{row}" for row in assembly.displayed_floor_numbers
+    }
+    for page_no, root in enumerate(floor_roots, start=1):
+        storeys = {
+            row.get("data-building-storey")
+            for row in root.iter()
+            if row.get("data-building-storey")
+        }
+        slabs = {
+            row.get("data-building-slab")
+            for row in root.iter()
+            if row.get("data-building-slab")
+        }
+        level_marks = {
+            row.get("data-building-level-mark")
+            for row in root.iter()
+            if row.get("data-building-level-mark")
+        }
+        envelope_sides = {
+            row.get("data-building-envelope")
+            for row in root.iter()
+            if row.get("data-building-envelope")
+        }
+        roof_boundaries = [
+            row for row in root.iter()
+            if row.get("data-building-roof-boundary") == "true"
+        ]
+        if storeys != expected_storeys:
+            findings.append(
+                f"sheet {page_no}: architectural storey boundaries are incomplete"
+            )
+        if slabs != expected_storeys:
+            findings.append(
+                f"sheet {page_no}: floor slab boundaries are incomplete"
+            )
+        if level_marks != expected_level_marks:
+            findings.append(
+                f"sheet {page_no}: storey/elevation marks are incomplete"
+            )
+        if envelope_sides != {"left", "right"}:
+            findings.append(
+                f"sheet {page_no}: building envelope boundaries are incomplete"
+            )
+        if len(roof_boundaries) != 1:
+            findings.append(
+                f"sheet {page_no}: roof boundary is missing or duplicated"
+            )
+    for fragment_no, root in enumerate(basement_roots, start=1):
+        storeys = {
+            row.get("data-building-storey")
+            for row in root.iter()
+            if row.get("data-building-storey")
+        }
+        slabs = {
+            row.get("data-building-slab")
+            for row in root.iter()
+            if row.get("data-building-slab")
+        }
+        level_marks = {
+            row.get("data-building-level-mark")
+            for row in root.iter()
+            if row.get("data-building-level-mark")
+        }
+        if "basement" not in storeys or "first-floor" not in slabs:
+            findings.append(
+                f"basement fragment {fragment_no}: architectural boundaries are incomplete"
+            )
+        if not {"floor-1", "basement-floor"}.issubset(level_marks):
+            findings.append(
+                f"basement fragment {fragment_no}: elevation marks are incomplete"
+            )
 
     expected_sheet_total = str(len(roots) + 1)
     for page_no, root in enumerate(roots, start=1):

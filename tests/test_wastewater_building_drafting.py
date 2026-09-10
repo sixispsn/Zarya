@@ -439,6 +439,20 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
     assert 'data-sheet-no="1" data-sheet-total="3"' in floors_svg
     assert floors_svg.count('data-floor-assembly="') == 6
     assert floors_svg.count('data-building-floor="') == 3
+    assert floors_svg.count('data-building-storey="') == 3
+    assert floors_svg.count('data-building-slab="') == 3
+    assert floors_svg.count('data-building-level-mark="') == 4
+    assert floors_svg.count('data-building-envelope="') == 2
+    assert floors_svg.count('data-building-roof-boundary="true"') == 1
+    assert floors_svg.count('data-building-shaft-system="K2"') == 6
+    for floor_no in (16, 2, 1):
+        assert f'data-building-storey="{floor_no}"' in floors_svg
+        assert f'data-building-slab="{floor_no}"' in floors_svg
+        assert f'data-building-level-mark="floor-{floor_no}"' in floors_svg
+    assert 'data-building-level-mark="roof"' in floors_svg
+    assert "+48,000" in floors_svg
+    assert "+45,000" in floors_svg
+    assert "±0,000" in floors_svg
     assert 'data-floor-assembly="К1-Ст1-Сборка-Этаж-16"' in floors_svg
     assert 'data-floor-assembly="К1-Ст2-Сборка-Этаж-16"' in floors_svg
     assert floors_svg.count('data-ugo="roof_funnel_heated"') == 2
@@ -505,6 +519,17 @@ def test_graphic_audit_rejects_a_shifted_basement_riser_axis():
     )
 
 
+def test_graphic_audit_rejects_missing_storey_boundary():
+    assembly = _demo_assembly()
+    floors_svg, basement_svg = build_wastewater_building_svgs(assembly)
+    broken = floors_svg.replace('data-building-storey="16"', '', 1)
+
+    assert any(
+        "architectural storey boundaries are incomplete" in row
+        for row in audit_wastewater_building_svgs(assembly, (broken, basement_svg))
+    )
+
+
 def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall():
     _, basement_svg = build_wastewater_building_svgs(_demo_assembly())
     root = ElementTree.fromstring(basement_svg)
@@ -513,6 +538,10 @@ def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall(
     assert root.get("height") == "594mm"
     assert basement_svg.count('data-title-block="form-3"') == 1
     assert 'data-sheet-no="2" data-sheet-total="3"' in basement_svg
+    assert 'data-building-storey="basement"' in basement_svg
+    assert 'data-building-slab="first-floor"' in basement_svg
+    assert 'data-building-level-mark="floor-1"' in basement_svg
+    assert 'data-building-level-mark="basement-floor"' in basement_svg
     for line_id in ("К1-М1", "К1-Вып1", "К2-М1", "К2-Вып1"):
         assert f'data-building-pipe-line="{line_id}"' in basement_svg
         assert f'data-pipe-line-id="{line_id}"' in basement_svg

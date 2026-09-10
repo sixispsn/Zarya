@@ -1234,9 +1234,9 @@ def render_typical_floor_assembly_svg(
             'data-geometry-source="schematic-fixture-groups" '
             f'x="{room_x:.1f}" y="{room_y:.1f}" '
             f'width="{room_x2-room_x:.1f}" height="{room_y2-room_y:.1f}" '
-            'fill="#fbfbfb" stroke="#777" stroke-width="1"/>',
+            'fill="white" stroke="#202020" stroke-width="1.2"/>',
             f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
-            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}" fill="#555">'
+            f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}" fill="#202020">'
             f'{escape(room_label)}</text>',
         ))
 
@@ -1249,14 +1249,14 @@ def render_typical_floor_assembly_svg(
         'data-geometry-source="schematic-fixture-groups" '
         f'x="{shaft_x:.1f}" y="{shaft_y:.1f}" '
         f'width="{shaft_x2-shaft_x:.1f}" height="{shaft_y2-shaft_y:.1f}" '
-        'fill="#f7f7f7" stroke="#777" stroke-width="1"/>',
+        'fill="white" stroke="#202020" stroke-width="1.2"/>',
         f'<text x="{shaft_label_x:.1f}" y="{shaft_label_y:.1f}" '
         f'text-anchor="middle" font-family="{FONT}" '
         f'font-size="{_FONT_H_2_5:.3f}" '
-        f'fill="#555" transform="rotate(-90 {shaft_label_x:.1f} '
+        f'fill="#202020" transform="rotate(-90 {shaft_label_x:.1f} '
         f'{shaft_label_y:.1f})">шахта</text>',
         f'<line data-architecture="floor" x1="{sx1:.1f}" y1="{sy1:.1f}" '
-        f'x2="{sx2:.1f}" y2="{sy1:.1f}" stroke="#666" stroke-width="1.2"/>',
+        f'x2="{sx2:.1f}" y2="{sy1:.1f}" stroke="#202020" stroke-width="1.2"/>',
     ))
 
     for segment in assembly.segments:
