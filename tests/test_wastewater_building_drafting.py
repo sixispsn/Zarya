@@ -312,6 +312,24 @@ def test_building_resolver_rejects_k2_transition_after_first_equal_dn_node():
     )
 
 
+def test_building_resolver_rejects_any_k2_link_into_k1():
+    project = _demo_project()
+    k2_collector = next(
+        row for row in project.sewage.pipes if row.section_id == "К2-М1"
+    )
+    k2_collector.to_node = "К1-Ст2"
+
+    result = resolve_wastewater_building_project_inputs(project)
+
+    assert not result.complete
+    assert any(
+        "К2-М1" in row
+        and "связывает K2 с K1" in row
+        and "перепуск" in row
+        for row in result.diagnostics
+    )
+
+
 @pytest.mark.parametrize("count", (1, 2, 5))
 def test_registry_chain_supports_one_two_and_many_risers(count):
     project = _project_with_linear_riser_count(count)
@@ -342,21 +360,22 @@ def test_five_risers_are_paginated_without_losing_topology():
     svgs = build_wastewater_building_svgs(assembly)
     joined = "".join(svgs)
 
-    assert len(svgs) == 5  # три надземных фрагмента + два подвальных
+    assert len(svgs) == 6  # три пары надземных/подвальных фрагментов
     assert audit_wastewater_building_svgs(assembly, svgs) == ()
-    assert joined.count('data-sheet-total="6"') == 5
+    assert joined.count('data-sheet-total="7"') == 6
     assert joined.count('data-basement-cleanout=') == 2
     assert joined.count('data-basement-through-junction=') == 8
     assert joined.count('data-building-transition="К1-Пер1"') == 1
     assert joined.count('data-building-transition="К2-Пер1"') == 1
-    assert all("продолжение на листе 4" in svg for svg in svgs[:2])
-    assert "продолжение на листе 5" in svgs[2]
+    assert "продолжение на листе 4" in svgs[0]
+    assert "продолжение на листе 5" in svgs[1]
+    assert "продолжение на листе 6" in svgs[2]
     for system in ("К1", "К2"):
         for index in range(1, 6):
             assert f"{system}-Ст{index}" in joined
 
 
-def test_five_riser_pdf_has_five_a1_pages(tmp_path):
+def test_five_riser_pdf_has_six_axis_matched_a1_pages(tmp_path):
     output = tmp_path / "five-risers.pdf"
 
     generate_wastewater_building_pdf_from_project(
@@ -367,7 +386,7 @@ def test_five_riser_pdf_has_five_a1_pages(tmp_path):
     )
 
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 5
+    assert len(pages) == 6
     assert all(
         float(page.mediabox.width) * 25.4 / 72 == pytest.approx(841.0, abs=0.1)
         and float(page.mediabox.height) * 25.4 / 72 == pytest.approx(594.0, abs=0.1)
@@ -439,6 +458,51 @@ def test_combined_floors_sheet_uses_shared_grid_and_registered_k2_revisions():
     assert "эт. 14; отм. 39,800" in floors_svg
     assert "К2 ⌀100" in floors_svg
     assert "К2 не соединяется с К1" in floors_svg
+
+
+def test_riser_axes_match_between_above_ground_and_basement_and_systems_do_not_cross():
+    floors_svg, basement_svg = build_wastewater_building_svgs(_demo_assembly())
+    floor_root = ElementTree.fromstring(floors_svg)
+    basement_root = ElementTree.fromstring(basement_svg)
+
+    def axes(root):
+        return {
+            row.get("data-riser-axis-id"): float(row.get("data-riser-axis-x"))
+            for row in root.iter()
+            if row.get("data-riser-axis-id")
+        }
+
+    floor_axes = axes(floor_root)
+    basement_axes = axes(basement_root)
+    assert floor_axes == basement_axes
+    assert max(
+        x for riser_id, x in floor_axes.items() if riser_id.startswith("К2-")
+    ) < min(
+        x for riser_id, x in floor_axes.items() if riser_id.startswith("К1-")
+    )
+    assert {
+        row.get("data-basement-system"): row.get("data-system-isolated")
+        for row in basement_root.iter()
+        if row.get("data-basement-system")
+    } == {"K1": "true", "K2": "true"}
+    assert audit_wastewater_building_svgs(
+        _demo_assembly(), (floors_svg, basement_svg)
+    ) == ()
+
+
+def test_graphic_audit_rejects_a_shifted_basement_riser_axis():
+    assembly = _demo_assembly()
+    floors_svg, basement_svg = build_wastewater_building_svgs(assembly)
+    broken = basement_svg.replace(
+        'data-riser-axis-id="К2-Ст1" data-riser-axis-x="260.0"',
+        'data-riser-axis-id="К2-Ст1" data-riser-axis-x="261.0"',
+        1,
+    )
+
+    assert any(
+        "К2-Ст1: above-ground and basement axes do not match" in row
+        for row in audit_wastewater_building_svgs(assembly, (floors_svg, broken))
+    )
 
 
 def test_combined_basement_uses_exact_edges_transitions_and_outlets_beyond_wall():

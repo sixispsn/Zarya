@@ -205,6 +205,104 @@ def _section(value: str) -> str:
     return " ".join(value.strip().casefold().split())
 
 
+_SYSTEM_PREFIX_RE = re.compile(r"^[кk]([12])(?:$|[-_–—\s])", re.IGNORECASE)
+
+
+def _identifier_system(value: str) -> str | None:
+    """Return an explicit K1/K2 namespace encoded in a registry identifier."""
+    match = _SYSTEM_PREFIX_RE.match(value.strip())
+    return f"K{match.group(1)}" if match else None
+
+
+def _validate_raw_k1_k2_isolation(
+    project: Project,
+    diagnostics: list[str],
+) -> None:
+    """Reject registry links that cross the independent K1/K2 namespaces."""
+    for pipe in project.sewage.pipes:
+        system = _system(pipe.system)
+        if system not in {"K1", "K2"}:
+            continue
+        for field_name, value in (
+            ("section_id", pipe.section_id),
+            ("from_node", pipe.from_node),
+            ("to_node", pipe.to_node),
+        ):
+            referenced_system = _identifier_system(value)
+            if referenced_system is not None and referenced_system != system:
+                diagnostics.append(
+                    f"{pipe.section_id or 'Участок без обозначения'}: {field_name}={value} "
+                    f"связывает {system} с {referenced_system}; перепуск "
+                    "между К1 и К2 запрещён."
+                )
+    for element in project.sewage.elements:
+        system = _system(element.system)
+        if system not in {"K1", "K2"}:
+            continue
+        for field_name, value in (
+            ("element_id", element.element_id),
+            ("section_id", element.section_id),
+            ("connects_to", element.connects_to),
+        ):
+            referenced_system = _identifier_system(value)
+            if referenced_system is not None and referenced_system != system:
+                diagnostics.append(
+                    f"{element.element_id or 'Элемент без обозначения'}: {field_name}={value} "
+                    f"связывает {system} с {referenced_system}; перепуск "
+                    "между К1 и К2 запрещён."
+                )
+
+
+def validate_wastewater_building_system_isolation(
+    inputs: WastewaterBuildingProjectInputs,
+) -> tuple[str, ...]:
+    """Validate the resolved graph contract independently of the raw model."""
+    findings: list[str] = []
+    system_rows = (
+        (
+            "K1",
+            tuple(row.stack.riser_id for row in inputs.k1_risers),
+            inputs.k1_collectors,
+            inputs.k1_outlet,
+            inputs.k1_transitions,
+        ),
+        (
+            "K2",
+            tuple(row.riser_id for row in inputs.k2_risers),
+            inputs.k2_collectors,
+            inputs.k2_outlet,
+            inputs.k2_transitions,
+        ),
+    )
+    for expected_system, riser_ids, collectors, outlet, transitions in system_rows:
+        for riser_id in riser_ids:
+            actual = _identifier_system(riser_id)
+            if actual is not None and actual != expected_system:
+                findings.append(
+                    f"Стояк {riser_id}: нарушена изоляция {expected_system}/{actual}."
+                )
+        for edge in collectors + ((outlet,) if outlet is not None else ()):
+            if edge.system != expected_system:
+                findings.append(
+                    f"{edge.section_id}: участок {edge.system} попал в тракт "
+                    f"{expected_system}."
+                )
+            for value in (edge.section_id, edge.from_node, edge.to_node):
+                actual = _identifier_system(value)
+                if actual is not None and actual != expected_system:
+                    findings.append(
+                        f"{edge.section_id}: ссылка {value} соединяет "
+                        f"{expected_system} с {actual}; перепуск запрещён."
+                    )
+        for transition in transitions:
+            if transition.system != expected_system:
+                findings.append(
+                    f"{transition.element_id}: переход {transition.system} попал "
+                    f"в тракт {expected_system}."
+                )
+    return tuple(dict.fromkeys(findings))
+
+
 def _is_riser_pipe(pipe: SewerPipeSpec) -> bool:
     purpose = pipe.purpose.strip().casefold()
     return (
@@ -922,6 +1020,7 @@ def resolve_wastewater_building_project_inputs(
     fittings, or synthesize a collector/outlet from the number of storeys.
     """
     diagnostics: list[str] = []
+    _validate_raw_k1_k2_isolation(project, diagnostics)
     floors_above = project.building.floors_above
     basement_floor = project.sewage.basement_floor_elevation_m
     if floors_above < 1:

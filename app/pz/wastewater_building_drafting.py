@@ -34,6 +34,7 @@ from app.pz.wastewater_project_inputs import (
     BuildingTransitionProjectInput,
     WastewaterBuildingProjectInputs,
     resolve_wastewater_building_project_inputs,
+    validate_wastewater_building_system_isolation,
 )
 from app.pz.wastewater_revision_placement import (
     REVISION_PLACEMENT_RULE_ID,
@@ -79,20 +80,41 @@ _LINE_THIN = 0.35 * _SHEET_SCALE
 _LINE_MAIN = 0.7 * _SHEET_SCALE
 _FLOOR_K1_PAGE_CAPACITY = 2
 _FLOOR_K2_PAGE_CAPACITY = 2
-_BASEMENT_RISER_PAGE_CAPACITY = 4
+_BASEMENT_RISER_PAGE_CAPACITY = 2
+
+# The same axis register is used on the above-ground and basement sheets.
+# K2 occupies the left lanes and K1 the right lanes so that independent
+# collectors never cross the other system's vertical risers.
+_K2_RISER_LANES = {
+    0: (),
+    1: (370.0,),
+    2: (260.0, 500.0),
+}
+_K1_RISER_LANES = {
+    0: (),
+    1: (1690.0,),
+    2: (1300.0, 2090.0),
+}
 
 
 def _chunks(values: tuple, size: int) -> tuple[tuple, ...]:
     return tuple(values[index:index + size] for index in range(0, len(values), size))
 
 
-def _spread_positions(count: int, start: float, end: float) -> tuple[float, ...]:
-    if count <= 0:
-        return ()
-    if count == 1:
-        return ((start + end) / 2.0,)
-    step = (end - start) / (count - 1)
-    return tuple(start + index * step for index in range(count))
+def _riser_axis_register(
+    *,
+    k1_ids: tuple[str, ...],
+    k2_ids: tuple[str, ...],
+) -> dict[str, float]:
+    """Return the canonical page axis for each continued building riser."""
+    if len(k1_ids) not in _K1_RISER_LANES or len(k2_ids) not in _K2_RISER_LANES:
+        raise ValueError("one drawing fragment supports one or two K1/K2 risers")
+    if len(set(k1_ids + k2_ids)) != len(k1_ids + k2_ids):
+        raise ValueError("riser identifiers in one drawing fragment must be unique")
+    return {
+        **dict(zip(k2_ids, _K2_RISER_LANES[len(k2_ids)])),
+        **dict(zip(k1_ids, _K1_RISER_LANES[len(k1_ids)])),
+    }
 
 
 def _short(value: str, limit: int) -> str:
@@ -256,6 +278,9 @@ class WastewaterBuildingAssembly:
                         f"{revision.element_id}: недоступная высота ревизии "
                         f"{relative_height_m:.3f} м над чистым полом ({exc})"
                     )
+        errors.extend(
+            validate_wastewater_building_system_isolation(self.project_inputs)
+        )
         return list(dict.fromkeys(errors))
 
 
@@ -332,7 +357,8 @@ def _line_with_label(
     label = f"{_system_mark(system)} ⌀{dn_mm}"
     return "".join(
         (
-            f'<g data-building-pipe-line="{escape(line_id)}"{extra_attributes}>',
+            f'<g data-building-pipe-line="{escape(line_id)}" '
+            f'data-building-system="{escape(system)}"{extra_attributes}>',
             f'<line x1="{start[0]:.1f}" y1="{start[1]:.1f}" '
             f'x2="{end[0]:.1f}" y2="{end[1]:.1f}" stroke="{BLACK}" '
             f'stroke-width="{stroke_width:g}"/>',
@@ -481,6 +507,7 @@ def build_wastewater_building_floors_svg(
     fragment_total: int = 1,
     basement_first_sheet_no: int = 2,
     basement_sheet_by_riser_id: dict[str, int] | None = None,
+    riser_axis_by_id: dict[str, float] | None = None,
 ) -> str:
     """Render the shared roof and characteristic-floor sheet."""
     errors = assembly.validate()
@@ -498,15 +525,14 @@ def build_wastewater_building_floors_svg(
         raise ValueError("floor fragment contains too many K1 stacks")
     if len(selected_k2) > _FLOOR_K2_PAGE_CAPACITY:
         raise ValueError("floor fragment contains too many K2 stacks")
-    # Выноска начальной этажной прочистки уходит влево от сборки; оси
-    # сдвинуты внутрь рабочей рамки, чтобы полка и текст не пересекали поле
-    # подшивки формы А1.
-    k1_origins_x = (
-        (550.0,) if len(selected_k1) == 1 else (160.0, 950.0)
-    )[:len(selected_k1)]
-    k2_xs = (
-        (2260.0,) if len(selected_k2) == 1 else (2110.0, 2400.0)
-    )[:len(selected_k2)]
+    k1_ids = tuple(stack.riser_id for stack in selected_k1)
+    k2_ids = tuple(riser.riser_id for riser in selected_k2)
+    axis_register = riser_axis_by_id or _riser_axis_register(
+        k1_ids=k1_ids,
+        k2_ids=k2_ids,
+    )
+    if set(axis_register) != set(k1_ids + k2_ids):
+        raise ValueError("floor fragment riser-axis register is incomplete")
     scale = 1.0
     roof_y = 220.0
     bottom_y = 1660.0
@@ -555,9 +581,10 @@ def build_wastewater_building_floors_svg(
             )
         )
 
-    for stack_index, stack in enumerate(selected_k1):
-        origin_x = k1_origins_x[stack_index]
-        riser_x = origin_x + stack.floor(floors[0]).port("riser_join").point.x_mm
+    for stack in selected_k1:
+        local_riser_x = stack.floor(floors[0]).port("riser_join").point.x_mm
+        riser_x = axis_register[stack.riser_id]
+        origin_x = riser_x - local_riser_x
         for floor_no in floors:
             floor = stack.floor(floor_no)
             body.append(
@@ -670,12 +697,17 @@ def build_wastewater_building_floors_svg(
                 start=(riser_x, last_bottom),
                 end=(riser_x, bottom_y),
                 position=0.58,
+                extra_attributes=(
+                    f' data-riser-axis-id="{escape(stack.riser_id)}" '
+                    f'data-riser-axis-x="{riser_x:.1f}"'
+                ),
             )
         )
         body.append(
             # Каждый стояк ссылается на тот подвальный фрагмент, где показан
             # его нижний узел; при одном фрагменте это обычный лист 2.
             f'<text data-continuation-riser="{escape(stack.riser_id)}" '
+            f'data-riser-axis-x="{riser_x:.1f}" '
             f'data-target-sheet="{(basement_sheet_by_riser_id or {}).get(stack.riser_id, basement_first_sheet_no)}" '
             f'x="{riser_x+20:.1f}" y="{bottom_y-12:.1f}" '
             f'font-family="{FONT}" font-size="13">{escape(stack.riser_id)}; '
@@ -684,8 +716,8 @@ def build_wastewater_building_floors_svg(
         )
 
     first_origin = origins[floors[0]]
-    for index, riser in enumerate(selected_k2):
-        x = k2_xs[index]
+    for riser in selected_k2:
+        x = axis_register[riser.riser_id]
         body.append(
             _line_with_label(
                 line_id=f"{riser.riser_id}-roof-to-basement",
@@ -694,6 +726,10 @@ def build_wastewater_building_floors_svg(
                 start=(x, roof_y),
                 end=(x, bottom_y),
                 position=0.64,
+                extra_attributes=(
+                    f' data-riser-axis-id="{escape(riser.riser_id)}" '
+                    f'data-riser-axis-x="{x:.1f}"'
+                ),
             )
         )
         body.append(
@@ -787,6 +823,7 @@ def build_wastewater_building_floors_svg(
             ))
         body.append(
             f'<text data-continuation-riser="{escape(riser.riser_id)}" '
+            f'data-riser-axis-x="{x:.1f}" '
             f'data-target-sheet="{(basement_sheet_by_riser_id or {}).get(riser.riser_id, basement_first_sheet_no)}" '
             f'x="{x+20:.1f}" y="{bottom_y-12:.1f}" '
             f'font-family="{FONT}" font-size="13">{escape(riser.riser_id)}; '
@@ -1406,12 +1443,17 @@ def _render_basement_system_fragment(
     floor_height_m: float,
     previous_sheet_no: int | None,
     next_sheet_no: int | None,
+    riser_axis_by_id: dict[str, float],
 ) -> None:
     """Draw one paginated fragment of a confirmed linear system chain."""
     fragment = risers[start_index:end_index]
     if not fragment:
         return
-    xs = _spread_positions(len(fragment), 470.0, 2090.0)
+    riser_ids = tuple(_riser_id(row) for row in fragment)
+    try:
+        xs = tuple(riser_axis_by_id[row] for row in riser_ids)
+    except KeyError as exc:
+        raise ValueError(f"missing basement riser axis for {exc.args[0]}") from exc
     turn_scale = 2.0
     turn_offset_x = 38.0 * turn_scale
     turn_offset_y = 76.0 * turn_scale
@@ -1427,6 +1469,10 @@ def _render_basement_system_fragment(
         f"стояк {start_index+1}"
         if end_index - start_index == 1
         else f"стояки {start_index+1}-{end_index}"
+    )
+    body.append(
+        f'<g data-basement-system="{escape(system)}" '
+        'data-system-isolated="true">'
     )
     body.append(
         f'<text x="{wall_left+45:.1f}" y="{base_y-205:.1f}" '
@@ -1492,7 +1538,15 @@ def _render_basement_system_fragment(
     if start_index > 0:
         incoming = collectors[start_index - 1]
         end = joins[0]
-        start = (wall_left + 78.0, end[1] - 5.0)
+        # A continued K1 collector enters inside the dedicated K1 lane band;
+        # starting it at the left building wall would cross the independent K2
+        # risers shown on the same fragment.
+        incoming_x = (
+            max(wall_left + 78.0, min(xs) - 260.0)
+            if system == "K1"
+            else wall_left + 78.0
+        )
+        start = (incoming_x, end[1] - 5.0)
         incoming_stub = (start, end)
         body.append(
             _line_with_label(
@@ -1547,6 +1601,10 @@ def _render_basement_system_fragment(
                 start=(x, first_floor_y),
                 end=(x, turn_origin_y),
                 position=0.52,
+                extra_attributes=(
+                    f' data-riser-axis-id="{escape(riser_id)}" '
+                    f'data-riser-axis-x="{x:.1f}"'
+                ),
             )
         )
         revision_reference = first_floor_revision_reference(riser)
@@ -1743,6 +1801,7 @@ def _render_basement_system_fragment(
                 f'Выпуск {escape(outlet.section_id)} DN{outlet.dn_mm} '
                 'за грань здания</text>'
             )
+    body.append('</g>')
 
 
 def build_wastewater_building_basement_fragment_svg(
@@ -1756,6 +1815,7 @@ def build_wastewater_building_basement_fragment_svg(
     sheet_total: int,
     fragment_index: int,
     fragment_total: int,
+    riser_axis_by_id: dict[str, float] | None = None,
 ) -> str:
     """Render one A1 fragment of the complete lower-node chain."""
     errors = assembly.validate()
@@ -1816,6 +1876,18 @@ def build_wastewater_building_basement_fragment_svg(
     ]
     previous_sheet_no = sheet_no - 1 if fragment_index > 1 else None
     next_sheet_no = sheet_no + 1 if fragment_index < fragment_total else None
+    selected_k1_ids = tuple(
+        row.stack.riser_id for row in inputs.k1_risers[k1_start_index:k1_end_index]
+    )
+    selected_k2_ids = tuple(
+        row.riser_id for row in inputs.k2_risers[k2_start_index:k2_end_index]
+    )
+    axis_register = riser_axis_by_id or _riser_axis_register(
+        k1_ids=selected_k1_ids,
+        k2_ids=selected_k2_ids,
+    )
+    if set(axis_register) != set(selected_k1_ids + selected_k2_ids):
+        raise ValueError("basement fragment riser-axis register is incomplete")
     _render_basement_system_fragment(
         body=body,
         system="K1",
@@ -1832,6 +1904,7 @@ def build_wastewater_building_basement_fragment_svg(
         floor_height_m=assembly.floor_height_m,
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
+        riser_axis_by_id=axis_register,
     )
     _render_basement_system_fragment(
         body=body,
@@ -1849,6 +1922,7 @@ def build_wastewater_building_basement_fragment_svg(
         floor_height_m=assembly.floor_height_m,
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
+        riser_axis_by_id=axis_register,
     )
     body.extend((
         f'<rect x="{margin+35}" y="1680" width="2010" height="215" '
@@ -1929,6 +2003,31 @@ def build_wastewater_building_svgs(
         len(k2_basement_chunks),
         1,
     )
+    if floor_page_count != basement_page_count:
+        raise ValueError(
+            "above-ground and basement pagination must use the same riser batches"
+        )
+    riser_axis_registers = tuple(
+        _riser_axis_register(
+            k1_ids=tuple(
+                stack.riser_id
+                for stack in (
+                    k1_floor_chunks[index]
+                    if index < len(k1_floor_chunks)
+                    else ()
+                )
+            ),
+            k2_ids=tuple(
+                riser.riser_id
+                for riser in (
+                    k2_floor_chunks[index]
+                    if index < len(k2_floor_chunks)
+                    else ()
+                )
+            ),
+        )
+        for index in range(floor_page_count)
+    )
     drawing_page_count = floor_page_count + basement_page_count
     sheet_total = drawing_page_count + 1  # отдельный лист УГО комплекта
     basement_sheet_by_riser_id: dict[str, int] = {}
@@ -1965,6 +2064,7 @@ def build_wastewater_building_svgs(
                 fragment_total=floor_page_count,
                 basement_first_sheet_no=floor_page_count + 1,
                 basement_sheet_by_riser_id=basement_sheet_by_riser_id,
+                riser_axis_by_id=riser_axis_registers[index],
             )
         )
     for index in range(basement_page_count):
@@ -1987,6 +2087,7 @@ def build_wastewater_building_svgs(
                 sheet_total=sheet_total,
                 fragment_index=index + 1,
                 fragment_total=basement_page_count,
+                riser_axis_by_id=riser_axis_registers[index],
             )
         )
     return tuple(pages)
@@ -2095,6 +2196,105 @@ def audit_wastewater_building_svgs(
     }
     if continuation_targets != basement_sheet_by_riser:
         findings.append("above-ground continuation references do not match basement sheets")
+
+    def axis_register(
+        page_roots: tuple[ElementTree.Element, ...],
+        role: str,
+    ) -> dict[str, float]:
+        result: dict[str, float] = {}
+        for root in page_roots:
+            for row in root.iter():
+                riser_id = row.get("data-riser-axis-id")
+                axis_x = row.get("data-riser-axis-x")
+                if not riser_id or axis_x is None:
+                    continue
+                value = float(axis_x)
+                if riser_id in result and abs(result[riser_id] - value) > 0.05:
+                    findings.append(
+                        f"{role}: riser {riser_id} is drawn on multiple axes"
+                    )
+                result[riser_id] = value
+        return result
+
+    floor_axes = axis_register(floor_roots, "above-ground")
+    basement_axes = axis_register(basement_roots, "basement")
+    if set(floor_axes) != set(basement_axes):
+        findings.append("above-ground and basement riser axis registers differ")
+    for riser_id in sorted(set(floor_axes) & set(basement_axes)):
+        if abs(floor_axes[riser_id] - basement_axes[riser_id]) > 0.05:
+            findings.append(
+                f"riser {riser_id}: above-ground and basement axes do not match"
+            )
+
+    for root in basement_roots:
+        system_groups = {
+            row.get("data-basement-system"): row.get("data-system-isolated")
+            for row in root.iter()
+            if row.get("data-basement-system")
+        }
+        if system_groups and system_groups != {"K1": "true", "K2": "true"}:
+            findings.append("basement: K1 and K2 are not isolated drawing groups")
+
+        segments: list[tuple[str, str, tuple[float, float], tuple[float, float]]] = []
+        for group in root.iter():
+            line_id = group.get("data-building-pipe-line")
+            if not line_id:
+                continue
+            system = group.get("data-building-system", "")
+            if system not in {"K1", "K2"}:
+                findings.append(
+                    f"basement: pipe line {line_id} has no K1/K2 ownership"
+                )
+                continue
+            line = next(
+                (child for child in group if child.tag.endswith("line")),
+                None,
+            )
+            if line is None:
+                continue
+            segments.append((
+                system,
+                line_id,
+                (float(line.get("x1", "0")), float(line.get("y1", "0"))),
+                (float(line.get("x2", "0")), float(line.get("y2", "0"))),
+            ))
+
+        def intersects(
+            first: tuple[tuple[float, float], tuple[float, float]],
+            second: tuple[tuple[float, float], tuple[float, float]],
+        ) -> bool:
+            (a, b), (c, d) = first, second
+
+            def cross(
+                p: tuple[float, float],
+                q: tuple[float, float],
+                r: tuple[float, float],
+            ) -> float:
+                return (q[0] - p[0]) * (r[1] - p[1]) - (
+                    q[1] - p[1]
+                ) * (r[0] - p[0])
+
+            def side(value: float) -> int:
+                return 1 if value > 0.05 else -1 if value < -0.05 else 0
+
+            return (
+                side(cross(a, b, c)) * side(cross(a, b, d)) <= 0
+                and side(cross(c, d, a)) * side(cross(c, d, b)) <= 0
+                and max(min(a[0], b[0]), min(c[0], d[0]))
+                <= min(max(a[0], b[0]), max(c[0], d[0])) + 0.05
+                and max(min(a[1], b[1]), min(c[1], d[1]))
+                <= min(max(a[1], b[1]), max(c[1], d[1])) + 0.05
+            )
+
+        for index, (system, line_id, start, end) in enumerate(segments):
+            for other_system, other_id, other_start, other_end in segments[index + 1:]:
+                if system == other_system:
+                    continue
+                if intersects((start, end), (other_start, other_end)):
+                    findings.append(
+                        f"basement: {line_id} ({system}) intersects "
+                        f"{other_id} ({other_system}); K1/K2 must stay separate"
+                    )
 
     drawn_k2_floor_revisions = {
         row.get("data-building-revision")
