@@ -563,18 +563,17 @@ def generate_bound_architecture_wastewater_pdf(
     from app.analysis.architecture_wastewater_binding import (
         build_bound_wastewater_layout,
     )
-    from app.pz.wastewater_structure_renderer import (
-        WastewaterStructureScope,
-        generate_wastewater_structure_pdf,
+    from app.pz.wastewater_graphic_exports import (
+        generate_wastewater_graphic_export,
     )
 
     layout = build_bound_wastewater_layout(architecture, binding, project)
-    return generate_wastewater_structure_pdf(
+    return generate_wastewater_graphic_export(
         project,
-        layout,
+        "k1-k2",
         output_path,
-        scope=WastewaterStructureScope.FULL_FLOOR_STACK,
-    )
+        confirmed_layout=layout,
+    ).output_path
 
 
 def generate_wastewater_diagnostic_pdf(

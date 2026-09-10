@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import replace
 from pathlib import Path
+from xml.etree import ElementTree
 
 from starlette.datastructures import FormData
 from pypdf import PdfReader
@@ -314,7 +315,25 @@ def test_binding_places_project_graph_without_inventing_rooms_or_edges():
     assert 'data-bound-element="К1-Мой1"' in svg
     assert 'data-ugo="sink"' in svg
     assert svg.count('data-ugo="trap"') == 1
+    assert svg.count('data-fixture-connection="') == 2
+    assert 'data-slope-marker="binding-1-К1-Ветв1"' in svg
+    assert "К1 ⌀100" in svg
+    assert "Ø" not in svg and "∠" not in svg
     assert "№102 Санузел" in svg
+    root = ElementTree.fromstring(svg)
+    branch_group = next(
+        row for row in root.iter()
+        if row.get("data-bound-section") == "К1-Ветв1"
+    )
+    branch_polyline = next(
+        row for row in branch_group
+        if row.tag.endswith("polyline")
+    )
+    branch_y = [
+        float(point.split(",")[1])
+        for point in branch_polyline.get("points", "").split()
+    ]
+    assert max(branch_y) - min(branch_y) <= 3.6
 
 
 def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
@@ -371,7 +390,7 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
         import_id,
     )
     body = workspace.body.decode("utf-8")
-    assert "Схема К1/К2 · PDF" in body
+    assert "Схема К1/К2 по АР · PDF" in body
     assert (
         f'/wizard/architecture/{import_id}/wastewater/export/k1-k2.pdf'
         in body
@@ -390,7 +409,13 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     assert pdf_response.status_code == 200
     assert pdf_response.media_type == "application/pdf"
     assert Path(pdf_response.path).is_file()
-    assert len(PdfReader(pdf_response.path).pages) == 2
+    pdf_reader = PdfReader(pdf_response.path)
+    assert len(pdf_reader.pages) == 1
+    pdf_text = pdf_reader.pages[0].extract_text() or ""
+    compact_pdf_text = "".join(pdf_text.split())
+    assert "№101Кухня" in compact_pdf_text
+    assert "№102Санузел" in compact_pdf_text
+    assert "По подтверждённой архитектуре" in pdf_text
 
     pressure_response = web.architecture_wastewater_graphic_pdf(
         import_id,

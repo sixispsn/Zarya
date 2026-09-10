@@ -1120,8 +1120,11 @@ def _architecture_wastewater_graphic_pdf(import_id: str, export_key: str):
         # K3/pressure sheets, which currently consume the linked project graph
         # but not the room-placement overlay.
         _STORE.survey(import_id)
+        confirmed_layout = None
         if export_key == "k1-k2":
-            project = _ready_wastewater_evaluation(import_id)["project"]
+            evaluation = _ready_wastewater_evaluation(import_id)
+            project = evaluation["project"]
+            confirmed_layout = evaluation["layout"]
         else:
             project = _linked_project(import_id, require_current=True)
             if project is None:
@@ -1136,6 +1139,7 @@ def _architecture_wastewater_graphic_pdf(import_id: str, export_key: str):
             project,
             export.key,
             output_path,
+            confirmed_layout=confirmed_layout,
         )
         os.chmod(output_path, 0o600)
     except FileNotFoundError:

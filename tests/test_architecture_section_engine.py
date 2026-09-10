@@ -15,6 +15,11 @@ from app.pz.architecture_section_engine import (
     generate_architecture_section_control_pdf,
     load_architecture_plan_registry,
 )
+from app.pz.project import Project
+from app.pz.wastewater_structure_renderer import (
+    WastewaterStructureScope,
+    build_wastewater_structure_svg,
+)
 
 
 DEMO = Path(__file__).parents[1] / "demo" / "architecture_section_registry.json"
@@ -147,6 +152,7 @@ def test_wastewater_adapter_contains_only_architecture_registry_spaces():
     model = build_architecture_section(_registry())
     layout = architecture_section_to_wastewater_layout(model)
 
+    assert layout.mode.value == "confirmed_architecture"
     assert [row.floors for row in layout.floor_groups] == [(6,), (2,), (1,), (0,)]
     expected = {
         f"section-{floor.floor}-{cell.room_id}"
@@ -169,6 +175,25 @@ def test_control_svg_has_rooms_barriers_and_typical_floor_break():
     assert 'data-section-barrier="F6-FW-1"' in svg
     assert 'data-collapsed-architecture-floors="3-5"' in svg
     assert "этажи 3-5 не показаны" in svg
+
+
+def test_confirmed_layout_renderer_keeps_storeys_rooms_and_typical_break():
+    model = build_architecture_section(_registry())
+    layout = architecture_section_to_wastewater_layout(model)
+
+    svg = build_wastewater_structure_svg(
+        Project(),
+        layout,
+        scope=WastewaterStructureScope.FULL_FLOOR_STACK,
+    )
+
+    assert 'data-layout-mode="confirmed_architecture"' in svg
+    assert 'data-building-roof-boundary="true"' in svg
+    assert svg.count('data-building-storey-boundary="') == 3
+    assert 'data-collapsed-architecture-floors="3-5"' in svg
+    assert "этажи 3-5 не показаны" in svg
+    assert "№601 Кухня" in svg
+    assert "№001 Техническое помещение" in svg
 
 
 def test_control_pdf_is_vector_a1_landscape(tmp_path):

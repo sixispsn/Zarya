@@ -566,10 +566,16 @@ def architecture_section_to_wastewater_layout(
         sorted(set(model.displayed_floor_numbers) | required, reverse=True)
     )
     x0, x1 = 80.0, 680.0
-    top_y = 75.0
-    room_height = 62.0
+    top_y = 72.0
     normal_gap = 8.0
     break_gap = 28.0
+    gaps = sum(
+        break_gap if upper - lower > 1 else normal_gap
+        for upper, lower in zip(displayed, displayed[1:])
+    )
+    # Заполняем полезную высоту листа, но не растягиваем один этаж до
+    # неправдоподобной башни. Это геометрия листа, не высота здания.
+    room_height = min(260.0, max(62.0, (410.0 - gaps) / len(displayed)))
     origins: dict[int, float] = {}
     cursor = top_y
     previous: int | None = None
@@ -581,7 +587,7 @@ def architecture_section_to_wastewater_layout(
         origins[floor_no] = cursor
         previous = floor_no
     layout = WastewaterSchemeLayout(
-        mode=WastewaterLayoutMode.STANDALONE,
+        mode=WastewaterLayoutMode.CONFIRMED_ARCHITECTURE,
         individual_floors_required=False,
     )
     for floor_no in displayed:

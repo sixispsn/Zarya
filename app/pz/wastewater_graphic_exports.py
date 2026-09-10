@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.pz.project import Project
+from app.pz.wastewater_layout import WastewaterSchemeLayout
 from app.pz.wastewater_k3_scheme_service import (
     assess_wastewater_k3_scheme_readiness,
     generate_wastewater_k3_scheme,
@@ -103,14 +104,26 @@ def generate_wastewater_graphic_export(
     project: Project,
     key: WastewaterGraphicExportKey | str,
     output_path: str,
+    *,
+    confirmed_layout: WastewaterSchemeLayout | None = None,
 ) -> WastewaterGraphicGenerationResult:
     """Generate one canonical PDF through a closed, explicit dispatch table."""
     row = wastewater_graphic_export(project, key)
     if row.key == "k1-k2":
-        result = generate_wastewater_scheme(project, output_path)
+        result = generate_wastewater_scheme(
+            project,
+            output_path,
+            confirmed_layout=confirmed_layout,
+        )
     elif row.key == "k3":
+        if confirmed_layout is not None:
+            raise ValueError("подтверждённая компоновка К1/К2 неприменима к К3")
         result = generate_wastewater_k3_scheme(project, output_path)
     elif row.key == "pressure":
+        if confirmed_layout is not None:
+            raise ValueError(
+                "подтверждённая самотечная компоновка неприменима к напорной схеме"
+            )
         result = generate_wastewater_pressure_scheme(project, output_path)
     else:  # pragma: no cover - Literal plus the lookup above make this impossible.
         raise AssertionError(f"Unhandled wastewater graphic export: {row.key}")

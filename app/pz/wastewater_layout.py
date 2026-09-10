@@ -23,6 +23,7 @@ class WastewaterLayoutMode(str, Enum):
     """Способ формирования графической части."""
 
     STANDALONE = "standalone"
+    CONFIRMED_ARCHITECTURE = "confirmed_architecture"
     ARCHITECTURE_UNDERLAY = "architecture_underlay"
 
 

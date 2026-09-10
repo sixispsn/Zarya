@@ -21,6 +21,11 @@ from app.pz.wastewater_project_inputs import (
     WastewaterBuildingProjectInputs,
     resolve_wastewater_building_project_inputs,
 )
+from app.pz.wastewater_layout import (
+    WastewaterLayoutMode,
+    WastewaterSchemeLayout,
+    audit_wastewater_layout,
+)
 
 
 @dataclass(frozen=True)
@@ -144,6 +149,8 @@ def _release_project(project: Project) -> Project:
 def generate_wastewater_scheme(
     project: Project,
     output_path: str,
+    *,
+    confirmed_layout: WastewaterSchemeLayout | None = None,
 ) -> WastewaterSchemeGenerationResult:
     """Выпустить канонический PDF либо честный лист неполноты.
 
@@ -163,6 +170,34 @@ def generate_wastewater_scheme(
             ready=False,
             backend="incomplete-status",
             reasons=readiness.reasons,
+        )
+
+    if confirmed_layout is not None:
+        if confirmed_layout.mode != WastewaterLayoutMode.CONFIRMED_ARCHITECTURE:
+            raise ValueError(
+                "для выпуска по АР требуется подтверждённая архитектурная компоновка"
+            )
+        layout_audit = audit_wastewater_layout(project, confirmed_layout)
+        if not layout_audit.ready:
+            raise ValueError(
+                "подтверждённая архитектурная компоновка не прошла аудит: "
+                + "; ".join(row.message for row in layout_audit.errors)
+            )
+        from app.pz.wastewater_structure_renderer import (
+            WastewaterStructureScope,
+            generate_wastewater_structure_pdf,
+        )
+
+        path = generate_wastewater_structure_pdf(
+            release_project,
+            confirmed_layout,
+            output_path,
+            scope=WastewaterStructureScope.FULL_FLOOR_STACK,
+        )
+        return WastewaterSchemeGenerationResult(
+            output_path=path,
+            ready=True,
+            backend="confirmed-architecture-layout-v1",
         )
 
     path = generate_wastewater_building_pdf_from_project(

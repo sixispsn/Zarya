@@ -429,7 +429,25 @@ def build_bound_wastewater_layout(
                     f"{branch.pipe.section_id}, этаж {floor}: нет положения стояка "
                     f"{branch.riser_id}"
                 )
-            points = tuple(ordered) + (riser_point,)
+            receiver_positions = tuple(ordered)
+            assert all(point is not None for point in receiver_positions)
+            typed_receiver_positions = tuple(
+                point for point in receiver_positions if point is not None
+            )
+            slope = abs(float(branch.pipe.slope_per_mille or 0.0)) / 1000.0
+            run_mm = abs(riser_point.x - typed_receiver_positions[0].x)
+            graphic_drop_mm = min(2.4, run_mm * slope * 0.4)
+            riser_approach_y = riser_point.y - 1.2
+            divisor = max(1, len(typed_receiver_positions) - 1)
+            branch_points = tuple(
+                PointMm(
+                    point.x,
+                    riser_approach_y
+                    - graphic_drop_mm * (1.0 - index / divisor),
+                )
+                for index, point in enumerate(typed_receiver_positions)
+            )
+            points = branch_points + (riser_point,)
             start_id = f"binding-{floor}-{branch.pipe.section_id}-start"
             end_id = f"binding-{floor}-{branch.pipe.section_id}-riser"
             group_id = floor_groups[floor].group_id
