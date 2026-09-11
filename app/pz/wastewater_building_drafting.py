@@ -1590,6 +1590,7 @@ def _render_basement_system_fragment(
     previous_sheet_no: int | None,
     next_sheet_no: int | None,
     riser_axis_by_id: dict[str, float],
+    range_label_offset_y: float = 205.0,
 ) -> None:
     """Draw one paginated fragment of a confirmed linear system chain."""
     fragment = risers[start_index:end_index]
@@ -1621,7 +1622,7 @@ def _render_basement_system_fragment(
         'data-system-isolated="true">'
     )
     body.append(
-        f'<text x="{wall_left+45:.1f}" y="{base_y-205:.1f}" '
+        f'<text x="{wall_left+45:.1f}" y="{base_y-range_label_offset_y:.1f}" '
         f'font-family="{FONT}" font-size="20" font-weight="bold">'
         f'{_system_mark(system)} · {range_label}</text>'
     )
@@ -1962,6 +1963,7 @@ def build_wastewater_building_basement_fragment_svg(
     fragment_index: int,
     fragment_total: int,
     riser_axis_by_id: dict[str, float] | None = None,
+    compact_vertical: bool = False,
 ) -> str:
     """Render one A1 fragment of the complete lower-node chain."""
     errors = assembly.validate()
@@ -1972,7 +1974,12 @@ def build_wastewater_building_basement_fragment_svg(
     assert inputs.k2_outlet is not None
     margin = 50
     first_floor_y = 260.0
-    basement_floor_y = 1560.0
+    basement_floor_y = 930.0 if compact_vertical else 1560.0
+    k1_base_y = 520.0 if compact_vertical else 820.0
+    k2_base_y = 720.0 if compact_vertical else 1210.0
+    basement_layout_attribute = (
+        'data-basement-layout="compact" ' if compact_vertical else ""
+    )
     wall_left, wall_right = 230.0, 2440.0
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
@@ -1982,6 +1989,7 @@ def build_wastewater_building_basement_fragment_svg(
         f'data-units-per-mm="{_SHEET_SCALE:.6f}" data-schematic-scale="not-to-scale" '
         'data-font-standard="GOST-2.304-81" data-font-type="B" '
         f'data-sheet-role="basement" '
+        f'{basement_layout_attribute}'
         f'data-fragment-index="{fragment_index}" '
         f'data-fragment-total="{fragment_total}">',
         '<defs><pattern id="basement-hatch" width="22" height="22" '
@@ -2062,7 +2070,7 @@ def build_wastewater_building_basement_fragment_svg(
         transitions=inputs.k1_transitions,
         start_index=k1_start_index,
         end_index=k1_end_index,
-        base_y=820.0,
+        base_y=k1_base_y,
         first_floor_y=first_floor_y,
         wall_left=wall_left,
         wall_right=wall_right,
@@ -2070,6 +2078,7 @@ def build_wastewater_building_basement_fragment_svg(
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
         riser_axis_by_id=axis_register,
+        range_label_offset_y=130.0 if compact_vertical else 205.0,
     )
     _render_basement_system_fragment(
         body=body,
@@ -2080,7 +2089,7 @@ def build_wastewater_building_basement_fragment_svg(
         transitions=inputs.k2_transitions,
         start_index=k2_start_index,
         end_index=k2_end_index,
-        base_y=1210.0,
+        base_y=k2_base_y,
         first_floor_y=first_floor_y,
         wall_left=wall_left,
         wall_right=wall_right,
@@ -2088,6 +2097,7 @@ def build_wastewater_building_basement_fragment_svg(
         previous_sheet_no=previous_sheet_no,
         next_sheet_no=next_sheet_no,
         riser_axis_by_id=axis_register,
+        range_label_offset_y=130.0 if compact_vertical else 205.0,
     )
     body.extend((
         f'<rect x="{margin+35}" y="1680" width="2010" height="215" '
@@ -2440,6 +2450,7 @@ def _direct_svg_content(
     start_attribute: str,
     end_attribute: str,
     skip_attribute_values: frozenset[tuple[str, str]] = frozenset(),
+    prune_descendant_attributes: frozenset[str] = frozenset(),
 ) -> str:
     """Extract one contiguous drawing layer from a generated sheet.
 
@@ -2458,8 +2469,18 @@ def _direct_svg_content(
         if row.get(end_attribute) is not None
     )
     ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
+
+    def serialized(row: ElementTree.Element) -> str:
+        clone = ElementTree.fromstring(ElementTree.tostring(row))
+        if prune_descendant_attributes:
+            for parent in tuple(clone.iter()):
+                for child in tuple(parent):
+                    if any(child.get(name) is not None for name in prune_descendant_attributes):
+                        parent.remove(child)
+        return ElementTree.tostring(clone, encoding="unicode")
+
     return "".join(
-        ElementTree.tostring(row, encoding="unicode")
+        serialized(row)
         for row in children[start:end + 1]
         if row.get("data-continuation-riser") is None
         and not any(row.get(name) == value for name, value in skip_attribute_values)
@@ -2575,6 +2596,7 @@ def build_residential_wastewater_reference_svg(
         fragment_index=1,
         fragment_total=1,
         riser_axis_by_id=axes,
+        compact_vertical=True,
     )
     floors_content = _direct_svg_content(
         floors_svg,
@@ -2587,6 +2609,10 @@ def build_residential_wastewater_reference_svg(
         end_attribute="data-basement-system",
         skip_attribute_values=frozenset((
             ("data-building-level-mark", "floor-1"),
+        )),
+        prune_descendant_attributes=frozenset((
+            "data-basement-revision-reference",
+            "data-lower-node-callout",
         )),
     )
 
@@ -2611,6 +2637,7 @@ def build_residential_wastewater_reference_svg(
         f'data-units-per-mm="{_SHEET_SCALE:.6f}" '
         'data-schematic-scale="not-to-scale" '
         'data-layout-profile="residential-gost-appendix-v" '
+        'data-basement-vertical-profile="compact" '
         'data-font-standard="GOST-2.304-81" data-font-type="B">',
         '<defs>',
         '<pattern id="building-slab-hatch" width="16" height="16" '
@@ -2645,7 +2672,7 @@ def build_residential_wastewater_reference_svg(
         f'<g data-residential-layer="basement" '
         f'transform="translate({content_tx:.3f} {basement_ty:.3f}) '
         f'scale({content_scale:.3f})">{basement_content}</g>',
-        _residential_compact_legend_svg(y=1535.0),
+        _residential_compact_legend_svg(y=1215.0),
         f'<g transform="translate(-{title_shift_x:.3f} 0)">',
         _title_block_svg(
             assembly.document,
@@ -2690,6 +2717,15 @@ def audit_residential_wastewater_reference_svg(
         findings.append("residential basement does not preserve K1/K2 isolation")
     if not any(row.get("data-architecture") == "basement-slab" for row in root.iter()):
         findings.append("residential sheet has no basement slab")
+    basement_contour = next(
+        (
+            row for row in root.iter()
+            if row.get("data-architecture") == "basement-contour"
+        ),
+        None,
+    )
+    if basement_contour is None or float(basement_contour.get("height", "inf")) > 700:
+        findings.append("residential basement is not using the compact vertical profile")
     expected_floors = len(assembly.displayed_floor_numbers) * len(assembly.k1_stacks)
     floor_assemblies = [row for row in root.iter() if row.get("data-floor-assembly")]
     if len(floor_assemblies) != expected_floors:

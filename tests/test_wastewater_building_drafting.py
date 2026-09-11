@@ -702,6 +702,7 @@ def test_residential_reference_sheet_combines_rooms_floors_and_basement():
     root = ElementTree.fromstring(svg)
 
     assert root.get("data-layout-profile") == "residential-gost-appendix-v"
+    assert root.get("data-basement-vertical-profile") == "compact"
     assert root.get("data-sheet-format") == "A2-portrait"
     assert svg.count('data-residential-layer="') == 2
     assert svg.count('data-building-room="') == 21
@@ -711,6 +712,13 @@ def test_residential_reference_sheet_combines_rooms_floors_and_basement():
     ):
         assert f'data-room-category="{category}"' in svg
     assert 'data-architecture="basement-slab"' in svg
+    basement_contour = next(
+        row for row in root.iter()
+        if row.get("data-architecture") == "basement-contour"
+    )
+    assert float(basement_contour.get("height")) == pytest.approx(665.0)
+    assert 'data-lower-node-callout="' not in svg
+    assert 'data-basement-revision-reference="' not in svg
     assert svg.count('data-floor-assembly="') == 6
     assert svg.count('data-title-block="form-3"') == 1
     assert 'data-residential-compact-legend="true"' in svg
