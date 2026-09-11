@@ -9,7 +9,9 @@ from pypdf import PdfReader
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
 from app.pz.wastewater_building_drafting import (
+    audit_residential_wastewater_reference_svg,
     audit_wastewater_building_svgs,
+    build_residential_wastewater_reference_svg,
     build_wastewater_building_assembly,
     build_wastewater_building_svgs,
     generate_wastewater_building_pdf_from_project,
@@ -644,7 +646,7 @@ def test_combined_graphic_audit_rejects_pipe_gap_between_transition_and_junction
     assert any("must directly adjoin junction" in row for row in findings)
 
 
-def test_combined_building_pdf_has_two_a1_landscape_pages(tmp_path):
+def test_residential_building_pdf_has_one_a2_portrait_appendix_v_sheet(tmp_path):
     output = tmp_path / "building-k1-k2.pdf"
 
     generate_wastewater_building_pdf_from_project(
@@ -655,11 +657,11 @@ def test_combined_building_pdf_has_two_a1_landscape_pages(tmp_path):
     )
 
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 2
+    assert len(pages) == 1
     for page in pages:
         width_mm = float(page.mediabox.width) * 25.4 / 72
         height_mm = float(page.mediabox.height) * 25.4 / 72
-        assert width_mm == pytest.approx(841.0, abs=0.1)
+        assert width_mm == pytest.approx(420.0, abs=0.1)
         assert height_mm == pytest.approx(594.0, abs=0.1)
     text = "".join(page.extract_text() for page in pages)
     compact = "".join(text.split())
@@ -691,3 +693,25 @@ def test_combined_building_pdf_has_two_a1_landscape_pages(tmp_path):
                         embedded_opengost = True
     assert any("OpenGOSTtypeB-Regular" in name for name in font_names)
     assert embedded_opengost
+
+
+def test_residential_reference_sheet_combines_rooms_floors_and_basement():
+    assembly = _demo_assembly()
+
+    svg = build_residential_wastewater_reference_svg(assembly)
+    root = ElementTree.fromstring(svg)
+
+    assert root.get("data-layout-profile") == "residential-gost-appendix-v"
+    assert root.get("data-sheet-format") == "A2-portrait"
+    assert svg.count('data-residential-layer="') == 2
+    assert svg.count('data-building-room="') == 21
+    for category in (
+        "kitchen-left", "bathroom-left", "corridor-left", "lift-hall",
+        "corridor-right", "bathroom-right", "kitchen-right",
+    ):
+        assert f'data-room-category="{category}"' in svg
+    assert 'data-architecture="basement-slab"' in svg
+    assert svg.count('data-floor-assembly="') == 6
+    assert svg.count('data-title-block="form-3"') == 1
+    assert 'data-residential-compact-legend="true"' in svg
+    assert audit_residential_wastewater_reference_svg(assembly, svg) == ()

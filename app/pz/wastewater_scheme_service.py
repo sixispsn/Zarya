@@ -362,5 +362,9 @@ def generate_wastewater_scheme(
     return WastewaterSchemeGenerationResult(
         output_path=path,
         ready=True,
-        backend="registry-building-v2-paginated",
+        backend=(
+            "registry-building-v3-residential-appendix-v"
+            if project.building.purpose.value == "residential"
+            else "registry-building-v2-paginated"
+        ),
     )

@@ -104,14 +104,14 @@ def test_canonical_release_uses_registry_building_pdf(tmp_path):
     result = generate_wastewater_scheme(_project(), str(output))
 
     assert result.ready
-    assert result.backend == "registry-building-v2-paginated"
+    assert result.backend == "registry-building-v3-residential-appendix-v"
     pages = PdfReader(str(output)).pages
-    assert len(pages) == 2
+    assert len(pages) == 1
     all_text = "\n".join(page.extract_text() or "" for page in pages)
     assert "ZARYA-DEMO-001-ИОС3.СК" in all_text
     assert "ZARYA-DEMO-001-ИОС2" not in all_text
     assert all(
-        float(page.mediabox.width) * 25.4 / 72 == pytest.approx(841.0, abs=0.02)
+        float(page.mediabox.width) * 25.4 / 72 == pytest.approx(420.0, abs=0.02)
         for page in pages
     )
 

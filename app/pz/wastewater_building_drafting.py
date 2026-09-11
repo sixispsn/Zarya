@@ -543,6 +543,7 @@ def _building_storey_svg(
     wall_left: float,
     wall_right: float,
     k2_axes: tuple[tuple[str, float], ...],
+    residential_rooms: bool = False,
 ) -> str:
     """Draw one confirmed storey cell behind the engineering topology."""
     storey_top = origin_y + 20.0
@@ -554,6 +555,38 @@ def _building_storey_svg(
         f'height="{slab_y-storey_top:.1f}" fill="none" stroke="{BLACK}" '
         f'stroke-width="{_LINE_THIN:.3f}"/>',
     ]
+    if residential_rooms:
+        # A compact apartment-building section follows the visual grammar of
+        # Appendix V: wet rooms at the outside risers and common rooms in the
+        # middle.  Names are typological; no project room numbers are invented.
+        room_rows = (
+            (0.00, 0.15, "Кухня квартиры 1", "kitchen-left"),
+            (0.15, 0.39, "Санузел квартиры 1", "bathroom-left"),
+            (0.39, 0.48, "Коридор", "corridor-left"),
+            (0.48, 0.52, "Лифтовой холл", "lift-hall"),
+            (0.52, 0.61, "Коридор", "corridor-right"),
+            (0.61, 0.85, "Санузел квартиры 2", "bathroom-right"),
+            (0.85, 1.00, "Кухня квартиры 2", "kitchen-right"),
+        )
+        width = wall_right - wall_left
+        for index, (left_ratio, right_ratio, label, role) in enumerate(
+            room_rows,
+            start=1,
+        ):
+            room_left = wall_left + width * left_ratio
+            room_right = wall_left + width * right_ratio
+            rows.extend((
+                f'<rect data-building-room="{floor_no}-{index}" '
+                f'data-room-category="{escape(role)}" '
+                'data-room-source="residential-typology" '
+                f'x="{room_left:.1f}" y="{storey_top:.1f}" '
+                f'width="{room_right-room_left:.1f}" '
+                f'height="{slab_y-storey_top:.1f}" fill="none" '
+                f'stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>',
+                f'<text x="{(room_left+room_right)/2:.1f}" '
+                f'y="{storey_top+28.0:.1f}" text-anchor="middle" '
+                f'font-family="{FONT}" font-size="13">{escape(label)}</text>',
+            ))
     for riser_id, axis_x in k2_axes:
         shaft_left = max(wall_left, axis_x - 28.0)
         shaft_right = min(wall_right, axis_x + 28.0)
@@ -595,6 +628,8 @@ def build_wastewater_building_floors_svg(
     basement_first_sheet_no: int = 2,
     basement_sheet_by_riser_id: dict[str, int] | None = None,
     riser_axis_by_id: dict[str, float] | None = None,
+    residential_rooms: bool = False,
+    mirrored_k1_riser_ids: frozenset[str] = frozenset(),
 ) -> str:
     """Render the shared roof and characteristic-floor sheet."""
     errors = assembly.validate()
@@ -685,13 +720,15 @@ def build_wastewater_building_floors_svg(
                 wall_left=wall_left,
                 wall_right=wall_right,
                 k2_axes=k2_architecture_axes,
+                residential_rooms=residential_rooms,
             )
         )
 
     for stack in selected_k1:
         local_riser_x = stack.floor(floors[0]).port("riser_join").point.x_mm
         riser_x = axis_register[stack.riser_id]
-        origin_x = riser_x - local_riser_x
+        mirror_x = stack.riser_id in mirrored_k1_riser_ids
+        origin_x = riser_x + local_riser_x if mirror_x else riser_x - local_riser_x
         for floor_no in floors:
             floor = stack.floor(floor_no)
             body.append(
@@ -701,6 +738,8 @@ def build_wastewater_building_floors_svg(
                     x=origin_x,
                     y=origins[floor_no],
                     scale=scale,
+                    mirror_x=mirror_x,
+                    render_architecture=not residential_rooms,
                 )
             )
             if floor_no in stack.revision_floors:
@@ -2395,6 +2434,271 @@ def build_wastewater_building_svgs(
     return tuple(pages)
 
 
+def _direct_svg_content(
+    svg: str,
+    *,
+    start_attribute: str,
+    end_attribute: str,
+    skip_attribute_values: frozenset[tuple[str, str]] = frozenset(),
+) -> str:
+    """Extract one contiguous drawing layer from a generated sheet.
+
+    The residential composition reuses the audited engineering renderers; it
+    does not maintain a second implementation of branches, fittings or lower
+    nodes.  Only page furniture and continuation captions are discarded.
+    """
+    root = ElementTree.fromstring(svg)
+    children = list(root)
+    start = next(
+        index for index, row in enumerate(children)
+        if row.get(start_attribute) is not None
+    )
+    end = max(
+        index for index, row in enumerate(children)
+        if row.get(end_attribute) is not None
+    )
+    ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
+    return "".join(
+        ElementTree.tostring(row, encoding="unicode")
+        for row in children[start:end + 1]
+        if row.get("data-continuation-riser") is None
+        and not any(row.get(name) == value for name, value in skip_attribute_values)
+    )
+
+
+def _residential_compact_legend_svg(*, y: float) -> str:
+    """Compact Appendix-V-style legend placed below the building section."""
+    x, width, row_height = 180.0, 1040.0, 34.0
+    half = width / 2
+    row_count = 5
+    rows: list[str] = [
+        '<g data-residential-compact-legend="true">',
+        f'<text x="{x:.1f}" y="{y-13:.1f}" font-family="{FONT}" '
+        f'font-size="{_FONT_H_3_5:.3f}" font-weight="bold">'
+        'Условные обозначения</text>',
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" '
+        f'height="{row_height*row_count:.1f}" fill="none" stroke="{BLACK}" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+        f'<line x1="{x+half:.1f}" y1="{y:.1f}" x2="{x+half:.1f}" '
+        f'y2="{y+row_height*row_count:.1f}" stroke="{BLACK}" '
+        f'stroke-width="{_LINE_THIN:.3f}"/>',
+    ]
+    for index in range(1, row_count):
+        yy = y + row_height * index
+        rows.append(
+            f'<line x1="{x:.1f}" y1="{yy:.1f}" x2="{x+width:.1f}" '
+            f'y2="{yy:.1f}" stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>'
+        )
+
+    entries = (
+        ("line-k1", "К1 — хозяйственно-бытовая канализация"),
+        ("revision", "Ревизия"),
+        ("line-k2", "К2 — внутренний водосток"),
+        ("cleanout", "Прочистка — заглушённый доступный конец"),
+        ("sink", "Мойка"),
+        ("washbasin", "Умывальник"),
+        ("bath", "Ванна"),
+        ("toilet", "Унитаз"),
+        ("trap", "Гидравлический затвор"),
+        ("roof_funnel_heated", "Воронка с электрообогревом"),
+    )
+    for index, (kind, label) in enumerate(entries):
+        column = index % 2
+        row = index // 2
+        cell_x = x + column * half
+        cy = y + row * row_height + row_height / 2
+        symbol_x = cell_x + 42.0
+        if kind.startswith("line-"):
+            system = kind[-2:].upper()
+            rows.extend((
+                f'<line x1="{symbol_x-22:.1f}" y1="{cy:.1f}" '
+                f'x2="{symbol_x+22:.1f}" y2="{cy:.1f}" stroke="{BLACK}" '
+                f'stroke-width="{_LINE_MAIN:.3f}"/>',
+                f'<text x="{symbol_x:.1f}" y="{cy-4:.1f}" text-anchor="middle" '
+                f'font-family="{FONT}" font-size="9">{system}</text>',
+            ))
+        else:
+            rows.append(render_ugo(kind, symbol_x, cy, scale=0.55))
+        rows.append(
+            f'<text x="{cell_x+82:.1f}" y="{cy+5:.1f}" '
+            f'font-family="{FONT}" font-size="11">{escape(label)}</text>'
+        )
+    rows.append("</g>")
+    return "".join(rows)
+
+
+def build_residential_wastewater_reference_svg(
+    assembly: WastewaterBuildingAssembly,
+) -> str:
+    """One-sheet residential section in the composition of Appendix V.
+
+    This profile is intentionally narrow: one or two K1 risers and one or two
+    K2 risers of an apartment building.  Engineering topology is still taken
+    from the project register; only the architectural typology and page
+    composition are predefined.
+    """
+    errors = assembly.validate()
+    if errors:
+        raise ValueError("cannot render invalid residential assembly: " + "; ".join(errors))
+    if not (1 <= len(assembly.k1_stacks) <= 2):
+        raise ValueError("residential reference sheet supports one or two K1 risers")
+    if not (1 <= len(assembly.project_inputs.k2_risers) <= 2):
+        raise ValueError("residential reference sheet supports one or two K2 risers")
+
+    k1_ids = tuple(row.riser_id for row in assembly.k1_stacks)
+    k2_ids = tuple(row.riser_id for row in assembly.project_inputs.k2_risers)
+    k1_lanes = (1750.0,) if len(k1_ids) == 1 else (1050.0, 1750.0)
+    k2_lanes = (1350.0,) if len(k2_ids) == 1 else (1250.0, 1550.0)
+    axes = {
+        **dict(zip(k1_ids, k1_lanes)),
+        **dict(zip(k2_ids, k2_lanes)),
+    }
+    mirrored = frozenset(k1_ids[1:2])
+    floors_svg = build_wastewater_building_floors_svg(
+        assembly,
+        sheet_no=1,
+        sheet_total=1,
+        basement_first_sheet_no=1,
+        basement_sheet_by_riser_id={row: 1 for row in axes},
+        riser_axis_by_id=axes,
+        residential_rooms=True,
+        mirrored_k1_riser_ids=mirrored,
+    )
+    basement_svg = build_wastewater_building_basement_fragment_svg(
+        assembly,
+        k1_start_index=0,
+        k1_end_index=len(assembly.project_inputs.k1_risers),
+        k2_start_index=0,
+        k2_end_index=len(assembly.project_inputs.k2_risers),
+        sheet_no=1,
+        sheet_total=1,
+        fragment_index=1,
+        fragment_total=1,
+        riser_axis_by_id=axes,
+    )
+    floors_content = _direct_svg_content(
+        floors_svg,
+        start_attribute="data-building-roof-boundary",
+        end_attribute="data-continuation-riser",
+    )
+    basement_content = _direct_svg_content(
+        basement_svg,
+        start_attribute="data-building-slab",
+        end_attribute="data-basement-system",
+        skip_attribute_values=frozenset((
+            ("data-building-level-mark", "floor-1"),
+        )),
+    )
+
+    # A2 portrait reproduces the vertical reading order of Appendix V while
+    # preserving a standard physical sheet, frame and form-3 title block.
+    sheet_width_mm = 420.0
+    sheet_height_mm = 594.0
+    sheet_width = sheet_width_mm * _SHEET_SCALE
+    sheet_height = sheet_height_mm * _SHEET_SCALE
+    frame_right = sheet_width - 5.0 * _SHEET_SCALE
+    content_scale = 0.50
+    content_tx = 18.0
+    floors_ty = 71.0
+    first_floor_target_y = floors_ty + 1478.0 * content_scale
+    basement_ty = first_floor_target_y - 255.0 * content_scale
+    title_shift_x = _FRAME_RIGHT - frame_right
+    return "".join((
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{sheet_width_mm:g}mm" height="{sheet_height_mm:g}mm" '
+        f'viewBox="0 0 {sheet_width:.3f} {sheet_height:.3f}" '
+        'data-sheet-format="A2-portrait" data-sheet-units="mm" '
+        f'data-units-per-mm="{_SHEET_SCALE:.6f}" '
+        'data-schematic-scale="not-to-scale" '
+        'data-layout-profile="residential-gost-appendix-v" '
+        'data-font-standard="GOST-2.304-81" data-font-type="B">',
+        '<defs>',
+        '<pattern id="building-slab-hatch" width="16" height="16" '
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        '<line x1="0" y1="0" x2="0" y2="16" stroke="#8a8a8a" '
+        'stroke-width="1"/></pattern>',
+        '<pattern id="basement-hatch" width="22" height="22" '
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(35)">'
+        '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" '
+        'stroke-width="2"/></pattern>',
+        '<clipPath id="residential-floors-clip">'
+        '<rect x="0" y="130" width="2803.333" height="1349"/>'
+        '</clipPath>',
+        '</defs>',
+        f'<rect width="{sheet_width:.3f}" height="{sheet_height:.3f}" fill="white"/>',
+        f'<rect data-drawing-frame="GOST-R-21.101" '
+        'data-left-margin-mm="20" data-other-margin-mm="5" '
+        f'x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
+        f'width="{frame_right-_FRAME_LEFT:.1f}" '
+        f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
+        f'stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        f'<text x="{sheet_width/2:.1f}" y="62" text-anchor="middle" '
+        f'font-family="{FONT}" font-size="{_FONT_H_5:.3f}" font-weight="bold">'
+        'Принципиальная схема систем канализации и водоотведения</text>',
+        f'<text x="{sheet_width/2:.1f}" y="91" text-anchor="middle" '
+        f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}" fill="{GRAY}">'
+        'Многоквартирный жилой дом · компоновка по примеру приложения В '
+        'ГОСТ Р 21.620-2023</text>',
+        f'<g data-residential-layer="floors" clip-path="url(#residential-floors-clip)" '
+        f'transform="translate({content_tx:.3f} {floors_ty:.3f}) '
+        f'scale({content_scale:.3f})">{floors_content}</g>',
+        f'<g data-residential-layer="basement" '
+        f'transform="translate({content_tx:.3f} {basement_ty:.3f}) '
+        f'scale({content_scale:.3f})">{basement_content}</g>',
+        _residential_compact_legend_svg(y=1535.0),
+        f'<g transform="translate(-{title_shift_x:.3f} 0)">',
+        _title_block_svg(
+            assembly.document,
+            sheet_no=1,
+            sheet_total=1,
+            title="Принципиальная схема К1, К2",
+        ),
+        '</g>',
+        '</svg>',
+    ))
+
+
+def audit_residential_wastewater_reference_svg(
+    assembly: WastewaterBuildingAssembly,
+    svg: str,
+) -> tuple[str, ...]:
+    """Check the residential composition without weakening topology checks."""
+    findings: list[str] = []
+    try:
+        root = ElementTree.fromstring(svg)
+    except ElementTree.ParseError as exc:
+        return (f"residential sheet SVG is invalid: {exc}",)
+    if root.get("data-layout-profile") != "residential-gost-appendix-v":
+        findings.append("residential sheet has no Appendix-V layout profile")
+    room_categories = {
+        row.get("data-room-category")
+        for row in root.iter()
+        if row.get("data-room-category")
+    }
+    required_rooms = {
+        "kitchen-left", "bathroom-left", "corridor-left", "lift-hall",
+        "corridor-right", "bathroom-right", "kitchen-right",
+    }
+    if not required_rooms.issubset(room_categories):
+        findings.append("residential room typology is incomplete")
+    systems = {
+        row.get("data-basement-system"): row.get("data-system-isolated")
+        for row in root.iter()
+        if row.get("data-basement-system")
+    }
+    if systems != {"K1": "true", "K2": "true"}:
+        findings.append("residential basement does not preserve K1/K2 isolation")
+    if not any(row.get("data-architecture") == "basement-slab" for row in root.iter()):
+        findings.append("residential sheet has no basement slab")
+    expected_floors = len(assembly.displayed_floor_numbers) * len(assembly.k1_stacks)
+    floor_assemblies = [row for row in root.iter() if row.get("data-floor-assembly")]
+    if len(floor_assemblies) != expected_floors:
+        findings.append("residential sheet lost registered floor assemblies")
+    if len([row for row in root.iter() if row.get("data-title-block") == "form-3"]) != 1:
+        findings.append("residential sheet must contain one form-3 title block")
+    return tuple(dict.fromkeys(findings))
+
+
 def audit_wastewater_building_svgs(
     assembly: WastewaterBuildingAssembly,
     svgs: tuple[str, ...],
@@ -2910,7 +3214,7 @@ def generate_wastewater_building_pdf_from_project(
     floor_height_m: float,
     roof_kind: str,
 ) -> str:
-    """Write the combined registry-backed paginated vector PDF."""
+    """Write the registry-backed vector PDF for the selected building profile."""
     ensure_drafting_font_registered()
     import cairosvg
     from pypdf import PdfReader, PdfWriter
@@ -2922,8 +3226,18 @@ def generate_wastewater_building_pdf_from_project(
         roof_kind=roof_kind,
         document=project.document,
     )
-    svgs = build_wastewater_building_svgs(assembly)
-    findings = audit_wastewater_building_svgs(assembly, svgs)
+    residential = project.building.purpose.value == "residential"
+    if (
+        residential
+        and len(assembly.k1_stacks) <= 2
+        and len(assembly.project_inputs.k2_risers) <= 2
+    ):
+        svg = build_residential_wastewater_reference_svg(assembly)
+        findings = audit_residential_wastewater_reference_svg(assembly, svg)
+        svgs = (svg,)
+    else:
+        svgs = build_wastewater_building_svgs(assembly)
+        findings = audit_wastewater_building_svgs(assembly, svgs)
     if findings:
         raise ValueError("combined K1/K2 graphic audit failed: " + "; ".join(findings))
     writer = PdfWriter()

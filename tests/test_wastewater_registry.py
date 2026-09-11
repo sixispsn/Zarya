@@ -190,7 +190,7 @@ def test_vector_scheme_contains_registry_topology_and_is_a1(tmp_path):
     page = PdfReader(str(output)).pages[0]
     width_mm = float(page.mediabox.width) * 25.4 / 72
     height_mm = float(page.mediabox.height) * 25.4 / 72
-    assert width_mm == pytest.approx(841.0, abs=0.02)
+    assert width_mm == pytest.approx(420.0, abs=0.02)
     assert height_mm == pytest.approx(594.0, abs=0.02)
 
 
