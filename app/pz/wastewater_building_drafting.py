@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from io import BytesIO
+from math import isfinite
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -2102,6 +2103,182 @@ def build_wastewater_building_basement_svg(
         fragment_index=1,
         fragment_total=1,
     )
+
+
+def build_confirmed_architecture_basement_svgs(
+    assembly: WastewaterBuildingAssembly,
+    *,
+    riser_axis_ratio_by_id: dict[str, float],
+    first_sheet_no: int = 2,
+    sheet_total: int | None = None,
+) -> tuple[str, ...]:
+    """Render lower K1/K2 sheets on axes confirmed by the AR section.
+
+    K1 and K2 are intentionally placed on separate sheets.  Actual confirmed
+    axes may alternate across the building; combining both systems on one
+    schematic section would create false-looking intersections.  The lower
+    topology, fittings, cleanouts, transitions and outlets still come only
+    from the checked project register.
+    """
+    errors = assembly.validate()
+    if errors:
+        raise ValueError(
+            "cannot render confirmed-architecture basement: "
+            + "; ".join(errors)
+        )
+    k1_ids = tuple(row.stack.riser_id for row in assembly.project_inputs.k1_risers)
+    k2_ids = tuple(row.riser_id for row in assembly.project_inputs.k2_risers)
+    expected_ids = set(k1_ids + k2_ids)
+    if set(riser_axis_ratio_by_id) != expected_ids:
+        missing = sorted(expected_ids - set(riser_axis_ratio_by_id))
+        extra = sorted(set(riser_axis_ratio_by_id) - expected_ids)
+        detail = []
+        if missing:
+            detail.append("missing: " + ", ".join(missing))
+        if extra:
+            detail.append("unexpected: " + ", ".join(extra))
+        raise ValueError("confirmed riser-axis register is incomplete (" + "; ".join(detail) + ")")
+    for riser_id, ratio in riser_axis_ratio_by_id.items():
+        if not isfinite(ratio) or not 0.0 <= ratio <= 1.0:
+            raise ValueError(
+                f"{riser_id}: confirmed riser-axis ratio must be within 0..1"
+            )
+
+    wall_left, wall_right = 230.0, 2440.0
+
+    def page_axes(ids: tuple[str, ...]) -> dict[str, float]:
+        return {
+            riser_id: wall_left + (wall_right - wall_left) * riser_axis_ratio_by_id[riser_id]
+            for riser_id in ids
+        }
+
+    k1_chunks = _chunks(assembly.project_inputs.k1_risers, _BASEMENT_RISER_PAGE_CAPACITY)
+    k2_chunks = _chunks(assembly.project_inputs.k2_risers, _BASEMENT_RISER_PAGE_CAPACITY)
+    page_count = len(k1_chunks) + len(k2_chunks)
+    resolved_sheet_total = sheet_total or (first_sheet_no - 1 + page_count)
+    pages: list[str] = []
+    sheet_no = first_sheet_no
+    for chunk_index, chunk in enumerate(k1_chunks):
+        start = chunk_index * _BASEMENT_RISER_PAGE_CAPACITY
+        end = start + len(chunk)
+        ids = tuple(row.stack.riser_id for row in chunk)
+        pages.append(build_wastewater_building_basement_fragment_svg(
+            assembly,
+            k1_start_index=start,
+            k1_end_index=end,
+            k2_start_index=0,
+            k2_end_index=0,
+            sheet_no=sheet_no,
+            sheet_total=resolved_sheet_total,
+            fragment_index=chunk_index + 1,
+            fragment_total=len(k1_chunks),
+            riser_axis_by_id=page_axes(ids),
+        ))
+        sheet_no += 1
+    for chunk_index, chunk in enumerate(k2_chunks):
+        start = chunk_index * _BASEMENT_RISER_PAGE_CAPACITY
+        end = start + len(chunk)
+        ids = tuple(row.riser_id for row in chunk)
+        pages.append(build_wastewater_building_basement_fragment_svg(
+            assembly,
+            k1_start_index=0,
+            k1_end_index=0,
+            k2_start_index=start,
+            k2_end_index=end,
+            sheet_no=sheet_no,
+            sheet_total=resolved_sheet_total,
+            fragment_index=chunk_index + 1,
+            fragment_total=len(k2_chunks),
+            riser_axis_by_id=page_axes(ids),
+        ))
+        sheet_no += 1
+    return tuple(pages)
+
+
+def audit_confirmed_architecture_basement_svgs(
+    assembly: WastewaterBuildingAssembly,
+    svgs: tuple[str, ...],
+    *,
+    riser_axis_ratio_by_id: dict[str, float],
+) -> tuple[str, ...]:
+    """Check that AR axes and every registered lower element reached the PDF."""
+    findings: list[str] = []
+    try:
+        roots = tuple(ElementTree.fromstring(svg) for svg in svgs)
+    except ElementTree.ParseError as exc:
+        return (f"confirmed basement SVG is invalid: {exc}",)
+    expected_systems = {
+        system
+        for system, rows in (
+            ("K1", assembly.project_inputs.k1_risers),
+            ("K2", assembly.project_inputs.k2_risers),
+        )
+        if rows
+    }
+    drawn_systems: set[str] = set()
+    drawn_axes: dict[str, float] = {}
+    for root in roots:
+        page_systems = {
+            row.get("data-basement-system")
+            for row in root.iter()
+            if row.get("data-basement-system")
+        }
+        if len(page_systems) > 1:
+            findings.append("confirmed basement sheet mixes K1 and K2")
+        drawn_systems.update(str(row) for row in page_systems)
+        for row in root.iter():
+            riser_id = row.get("data-riser-axis-id")
+            axis_x = row.get("data-riser-axis-x")
+            if riser_id and axis_x is not None:
+                drawn_axes[riser_id] = float(axis_x)
+    if drawn_systems != expected_systems:
+        findings.append("confirmed basement sheets do not cover all K1/K2 systems")
+
+    wall_left, wall_right = 230.0, 2440.0
+    expected_axes = {
+        riser_id: wall_left + (wall_right - wall_left) * ratio
+        for riser_id, ratio in riser_axis_ratio_by_id.items()
+    }
+    if set(drawn_axes) != set(expected_axes):
+        findings.append("confirmed basement riser-axis register is incomplete")
+    for riser_id in sorted(set(drawn_axes) & set(expected_axes)):
+        if abs(drawn_axes[riser_id] - expected_axes[riser_id]) > 0.05:
+            findings.append(f"{riser_id}: basement axis differs from confirmed AR axis")
+
+    def drawn(attribute: str) -> set[str]:
+        return {
+            str(row.get(attribute))
+            for root in roots
+            for row in root.iter()
+            if row.get(attribute)
+        }
+
+    inputs = assembly.project_inputs
+    expected_cleanouts = {
+        element_id
+        for row in inputs.k1_risers + inputs.k2_risers
+        for element_id in row.lower_cleanout_element_ids
+    }
+    expected_junctions = {
+        element_id
+        for row in inputs.k1_risers + inputs.k2_risers
+        for element_id in row.lower_junction_element_ids
+    }
+    expected_transitions = {
+        row.element_id for row in inputs.k1_transitions + inputs.k2_transitions
+    }
+    expected_outlets = {
+        row.section_id for row in (inputs.k1_outlet, inputs.k2_outlet) if row
+    }
+    if drawn("data-basement-cleanout") != expected_cleanouts:
+        findings.append("confirmed basement cleanouts differ from project register")
+    if drawn("data-basement-through-junction") != expected_junctions:
+        findings.append("confirmed basement through junctions differ from project register")
+    if drawn("data-building-transition") != expected_transitions:
+        findings.append("confirmed basement transitions differ from project register")
+    if drawn("data-wall-sleeve") != expected_outlets:
+        findings.append("confirmed basement outlet sleeves differ from project register")
+    return tuple(dict.fromkeys(findings))
 
 
 def build_wastewater_building_svgs(

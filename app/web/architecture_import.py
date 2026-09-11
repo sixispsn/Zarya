@@ -55,6 +55,10 @@ from app.pz.wastewater_structure_renderer import (
     WastewaterStructureScope,
     build_wastewater_structure_svg,
 )
+from app.pz.wastewater_scheme_service import (
+    assess_confirmed_architecture_basement_readiness,
+    assess_wastewater_scheme_readiness,
+)
 from app.pz.wastewater_graphic_exports import (
     assess_wastewater_graphic_exports,
     generate_wastewater_graphic_export,
@@ -397,6 +401,21 @@ def _project_evaluation(
                         "Подтверждённая привязка не образовала ни одного участка схемы.",
                     ))
                     layout = None
+                else:
+                    scheme_readiness = assess_wastewater_scheme_readiness(project)
+                    if scheme_readiness.ready:
+                        basement = assess_confirmed_architecture_basement_readiness(
+                            layout,
+                            scheme_readiness.project_inputs,
+                        )
+                        issues.extend(
+                            ArchitectureWastewaterBindingIssue(
+                                "layout.basement_axes_missing",
+                                reason,
+                                "warning",
+                            )
+                            for reason in basement.reasons
+                        )
             except ValueError as exc:
                 issues.append(ArchitectureWastewaterBindingIssue(
                     "layout.not_ready",

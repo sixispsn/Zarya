@@ -9,12 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from html import escape
+from io import BytesIO
 from pathlib import Path
 from textwrap import wrap
 
 from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.project import Project
 from app.pz.wastewater_building_drafting import (
+    audit_confirmed_architecture_basement_svgs,
+    build_confirmed_architecture_basement_svgs,
+    build_wastewater_building_assembly,
     generate_wastewater_building_pdf_from_project,
 )
 from app.pz.wastewater_project_inputs import (
@@ -41,6 +45,85 @@ class WastewaterSchemeGenerationResult:
     ready: bool
     backend: str
     reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ConfirmedArchitectureBasementReadiness:
+    ready: bool
+    riser_axis_ratio_by_id: tuple[tuple[str, float], ...]
+    missing_riser_ids: tuple[str, ...]
+    reasons: tuple[str, ...]
+
+
+def assess_confirmed_architecture_basement_readiness(
+    layout: WastewaterSchemeLayout,
+    project_inputs: WastewaterBuildingProjectInputs,
+) -> ConfirmedArchitectureBasementReadiness:
+    """Resolve the lowest confirmed AR axis for every K1/K2 riser."""
+    expected_ids = {
+        row.stack.riser_id for row in project_inputs.k1_risers
+    } | {
+        row.riser_id for row in project_inputs.k2_risers
+    }
+    reasons: list[str] = []
+    if not layout.spaces:
+        reasons.append(
+            "Для привязки подвала нужны подтверждённые границы помещений по разрезу АР."
+        )
+        return ConfirmedArchitectureBasementReadiness(
+            False,
+            (),
+            tuple(sorted(expected_ids)),
+            tuple(reasons),
+        )
+    source_left = min(row.frame.x for row in layout.spaces)
+    source_right = max(row.frame.x2 for row in layout.spaces)
+    if source_right - source_left <= 0.1:
+        reasons.append("Ширина подтверждённого архитектурного разреза равна нулю.")
+        return ConfirmedArchitectureBasementReadiness(
+            False,
+            (),
+            tuple(sorted(expected_ids)),
+            tuple(reasons),
+        )
+
+    axis_ratios: dict[str, float] = {}
+    for riser_id in sorted(expected_ids):
+        route = next(
+            (
+                row for row in layout.routes
+                if row.section_id == riser_id and len(row.points) >= 2
+            ),
+            None,
+        )
+        if route is None:
+            continue
+        axis_ratios[riser_id] = (
+            route.points[-1].x - source_left
+        ) / (source_right - source_left)
+    missing = tuple(sorted(expected_ids - set(axis_ratios)))
+    if missing:
+        reasons.append(
+            "Подвал и выпуски не добавлены: подтвердите оси стояков на нижнем "
+            "показанном этаже: " + ", ".join(missing) + "."
+        )
+    outside = tuple(sorted(
+        riser_id
+        for riser_id, ratio in axis_ratios.items()
+        if not 0.0 <= ratio <= 1.0
+    ))
+    if outside:
+        reasons.append(
+            "Оси стояков вышли за подтверждённый контур разреза: "
+            + ", ".join(outside) + "."
+        )
+    ready = bool(expected_ids) and not missing and not outside
+    return ConfirmedArchitectureBasementReadiness(
+        ready,
+        tuple(sorted(axis_ratios.items())),
+        missing,
+        tuple(reasons),
+    )
 
 
 def assess_wastewater_scheme_readiness(
@@ -146,6 +229,24 @@ def _release_project(project: Project) -> Project:
     )
 
 
+def _write_svg_pages(output_path: str, svgs: tuple[str, ...]) -> str:
+    ensure_drafting_font_registered()
+    import cairosvg
+    from pypdf import PdfReader, PdfWriter
+
+    writer = PdfWriter()
+    for svg in svgs:
+        page_pdf = BytesIO()
+        cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=page_pdf)
+        page_pdf.seek(0)
+        writer.append(PdfReader(page_pdf))
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as stream:
+        writer.write(stream)
+    return str(path)
+
+
 def generate_wastewater_scheme(
     project: Project,
     output_path: str,
@@ -185,8 +286,59 @@ def generate_wastewater_scheme(
             )
         from app.pz.wastewater_structure_renderer import (
             WastewaterStructureScope,
+            build_wastewater_structure_svg,
             generate_wastewater_structure_pdf,
         )
+
+        basement_readiness = assess_confirmed_architecture_basement_readiness(
+            confirmed_layout,
+            readiness.project_inputs,
+        )
+        if basement_readiness.ready:
+            assembly = build_wastewater_building_assembly(
+                readiness.project_inputs,
+                floor_height_m=float(project.sewage.floor_height_m),
+                roof_kind=project.sewage.roof_kind,
+                document=release_project.document,
+            )
+            axis_ratios = dict(basement_readiness.riser_axis_ratio_by_id)
+            basement_page_count = (
+                (len(assembly.project_inputs.k1_risers) + 1) // 2
+                + (len(assembly.project_inputs.k2_risers) + 1) // 2
+            )
+            sheet_total = 1 + basement_page_count
+            basement_svgs = build_confirmed_architecture_basement_svgs(
+                assembly,
+                riser_axis_ratio_by_id=axis_ratios,
+                first_sheet_no=2,
+                sheet_total=sheet_total,
+            )
+            findings = audit_confirmed_architecture_basement_svgs(
+                assembly,
+                basement_svgs,
+                riser_axis_ratio_by_id=axis_ratios,
+            )
+            if findings:
+                raise ValueError(
+                    "аудит подвала по подтверждённым осям АР не пройден: "
+                    + "; ".join(findings)
+                )
+            first_svg = build_wastewater_structure_svg(
+                release_project,
+                confirmed_layout,
+                scope=WastewaterStructureScope.FULL_FLOOR_STACK,
+                sheet_no=1,
+                sheet_total=sheet_total,
+            )
+            path = _write_svg_pages(
+                output_path,
+                (first_svg,) + basement_svgs,
+            )
+            return WastewaterSchemeGenerationResult(
+                output_path=path,
+                ready=True,
+                backend="confirmed-architecture-layout-v2-basement",
+            )
 
         path = generate_wastewater_structure_pdf(
             release_project,
@@ -198,6 +350,7 @@ def generate_wastewater_scheme(
             output_path=path,
             ready=True,
             backend="confirmed-architecture-layout-v1",
+            reasons=basement_readiness.reasons,
         )
 
     path = generate_wastewater_building_pdf_from_project(
