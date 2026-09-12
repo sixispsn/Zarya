@@ -14,9 +14,11 @@ from html import escape
 from io import BytesIO
 from math import isfinite
 from pathlib import Path
+import re
 from xml.etree import ElementTree
 
 from app.pz.drafting_font import ensure_drafting_font_registered
+from app.pz.leader_layout import LeaderBounds, LeaderLayoutEngine, LeaderRequest
 from app.pz.project import DocumentInfo, Project
 from app.pz.wastewater_drafting import (
     BLACK,
@@ -398,6 +400,54 @@ def _break_overlay(
             "</g>",
         )
     )
+
+
+def _building_section_break_svg(
+    *,
+    break_id: str,
+    wall_left: float,
+    wall_right: float,
+    center_y: float,
+    label: str,
+) -> str:
+    """Draw one full-width omitted-storeys break after Appendix V.
+
+    A section break belongs to the architectural section, not to individual
+    pipes.  The white band first interrupts every room, riser and annotation;
+    two continuous boundary lines with a central rotated-Z glyph are then
+    drawn over the whole building width.
+    """
+    upper_y = center_y - 24.0
+    lower_y = center_y + 24.0
+    center_x = (wall_left + wall_right) / 2
+
+    def broken_line(y: float) -> str:
+        return (
+            f"M{wall_left:.1f},{y:.1f} "
+            f"L{center_x-30.0:.1f},{y:.1f} "
+            f"L{center_x-12.0:.1f},{y-22.0:.1f} "
+            f"L{center_x+12.0:.1f},{y+22.0:.1f} "
+            f"L{center_x+30.0:.1f},{y:.1f} "
+            f"L{wall_right:.1f},{y:.1f}"
+        )
+
+    return "".join((
+        f'<g data-building-section-break="{escape(break_id)}" '
+        'data-break-kind="whole-section-omission" '
+        'data-break-span="full-building-width" data-break-glyph="rotated-z">',
+        f'<rect data-section-break-mask="true" x="{wall_left-5.0:.1f}" '
+        f'y="{center_y-55.0:.1f}" width="{wall_right-wall_left+10.0:.1f}" '
+        'height="110" fill="white"/>',
+        f'<path data-section-break-line="upper" d="{broken_line(upper_y)}" '
+        f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        f'<path data-section-break-line="lower" d="{broken_line(lower_y)}" '
+        f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
+        f'<text data-section-break-label="true" x="{wall_left+34.0:.1f}" '
+        f'y="{upper_y-13.0:.1f}" font-family="{FONT}" '
+        'data-text-height-mm="3.5" '
+        f'font-size="{_FONT_H_3_5*2:.3f}">{escape(label)}</text>',
+        '</g>',
+    ))
 
 
 def _revision_svg(
@@ -796,7 +846,7 @@ def build_wastewater_building_floors_svg(
                     position=0.35 if upper - lower > 1 else 0.5,
                 )
             )
-            if upper - lower > 1:
+            if upper - lower > 1 and not residential_rooms:
                 body.append(
                     _break_overlay(
                         break_id=line_id,
@@ -900,7 +950,7 @@ def build_wastewater_building_floors_svg(
             f'font-size="12">{riser.funnel_quantity} шт.; DN{riser.funnel_dn_mm}; '
             'с электрообогревом</text>'
         )
-        if floors[0] - floors[1] > 1:
+        if floors[0] - floors[1] > 1 and not residential_rooms:
             break_y = (
                 first_origin
                 + 252.0
@@ -981,6 +1031,22 @@ def build_wastewater_building_floors_svg(
             f'продолжение на листе '
             f'{(basement_sheet_by_riser_id or {}).get(riser.riser_id, basement_first_sheet_no)}</text>'
         )
+
+    if residential_rooms:
+        for upper, lower in zip(floors, floors[1:]):
+            if upper - lower <= 1:
+                continue
+            upper_bottom = origins[upper] + 252.0
+            lower_top = origins[lower] + 5.0
+            body.append(
+                _building_section_break_svg(
+                    break_id=f"floors-{lower+1}-{upper-1}",
+                    wall_left=wall_left,
+                    wall_right=wall_right,
+                    center_y=(upper_bottom + lower_top) / 2,
+                    label=f"этажи {lower+1}-{upper-1} - типовые, не показаны",
+                )
+            )
 
     body.extend(
         (
@@ -2456,6 +2522,7 @@ def _direct_svg_content(
     end_attribute: str,
     skip_attribute_values: frozenset[tuple[str, str]] = frozenset(),
     prune_descendant_attributes: frozenset[str] = frozenset(),
+    prune_wall_sleeve_annotations: bool = False,
 ) -> str:
     """Extract one contiguous drawing layer from a generated sheet.
 
@@ -2482,6 +2549,14 @@ def _direct_svg_content(
                 for child in tuple(parent):
                     if any(child.get(name) is not None for name in prune_descendant_attributes):
                         parent.remove(child)
+        if prune_wall_sleeve_annotations:
+            for sleeve in tuple(clone.iter()):
+                if sleeve.get("data-wall-sleeve") is None:
+                    continue
+                for child in tuple(sleeve):
+                    tag = child.tag.rsplit("}", 1)[-1]
+                    if tag in {"path", "text"}:
+                        sleeve.remove(child)
         return ElementTree.tostring(clone, encoding="unicode")
 
     return "".join(
@@ -2490,6 +2565,101 @@ def _direct_svg_content(
         if row.get("data-continuation-riser") is None
         and not any(row.get(name) == value for name, value in skip_attribute_values)
     )
+
+
+def _residential_leader_layer_svg(
+    *,
+    basement_svg: str,
+    assembly: WastewaterBuildingAssembly,
+    content_tx: float,
+    content_ty: float,
+    content_scale: float,
+    bounds: LeaderBounds,
+) -> str:
+    """Replace manually drawn basement callouts with governed leaders."""
+    root = ElementTree.fromstring(basement_svg)
+    engine = LeaderLayoutEngine(bounds=bounds, units_per_mm=_SHEET_SCALE)
+    requests: list[LeaderRequest] = []
+
+    def transformed(x: float, y: float) -> tuple[float, float]:
+        return content_tx + x * content_scale, content_ty + y * content_scale
+
+    for group in root.iter():
+        target_id = group.get("data-lower-node-callout")
+        if not target_id:
+            continue
+        target_x = float(group.get("data-callout-target-x", "nan"))
+        target_y = float(group.get("data-callout-target-y", "nan"))
+        if not isfinite(target_x) or not isfinite(target_y):
+            raise ValueError(f"lower-node callout {target_id} has no finite target")
+        text_value = " ".join(
+            " ".join((row.text or "").split())
+            for row in group.iter()
+            if row.tag.rsplit("}", 1)[-1] == "text"
+        )
+        dn_match = re.search(r"DN\d+(?:×\d+)?", text_value)
+        if dn_match is None:
+            raise ValueError(f"lower-node callout {target_id} has no DN")
+        target = transformed(target_x, target_y)
+        target_kind = group.get("data-callout-target-kind")
+        title = "Прочистка" if target_kind == "cleanout-cap" else "Косой тройник 45°"
+        requests.append(
+            LeaderRequest(
+                leader_id=f"{target_id}-leader",
+                target_id=target_id,
+                target=target,
+                title=title,
+                detail=dn_match.group(0),
+                preferred_side=-1 if target[0] < (bounds.left + bounds.right) / 2 else 1,
+                preferred_vertical=-1 if target[1] < (bounds.top + bounds.bottom) / 2 else 1,
+            )
+        )
+
+    outlet_dn_by_id = {
+        row.section_id: row.dn_mm
+        for row in (
+            assembly.project_inputs.k1_outlet,
+            assembly.project_inputs.k2_outlet,
+        )
+        if row is not None
+    }
+    for sleeve in root.iter():
+        section_id = sleeve.get("data-wall-sleeve")
+        if not section_id:
+            continue
+        rect = next(
+            (
+                row for row in sleeve
+                if row.tag.rsplit("}", 1)[-1] == "rect"
+            ),
+            None,
+        )
+        if rect is None:
+            raise ValueError(f"wall sleeve {section_id} has no graphic body")
+        target = transformed(
+            float(rect.get("x", "0")) + float(rect.get("width", "0")) / 2,
+            float(rect.get("y", "0")) + float(rect.get("height", "0")) / 2,
+        )
+        requests.append(
+            LeaderRequest(
+                leader_id=f"{section_id}-sleeve-leader",
+                target_id=section_id,
+                target=target,
+                title="Гильза",
+                detail=f"{section_id} · DN{outlet_dn_by_id[section_id]}",
+                preferred_side=-1,
+                preferred_vertical=-1 if target[1] < (bounds.top + bounds.bottom) / 2 else 1,
+            )
+        )
+
+    rendered = [
+        '<g data-residential-leader-layer="true" '
+        'data-leader-standard="GOST-2.316-2008">'
+    ]
+    for request in sorted(requests, key=lambda row: (row.target[1], row.target[0])):
+        rendered.append(engine.place_and_render(request))
+    rendered.append('</g>')
+    return "".join(rendered)
 
 
 def _residential_compact_legend_svg(*, y: float) -> str:
@@ -2606,7 +2776,7 @@ def build_residential_wastewater_reference_svg(
     floors_content = _direct_svg_content(
         floors_svg,
         start_attribute="data-building-roof-boundary",
-        end_attribute="data-continuation-riser",
+        end_attribute="data-building-section-break",
     )
     basement_content = _direct_svg_content(
         basement_svg,
@@ -2619,6 +2789,7 @@ def build_residential_wastewater_reference_svg(
             "data-basement-revision-reference",
             "data-lower-node-callout",
         )),
+        prune_wall_sleeve_annotations=True,
     )
 
     # A2 portrait reproduces the vertical reading order of Appendix V while
@@ -2634,6 +2805,19 @@ def build_residential_wastewater_reference_svg(
     first_floor_target_y = floors_ty + 1478.0 * content_scale
     basement_ty = first_floor_target_y - 255.0 * content_scale
     title_shift_x = _FRAME_RIGHT - frame_right
+    leader_layer = _residential_leader_layer_svg(
+        basement_svg=basement_svg,
+        assembly=assembly,
+        content_tx=content_tx,
+        content_ty=basement_ty,
+        content_scale=content_scale,
+        bounds=LeaderBounds(
+            left=content_tx + 245.0 * content_scale,
+            top=first_floor_target_y + 18.0,
+            right=content_tx + 2420.0 * content_scale,
+            bottom=basement_ty + 920.0 * content_scale,
+        ),
+    )
     return "".join((
         '<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{sheet_width_mm:g}mm" height="{sheet_height_mm:g}mm" '
@@ -2677,6 +2861,7 @@ def build_residential_wastewater_reference_svg(
         f'<g data-residential-layer="basement" '
         f'transform="translate({content_tx:.3f} {basement_ty:.3f}) '
         f'scale({content_scale:.3f})">{basement_content}</g>',
+        leader_layer,
         _residential_compact_legend_svg(y=1215.0),
         f'<g transform="translate(-{title_shift_x:.3f} 0)">',
         _title_block_svg(
@@ -2731,6 +2916,39 @@ def audit_residential_wastewater_reference_svg(
     )
     if basement_contour is None or float(basement_contour.get("height", "inf")) > 700:
         findings.append("residential basement is not using the compact vertical profile")
+    section_breaks = [
+        row for row in root.iter() if row.get("data-building-section-break")
+    ]
+    if len(section_breaks) != 1:
+        findings.append("residential section must contain one whole-section break")
+    if any(row.get("data-building-riser-break") for row in root.iter()):
+        findings.append("residential section contains obsolete per-riser breaks")
+    leaders = [row for row in root.iter() if row.get("data-leader-id")]
+    if len(leaders) != 6:
+        findings.append("residential basement must contain six governed leaders")
+    if any(row.get("data-text-height-mm") != "3.5" for row in leaders):
+        findings.append("residential leader text must be 3.5 mm high")
+    leader_boxes = [
+        (
+            float(row.get("data-text-box-x1", "nan")),
+            float(row.get("data-text-box-y1", "nan")),
+            float(row.get("data-text-box-x2", "nan")),
+            float(row.get("data-text-box-y2", "nan")),
+        )
+        for row in leaders
+    ]
+    if any(not all(isfinite(value) for value in box) for box in leader_boxes):
+        findings.append("residential leader has no finite text box")
+    for index, first in enumerate(leader_boxes):
+        for second in leader_boxes[index + 1:]:
+            if (
+                first[0] < second[2]
+                and first[2] > second[0]
+                and first[1] < second[3]
+                and first[3] > second[1]
+            ):
+                findings.append("residential leader text boxes overlap")
+                break
     expected_floors = len(assembly.displayed_floor_numbers) * len(assembly.k1_stacks)
     floor_assemblies = [row for row in root.iter() if row.get("data-floor-assembly")]
     if len(floor_assemblies) != expected_floors:

@@ -725,6 +725,19 @@ def test_residential_reference_sheet_combines_rooms_floors_and_basement():
     assert 'data-floor-fixture-label="' not in svg
     assert svg.count('data-residential-room-label="') == 21
     assert svg.count('data-text-height-mm="2.5"') == 21
+    assert svg.count('data-building-section-break="') == 1
+    assert svg.count('data-section-break-line="') == 2
+    assert 'data-break-span="full-building-width"' in svg
+    assert 'data-break-glyph="rotated-z"' in svg
+    assert 'data-section-break-label="true"' in svg
+    assert 'data-building-riser-break="' not in svg
+    assert svg.count('data-leader-id="') == 6
+    assert svg.count('data-leader-arrow="true"') == 6
+    assert svg.count('data-shelf-horizontal="true"') == 6
+    assert svg.count('data-title-above-shelf="true"') == 6
+    assert svg.count('data-detail-below-shelf="true"') == 6
+    assert svg.count('data-text-height-mm="3.5"') == 7
+    assert "Гильза в фундаментной стене" not in svg
     assert svg.count('data-title-block="form-3"') == 1
     assert 'data-residential-compact-legend="true"' in svg
     assert audit_residential_wastewater_reference_svg(assembly, svg) == ()
