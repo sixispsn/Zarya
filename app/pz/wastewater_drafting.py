@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from html import escape
 from math import acos, atan2, ceil, degrees, hypot
 from pathlib import Path
+from app.pz.drawing_sheet_style import FittingGraphicSize
 from app.pz.drafting_font import (
     DRAFTING_FONT_FAMILY,
     ensure_drafting_font_registered,
@@ -622,6 +623,9 @@ def render_lower_turn_assembly_svg(
     y: float = 0.0,
     scale: float = 5.0,
     pipe_width: float = 3.0,
+    graphic_size: FittingGraphicSize | None = None,
+    graphic_main_in: tuple[float, float] | None = None,
+    graphic_main_out: tuple[float, float] | None = None,
 ) -> str:
     """Render one semantic assembly without inventing extra pipework."""
     errors = assembly.validate()
@@ -680,7 +684,32 @@ def render_lower_turn_assembly_svg(
         f'{elbow_y+diagonal_offset-tick:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="2.2"/>'
     )
-    if has_cleanout:
+    if graphic_size is not None:
+        # Elbow and wye meet at one joint on the diagonal. Their socket
+        # boundaries are sized from the corresponding branch/main diameter.
+        body.pop()  # replace the legacy fixed-pixel elbow boundaries
+        shared = ((elbow_x+wye_x)/2, (elbow_y+wye_y)/2)
+        body.extend((
+            graphic_size.boundary((elbow_x, elbow_y), xy('riser_in'),
+                offset=graphic_size.branch_socket, dn=graphic_size.branch_dn,
+                marker='lower_elbow_45'),
+            graphic_size.boundary(shared, (wye_x, wye_y), offset=0,
+                dn=graphic_size.branch_dn, marker='elbow-wye-direct-joint'),
+            graphic_size.boundary((wye_x, wye_y), graphic_main_out or xy('main_out'),
+                offset=graphic_size.main_socket, dn=graphic_size.main_dn,
+                marker='wye-main-outlet'),
+        ))
+        if not has_cleanout:
+            body.append(graphic_size.boundary((wye_x, wye_y), graphic_main_in or xy('main_in'),
+                offset=graphic_size.main_socket, dn=graphic_size.main_dn,
+                marker='through_wye_45'))
+        else:
+            cap_x, cap_y = xy('cleanout_cap')
+            for cap_offset in (0, .5*graphic_size.units_per_paper_mm):
+                body.append(graphic_size.boundary((cap_x+cap_offset, cap_y),
+                    (wye_x, wye_y), offset=0, dn=graphic_size.main_dn,
+                    marker='cleanout_cap_fitting'))
+    elif has_cleanout:
         cap_x, cap_y = xy("cleanout_cap")
         body.extend((
             f'<path data-fitting="service_wye_45" '

@@ -18,6 +18,7 @@ import re
 from xml.etree import ElementTree
 
 from app.pz.drafting_font import ensure_drafting_font_registered
+from app.pz.drawing_sheet_style import FittingGraphicSize, apply_residential_paper_style
 from app.pz.leader_layout import LeaderBounds, LeaderLayoutEngine, LeaderRequest
 from app.pz.project import DocumentInfo, Project
 from app.pz.wastewater_drafting import (
@@ -409,6 +410,9 @@ def _building_section_break_svg(
     wall_right: float,
     center_y: float,
     label: str,
+    partition_xs: tuple[float, ...] = (),
+    upper_storey_bottom: float | None = None,
+    lower_storey_top: float | None = None,
 ) -> str:
     """Draw one full-width omitted-storeys break after Appendix V.
 
@@ -421,29 +425,52 @@ def _building_section_break_svg(
     lower_y = center_y + 24.0
     center_x = (wall_left + wall_right) / 2
 
-    def broken_line(y: float) -> str:
+    # The residential source is embedded at 1/2 on the final sheet.
+    tail = 10.0 * _SHEET_SCALE / 0.5
+
+    def points(y: float) -> tuple[tuple[float, float], ...]:
         return (
-            f"M{wall_left:.1f},{y:.1f} "
-            f"L{center_x-30.0:.1f},{y:.1f} "
-            f"L{center_x-12.0:.1f},{y-22.0:.1f} "
-            f"L{center_x+12.0:.1f},{y+22.0:.1f} "
-            f"L{center_x+30.0:.1f},{y:.1f} "
-            f"L{wall_right:.1f},{y:.1f}"
+            (wall_left-tail, y), (center_x-30, y),
+            (center_x-12, y-22), (center_x+12, y+22),
+            (center_x+30, y), (wall_right+tail, y),
         )
+
+    def path(points_: tuple[tuple[float, float], ...]) -> str:
+        return " ".join(
+            f'{"M" if index == 0 else "L"}{x:.3f},{y:.3f}'
+            for index, (x, y) in enumerate(points_)
+        )
+
+    upper_points, lower_points = points(upper_y), points(lower_y)
+    # This polygon has exactly the same boundaries as the two cut lines.
+    # A larger rectangular eraser would leave every pipe hanging in the air.
+    mask = path(upper_points + tuple(reversed(lower_points))) + " Z"
+    extensions = []
+    for x in sorted(set(partition_xs)):
+        for side, start, end in (
+            ("upper", upper_storey_bottom, upper_y + 22),
+            ("lower", lower_y - 22, lower_storey_top),
+        ):
+            if start is not None and end is not None:
+                extensions.append(
+                    f'<line data-section-partition-extension="{side}" '
+                    f'x1="{x:.3f}" y1="{start:.3f}" x2="{x:.3f}" y2="{end:.3f}" '
+                    f'stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>'
+                )
 
     return "".join((
         f'<g data-building-section-break="{escape(break_id)}" '
         'data-break-kind="whole-section-omission" '
-        'data-break-span="full-building-width" data-break-glyph="rotated-z">',
-        f'<rect data-section-break-mask="true" x="{wall_left-5.0:.1f}" '
-        f'y="{center_y-55.0:.1f}" width="{wall_right-wall_left+10.0:.1f}" '
-        'height="110" fill="white"/>',
-        f'<path data-section-break-line="upper" d="{broken_line(upper_y)}" '
+        'data-break-span="full-building-width" data-break-glyph="rotated-z" '
+        'data-break-tail-mm="10" data-mask-follows-boundaries="true">',
+        *extensions,
+        f'<path data-section-break-mask="true" d="{mask}" fill="white"/>',
+        f'<path data-section-break-line="upper" d="{path(upper_points)}" '
         f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
-        f'<path data-section-break-line="lower" d="{broken_line(lower_y)}" '
+        f'<path data-section-break-line="lower" d="{path(lower_points)}" '
         f'fill="none" stroke="{BLACK}" stroke-width="{_LINE_MAIN:.3f}"/>',
         f'<text data-section-break-label="true" x="{wall_left+34.0:.1f}" '
-        f'y="{upper_y-13.0:.1f}" font-family="{FONT}" '
+        f'y="{center_y+8.0:.1f}" font-family="{FONT}" '
         'data-text-height-mm="3.5" '
         f'font-size="{_FONT_H_3_5*2:.3f}">{escape(label)}</text>',
         '</g>',
@@ -458,6 +485,7 @@ def _revision_svg(
     slab_y: float,
     floor_height_m: float,
     dimension: bool,
+    dimension_side: int = 1,
     element_id: str = "",
     requested_height_m: float | None = None,
 ) -> str:
@@ -484,7 +512,7 @@ def _revision_svg(
         f'font-family="{FONT}" font-size="10" font-weight="bold">Р</text>',
     ]
     if dimension:
-        dim_x = x + 55.0
+        dim_x = x + dimension_side * 55.0
         body.extend(
             (
                 f'<line x1="{dim_x:.1f}" y1="{revision_y:.1f}" '
@@ -496,7 +524,7 @@ def _revision_svg(
                 f'<line x1="{dim_x-8:.1f}" y1="{slab_y:.1f}" '
                 f'x2="{dim_x+8:.1f}" y2="{slab_y:.1f}" '
                 f'stroke="{BLACK}" stroke-width="1"/>',
-                f'<text x="{dim_x+12:.1f}" y="{(revision_y+slab_y)/2+4:.1f}" '
+                f'<text x="{dim_x+dimension_side*12:.1f}" y="{(revision_y+slab_y)/2+4:.1f}" '
                 f'font-family="{FONT}" font-size="10">{height_mm}</text>',
             )
         )
@@ -806,6 +834,7 @@ def build_wastewater_building_floors_svg(
                         slab_y=origins[floor_no] + 228.0,
                         floor_height_m=assembly.floor_height_m,
                         dimension=floor_no == 1,
+                        dimension_side=-1 if mirror_x else 1,
                     )
                 )
 
@@ -942,11 +971,11 @@ def build_wastewater_building_floors_svg(
             )
         )
         body.append(
-            f'<text x="{x+35:.1f}" y="{roof_y-36:.1f}" font-family="{FONT}" '
+            f'<text data-funnel-caption="id" x="{x+35:.1f}" y="{roof_y-36:.1f}" font-family="{FONT}" '
             f'font-size="13" font-weight="bold">{escape(riser.funnel_id)}</text>'
         )
         body.append(
-            f'<text x="{x+35:.1f}" y="{roof_y-17:.1f}" font-family="{FONT}" '
+            f'<text data-funnel-caption="description" x="{x+35:.1f}" y="{roof_y-17:.1f}" font-family="{FONT}" '
             f'font-size="12">{riser.funnel_quantity} шт.; DN{riser.funnel_dn_mm}; '
             'с электрообогревом</text>'
         )
@@ -1045,6 +1074,15 @@ def build_wastewater_building_floors_svg(
                     wall_right=wall_right,
                     center_y=(upper_bottom + lower_top) / 2,
                     label=f"этажи {lower+1}-{upper-1} - типовые, не показаны",
+                    partition_xs=tuple(
+                        wall_left + (wall_right-wall_left) * ratio
+                        for ratio in (0, .15, .39, .48, .52, .61, .85, 1)
+                    ) + tuple(
+                        x + offset for _, x in k2_architecture_axes
+                        for offset in (-28.0, 28.0)
+                    ),
+                    upper_storey_bottom=origins[upper] + 238.0,
+                    lower_storey_top=origins[lower] + 20.0,
                 )
             )
 
@@ -1147,6 +1185,7 @@ def _direct_transition_svg(
     downstream_dn: int,
     placement: str,
     adjacent_node_id: str,
+    socket_offset: float = 0.0,
 ) -> str:
     """Draw a reducer directly against the adjacent junction fitting.
 
@@ -1166,8 +1205,8 @@ def _direct_transition_svg(
     depth = min(24.0, length)
     half_width = 10.0
     if placement == "upstream-before-junction":
-        base_x, base_y = end
-        apex_x, apex_y = end[0] - ux * depth, end[1] - uy * depth
+        base_x, base_y = end[0]-ux*socket_offset, end[1]-uy*socket_offset
+        apex_x, apex_y = base_x-ux*depth, base_y-uy*depth
     elif placement == "downstream-after-terminal-turn":
         apex_x, apex_y = start
         base_x, base_y = start[0] + ux * depth, start[1] + uy * depth
@@ -1189,6 +1228,7 @@ def _direct_transition_svg(
             f'data-flat-side="downstream" data-apex-side="upstream" '
             f'data-transition-joint="direct" '
             f'data-adjacent-node="{escape(adjacent_node_id)}" '
+            f'data-fitting-socket-offset="{socket_offset:.3f}" '
             'data-fitting-gap-mm="0">',
             f'<path d="{triangle}" fill="white" stroke="white" stroke-width="4"/>',
             f'<path data-diameter-transition="{escape(element_id)}" '
@@ -1662,6 +1702,7 @@ def _render_basement_system_fragment(
     next_sheet_no: int | None,
     riser_axis_by_id: dict[str, float],
     range_label_offset_y: float = 205.0,
+    proportioned_fittings: bool = False,
 ) -> None:
     """Draw one paginated fragment of a confirmed linear system chain."""
     fragment = risers[start_index:end_index]
@@ -1672,7 +1713,7 @@ def _render_basement_system_fragment(
         xs = tuple(riser_axis_by_id[row] for row in riser_ids)
     except KeyError as exc:
         raise ValueError(f"missing basement riser axis for {exc.args[0]}") from exc
-    turn_scale = 2.0
+    turn_scale = 1.25 if proportioned_fittings else 2.0
     turn_offset_x = 38.0 * turn_scale
     turn_offset_y = 76.0 * turn_scale
     node_ys = [base_y]
@@ -1799,6 +1840,10 @@ def _render_basement_system_fragment(
         riser_id = _riser_id(riser)
         dn = _riser_dn(riser)
         outgoing = collectors[global_index] if global_index < len(collectors) else outlet
+        graphic_size = (
+            FittingGraphicSize(dn, outgoing.dn_mm, _SHEET_SCALE/.5)
+            if proportioned_fittings else None
+        )
         outgoing_start = joins[local_index]
         if local_index + 1 < len(fragment):
             outgoing_end = joins[local_index + 1]
@@ -1859,6 +1904,8 @@ def _render_basement_system_fragment(
                     y=turn_origin_y,
                     scale=turn_scale,
                     pipe_width=4.0,
+                    graphic_size=graphic_size,
+                    graphic_main_out=outgoing_end,
                 )
                 + '</g>'
             )
@@ -1907,6 +1954,12 @@ def _render_basement_system_fragment(
                     y=turn_origin_y,
                     scale=turn_scale,
                     pipe_width=4.0,
+                    graphic_size=graphic_size,
+                    graphic_main_in=(
+                        joins[local_index-1] if local_index > 0
+                        else incoming_stub[0] if incoming_stub is not None else None
+                    ),
+                    graphic_main_out=outgoing_end,
                 )
                 + '</g>'
             )
@@ -1996,6 +2049,7 @@ def _render_basement_system_fragment(
                     downstream_dn=transition.downstream_dn_mm,
                     placement=transition.placement,
                     adjacent_node_id=riser_id,
+                    socket_offset=graphic_size.main_socket if graphic_size else 0,
                 )
             )
 
@@ -2150,6 +2204,7 @@ def build_wastewater_building_basement_fragment_svg(
         next_sheet_no=next_sheet_no,
         riser_axis_by_id=axis_register,
         range_label_offset_y=130.0 if compact_vertical else 205.0,
+        proportioned_fittings=compact_vertical,
     )
     _render_basement_system_fragment(
         body=body,
@@ -2169,6 +2224,7 @@ def build_wastewater_building_basement_fragment_svg(
         next_sheet_no=next_sheet_no,
         riser_axis_by_id=axis_register,
         range_label_offset_y=130.0 if compact_vertical else 205.0,
+        proportioned_fittings=compact_vertical,
     )
     body.extend((
         f'<rect x="{margin+35}" y="1680" width="2010" height="215" '
@@ -2791,6 +2847,8 @@ def build_residential_wastewater_reference_svg(
         )),
         prune_wall_sleeve_annotations=True,
     )
+    floors_content = apply_residential_paper_style(floors_content)
+    basement_content = apply_residential_paper_style(basement_content)
 
     # A2 portrait reproduces the vertical reading order of Appendix V while
     # preserving a standard physical sheet, frame and form-3 title block.

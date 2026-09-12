@@ -120,12 +120,16 @@ class LeaderLayoutEngine:
         bounds: LeaderBounds,
         units_per_mm: float,
         clearance_mm: float = 2.0,
+        line_width_mm: float = 0.25,
     ) -> None:
         if units_per_mm <= 0:
             raise ValueError("leader units_per_mm must be positive")
         self.bounds = bounds
         self.units_per_mm = units_per_mm
         self.clearance = clearance_mm * units_per_mm
+        if line_width_mm <= 0:
+            raise ValueError("leader line width must be positive")
+        self.line_width_mm = line_width_mm
         self._text_boxes: list[tuple[float, float, float, float]] = []
         self._segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
 
@@ -233,7 +237,7 @@ class LeaderLayoutEngine:
             f"L{base_x-perp_x*arrow_half_width:.3f},"
             f"{base_y-perp_y*arrow_half_width:.3f} Z"
         )
-        stroke_width = 0.35 * self.units_per_mm
+        stroke_width = self.line_width_mm * self.units_per_mm
         title_x, title_y = placement.title_xy
         detail_x, detail_y = placement.detail_xy
         box_x1, box_y1, box_x2, box_y2 = placement.text_box
@@ -248,6 +252,7 @@ class LeaderLayoutEngine:
             f'data-text-box-x2="{box_x2:.3f}" data-text-box-y2="{box_y2:.3f}" '
             f'data-arrow-kind="{escape(request.arrow_kind)}" '
             f'data-text-height-mm="{request.text_height_mm:g}" '
+            f'data-line-width-mm="{self.line_width_mm:g}" '
             'data-shelf-horizontal="true" data-title-above-shelf="true" '
             'data-detail-below-shelf="true">',
             f'<path data-leader-line="true" d="M{target_x:.3f},{target_y:.3f} '
