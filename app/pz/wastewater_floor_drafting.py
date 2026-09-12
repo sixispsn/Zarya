@@ -1176,11 +1176,15 @@ def render_typical_floor_assembly_svg(
     scale: float = 2.2,
     mirror_x: bool = False,
     render_architecture: bool = True,
+    compact_fixture_annotations: bool = False,
+    annotation_scale: float = 1.0,
 ) -> str:
     """Render the connected floor graph using the canonical UGO catalogue."""
     errors = assembly.validate()
     if errors:
         raise ValueError("cannot render invalid floor assembly: " + "; ".join(errors))
+    if annotation_scale <= 0:
+        raise ValueError("annotation scale must be positive")
 
     def xy(value: str | DraftPoint) -> tuple[float, float]:
         point = assembly.port(value).point if isinstance(value, str) else value
@@ -1191,9 +1195,15 @@ def render_typical_floor_assembly_svg(
         assembly
     )
 
+    annotation_profile = (
+        ' data-fixture-annotation-profile="appendix-v"'
+        if compact_fixture_annotations
+        else ""
+    )
     body: list[str] = [
         f'<g data-floor-assembly="{escape(assembly.assembly_id)}" '
-        f'data-floor="{assembly.floor_no}" data-system="{assembly.system}">'
+        f'data-floor="{assembly.floor_no}" data-system="{assembly.system}"'
+        f'{annotation_profile}>'
     ]
 
     if render_architecture:
@@ -1326,19 +1336,35 @@ def render_typical_floor_assembly_svg(
         body.append("</g>")
 
         fx, fy = outlet
-        quantity_label = f"; {fixture.quantity} шт." if fixture.quantity > 1 else ""
-        body.extend(
-            (
-                f'<text x="{fx:.1f}" y="{fy-68:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
-                f'{escape(fixture.fixture_id)}</text>',
-                f'<text x="{fx:.1f}" y="{fy-54:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">'
-                f'{escape(_FIXTURE_LABEL[fixture.kind])}; '
-                f'{_system_mark(assembly.system)} ⌀{fixture.dn_mm}'
-                f'{quantity_label}</text>',
+        annotation_font = _FONT_H_2_5 * annotation_scale
+        if compact_fixture_annotations:
+            # Appendix V identifies the sanitary appliance by its UGO.  A
+            # schematic sheet therefore needs only the grouped quantity; the
+            # internal registry ID and a repeated appliance name are service
+            # data and would collide with the architectural room caption.
+            if fixture.quantity > 1:
+                body.append(
+                    f'<text data-floor-fixture-quantity="{escape(fixture.fixture_id)}" '
+                    f'x="{fx:.1f}" y="{fy-62:.1f}" text-anchor="middle" '
+                    f'font-family="{FONT}" font-size="{annotation_font:.3f}">'
+                    f'{fixture.quantity} шт.</text>'
+                )
+        else:
+            quantity_label = (
+                f"; {fixture.quantity} шт." if fixture.quantity > 1 else ""
             )
-        )
+            body.extend(
+                (
+                    f'<text x="{fx:.1f}" y="{fy-68:.1f}" text-anchor="middle" '
+                    f'font-family="{FONT}" font-size="{annotation_font:.3f}">'
+                    f'{escape(fixture.fixture_id)}</text>',
+                    f'<text x="{fx:.1f}" y="{fy-54:.1f}" text-anchor="middle" '
+                    f'font-family="{FONT}" font-size="{annotation_font:.3f}">'
+                    f'{escape(_FIXTURE_LABEL[fixture.kind])}; '
+                    f'{_system_mark(assembly.system)} ⌀{fixture.dn_mm}'
+                    f'{quantity_label}</text>',
+                )
+            )
 
     # Every fixture elbow is socketed directly into its oblique wye.  The
     # collector boundaries are shifted outside the short fitting bodies, and

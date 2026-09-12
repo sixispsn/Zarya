@@ -720,6 +720,11 @@ def test_residential_reference_sheet_combines_rooms_floors_and_basement():
     assert 'data-lower-node-callout="' not in svg
     assert 'data-basement-revision-reference="' not in svg
     assert svg.count('data-floor-assembly="') == 6
+    assert svg.count('data-fixture-annotation-profile="appendix-v"') == 6
+    assert 'data-floor-fixture-id="' not in svg
+    assert 'data-floor-fixture-label="' not in svg
+    assert svg.count('data-residential-room-label="') == 21
+    assert svg.count('data-text-height-mm="2.5"') == 21
     assert svg.count('data-title-block="form-3"') == 1
     assert 'data-residential-compact-legend="true"' in svg
     assert audit_residential_wastewater_reference_svg(assembly, svg) == ()

@@ -560,13 +560,13 @@ def _building_storey_svg(
         # Appendix V: wet rooms at the outside risers and common rooms in the
         # middle.  Names are typological; no project room numbers are invented.
         room_rows = (
-            (0.00, 0.15, "Кухня квартиры 1", "kitchen-left"),
-            (0.15, 0.39, "Санузел квартиры 1", "bathroom-left"),
+            (0.00, 0.15, "Кухня кв. 1", "kitchen-left"),
+            (0.15, 0.39, "Санузел кв. 1", "bathroom-left"),
             (0.39, 0.48, "Коридор", "corridor-left"),
             (0.48, 0.52, "Лифтовой холл", "lift-hall"),
             (0.52, 0.61, "Коридор", "corridor-right"),
-            (0.61, 0.85, "Санузел квартиры 2", "bathroom-right"),
-            (0.85, 1.00, "Кухня квартиры 2", "kitchen-right"),
+            (0.61, 0.85, "Санузел кв. 2", "bathroom-right"),
+            (0.85, 1.00, "Кухня кв. 2", "kitchen-right"),
         )
         width = wall_right - wall_left
         for index, (left_ratio, right_ratio, label, role) in enumerate(
@@ -583,9 +583,12 @@ def _building_storey_svg(
                 f'width="{room_right-room_left:.1f}" '
                 f'height="{slab_y-storey_top:.1f}" fill="none" '
                 f'stroke="{BLACK}" stroke-width="{_LINE_THIN:.3f}"/>',
-                f'<text x="{(room_left+room_right)/2:.1f}" '
+                f'<text data-residential-room-label="{floor_no}-{index}" '
+                'data-text-height-mm="2.5" '
+                f'x="{(room_left+room_right)/2:.1f}" '
                 f'y="{storey_top+28.0:.1f}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="13">{escape(label)}</text>',
+                f'font-family="{FONT}" font-size="{_FONT_H_2_5*2:.3f}">'
+                f'{escape(label)}</text>',
             ))
     for riser_id, axis_x in k2_axes:
         shaft_left = max(wall_left, axis_x - 28.0)
@@ -740,6 +743,8 @@ def build_wastewater_building_floors_svg(
                     scale=scale,
                     mirror_x=mirror_x,
                     render_architecture=not residential_rooms,
+                    compact_fixture_annotations=residential_rooms,
+                    annotation_scale=2.0 if residential_rooms else 1.0,
                 )
             )
             if floor_no in stack.revision_floors:
