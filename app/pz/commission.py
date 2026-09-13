@@ -735,6 +735,24 @@ def build_commission_report(
         "СП 30.13330.2020, раздел 19; профиль и аксонометрия К1",
         blocking=internal_node_overflow,
     )
+    if project.sewage.pipes:
+        diagnostic = project.sewage.hydraulic_assessment
+        diagnostic_errors = diagnostic.errors if diagnostic else []
+        diagnostic_warnings = diagnostic.warnings if diagnostic else []
+        add(
+            "K1-05", "Диаметры, вентиляция и доступность обслуживания самотёчной сети",
+            "missing" if diagnostic_errors else
+            "stage_r" if diagnostic is None or diagnostic_warnings else "verified",
+            ("; ".join(diagnostic_errors or diagnostic_warnings)
+             or "рассчитанная диагностика сети не содержит ошибок") if diagnostic else
+            "диагностика сети не выполнена",
+            "Исправить перечисленные участки по подтверждённой трассировке и пересчитать"
+            if diagnostic_errors else
+            "Дополнить данные для диагностики сети" if diagnostic is None or diagnostic_warnings
+            else "Нет действий",
+            "СП 30.13330.2020, пп. 18.26–18.27, таблица 18.1; пп. 21.8, 21.15",
+            blocking=bool(diagnostic_errors),
+        )
     if project.storm.system_kind == "internal":
         storm_ok = project.storm.result is not None
         add(
@@ -852,7 +870,7 @@ def build_commission_report(
                 "машинная матрица требований не содержит блокировок выпуска"
                 if wastewater_audit.release_ready else
                 "не закрыты: " + "; ".join(
-                    f"{row.rule_id} {row.title}"
+                    f"{row.rule_id} {row.title}: {row.evidence}"
                     for row in wastewater_audit.release_blockers
                 )
             ),
@@ -871,7 +889,7 @@ def build_commission_report(
                 "машинная матрица требований не содержит блокировок выпуска"
                 if water_audit.release_ready else
                 "не закрыты: " + "; ".join(
-                    f"{row.rule_id} {row.title}"
+                    f"{row.rule_id} {row.title}: {row.evidence}"
                     for row in water_audit.release_blockers
                 )
             ),

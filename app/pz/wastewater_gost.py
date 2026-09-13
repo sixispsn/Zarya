@@ -5,7 +5,10 @@
 состава текстовой и графической частей, и формирует прозрачную трассировку.
 """
 from dataclasses import dataclass
+from math import isclose, isfinite
 from typing import List
+
+from app.pz.wastewater_topology import _is_riser as is_sewer_riser
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,34 @@ class WastewaterGostAudit:
     @property
     def complete(self) -> bool:
         return not self.missing
+
+
+def _current_calculated_fill(pipe, assessment):
+    """Прочитать готовый результат, не рассчитывая и не изменяя исходные данные.
+
+    Результат с ошибкой или от другой геометрии не закрывает недостаток данных.
+    Прочность трубы (PN) сама по себе не определяет гидравлический режим.
+    """
+    matches = [
+        row for row in assessment.hydraulics
+        if row.section_id == pipe.section_id
+    ] if assessment else []
+    if len(matches) != 1:
+        return None
+    row = matches[0]
+    if row.status != "verified" or row.fill_ratio is None:
+        return None
+    if not isfinite(row.fill_ratio) or not 0 <= row.fill_ratio <= 1:
+        return None
+    if pipe.slope_per_mille is None or not (
+        isclose(row.inner_diameter_mm, pipe.inner_diameter_mm, abs_tol=1e-6)
+        and isclose(row.slope_per_mille, pipe.slope_per_mille, abs_tol=1e-6)
+        and pipe.manning_n is not None
+        and isclose(row.manning_n, pipe.manning_n, abs_tol=1e-9)
+        and row.roughness_source == pipe.hydraulic_source
+    ):
+        return None
+    return row.fill_ratio
 
 
 def audit_wastewater_gost(project) -> WastewaterGostAudit:
@@ -159,18 +190,38 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
     )
     gravity = [
         p for p in s.pipes
-        if "стояк" not in p.purpose.lower() and "вертик" not in p.purpose.lower()
+        if not is_sewer_riser(p)
     ]
-    hydraulic_ok = bool(gravity) and all(
-        p.slope_per_mille is not None and p.fill_ratio is not None
-        for p in gravity
-    )
+    missing_slopes = []
+    missing_fills = []
+    calculated_fills = []
+    declared_fills = []
+    for pipe in gravity:
+        if pipe.slope_per_mille is None:
+            missing_slopes.append(pipe.section_id)
+        calculated_fill = _current_calculated_fill(pipe, s.hydraulic_assessment)
+        if calculated_fill is not None:
+            calculated_fills.append(pipe.section_id)
+        elif pipe.fill_ratio is not None and isfinite(pipe.fill_ratio) and 0 <= pipe.fill_ratio <= 1:
+            declared_fills.append(pipe.section_id)
+        else:
+            missing_fills.append(pipe.section_id)
+    hydraulic_ok = bool(gravity) and not (missing_slopes or missing_fills)
+    hydraulic_evidence = [f"горизонтальных участков: {len(gravity)}"]
+    for label, ids in (
+        ("h/d из выполненного расчёта", calculated_fills),
+        ("h/d задано проектировщиком", declared_fills),
+        ("не задан уклон", missing_slopes),
+        ("не задано и не рассчитано h/d", missing_fills),
+    ):
+        if ids:
+            hydraulic_evidence.append(f"{label}: {', '.join(ids)}")
     add(
         "K-GOST-08", "Уклоны в промилле и коэффициенты наполнения",
         "ГОСТ Р 21.620-2023, пп. 5.1.4.1, 5.1.6.1",
         hydraulic_ok,
         (
-            f"самотечных горизонтальных участков: {len(gravity)}"
+            "; ".join(hydraulic_evidence)
             if gravity else "горизонтальные участки не заданы"
         ),
     )

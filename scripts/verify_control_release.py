@@ -21,8 +21,9 @@ sys.path.insert(0, str(ROOT))
 from app.intake.preflight import preflight_request  # noqa: E402
 from app.intake.project_builder import build_project  # noqa: E402
 from app.intake.yaml_io import load_request_file  # noqa: E402
+from app.pz.commission import CommissionReport  # noqa: E402
 from app.pz.ios2_orchestrator import IOS2DesignBundle, design_ios2  # noqa: E402
-from app.quality_gates import build_release_quality_report  # noqa: E402
+from app.quality_gates import ReleaseQualityReport, build_release_quality_report  # noqa: E402
 
 
 REQUIRED_DOCUMENTS = (
@@ -49,6 +50,56 @@ RENDER_DOCUMENTS = (
     "scheme_pdf",
     "wastewater_scheme_pdf",
 )
+
+
+def blocker_snapshot(
+    quality: ReleaseQualityReport,
+    commission: CommissionReport,
+) -> list[dict[str, str]]:
+    """Точные замечания, включая причины агрегированных DOC-04/DOC-05.
+
+    Разрешение одного DOC-кода не должно скрывать новые ошибки внутри матрицы.
+    Снимок - отрицательный регрессионный эталон, а не допуск к выпуску.
+    """
+    findings: list[dict[str, str]] = []
+    audits = {
+        item["discipline"]: item for item in commission.normative_audits
+    }
+    for finding in quality.blocking_findings:
+        discipline = {"DOC-04": "ИОС3", "DOC-05": "ИОС2"}.get(finding.code)
+        rows = [
+            row for row in audits.get(discipline, {}).get("rows", [])
+            if row.get("blocks_release")
+        ]
+        if rows:
+            findings.extend({
+                "code": row["rule_id"],
+                "detail": row["evidence"],
+                "reference": row["reference"],
+            } for row in rows)
+        else:
+            findings.append({
+                "code": finding.code,
+                "detail": finding.detail,
+                "reference": finding.reference,
+            })
+    return sorted(findings, key=lambda row: (row["code"], row["detail"]))
+
+
+def check_expected_blockers(
+    actual: list[dict[str, str]],
+    expected: list[dict[str, str]],
+) -> None:
+    """Запретить новые, изменённые и исчезнувшие без ревизии замечания."""
+    def canonical(rows: list[dict[str, str]]) -> list[tuple[str, str, str]]:
+        return sorted((row["code"], row["detail"], row["reference"]) for row in rows)
+    if not expected:
+        raise ValueError("эталон заблокированного примера не может быть пустым")
+    if canonical(actual) != canonical(expected):
+        raise RuntimeError(
+            "замечания контрольного примера изменились; требуется инженерная ревизия. "
+            "Фактически: " + json.dumps(actual, ensure_ascii=False, sort_keys=True)
+        )
 
 
 def _sha256(path: Path) -> str:
@@ -111,7 +162,7 @@ def verify_control_release(
     source: Path,
     output: Path,
     *,
-    allowed_blockers: frozenset[str] = frozenset(),
+    expected_blockers: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     request = load_request_file(str(source))
     preflight = preflight_request(request)
@@ -142,11 +193,18 @@ def verify_control_release(
     quality = build_release_quality_report(
         preflight, bundle.commission_report,
     )
-    blocker_codes = {row.code for row in quality.blocking_findings}
-    unexpected = blocker_codes - allowed_blockers
-    if unexpected:
+    actual_blockers = blocker_snapshot(quality, bundle.commission_report)
+    if expected_blockers is not None:
+        if (
+            expected_blockers.get("schema_version") != "1.0"
+            or expected_blockers.get("source") != str(source.relative_to(ROOT))
+        ):
+            raise ValueError("неподходящий эталон замечаний для контрольного проекта")
+        check_expected_blockers(actual_blockers, expected_blockers["blockers"])
+    elif actual_blockers:
         raise RuntimeError(
-            "новые блокеры контрольного выпуска: " + ", ".join(sorted(unexpected))
+            "контрольный выпуск заблокирован: "
+            + json.dumps(actual_blockers, ensure_ascii=False, sort_keys=True)
         )
 
     manifest = {
@@ -158,7 +216,9 @@ def verify_control_release(
             "issue_count": len(preflight.issues),
         },
         "quality": quality.to_dict(),
-        "allowed_blockers": sorted(allowed_blockers),
+        "verification_mode": "expected_blocked" if expected_blockers else "release_ready",
+        "release_ready": quality.can_release,
+        "blocker_details": actual_blockers,
         "documents": documents,
         "renders": _render_first_pages(bundle, output),
     }
@@ -177,15 +237,23 @@ def main() -> int:
         default=ROOT / "demo" / "demo_project.yaml",
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--allow-blocker", action="append", default=[])
+    parser.add_argument(
+        "--expected-blockers", type=Path,
+        help="точный отрицательный эталон; успешная проверка не разрешает выпуск",
+    )
     args = parser.parse_args()
     manifest = verify_control_release(
         args.source.resolve(),
         args.output.resolve(),
-        allowed_blockers=frozenset(args.allow_blocker),
+        expected_blockers=(
+            json.loads(args.expected_blockers.read_text(encoding="utf-8"))
+            if args.expected_blockers else None
+        ),
     )
     print(
-        "Quality gate: "
+        ("Регрессия неполного примера (НЕ допуск к выпуску): "
+         if manifest["verification_mode"] == "expected_blocked" else "Quality gate: ")
+        +
         f"{len(manifest['documents'])} PDF, "
         f"статус {manifest['quality']['state']}, "
         f"блокеры {manifest['quality']['blocking_count']}"

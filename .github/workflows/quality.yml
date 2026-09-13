@@ -134,15 +134,13 @@ jobs:
         run: python -m pip install --requirement requirements.txt
       - name: Approved visual regression gate
         run: python -m pytest -q tests/test_wastewater_visual_golden.py
-      - name: Build complete control release
+      - name: Build known-incomplete control case (negative regression, not release approval)
         env:
           ZARYA_BUILD_COMMIT: ${{ github.sha }}
         run: |
           python scripts/verify_control_release.py \
             --output ci-artifacts/control-release \
-            --allow-blocker SP54-01 \
-            --allow-blocker DOC-04 \
-            --allow-blocker DOC-05
+            --expected-blockers demo/control_blockers.json
       - name: Publish control release
         uses: actions/upload-artifact@v4
         with:

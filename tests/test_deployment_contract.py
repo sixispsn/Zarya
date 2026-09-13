@@ -23,7 +23,9 @@ def test_ci_has_parity_full_suite_and_container_smoke_gates():
     assert "Normative contract gate" in workflow
     assert "Critical-module coverage gate" in workflow
     assert "Approved visual regression gate" in workflow
-    assert "Build complete control release" in workflow
+    assert "Build known-incomplete control case" in workflow
+    assert "negative regression, not release approval" in workflow
+    assert "--expected-blockers demo/control_blockers.json" in workflow
     assert "scripts/verify_control_release.py" in workflow
     assert "app/architecture" in workflow
     assert "app/web/building_model.py" in workflow
