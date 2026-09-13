@@ -485,7 +485,7 @@ def generate_building_program_report_pdf(
     output_path: str | Path,
 ) -> str:
     """Write a paginated, vector PDF for visual programme verification."""
-    import cairosvg  # type: ignore[import-untyped]
+    import cairosvg
     from pypdf import PdfReader, PdfWriter
 
     path = Path(output_path)

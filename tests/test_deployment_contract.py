@@ -26,6 +26,9 @@ def test_ci_has_parity_full_suite_and_container_smoke_gates():
     assert "Build known-incomplete control case" in workflow
     assert "negative regression, not release approval" in workflow
     assert "--expected-blockers demo/control_blockers.json" in workflow
+    # Do not turn typed FastAPI decorators into Any by skipping imports.
+    assert "--follow-imports=silent" in workflow
+    assert "--follow-imports=skip" not in workflow
     assert "scripts/verify_control_release.py" in workflow
     assert "app/architecture" in workflow
     assert "app/web/building_model.py" in workflow

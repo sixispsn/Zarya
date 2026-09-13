@@ -190,6 +190,8 @@ def verify_control_release(
         key=lambda path: path.name,
     )
     documents = [_inspect_pdf(path) for path in pdfs]
+    if bundle.commission_report is None:
+        raise RuntimeError("контрольный комплект не сформировал комиссионный отчёт")
     quality = build_release_quality_report(
         preflight, bundle.commission_report,
     )

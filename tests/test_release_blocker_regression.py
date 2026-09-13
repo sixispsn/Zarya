@@ -159,3 +159,8 @@ def test_control_runner_rejects_blockers_by_default_and_labels_negative_case(dem
     assert manifest["release_ready"] is False
     assert manifest["quality"]["state"] == "blocked"
     assert len(manifest["blocker_details"]) == 4
+    bundle.commission_report = None
+    with pytest.raises(RuntimeError, match="не сформировал комиссионный отчёт"):
+        control_release.verify_control_release(
+            source, tmp_path / "missing-report", expected_blockers=baseline,
+        )

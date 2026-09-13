@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import struct
+from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree
 
 import cairosvg
 
-from app.pz.wastewater_building_drafting import build_wastewater_building_svgs
+from app.pz.wastewater_building_drafting import build_wastewater_building_release_svgs
+from app.pz.wastewater_graphic_exports import generate_wastewater_graphic_export
+from app.pz.wastewater_scheme_service import _release_project
 from app.pz.wastewater_k3_drafting import build_wastewater_k3_svgs
 from app.pz.wastewater_k3_project_inputs import (
     resolve_wastewater_k3_project_inputs,
@@ -24,7 +28,7 @@ from app.pz.wastewater_pressure_drafting import build_wastewater_pressure_svgs
 from app.pz.wastewater_pressure_project_inputs import (
     resolve_wastewater_pressure_project_inputs,
 )
-from tests.test_wastewater_building_drafting import _demo_assembly
+from tests.test_wastewater_building_drafting import _demo_assembly, _demo_project
 from tests.test_wastewater_k3_scheme import _k3_project
 from tests.test_wastewater_pressure_scheme import _pressure_project
 
@@ -56,8 +60,16 @@ def _visual_digest(svg: str) -> str:
 def _production_svgs() -> dict[str, tuple[str, ...]]:
     k3_project = _k3_project()
     pressure_project = _pressure_project()
+    residential_assembly = replace(
+        _demo_assembly(), document=_release_project(_demo_project()).document,
+    )
     return {
-        "k1-k2": build_wastewater_building_svgs(_demo_assembly()),
+        "k1-k2": build_wastewater_building_release_svgs(
+            _demo_assembly(), residential=False,
+        ),
+        "residential": build_wastewater_building_release_svgs(
+            residential_assembly, residential=True,
+        ),
         "k3": build_wastewater_k3_svgs(
             k3_project,
             resolve_wastewater_k3_project_inputs(k3_project),
@@ -71,12 +83,46 @@ def _production_svgs() -> dict[str, tuple[str, ...]]:
 
 def test_production_wastewater_schemes_match_approved_visual_golden():
     approved = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    svgs = _production_svgs()
     actual = {
         key: [_visual_digest(page) for page in pages]
-        for key, pages in _production_svgs().items()
+        for key, pages in svgs.items()
     }
-
+    artifact_dir = os.environ.get("ZARYA_VISUAL_ARTIFACTS")
+    if actual != approved and artifact_dir:
+        output = Path(artifact_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "comparison.json").write_text(
+            json.dumps({"expected": approved, "actual": actual}, indent=2),
+        )
+        for key, pages in svgs.items():
+            if actual[key] == approved.get(key):
+                continue
+            for index, svg in enumerate(pages, 1):
+                (output / f"{key}-{index}.svg").write_text(svg, encoding="utf-8")
+                cairosvg.svg2png(
+                    bytestring=svg.encode("utf-8"),
+                    write_to=str(output / f"{key}-{index}.png"),
+                    output_width=1800,
+                )
     assert actual == approved
+
+
+def test_residential_public_pdf_export_uses_exact_golden_pages(monkeypatch, tmp_path):
+    captured = []
+    converter = cairosvg.svg2pdf
+
+    def capture(*args, **kwargs):
+        captured.append(kwargs["bytestring"].decode("utf-8"))
+        return converter(*args, **kwargs)
+
+    monkeypatch.setattr(cairosvg, "svg2pdf", capture)
+    result = generate_wastewater_graphic_export(
+        _demo_project(), "k1-k2", str(tmp_path / "residential.pdf"),
+    )
+    assert result.ready
+    assert len(captured) == 1
+    assert captured == list(_production_svgs()["residential"])
 
 
 def test_every_approved_page_rasterizes_without_artifacts_from_invalid_svg():

@@ -27,7 +27,7 @@ from app.pz.flows_bridge import (
     balance_from_calc,
     enrich_fire_from_layout_and_hydraulics,
 )
-from app.pz.commission import build_commission_report
+from app.pz.commission import CommissionReport, build_commission_report
 from app.pz.generator import (
     generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
@@ -77,7 +77,7 @@ class IOS2DesignBundle:
     wastewater_balance_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     commission_control_pdf: Optional[str] = None
-    commission_report: Optional[object] = None
+    commission_report: Optional[CommissionReport] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)

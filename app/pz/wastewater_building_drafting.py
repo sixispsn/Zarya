@@ -3524,6 +3524,28 @@ def audit_wastewater_building_svgs(
     return tuple(dict.fromkeys(findings))
 
 
+def build_wastewater_building_release_svgs(
+    assembly: WastewaterBuildingAssembly,
+    *,
+    residential: bool,
+) -> tuple[str, ...]:
+    """Select and audit the exact pages shared by PDF export and visual tests."""
+    if (
+        residential
+        and len(assembly.k1_stacks) <= 2
+        and len(assembly.project_inputs.k2_risers) <= 2
+    ):
+        svg = build_residential_wastewater_reference_svg(assembly)
+        findings = audit_residential_wastewater_reference_svg(assembly, svg)
+        svgs = (svg,)
+    else:
+        svgs = build_wastewater_building_svgs(assembly)
+        findings = audit_wastewater_building_svgs(assembly, svgs)
+    if findings:
+        raise ValueError("combined K1/K2 graphic audit failed: " + "; ".join(findings))
+    return svgs
+
+
 def generate_wastewater_building_pdf_from_project(
     output_path: str,
     project: Project,
@@ -3543,20 +3565,9 @@ def generate_wastewater_building_pdf_from_project(
         roof_kind=roof_kind,
         document=project.document,
     )
-    residential = project.building.purpose.value == "residential"
-    if (
-        residential
-        and len(assembly.k1_stacks) <= 2
-        and len(assembly.project_inputs.k2_risers) <= 2
-    ):
-        svg = build_residential_wastewater_reference_svg(assembly)
-        findings = audit_residential_wastewater_reference_svg(assembly, svg)
-        svgs = (svg,)
-    else:
-        svgs = build_wastewater_building_svgs(assembly)
-        findings = audit_wastewater_building_svgs(assembly, svgs)
-    if findings:
-        raise ValueError("combined K1/K2 graphic audit failed: " + "; ".join(findings))
+    svgs = build_wastewater_building_release_svgs(
+        assembly, residential=project.building.purpose.value == "residential",
+    )
     writer = PdfWriter()
     for svg in svgs:
         page_pdf = BytesIO()
