@@ -1,6 +1,9 @@
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
+from app.calc.sewer_hydraulics import SewerHydraulicInput, calculate_sewer_hydraulics
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
 from app.pz.generator import generate_wastewater_scheme_result
@@ -13,6 +16,66 @@ DEMO = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
 
 def _project():
     return build_project(load_request_file(str(DEMO)))
+
+
+def test_branch_uses_existing_solver_and_does_not_add_service_devices():
+    project = _project()
+    pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
+    pipe.design_flow_lps = 2.758
+    pipe.manning_n = 0.011
+    pipe.hydraulic_source = "явные исходные данные только теста"
+    before = deepcopy(project.sewage.elements)
+    result = assess_wastewater_diagnostics(project)
+    expected = calculate_sewer_hydraulics(SewerHydraulicInput(
+        section_id=pipe.section_id, design_flow_lps=pipe.design_flow_lps,
+        inner_diameter_mm=pipe.inner_diameter_mm, slope_per_mille=pipe.slope_per_mille,
+        material=pipe.material, manning_n=pipe.manning_n,
+        roughness_source=pipe.hydraulic_source,
+    ))
+    assert next(h for h in result.hydraulics if h.section_id == pipe.section_id) == expected
+    assert project.sewage.elements == before
+    assert pipe.fill_ratio is None
+    assert pipe.section_id not in result.resolved_flows_lps  # Never infer branch shares.
+    assert pipe.section_id not in {s.section_id for s in result.linear_service_checks}
+
+
+@pytest.mark.parametrize("missing", ["design_flow_lps", "manning_n", "slope_per_mille", "hydraulic_source"])
+def test_branch_missing_input_is_explained_without_a_default(missing):
+    project = _project()
+    pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
+    pipe.design_flow_lps = 2.758
+    pipe.manning_n = 0.011
+    pipe.hydraulic_source = "явные исходные данные только теста"
+    setattr(pipe, missing, "" if missing == "hydraulic_source" else None)
+    result = assess_wastewater_diagnostics(project)
+    assert pipe.section_id not in {h.section_id for h in result.hydraulics}
+    assert any(pipe.section_id in warning for warning in result.warnings)
+    if missing != "slope_per_mille":
+        # A missing slope is separately rejected by the existing topology audit.
+        assert not any(pipe.section_id in error for error in result.errors)
+
+
+def test_k2_does_not_get_domestic_self_cleaning_rules_implicitly():
+    project = _project()
+    pipe = next(p for p in project.sewage.pipes if p.section_id == "К2-М1")
+    pipe.design_flow_lps = 2.758
+    pipe.manning_n = 0.011
+    pipe.hydraulic_source = "явные исходные данные только теста"
+    assert pipe.section_id not in {h.section_id for h in assess_wastewater_diagnostics(project).hydraulics}
+
+
+def test_overloaded_branch_is_not_reported_as_a_successful_calculation():
+    project = _project()
+    pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
+    pipe.design_flow_lps = 100.0  # Deliberately impossible load for this test pipe.
+    pipe.manning_n = 0.011
+    pipe.hydraulic_source = "явные исходные данные только теста"
+    result = assess_wastewater_diagnostics(project)
+    hydraulic = next(h for h in result.hydraulics if h.section_id == pipe.section_id)
+    assert hydraulic.status == "fail"
+    assert hydraulic.fill_ratio is None
+    assert any(pipe.section_id in e and "пропускную" in e for e in result.errors)
+    assert pipe.fill_ratio is None
 
 
 def test_demo_resolves_flow_and_keeps_explicit_lower_turn_access():

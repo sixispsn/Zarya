@@ -13,6 +13,7 @@ from app.intake.yaml_io import load_request_file
 from app.pz.commission import build_commission_report
 from app.pz.ios2_orchestrator import design_ios2
 from app.pz.wastewater_diagnostics import WastewaterDiagnosticAssessment
+from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
 from app.pz.wastewater_gost import _current_calculated_fill, audit_wastewater_gost
 from app.quality_gates import build_release_quality_report
 from scripts.verify_control_release import blocker_snapshot, check_expected_blockers
@@ -59,7 +60,9 @@ def test_stale_hydraulic_result_cannot_close_missing_fill(demo, field, value):
     project = deepcopy(demo[1])
     pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-М1")
     setattr(pipe, field, value)
-    assert _current_calculated_fill(pipe, project.sewage.hydraulic_assessment) is None
+    assert _current_calculated_fill(
+        pipe, project.sewage.hydraulic_assessment, design_flow_lps=2.758,
+    ) is None
 
 
 @pytest.mark.parametrize("changes", [{"status": "fail"}, {"fill_ratio": float("nan")}, {"fill_ratio": None}])
@@ -68,7 +71,41 @@ def test_failed_or_invalid_calculated_fill_is_not_accepted(demo, changes):
     assessment = project.sewage.hydraulic_assessment
     assessment.hydraulics[0] = replace(assessment.hydraulics[0], **changes)
     pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-М1")
-    assert _current_calculated_fill(pipe, assessment) is None
+    assert _current_calculated_fill(pipe, assessment, design_flow_lps=2.758) is None
+
+
+@pytest.mark.parametrize("source", ["explicit", "riser", "removed"])
+def test_changed_flow_cannot_reuse_old_fill_even_if_geometry_is_unchanged(demo, source):
+    project = deepcopy(demo[1])
+    main = next(p for p in project.sewage.pipes if p.section_id == "К1-М1")
+    if source == "explicit":
+        main.design_flow_lps = 3.5
+    elif source == "riser":
+        next(r for r in project.sewage.risers if r.riser_id == "К1-Ст1").design_flow_lps = 3.5
+    else:
+        project.sewage.risers = []
+    # The cached resolver result also belongs to the OLD load. Re-read inputs.
+    assert project.sewage.hydraulic_assessment.resolved_flows_lps["К1-М1"] == 2.758
+    missing = _hydraulic_row(project).evidence.split("не задано и не рассчитано h/d: ")[1]
+    assert "К1-М1" in missing
+
+
+def test_supplied_branch_load_is_calculated_without_retyping_fill(demo):
+    project = deepcopy(demo[1])
+    branch = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
+    branch.design_flow_lps = 2.758
+    branch.manning_n = 0.011
+    branch.hydraulic_source = "явные исходные данные только теста"
+    project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
+    calculated = next(h for h in project.sewage.hydraulic_assessment.hydraulics if h.section_id == branch.section_id)
+    assert calculated.status == "verified"
+    assert calculated.fill_ratio is not None
+    assert branch.fill_ratio is None
+    missing = _hydraulic_row(project).evidence.split("не задано и не рассчитано h/d: ")[1]
+    assert branch.section_id not in missing
+    branch.design_flow_lps = 3.5
+    missing = _hydraulic_row(project).evidence.split("не задано и не рассчитано h/d: ")[1]
+    assert branch.section_id in missing
 
 
 def test_pressure_rated_material_does_not_prove_pressure_flow(demo):

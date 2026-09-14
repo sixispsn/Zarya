@@ -683,8 +683,9 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
             assessment.errors.append(f"{riser_id}: {check.note}")
 
     for pipe in pipes:
-        if _is_riser(pipe) or _is_branch(pipe):
+        if _is_riser(pipe):
             continue
+        is_branch = _is_branch(pipe)
         if (
             pipe.calculation_length_m is not None
             and pipe.slope_per_mille is not None
@@ -701,7 +702,9 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
                     f"{pipe.section_id}: уклон {pipe.slope_per_mille:g}‰ "
                     f"не совпадает с отметками ({geometric_slope:.2f}‰)"
                 )
-        if pipe.system in {"K1", "K2"}:
+        # Проверка линейного обслуживания магистралей не должна по шаблону
+        # добавляться к этажным ветвям. Их доступ проверяет профильный СП-слой.
+        if not is_branch and pipe.system in {"K1", "K2"}:
             service = _linear_service_check(project, pipe)
             assessment.linear_service_checks.append(service)
             if service.status == "fail":
@@ -724,11 +727,24 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
                 assessment.warnings.append(f"{pipe.section_id}: {service.note}")
 
         flow = flows.get(pipe.section_id, pipe.design_flow_lps)
-        if pipe.system not in {"K1", "K3"} or flow is None:
+        # Для ветви используется ТОЛЬКО её явно заданный расход. Общий расход
+        # здания/стояка между приборами не распределяется. К2 не наследует
+        # критерии самоочищения бытовых стоков из этого расчётного модуля.
+        if pipe.system not in {"K1", "K3"}:
             continue
-        if pipe.slope_per_mille is None or pipe.manning_n is None:
+        missing = []
+        if flow is None:
+            missing.append("расчётный расход участка")
+        if pipe.slope_per_mille is None:
+            missing.append("уклон")
+        if pipe.manning_n is None:
+            missing.append("коэффициент шероховатости n")
+        if not pipe.hydraulic_source.strip():
+            missing.append("источник коэффициента шероховатости")
+        if missing:
             assessment.warnings.append(
-                f"{pipe.section_id}: расчёт Шези требует уклон и явный n"
+                f"{pipe.section_id}: расчёт Шези не выполнен; требуется "
+                + ", ".join(missing)
             )
             continue
         try:

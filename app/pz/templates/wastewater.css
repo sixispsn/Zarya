@@ -16,12 +16,24 @@
 .riser-calc { font-size: 8.5pt !important; }
 .riser-calc th:nth-child(1) { width: 10%; }
 .riser-calc th:nth-child(2) { width: 9%; }
-.riser-calc th:nth-child(3) { width: 18%; }
+.riser-calc th:nth-child(3) { width: 16%; }
 .riser-calc th:nth-child(4) { width: 13%; }
 .riser-calc th:nth-child(5) { width: 8%; }
-.riser-calc th:nth-child(6) { width: 10%; }
+.riser-calc th:nth-child(6) { width: 12%; }
 .riser-calc th:nth-child(7) { width: 32%; }
 .pipe-calc { font-size: 8.5pt !important; }
+/* Fixed-layout numerical columns must leave real space for the verdict. */
+table.data.hydraulic-calc th,
+table.data.hydraulic-calc td { padding: 2pt 3pt; overflow-wrap: break-word; }
+.hydraulic-calc th:nth-child(1) { width: 13%; }
+.hydraulic-calc th:nth-child(2) { width: 7%; }
+.hydraulic-calc th:nth-child(3) { width: 9%; }
+.hydraulic-calc th:nth-child(4) { width: 6%; }
+.hydraulic-calc th:nth-child(5) { width: 10%; }
+.hydraulic-calc th:nth-child(6) { width: 7%; }
+.hydraulic-calc th:nth-child(7) { width: 7%; }
+.hydraulic-calc th:nth-child(8) { width: 15%; }
+.hydraulic-calc th:nth-child(9) { width: 26%; }
 .systems-table, .gost-audit, .gost-pipes, .scheme-pipes {
   font-size: 7.7pt !important;
 }

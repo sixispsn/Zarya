@@ -73,6 +73,10 @@
 данные: [`docs/commission_readiness_2026-09-13.md`](docs/commission_readiness_2026-09-13.md).
 Разбор графических эталонов и настройки типов:
 [`docs/visual_regression_review_2026-09-13.md`](docs/visual_regression_review_2026-09-13.md).
+Следующий проход: устранён пропуск гидравлики явно заданных этажных ветвей;
+рассчитанное h/d проверяется также по текущему расходу, а не только геометрии.
+Четыре группы исходных замечаний сохранены. Подробности и необходимые данные:
+[`docs/branch_hydraulics_review_2026-09-14.md`](docs/branch_hydraulics_review_2026-09-14.md).
 
 Принятое архитектурное решение по генератору ИОС3 зафиксировано в
 [`docs/adr/001-canonical-wastewater-scheme-api.md`](docs/adr/001-canonical-wastewater-scheme-api.md).

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from math import isclose, isfinite
 from typing import List
 
+from app.pz.wastewater_diagnostics import resolve_k1_main_flows
 from app.pz.wastewater_topology import _is_riser as is_sewer_riser
 
 
@@ -33,7 +34,7 @@ class WastewaterGostAudit:
         return not self.missing
 
 
-def _current_calculated_fill(pipe, assessment):
+def _current_calculated_fill(pipe, assessment, *, design_flow_lps):
     """Прочитать готовый результат, не рассчитывая и не изменяя исходные данные.
 
     Результат с ошибкой или от другой геометрии не закрывает недостаток данных.
@@ -49,6 +50,12 @@ def _current_calculated_fill(pipe, assessment):
     if row.status != "verified" or row.fill_ratio is None:
         return None
     if not isfinite(row.fill_ratio) or not 0 <= row.fill_ratio <= 1:
+        return None
+    # Расход перечитывается из текущего проекта, а не из кэша диагностики.
+    # Сравниваем с той же точностью, с которой решатель хранит результат.
+    if design_flow_lps is None or not isfinite(design_flow_lps) or not (
+        isclose(row.design_flow_lps, round(design_flow_lps, 3), abs_tol=1e-9)
+    ):
         return None
     if pipe.slope_per_mille is None or not (
         isclose(row.inner_diameter_mm, pipe.inner_diameter_mm, abs_tol=1e-6)
@@ -196,10 +203,14 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
     missing_fills = []
     calculated_fills = []
     declared_fills = []
+    current_flows, _ = resolve_k1_main_flows(project)
     for pipe in gravity:
         if pipe.slope_per_mille is None:
             missing_slopes.append(pipe.section_id)
-        calculated_fill = _current_calculated_fill(pipe, s.hydraulic_assessment)
+        calculated_fill = _current_calculated_fill(
+            pipe, s.hydraulic_assessment,
+            design_flow_lps=current_flows.get(pipe.section_id, pipe.design_flow_lps),
+        )
         if calculated_fill is not None:
             calculated_fills.append(pipe.section_id)
         elif pipe.fill_ratio is not None and isfinite(pipe.fill_ratio) and 0 <= pipe.fill_ratio <= 1:
