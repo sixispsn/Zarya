@@ -3,6 +3,10 @@ from dataclasses import asdict, replace
 import xml.etree.ElementTree as ET
 
 import pytest
+import cairosvg
+import pymupdf
+
+from tests.graphic_text_bounds import assert_graphic_text_bounds
 
 from app.data.metering_products import get_metering_catalogue
 from app.intake.project_builder import build_project
@@ -158,8 +162,9 @@ def test_svg_marks_match_pipe_schedule_and_no_hydraulic_mutation_or_fake_total()
         assert 'width="420mm" height="297mm"' in svg
         for element in ET.fromstring(svg).iter():
             if element.tag.endswith("text"):
-                assert float(element.get("y")) <= 292
                 assert "Ø" not in (element.text or "") and "⌀" not in (element.text or "")
+        with pymupdf.open(stream=cairosvg.svg2pdf(bytestring=svg.encode()), filetype="pdf") as pdf:
+            assert_graphic_text_bounds(pdf[0], 420, 297, "А3")
 
 
 def test_pipe_label_escaping_and_empty_old_project_no_new_sheet():

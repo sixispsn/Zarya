@@ -7,6 +7,8 @@ import cairosvg
 import pymupdf
 import pytest
 
+from tests.graphic_text_bounds import assert_graphic_text_bounds
+
 from scripts.review_residential_water_matrix import CASES,build_case,audit_documents,domestic_sheet
 from app.pz.generator import generate_pz_html
 from app.pz.spec import build_specification
@@ -30,11 +32,9 @@ def test_drawing_pz_spec_share_current_sizes_and_components(case):
 def test_every_printed_word_fits_sheet_and_known_datums_survive(case):
     p=build_case(case);result=domestic_sheet(p)
     pdf=pymupdf.open(stream=cairosvg.svg2pdf(bytestring=result.svg.encode()),filetype='pdf')
-    page=pdf[0];mm=72/25.4
-    safe=pymupdf.Rect(20*mm,5*mm,589*mm,415*mm)
+    page=pdf[0]
     assert len(pdf)==1 and not page.get_images()
-    for word in page.get_text('words'):
-        assert safe.contains(pymupdf.Rect(word[:4])),word
+    assert_graphic_text_bounds(page,594,420,'А2')
     assert '\ufffd' not in page.get_text()
     root=ET.fromstring(result.svg)
     controls={e.get('data-control-datum'):e.get('data-value') for e in root.iter() if e.get('data-control-datum')}

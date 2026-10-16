@@ -4,6 +4,10 @@ from types import MappingProxyType
 import xml.etree.ElementTree as ET
 
 import pytest
+import cairosvg
+import pymupdf
+
+from tests.graphic_text_bounds import assert_graphic_text_bounds
 
 from app.data.metering_products import get_metering_catalogue
 from app.pz.metering_connections import check_connections
@@ -182,9 +186,8 @@ def test_pdf_source_card_ports_and_conflict_do_not_mutate_hydraulics():
     for svg in pages:
         root = ET.fromstring(svg)
         assert root.get("width") == "420mm" and root.get("height") == "297mm"
-        for element in root.iter():
-            if element.tag.endswith("text"):
-                assert float(element.get("y")) <= 292
+        with pymupdf.open(stream=cairosvg.svg2pdf(bytestring=svg.encode()), filetype="pdf") as pdf:
+            assert_graphic_text_bounds(pdf[0], 420, 297, "А3")
     assert not any('data-meter-connections' in s for s in build_metering_detail_pages(review_project()))
 
 
