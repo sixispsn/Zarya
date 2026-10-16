@@ -9,7 +9,7 @@ from app.pz.fire_station_binding import digest, validate_design, station_spec_ro
 
 
 def assert_repair_platform_parity(actual, stored):
-    # Linux libm differs from the signed macOS result by exactly one ULP in
+    # The Linux run differs from the signed macOS result by exactly one ULP in
     # this one extremum (22.060048801277876 versus 22.060048801277873).
     # All other values, keys, types, signatures and flags remain digest-exact.
     # Normalize only a TEST copy; never re-sign or mutate either result.

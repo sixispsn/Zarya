@@ -56,7 +56,11 @@ def test_ci_has_parity_full_suite_and_container_smoke_gates():
     workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
     assert "Legacy parity gate" in workflow
     assert "Full test suite" in workflow
-    assert 'NODE_BINARY="$(command -v node)" python -m pytest' in workflow
+    assert 'NODE_BINARY="$(command -v node)" timeout --signal=INT --kill-after=30s 20m' in workflow
+    assert "shard: [0, 1, 2, 3]" in workflow
+    assert "fail-fast: false" in workflow
+    assert "needs: regression-shards" in workflow
+    assert "python scripts/pytest_shards.py check --total 4" in workflow
     assert "container-smoke" in workflow
     assert "github.sha" in workflow
     assert "Normative contract gate" in workflow
