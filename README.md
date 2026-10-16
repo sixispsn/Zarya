@@ -139,11 +139,26 @@ pip install -r requirements.txt
 python start_zarya.py
 ```
 
-Тесты:
+Полная техническая проверка (Python 3.12, Node.js 22 в PATH; для PDF нужны
+Cairo/Pango и шрифты, перечень Linux-пакетов закреплён в существующем
+`.github/workflows/quality.yml`). Зависимости тестов, включая PyMuPDF,
+устанавливаются отдельно от зависимостей приложения:
 
 ```bash
-pytest -q
+python -m pip install -r requirements-quality.txt
+python scripts/rebuild_working_legacy.py --check
+export NODE_BINARY="$(command -v node)"
+python -m pytest -q
+node --test tests/*.test.cjs
 ```
+
+При нестандартном расположении Node задайте `NODE_BINARY` полным путём к нему.
+Автоматический сбор pytest ограничен `tests/`: временные копии проектов в
+`tmp/` не являются вторым тестовым набором. Полный прогон включает генерацию
+PDF и может занять десятки минут. Успешный CI не заменяет инженерную приёмку
+реального проекта и не запускает развёртывание.
+Проверки личных PDF-источников явно пропускаются, если этих файлов нет:
+они не входят в репозиторий. Расчётные проверки при этом не пропускаются.
 
 ## Размещение на сервере
 

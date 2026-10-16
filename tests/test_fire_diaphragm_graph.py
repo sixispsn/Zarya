@@ -94,17 +94,22 @@ def test_unknown_data_or_no_convergence_is_not_a_pass(constructed_network):
     assert out.operating is None and out.pump_flow_m3h is None
 
 
-def test_samara_apertures_joint_check_and_pdf(tmp_path):
-    from pypdf import PdfReader
-    from scripts.build_samara_diaphragm_apertures import calculate_apertures,render_apertures,extract_nomogram
+@pytest.fixture(scope='module')
+def samara_aperture_review(tmp_path_factory):
+    from scripts.build_samara_diaphragm_apertures import calculate_apertures
     from scripts.build_samara_section_study import load_basis,make_draft,make_request,make_fire_station
     from app.intake.project_builder import build_project
     from app.pz.ios2_orchestrator import design_ios2
     b=load_basis();bundle=design_ios2(build_project(make_request(make_draft(b))),
-        output_dir=str(tmp_path),fire_station=make_fire_station(b),render_documents=False)
+        output_dir=str(tmp_path_factory.mktemp('apertures')),fire_station=make_fire_station(b),render_documents=False)
     before=deepcopy(bundle.fire_station_result.network);pump=deepcopy(bundle.project.fire_pumps)
     review=calculate_apertures(b,bundle)
     assert bundle.fire_station_result.network==before and bundle.project.fire_pumps==pump
+    return review
+
+
+def test_samara_apertures_joint_check(samara_aperture_review):
+    review=samara_aperture_review
     assert [g['upper_mm'] for g in review['groups']]==[13,13.5,14.5,15.5,18]
     assert [g['next_size_mm'] for g in review['groups']]==[13.5,14,15,16,18.5]
     near,upper,*sensitivity=review['variants']
@@ -135,7 +140,16 @@ def test_samara_apertures_joint_check_and_pdf(tmp_path):
                     aperture_mm=s['apertures_mm'][c['cabinet_id']],axis_offset_px=variant['axis_offset_px'])
                 assert c['control_drop_m']==pytest.approx(dp*MPA_TO_M,abs=1e-7)
                 assert c['within_device_range']
-    image=extract_nomogram()
+
+
+def test_samara_apertures_pdf_with_verified_private_nomogram(tmp_path,samara_aperture_review):
+    from pypdf import PdfReader
+    from scripts.build_samara_diaphragm_apertures import render_apertures,extract_nomogram
+    try:
+        image=extract_nomogram()
+    except FileNotFoundError as exc:
+        pytest.skip(f"Private source PDF is not distributed: {exc.filename}")
+    review=samara_aperture_review
     pdf=tmp_path/'apertures.pdf';render_apertures(pdf,review,image)
     pages=PdfReader(pdf).pages
     assert len(pages)==3

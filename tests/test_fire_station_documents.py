@@ -50,7 +50,7 @@ def current_study(tmp_path_factory):
 
 def test_bound_to_current_hydraulics_but_no_false_station_approval(current_study,tmp_path):
     from pypdf import PdfReader
-    from scripts.build_samara_station_passport import render_station_review,verify_sources
+    from scripts.build_samara_station_passport import render_station_review
     b,station,bundle,a=current_study
     before=deepcopy(a)
     r=review_station_documents(b,bundle.fire_station_result,station,a)
@@ -69,13 +69,20 @@ def test_bound_to_current_hydraulics_but_no_false_station_approval(current_study
     assert r['factory_control_check']['status']=='conflict'
     assert r['product_control_check']['status']=='needs_data'
     assert not r['evidence']['selection_confirmed']
-    verify_sources()
     path=tmp_path/'station.pdf';render_station_review(path,r)
     pdf=PdfReader(path);assert len(pdf.pages)==3
     text=' '.join(' '.join(p.extract_text() for p in pdf.pages).split())
     for phrase in ['не отправлен','не комплект ИОС2','не учтена','Материал оставлен неопределённым',
                    'не разрешение на монтаж','Полный заказной код']:
         assert phrase in text
+
+
+def test_private_station_sources_match_recorded_hashes_when_available():
+    from scripts.build_samara_station_passport import verify_sources
+    try:
+        verify_sources()
+    except FileNotFoundError as exc:
+        pytest.skip(f"Private source PDF is not distributed: {exc.filename}")
 
 
 @pytest.mark.parametrize('mutation',['basis','curve','curve_source','station','missing_variant',

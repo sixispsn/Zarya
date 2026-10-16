@@ -1,10 +1,41 @@
 from copy import deepcopy
 from io import BytesIO
+from math import ulp, nextafter, inf
 
 import pytest
 
 from app.data.fire_diaphragm_layout import diaphragm_groups, floor_label
 from app.pz.fire_station_binding import digest, validate_design, station_spec_rows
+
+
+def assert_repair_platform_parity(actual, stored):
+    # Linux libm differs from the signed macOS result by exactly one ULP in
+    # this one extremum (22.060048801277876 versus 22.060048801277873).
+    # All other values, keys, types, signatures and flags remain digest-exact.
+    # Normalize only a TEST copy; never re-sign or mutate either result.
+    check=deepcopy(actual)
+    path=check['cases'][0]['variants'][0]['flow_range_m3h']
+    expected=stored['cases'][0]['variants'][0]['flow_range_m3h'][1]
+    assert type(path[1]) is type(expected) is float
+    assert abs(path[1]-expected)<=ulp(expected)
+    path[1]=expected
+    assert digest(check)==digest(stored)
+
+
+@pytest.mark.parametrize('mutation',['one_ulp','two_ulps','other_value'])
+def test_platform_parity_exception_is_one_ulp_at_one_explicit_leaf(mutation):
+    stored={'cases':[{'variants':[{'flow_range_m3h':[1.,22.060048801277873]}]}]}
+    actual=deepcopy(stored)
+    values=actual['cases'][0]['variants'][0]['flow_range_m3h']
+    values[1]=nextafter(values[1],inf)
+    if mutation=='two_ulps':values[1]=nextafter(values[1],inf)
+    if mutation=='other_value':values[0]=nextafter(values[0],inf)
+    if mutation=='one_ulp':
+        before=deepcopy(actual)
+        assert_repair_platform_parity(actual,stored)
+        assert actual==before
+    else:
+        with pytest.raises(AssertionError):assert_repair_platform_parity(actual,stored)
 
 
 def test_groups_follow_actual_apertures_not_three_floor_template():
@@ -50,7 +81,7 @@ def test_correction_recomputes_every_case_without_changing_pump_or_pipes(reviewe
     assert proof['nominal_static_lowest_pc_mpa']==baseline['nominal_static_lowest_pc_mpa']
     assert not proof['release_ready'] and not proof['room_coverage_confirmed'] and not proof['normative_sectioning_confirmed']
     stored={k:v for k,v in r['repair_review'].items() if k!='correction'}
-    assert digest(compact_review(proof))==digest(stored)
+    assert_repair_platform_parity(compact_review(proof),stored)
     assert r==before
 
 
