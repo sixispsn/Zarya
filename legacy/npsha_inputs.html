@@ -1,0 +1,24 @@
+<details style="margin:0 0 1rem" oninput="renderNpshaBalance()">
+  <summary>Отдельный расчёт NPSHa · CNP</summary>
+  <p style="font-size:12px">Каталог CDM/CDMF 24.11.2025, с. 18. NPSHa = 10,2·Pb(abs) + zист − zнас − Hf − Hv.
+    Это проверка заданного режима, не автоматическое подтверждение насоса. Результат не переносится в подбор молча.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;font-size:12px">
+    <label>Вид давления<select data-npsha-field="pressure_kind" data-label="вид давления"><option value="">Выберите</option><option value="absolute">Абсолютное</option><option value="gauge">Избыточное</option></select></label>
+    <label>Давление в исходном сечении, бар<input type="number" step="any" data-npsha-field="pressure_bar" data-label="давление, бар"></label>
+    <label id="npsha_atmospheric_label" hidden>Атмосферное давление, бар<input type="number" step="any" data-npsha-field="atmospheric_pressure_bar" data-label="атмосферное давление, бар"></label>
+    <label>Отметка исходного сечения / уровня, м<input type="number" step="any" data-npsha-field="source_elevation_m" data-label="отметка исходного сечения"></label>
+    <label>Отметка оси всасывания насоса, м<input type="number" step="any" data-npsha-field="pump_elevation_m" data-label="отметка оси насоса"></label>
+    <label>Все потери до насоса Hf, м<input type="number" step="any" min="0" data-npsha-field="suction_losses_m" data-label="потери всасывания Hf"></label>
+    <label>Максимальная рабочая подача одного насоса, м³/ч<input type="number" step="any" data-npsha-field="max_flow_m3h" data-label="максимальная рабочая подача"></label>
+    <label>Расчётная температура воды, °C<input type="number" step="any" data-npsha-field="temperature_c" data-label="температура воды"></label>
+    <label>Давление паров Hv при этой температуре, м<input type="number" step="any" min="0" data-npsha-field="vapor_head_m" data-label="давление паров Hv"></label>
+    <label>NPSHr при той же максимальной подаче, м<input type="number" step="any" min="0" data-npsha-field="npshr_m" data-label="NPSHr"></label>
+    <label>Запас Hs (минимум CNP 0,5 м), м<input type="number" step="any" min="0.5" value="0.5" data-npsha-field="safety_margin_m" data-label="запас Hs"></label>
+    <label>Модель / кривая / расход для NPSHr<input type="text" data-npsha-field="npshr_basis" data-label="источник NPSHr" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></label>
+  </div>
+  <label style="display:block;margin-top:10px;font-size:12px">Основание давления, отметок, режима, потерь и Hv
+    <textarea data-npsha-field="basis" data-label="основание исходных данных" rows="3" style="width:100%;box-sizing:border-box;padding:5px 8px;font-family:inherit;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></textarea>
+  </label>
+  <p style="font-size:12px">Hf включает ВУ, фильтры, общие участки и обвязку до насоса при максимальном рабочем режиме, без повторного учёта. Резервный насос не удваивает подачу. Отметки задаются в одной системе. Hv по температуре автоматически не определяется.</p>
+  <div id="npsha_balance_result" role="status" style="font-size:12px;margin-top:10px">Введите исходные данные. Нулевые отметки и нулевые потери требуют явного ввода.</div>
+</details>

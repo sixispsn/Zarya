@@ -1,0 +1,16 @@
+<dialog id="pilot-snapshot" class="pilot-dialog" aria-labelledby="pilot-snapshot-title">
+  <div class="pilot-dialog-heading"><h2 id="pilot-snapshot-title">Сохранить версию объекта</h2><button type="button" data-snapshot-close aria-label="Закрыть сохранение версии">×</button></div>
+  <p>Эта копия останется в истории, когда вы измените рабочий проект.</p>
+  <p data-snapshot-error role="alert" hidden></p>
+  <form id="pilot-snapshot-form">
+    <label>Объект<select name="object_id"><option value="">Новый объект пилота</option></select></label>
+    <label data-snapshot-title-field>Название или псевдоним<input name="title" maxlength="120" required placeholder="Например, Дом-01" autocomplete="off"></label>
+    <label>Что проверяли? <span class="pilot-optional">Необязательно</span><textarea name="note" rows="2" maxlength="1000" placeholder="Например, расход и напор после уточнения ТУ"></textarea></label>
+    <p data-snapshot-state></p>
+    <details><summary>Посмотреть, какие данные сохранятся</summary><pre data-snapshot-preview></pre></details>
+    <label class="pilot-consent"><input type="checkbox" name="consent" required><span>Подтверждаю передачу показанных исходных, текстовых пояснений и численных результатов владельцу ЗАРИ для анализа пилота. Имею право поделиться этими данными.</span></label>
+    <p class="pilot-snapshot-privacy">Файлы PDF, цитаты и имена исходных документов не копируются. Название из анкеты не переносится — используется указанный здесь псевдоним. Снимок доступен вам и владельцу. Удаление исходного PDF не удаляет эту отдельную копию; для удаления копии обратитесь к владельцу.</p>
+    <button class="pilot-primary" type="submit">Сохранить отдельную версию</button>
+  </form>
+  <div data-snapshot-result role="status" tabindex="-1" hidden></div>
+</dialog>

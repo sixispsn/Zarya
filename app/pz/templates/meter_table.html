@@ -4,6 +4,17 @@
    (ГОСТ 21.619-2023, п. 5.1.13). Контекст: meters (MetersSystem).
    Подключение: {% include "meter_table.html" %}
 =========================================================================== #}
+{% if metering_options %}
+<p class="equip-note">{{ metering_options_notice }}</p>
+{% for option in metering_options %}
+<p class="equip-note">{{ option.title }} — {{ option.label }}. {{ option.requirement }}</p>
+{% endfor %}
+{% endif %}
+{% if meters.selection_error %}
+<p class="equip-verdict bad">Подбор водомерных узлов не выполнен. {{ meters.selection_error }}</p>
+<p class="equip-note">Потери в неподобранных водомерах не определены. Расчёт напора и подбор насоса требуют дополнения.</p>
+{% endif %}
+{% if meters.rows %}
 <table class="equip">
   <thead>
     <tr>
@@ -28,6 +39,12 @@
   </thead>
   <tbody>
     {% for r in meters.rows %}
+      {% set average_check = check_meter_average(r, flows, source) %}
+      {% set mp = meter_product_check(project, r) %}
+      {% set bound = mp.automatic or mp.product or mp.errors %}
+      {% set min_ok = mp.minimum_ok if bound else r.ok_v %}
+      {% set min_q = mp.evidence.q_min_passport_m3h if bound else r.q_min_passport_m3h %}
+      {% set min_design = mp.evidence.q_min_hourly_m3h if bound else r.q_min_hourly_m3h %}
       <tr>
         <td class="m-name">{{ r.label }}</td>
         <td class="m-dn">{{ r.dn }}</td>
@@ -46,10 +63,15 @@
           <td class="m-h">—</td><td class="m-lim">—</td>
         {% endif %}
         {# проверка в) #}
-        <td class="m-v {{ 'ok' if r.ok_v else 'warn' }}">{{ r.qmin | num(3) }} ≤ {{ r.q_hr | num(3) }}{{ ' ✓' if r.ok_v else ' !' }}</td>
+        <td class="m-v {{ 'ok' if min_ok else 'warn' }}">{% if min_ok is none %}Нужны данные{% else %}{{ min_q | num(3) }} ≤ {{ min_design | num(3) }}{{ ' ✓' if min_ok else ' !' }}{% endif %}</td>
         {# вывод #}
-        <td class="m-out">
-          {%- if r.need_bypass %}+ обводная (12.10, 12.11)
+        <td class="m-out {{ 'bad' if average_check[0] is false else '' }}">
+          {%- if average_check[0] is false %}не подходит по Qсред
+          {%- elif average_check[0] is none %}проверить Qсред
+          {%- elif mp.errors %}модель не подтверждена
+          {%- elif min_ok is none %}предварительно
+          {%- elif not r.ok_a or min_ok is false %}требует уточнения
+          {%- elif r.need_bypass %}+ обводная (12.10, 12.11)
           {%- elif r.need_combo %}комбинированный
           {%- else %}принят{% endif -%}
         </td>
@@ -57,18 +79,48 @@
     {% endfor %}
   </tbody>
 </table>
-{% if meters.inputs_count > 1 %}
+{% endif %}
+{% if metering_principle is defined and metering_principle.common_inlets %}
+<p class="equip-note">Принят один общий вводной ВУ для {{ meters.inputs_count }} вводов. Табличные расходы и потери относятся к общему счётчику; расход не делится по числу вводов.</p>
+{% if metering_principle.modes_notice %}<p class="equip-note">{{ metering_principle.modes_notice }}</p>{% endif %}
+{% elif meters.inputs_count > 1 %}
 <p class="equip-note">Приняты {{ meters.inputs_count }} одинаковых вводных узла учёта — по одному на каждом вводе. Табличные параметры и потери приведены для одного узла.</p>
 {% endif %}
 <p class="equip-verdict">
+  Подбор по среднему расходу: Q<sub>сред</sub>&nbsp;=&nbsp;Q<sub>сут</sub>/T&nbsp;≤&nbsp;Q<sub>экспл</sub> (п. 12.14).
   Проверки: а) потери при расчётном секундном расходе h&nbsp;=&nbsp;S·q<sub>с</sub>² (предел 5&nbsp;м крыльчатый / 2,5&nbsp;м турбинный);
   б) то же при пропуске пожарного расхода h&nbsp;=&nbsp;S·(q<sub>с</sub>+Q<sub>пож</sub>)² (предел 10&nbsp;/&nbsp;5&nbsp;м);
-  в) измерение минимальных расходов (q<sub>min</sub> счётчика&nbsp;≤&nbsp;часового расхода).
+  в) измерение минимальных расходов (q<sub>min</sub> по паспорту счётчика&nbsp;≤&nbsp;минимального расчётного часового расхода, п. 12.16в).
+  Табличный диапазон расходов не заменяет паспорт выбранной модели.
+  Потери рассчитаны по п. 12.15, формуле (18), с S из таблицы 12.1;
+  это не паспортная характеристика конкретного изделия.
 </p>
-{% if meters.single_input_bypass_note %}
+{% for r in meters.rows %}
+{% set average_check = check_meter_average(r, flows, source) %}
+{% set mp = meter_product_check(project, r) %}
+<div style="break-inside: avoid; page-break-inside: avoid;">
+<p class="equip-note {{ 'bad' if average_check[0] is false else '' }}">{{ r.label }}: {{ average_check[1] }}.</p>
+{% if mp.product %}
+<p class="equip-note">{{ mp.product.name }}{% if mp.automatic %} (предложение каталога){% endif %}.
+Паспортный Qmin = {{ mp.evidence.q_min_passport_m3h | num(3) }}, Qmax = {{ mp.product.flows_m3h.qmax | num(1) }} м³/ч;
+длина корпуса {{ mp.product.body_length_mm | num(0) }} мм.
+{% for source in mp.summary().sources %}<a href="{{ source.url }}" title="{{ source.title }}">Паспорт изготовителя</a>{% endfor %}</p>
+{% set hydraulic = mp.summary().hydraulic_evidence %}
+{% if hydraulic %}<p class="equip-note">{{ hydraulic.note }}</p>{% endif %}
+<p class="equip-note">{{ mp.minimum_note }}{% if mp.evidence.flow_reference %}. Основание: {{ mp.evidence.flow_reference }}{% endif %}.
+{% for note in mp.pending %}{{ note }}. {% endfor %}</p>
+{% elif mp.errors %}<p class="equip-note bad">{{ r.label }}: {{ mp.errors | join('; ') }}.</p>
+{% else %}
+<p class="equip-note">{{ r.label }}: {{ r.minimum_flow_note or 'Проверка минимального расхода не подтверждена' }}{% if r.passport_reference %}. Паспорт: {{ r.passport_reference }}{% endif %}{% if r.flow_reference %}. Основание минимального расхода: {{ r.flow_reference }}{% endif %}.</p>
+{% endif %}
+</div>
+{% endfor %}
+{% if metering_principle is defined and metering_principle.common_inlets %}
+<p class="equip-note">{% if metering_principle.switching_bridge %}Две обводные ветви общего ВУ по рисунку Г.1; в режиме учёта закрыты и опломбированы.{% else %}Обводная общего ВУ предусмотрена для обслуживания.{% endif %} Проверка пожарного расхода и необходимость электропривода выполняются отдельно, по принятому подключению В2.</p>
+{% elif meters.single_input_bypass_note %}
 <p class="equip-note">При одном вводе водопровода обводная линия у счётчика ХВС предусматривается обязательно (п. 12.10 СП 30.13330.2020).</p>
-{% elif meters.inputs_count > 1 and not meters.has_bypass and meters.fire_flow_through_meter %}
+{% elif meters.rows and meters.inputs_count > 1 and not meters.has_bypass and meters.fire_flow_through_meter %}
 <p class="equip-note">Вводные счётчики приняты без обводных линий при выполнении проверки п. 12.16, перечисление б) (п. 12.12 СП 30.13330.2020).</p>
-{% elif meters.inputs_count > 1 and not meters.has_bypass %}
+{% elif meters.rows and meters.inputs_count > 1 and not meters.has_bypass %}
 <p class="equip-note">Пожарный расход по принятой раздельной схеме через вводные узлы учёта В1 не проходит; обводные линии ВУ не предусматриваются.</p>
 {% endif %}

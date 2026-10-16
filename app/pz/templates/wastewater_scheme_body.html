@@ -25,7 +25,7 @@
     <div class="scheme-arrow">→</div>
     <div class="scheme-node terminal">{{ sewage.discharge_point_k1 or "Точка сброса К1 не задана" }}</div>
   </div>
-  <p>{% if sewage.result %}Q<sub>К1</sub> = {{ sewage.result.total.q_sewage_lps|num(3) }} л/с{% endif %}</p>
+  <p>{% if sewage.result %}К1 по формуле (5) для стояков: {{ sewage.result.total.q_sewage_lps|num(3) }} л/с, справочно для заданных потребителей; не расход выпуска.{% endif %}</p>
 </section>
 
 {% if grease_trap.preparation_type != "none" %}

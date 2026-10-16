@@ -1,0 +1,11 @@
+<dialog id="pilot-feedback" class="pilot-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-privacy">
+  <div class="pilot-dialog-heading"><h2 id="feedback-title">Что можно улучшить?</h2><button type="button" data-feedback-close aria-label="Закрыть">×</button></div>
+  <p id="feedback-privacy">Отправим только этот текст, тему, ваше имя участника и версию ЗАРИ. Без файлов и параметров проекта. Не указывайте пароли и конфиденциальные данные.</p>
+  <form id="pilot-feedback-form">
+    <label>Тема<select name="category"><option value="interface">Интерфейс</option><option value="calculation">Расчёт</option><option value="documents">ПЗ и схемы</option><option value="other">Другое</option></select></label>
+    <label>Что произошло?<textarea name="message" rows="5" minlength="10" maxlength="4000" required placeholder="Что вы делали, чего ожидали и что получилось?"></textarea></label>
+    <p class="pilot-feedback-error" role="alert" hidden></p>
+    <button type="submit" class="pilot-primary">Отправить замечание</button>
+  </form>
+  <p id="feedback-result" role="status" tabindex="-1" hidden></p>
+</dialog>

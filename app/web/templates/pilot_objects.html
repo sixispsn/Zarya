@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru" data-theme="light" data-ui="white">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>ЗАРЯ — объекты пилота</title>{% include 'site_assets.html' %}<link rel="stylesheet" href="/static/pilot_objects.css?v=2"><script src="/static/pilot_attachments.js?v=1" defer></script></head>
+<body>{% include 'site_header.html' %}
+<main id="main-content" class="pilot-archive" tabindex="-1">
+  <a href="/studio/projects">← Мои проекты</a>
+  {% if not object %}
+  <h1>Объекты пилота</h1>
+  <p>{% if request.state.pilot_user.role == 'admin' %}Объекты участников пилота.{% else %}Ваши сохранённые версии. Они также доступны владельцу ЗАРИ.{% endif %} После принятия условий участия результаты и выдаваемые ЗАРЕЙ PDF сохраняются автоматически. Исходные загруженные документы не копируются.</p>
+  {% for item in objects %}<article class="pilot-object"><div><small>Тестирование · {{ item.user_name }}</small><h2><a href="/studio/pilot-objects/{{ item.id }}">{{ item.title }}</a></h2><p>Версий: {{ item.versions }} · ID {{ item.id[:8] }}</p></div><a href="/studio/pilot-objects/{{ item.id }}">Открыть →</a></article>{% else %}<p class="pilot-empty">Пока нет сохранённых объектов. В рабочем проекте нажмите «Сохранить версию для пилота».</p>{% endfor %}
+  {% if cursor %}<a href="?before={{ cursor }}">Следующие объекты →</a>{% endif %}
+  {% elif not version %}
+  <p><a href="/studio/pilot-objects">Все объекты</a></p><h1>{{ object.title }}</h1><p>{{ object.user_name }} · ID {{ object.id }}</p>
+  <p>Каждая версия сохранена отдельно. Изменение рабочего черновика не меняет историю. Откройте нужную версию, чтобы прикрепить к ней комплект после экспертизы.</p>
+  {% for item in versions %}<article class="pilot-object"><div><h2><a href="/studio/pilot-objects/{{ object.id }}/versions/{{ item.number }}">Версия {{ item.number }}</a></h2><small>{{ item.date }}</small><p class="pilot-note">{{ item.note or 'Без примечания' }}</p></div><a href="/studio/pilot-objects/{{ object.id }}/versions/{{ item.number }}">Посмотреть →</a></article>{% endfor %}
+  {% if cursor %}<a href="?before={{ cursor }}">Предыдущие версии →</a>{% endif %}
+  {% else %}
+  {% set snapshot = version.snapshot %}
+  <p><a href="/studio/pilot-objects/{{ object.id }}">Все версии объекта</a></p><h1>{{ object.title }} · версия {{ version.number }}</h1>
+  <p>{{ object.user_name }} · сборка {{ snapshot.build }} · ревизия исходных {{ snapshot.draft_revision }}</p>
+  <p class="pilot-note">{{ version.note }}</p>
+  <p>На момент сохранения снимка: {{ snapshot.scope }}</p>
+  <p class="pilot-result-state">{% if snapshot.results.state == 'current' %}Численные результаты сохранены вместе с исходными. Это не означает готовность комплекта к выпуску.{% else %}Сохранены только исходные: актуального расчёта для этой версии не было. Старые результаты не перенесены.{% endif %}</p>
+  {% if snapshot.results.demand %}<div class="pilot-metrics"><div><small>Водопотребление</small><strong>{{ snapshot.results.demand.total.q_day }} м³/сут</strong></div><div><small>Расход канализации</small><strong>{{ snapshot.results.demand.sewage_flow }} л/с</strong></div></div>{% endif %}
+  <h2>Сохранённые исходные</h2><div class="pilot-table-wrap"><table><thead><tr><th>Параметр</th><th>Значение</th><th>Источник</th></tr></thead><tbody>{% for row in snapshot.inputs %}<tr><td>{{ row.label }}</td><td>{{ row.value }} {{ row.unit or '' }}</td><td>{{ {'user':'Ручной ввод','document_confirmed':'Подтверждено по документу','core_default':'Принято ядром','residential_preset':'Типовой вариант','apartment_estimate':'Предварительная оценка'}.get(row.source_kind, row.source_kind or 'Не указан') }}</td></tr>{% endfor %}</tbody></table></div>
+  <details><summary>Неуточнённые данные · {{ snapshot.unresolved|length }}</summary><ul>{% for row in snapshot.unresolved %}<li>{{ row.label }} — {{ {'missing':'не задано','review':'не подтверждено','conflict':'противоречие источников'}.get(row.status,row.status) }}</li>{% endfor %}</ul></details>
+  <details><summary>Полный снимок: результаты, допущения и ограничения</summary><pre>{{ snapshot_text }}</pre></details>
+  <p class="pilot-checksum">SHA-256: {{ version.sha256 }}</p>
+  {% if generated %}<section class="pilot-bundles"><h2>Что выдала ЗАРЯ</h2><p>{{ 'Предварительные PDF — не готовый выпуск' if generated.kind == 'preview' else 'Выданный комплект' }}. Это сохранённые файлы именно этой версии, а не заново построенные документы.</p><ul>{% for file in generated.files %}<li><a href="/studio/pilot-generated/{{ generated.bundle_id }}/files/{{ file.id }}" download>{{ file.name }}</a>{% if file.state_note %}<p>{{ file.state_note }}</p>{% endif %}<small class="pilot-checksum">SHA-256: {{ file.sha256 }}</small></li>{% endfor %}</ul></section>{% endif %}
+  <section class="pilot-bundles" aria-labelledby="pilot-bundles-title">
+    <h2 id="pilot-bundles-title">Комплекты после экспертизы</h2>
+    <p>Отдельные PDF, связанные именно с версией {{ version.number }}. Снимок исходных выше остаётся неизменным.</p>
+    {% if object.user_id == request.state.pilot_user.id %}<button type="button" class="pilot-bundle-open" data-bundle-open>Прикрепить комплект PDF</button>{% endif %}
+    {% for bundle in bundles %}<article class="pilot-object pilot-bundle" id="bundle-{{ bundle.id }}">
+      <h3>Прошёл экспертизу — со слов инженера</h3><small>{{ bundle.date }} · {{ bundle.files|length }} PDF</small>
+      <p>ЗАРЯ не проверяла подлинность заключения и соответствие этих файлов утверждённому комплекту.</p>
+      {% if bundle.expertise_ref %}<p class="pilot-note">Заключение: {{ bundle.expertise_ref }}</p>{% endif %}
+      {% if bundle.note %}<p class="pilot-note">{{ bundle.note }}</p>{% endif %}
+      <ul>{% for file in bundle.files %}<li><a href="/studio/pilot-attachments/{{ bundle.id }}/files/{{ file.id }}" download>{{ file.name }}</a> <small>· {{ file.pages }} стр. · {% if file.bytes < 1048576 %}{{ (file.bytes / 1024)|round(0, 'ceil')|int }} КБ{% else %}{{ '%.1f'|format(file.bytes / 1048576) }} МБ{% endif %}</small></li>{% endfor %}</ul>
+    </article>{% else %}<p class="pilot-empty">Пока нет прикреплённых комплектов.</p>{% endfor %}
+    <p class="pilot-bundle-privacy">Доступ только автору и владельцу ЗАРИ. PDF не публикуются и не меняют расчётные алгоритмы автоматически. Антивирусная проверка файлов не выполняется.</p>
+  </section>
+  {% if object.user_id == request.state.pilot_user.id %}{% include 'pilot_attachment_dialog.html' %}{% endif %}
+  {% endif %}
+</main></body></html>

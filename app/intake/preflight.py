@@ -129,6 +129,27 @@ def preflight_request(value: IntentLike) -> PreflightReport:
         )
     ]
 
+    if req.fire_station_model is not None:
+        from app.intake.studio_fire_station import NOTICE
+        notice = NOTICE
+        if req.fire_station_model.get("pressure_review"):
+            notice = ("Предварительная модель В2: совместная работа ПК, диафрагмы и явно заданные отключения "
+                      "проверяются отдельным расчётом L06. Его результат см. в расчётном приложении. "
+                      "Паспортные ограничения, NPSH, покрытие помещений и соответствие реальным "
+                      "ремонтным секциям требуют подтверждения; резерв не суммируется.")
+        issues.append(PreflightIssue(
+            level=PreflightLevel.RELEASE_BLOCKING,
+            code="studio.fire_station_preliminary", message=notice, systems=("В2",),
+        ))
+
+    if req.source_data and req.source_data.apartment_meter_basis:
+        issues.append(PreflightIssue(
+            level=PreflightLevel.RELEASE_BLOCKING,
+            code="studio.apartment_meter_estimate",
+            message=req.source_data.apartment_meter_basis,
+            systems=("В1", "Т3"),
+        ))
+
     # Уточняющие вопросы владеют своей применимостью, полнотой и связью с
     # Fact Registry. Это устраняет обезличенные дубликаты DTO-валидации.
     for state in questions:

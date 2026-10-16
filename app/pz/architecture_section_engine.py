@@ -16,9 +16,14 @@ from html import escape
 import json
 from math import hypot, isfinite
 from pathlib import Path
+import os
+import tempfile
 from typing import Any, Iterable, Mapping
+from xml.etree import ElementTree
 
-from app.pz.wastewater_drafting import BLACK, FONT, GRAY
+from app.pz.drafting_font import ensure_drafting_font_registered
+from app.pz.leader_layout import _text_width
+from app.pz.wastewater_drafting import BLACK, FONT
 from app.pz.wastewater_layout import (
     RectMm,
     WastewaterFloorGroup,
@@ -630,27 +635,61 @@ def architecture_section_to_wastewater_layout(
     return layout
 
 
-def _wrap_label(value: str, max_chars: int = 22) -> tuple[str, ...]:
-    words = value.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        candidate = f"{current} {word}".strip()
-        if current and len(candidate) > max_chars:
-            lines.append(current)
-            current = word
-        else:
-            current = candidate
-    if current:
-        lines.append(current)
-    return tuple(lines[:3]) or ("",)
+_SECTION_NOTICE = "Контрольный разрез. Не проектная документация. Не для выпуска."
+
+
+def _wrap_label(value: str, *, width: float, size: float = 13) -> tuple[str, ...]:
+    """Measured wrapping, including unbroken identifiers, without truncation."""
+    remaining = " ".join(value.split())
+    lines = []
+    while remaining:
+        end = 0
+        for index in range(1, len(remaining) + 1):
+            if _text_width(remaining[:index], size) > width:
+                break
+            end = index
+        if not end:
+            raise ValueError("Подпись разреза не помещается; PDF не изменён")
+        if end < len(remaining):
+            space = remaining.rfind(" ", 0, end + 1)
+            if space > 0:
+                end = space
+        lines.append(remaining[:end])
+        remaining = remaining[end:].lstrip()
+    return tuple(lines) or ("",)
+
+
+def _section_text_block(value, *, x, y, width, bottom, size=16, pitch=22):
+    lines = _wrap_label(value, width=width, size=size)
+    if y + (len(lines) - 1) * pitch > bottom:
+        raise ValueError("Пояснения разреза не помещаются; PDF не изменён")
+    return "".join(
+        f'<text x="{x:g}" y="{y+i*pitch:g}" font-family="{FONT}" '
+        f'font-size="{size:g}">{escape(line)}</text>' for i, line in enumerate(lines)
+    ), y + len(lines) * pitch
+
+
+def _validate_section_control_svg(svg):
+    """Guard printable text bounds, not all possible architectural collisions."""
+    root = ElementTree.fromstring(svg)
+    if root.get("data-release-ready") != "false":
+        raise ValueError("Контрольный разрез не является проектным выпуском")
+    for element in root.iter():
+        if not element.tag.endswith("text"):
+            continue
+        size = float(element.get("font-size"))
+        width = _text_width("".join(element.itertext()), size)
+        x, y = float(element.get("x")), float(element.get("y"))
+        anchor = element.get("text-anchor", "start")
+        left = x - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+        if left < 50 or left + width > 2750 or y - size < 50 or y > 1930:
+            raise ValueError("Подпись разреза выходит за поле; PDF не изменён")
 
 
 def build_architecture_section_control_svg(
     model: ArchitectureSectionModel,
 ) -> str:
     """Render a standalone A1 control sheet for the architecture engine."""
-    width, height = 2800, 1980
     margin = 50
     x_left, x_right = 180.0, 2580.0
     room_height = 275.0
@@ -669,9 +708,15 @@ def build_architecture_section_control_svg(
         origins[floor_no] = cursor
         previous = floor_no
     lowest_bottom = max(origins.values()) + room_height
+    if lowest_bottom + 80 > 1800:
+        raise ValueError("Этажи разреза не помещаются на одном А1; PDF не изменён")
+    subtitle, _ = _section_text_block(
+        f"Реестр {model.plan_id}; разрез {model.cut_id}; длина {_fmt(model.cut_length_m)} м; "
+        "помещения не генерируются - только пересекаются линией разреза",
+        x=88, y=134, width=2624, bottom=156)
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        'viewBox="0 0 2800 1980">',
+        'viewBox="0 0 2800 1980" data-release-ready="false">',
         '<defs><pattern id="architecture-hatch" width="22" height="22" '
         'patternUnits="userSpaceOnUse" patternTransform="rotate(35)">'
         '<line x1="0" y1="0" x2="0" y2="22" stroke="#777" stroke-width="2"/>'
@@ -679,14 +724,10 @@ def build_architecture_section_control_svg(
         'patternUnits="userSpaceOnUse"><path d="M0,18 L18,0" stroke="#bbb" '
         'stroke-width="1"/></pattern></defs>',
         '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+38}" y="{margin+50}" font-family="{FONT}" '
         'font-size="30" font-weight="bold">Контрольный модуль «План - принципиальный разрез»</text>',
-        f'<text x="{margin+38}" y="{margin+84}" font-family="{FONT}" '
-        f'font-size="16" fill="{GRAY}">Реестр {escape(model.plan_id)}; '
-        f'разрез {escape(model.cut_id)}; длина {_fmt(model.cut_length_m)} м; '
-        'помещения не генерируются — только пересекаются линией разреза</text>',
+        subtitle,
+        f'<text x="88" y="180" font-family="{FONT}" font-size="16">{_SECTION_NOTICE}</text>',
         f'<line data-architecture-roof="true" x1="{x_left}" y1="{start_y-35}" '
         f'x2="{x_right}" y2="{start_y-35}" stroke="#777" stroke-width="2"/>',
         f'<text x="{x_left-25}" y="{start_y-47}" text-anchor="end" '
@@ -722,9 +763,11 @@ def build_architecture_section_control_svg(
                 f'width="{right-left:.1f}" height="{room_height:.1f}" '
                 f'fill="{fill}" stroke="{BLACK}" stroke-width="1.5"/>'
             )
-            lines = _wrap_label(f"№{cell.number} {cell.name}")
+            lines = _wrap_label(f"№{cell.number} {cell.name}", width=right-left-20)
             centre_x = (left + right) / 2
             label_y = y + 32.0
+            if label_y + (len(lines)-1)*20 > y + room_height - 50:
+                raise ValueError("Название помещения разреза не помещается; PDF не изменён")
             for index, line in enumerate(lines):
                 body.append(
                     f'<text x="{centre_x:.1f}" y="{label_y+index*20:.1f}" '
@@ -734,6 +777,8 @@ def build_architecture_section_control_svg(
                 )
         for barrier in floor.barriers:
             x = x_left + (x_right - x_left) * barrier.distance_m / model.cut_length_m
+            if _text_width(barrier.kind, 11) > 180:
+                raise ValueError("Название преграды разреза не помещается; PDF не изменён")
             body.extend(
                 (
                     f'<line data-section-barrier="{escape(barrier.barrier_id)}" '
@@ -769,24 +814,25 @@ def build_architecture_section_control_svg(
         )
 
     slab_y = lowest_bottom
-    body.extend(
-        (
+    body.append(
             f'<rect data-foundation-slab="true" x="{x_left}" y="{slab_y:.1f}" '
             f'width="{x_right-x_left}" height="80" fill="url(#architecture-hatch)" '
-            'stroke="#777" stroke-width="1.5"/>',
-            f'<text x="{margin+38}" y="{height-margin-76}" font-family="{FONT}" '
-            'font-size="13">Выход движка: этажные ячейки с номером, названием, '
-            'типом, границами, шахтами и преградами. Следующий слой — привязка К1/К2.</text>',
-            f'<text x="{margin+38}" y="{height-margin-48}" font-family="{FONT}" '
-            f'font-size="12" fill="{GRAY}">Источник: {escape(model.source_ref)}. '
-            'Контрольный лист компонента, не лист проектной документации.</text>',
-            f'<text x="{margin+38}" y="{height-margin-24}" font-family="{FONT}" '
-            f'font-size="12" fill="{GRAY}">Состав помещений соответствует '
-            'ГОСТ Р 21.620-2023, 5.2.2.4; координаты получены из линии разреза.</text>',
-            '</svg>',
-        )
+            'stroke="#777" stroke-width="1.5"/>'
     )
-    return "".join(body)
+    cy = 1835
+    for value in (
+        "Выход движка: этажные ячейки с номером, названием, типом, границами, шахтами и преградами. "
+        "Следующий слой - привязка К1/К2.",
+        f"Источник: {model.source_ref}. Контрольный лист компонента, не лист проектной документации.",
+        "Состав помещений соответствует ГОСТ Р 21.620-2023, 5.2.2.4; координаты получены из линии разреза.",
+    ):
+        text, cy = _section_text_block(value, x=88, y=cy, width=2624, bottom=1901)
+        body.append(text)
+    body.extend((f'<text x="2712" y="1930" text-anchor="end" font-family="{FONT}" '
+                 'font-size="16">Лист 1 из 1</text>', '</svg>'))
+    svg = "".join(body)
+    _validate_section_control_svg(svg)
+    return svg
 
 
 def _fmt(value: float, digits: int = 3) -> str:
@@ -798,11 +844,23 @@ def generate_architecture_section_control_pdf(
     registry: ArchitecturePlanRegistry,
 ) -> str:
     """Write one vector A1 control sheet for the Plan-to-Section engine."""
+    ensure_drafting_font_registered()
     import cairosvg
 
     model = build_architecture_section(registry)
     svg = build_architecture_section_control_svg(model)
+    _validate_section_control_svg(svg)
+    pdf = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=str(path))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".architecture-control-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)

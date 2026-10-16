@@ -1,0 +1,24 @@
+.site-feedback-open { font:inherit; color:#606970; border:1px solid #e8ebed; background:#fff; border-radius:13px; padding:10px 13px; min-height:44px; cursor:pointer; }
+.site-feedback-open:hover { background:#f6f8f7; color:#202622; }
+.pilot-dialog { box-sizing:border-box; width:min(520px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; border:1px solid #e6e8ed; border-radius:24px; padding:28px; background:#fff; color:#303439; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; box-shadow:0 24px 100px #25293626; }
+.pilot-dialog::backdrop { background:#272d3b26; backdrop-filter:blur(4px); }
+.pilot-dialog-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.pilot-dialog h2 { font-size:22px; font-weight:500; letter-spacing:-.5px; margin:0; }
+.pilot-dialog-heading button { border:0; border-radius:10px; min-width:44px; min-height:44px; background:#f5f7f6; color:#5b646a; font:inherit; font-size:24px; cursor:pointer; }
+.pilot-dialog p { color:#647077; font-size:13px; margin:16px 0; }
+.pilot-dialog label { display:grid; gap:8px; margin:18px 0; font-size:13px; }
+.pilot-dialog select,.pilot-dialog textarea { box-sizing:border-box; width:100%; border:1px solid #dce2e5; border-radius:12px; padding:12px; color:#303439; background:#fff; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; }
+.pilot-dialog textarea { resize:vertical; min-height:130px; }
+.pilot-dialog :focus-visible,.site-feedback-open:focus-visible { outline:2px solid #657b6a; outline-offset:3px; }
+.pilot-dialog .pilot-primary { border:0; border-radius:12px; background:#26372d; color:#fff; font:inherit; min-height:44px; padding:12px 20px; cursor:pointer; }
+.pilot-dialog button:disabled { opacity:.55; cursor:wait; }
+.pilot-dialog .pilot-feedback-error { color:#9b252e; }
+.feedback-inbox { max-width:880px; margin:32px auto; padding:0 24px 60px; color:#303439; font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; }
+.feedback-inbox h1 { font-size:28px; font-weight:500; }
+.feedback-inbox > p,.feedback-item small { color:#69747b; }
+.feedback-item { margin:22px 0; padding:24px; border:1px solid #e6e8ed; border-radius:20px; }
+.feedback-item-meta { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:13px; }
+.feedback-item-meta strong { font-weight:500; }
+.feedback-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+.feedback-item small { font-size:12px; }
+@media(max-width:640px) { .site-nav { flex-wrap:wrap; justify-content:flex-end; gap:3px; } .site-feedback-open { font-size:11px; padding:8px 10px; } .pilot-dialog { padding:20px; } }

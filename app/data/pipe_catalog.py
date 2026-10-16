@@ -7,6 +7,7 @@ PE-X задан фактическим размером Dн×s, уже прим�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,36 @@ PEX: dict[int, PipeSize] = {
 }
 
 
+@dataclass(frozen=True)
+class NominalConnection:
+    """DN of an exact steel connection, not a pipe manufacturing standard."""
+    dn: int
+    basis: str
+
+
+# ГОСТ 17375-2001, table 2, execution 2: DN65, D=76, T=3.5 mm.
+# Official-edition scan, printed page 4 (PDF page 6):
+# https://meganorm.ru/Data2/1/4294846/4294846099.pdf
+# This identifies the butt-weld connection only. It neither selects a pipe
+# manufacturing process/standard nor substitutes VGP 75.5×4 for 76×3.5.
+STEEL_WELD_CONNECTIONS = {
+    (76.0, 3.5): NominalConnection(65, "ГОСТ 17375-2001, табл. 2, исполнение 2 (DN соединения)"),
+}
+
+
+def steel_nominal_connection(outer_mm: float, wall_mm: float, material: str):
+    """Resolve exact geometry only; respect an explicitly stated VGP series."""
+    name = material.casefold()
+    if "вгп" not in name and "3262" not in name:
+        connection = STEEL_WELD_CONNECTIONS.get((outer_mm, wall_mm))
+        if connection:
+            return connection
+    for pipe in STEEL_VGP_ORDINARY.values():
+        if (pipe.outer_mm, pipe.wall_mm) == (outer_mm, wall_mm):
+            return NominalConnection(pipe.dn, "ГОСТ 3262-75, табл. 1 (размеры ВГП)")
+    return None
+
+
 def steel_vgp_ordinary(dn: int) -> PipeSize:
     try:
         return STEEL_VGP_ORDINARY[int(dn)]
@@ -77,13 +108,26 @@ def pipe_size(material: str, dn: int) -> PipeSize:
     )
 
 
-def sleeve_for(pipe: PipeSize, diametral_clearance_mm: float = 8.0) -> PipeSize:
-    """Минимальная ВГП-гильза с заданной разницей внутреннего и наружного диаметров."""
-    required_inner = pipe.outer_mm + diametral_clearance_mm
-    for size in STEEL_VGP_ORDINARY.values():
-        if size.inner_mm >= required_inner:
-            return size
-    raise ValueError(
-        f"Для трубы {pipe.size_label} нет гильзы с разницей диаметров "
-        f"{diametral_clearance_mm:g} мм"
-    )
+def _sleeve_in_range(pipe: PipeSize, minimum: float, maximum: float) -> PipeSize | None:
+    if not isfinite(pipe.outer_mm) or pipe.outer_mm <= 0:
+        raise ValueError("Для подбора гильзы нужен положительный наружный диаметр трубы")
+    return next((size for size in sorted(STEEL_VGP_ORDINARY.values(), key=lambda s: s.inner_mm)
+                 if minimum <= size.inner_mm - pipe.outer_mm <= maximum), None)
+
+
+def sleeve_for(pipe: PipeSize) -> PipeSize | None:
+    """Внутренняя проходка: разница диаметров 5–10 мм (СП 30, п. 11.5).
+
+    Нет подходящей ВГП-гильзы — нет подбора, а не следующий больший DN.
+    Это подбор геометрии, не подтверждение огнестойкости узла проходки.
+    """
+    return _sleeve_in_range(pipe, 5.0, 10.0)
+
+
+def preliminary_inlet_sleeve_for(pipe: PipeSize) -> PipeSize | None:
+    """Наружный ввод: прежняя предварительная геометрия с минимумом 8 мм.
+
+    Не является проверкой п. 11.5 для внутренних пересечений. Герметизация,
+    грунты, фундамент и окончательный размер определяются узлом ввода.
+    """
+    return _sleeve_in_range(pipe, 8.0, float("inf"))

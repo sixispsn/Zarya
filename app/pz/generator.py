@@ -14,6 +14,15 @@ from weasyprint import CSS, HTML
 from dataclasses import replace
 
 from app.pz.drafting_font import ensure_drafting_font_registered
+from app.pz.metering_options import option_requests, OPTIONS_NOTICE
+from app.pz.metering_presentation import metering_presentation
+from app.pz.metering_extras import metering_option_rows
+from app.pz.water_document_binding import water_material_context, water_pressure_presentation
+from app.pz.hws_presentation import hws_principle
+from app.pz.hws_stage_p import stage_p_circulation
+from app.data.booster_controls import booster_control
+from app.calc.rainwater_reuse import assess as assess_rainwater
+from app.calc.rainwater_treatment import project_context as rainwater_context
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import (
     check_tu_limits, decide_fire_network,
@@ -21,7 +30,7 @@ from app.pz.rules import (
 )
 from app.pz.pump_chart import PumpChart, render_pump_chart_svg
 from app.pz.spec import (
-    build_specification,
+    build_water_specification,
     build_wastewater_specification,
     format_spec_qty,
 )
@@ -33,6 +42,23 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 # CSS-файлы ПЗ (порядок важен: рамка -> таблицы). Все лежат в templates/.
 _CSS_FILES = ["frame.css", "balance.css", "equipment.css"]
+
+
+def _write_text_pdf(html, output_path, doc, css_files):
+    """Title-less A4 annex: forms 3/6 and actual page count after pagination."""
+    from app.pz.text_document_frame import apply_frame
+    body = HTML(string=html, base_url=str(TEMPLATES_DIR)).write_pdf(stylesheets=[
+        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+        for name in (*css_files, "measured_text_frame.css")])
+    Path(output_path).write_bytes(apply_frame(body, doc))
+    return output_path
+
+
+def _fire_station_document_context(project):
+    from app.intake.studio_fire_location import from_model
+    from app.data.fire_pump_geometry import connection_review
+    return dict(fire_station_location=from_model(project.fire_station_model_input),
+                fire_pump_geometry=connection_review(project.fire_station_model_input, project.fire_pumps.model))
 
 
 def _document_cipher(cipher: str, suffix: str) -> str:
@@ -73,6 +99,19 @@ def _build_env() -> Environment:
         "—" if v is None else f"{v:.{p}f}".rstrip("0").rstrip(".")
     )
     env.filters["spec_qty"] = format_spec_qty
+    from app.pz.meter_products import evaluate_meter_product
+    env.globals["meter_product_check"] = evaluate_meter_product
+    from app.pz.pump_validation import check_saved_pump_intersection
+    env.globals["check_saved_pump_intersection"] = check_saved_pump_intersection
+    from app.pz.meter_validation import check_meter_average
+    env.globals["check_meter_average"] = check_meter_average
+    env.globals["booster_control_for"] = booster_control
+    from app.pz.water_station_review import review_station
+    env.globals["station_review_for"] = review_station
+    from app.pz.suction_check import review_suction
+    env.globals["suction_review_for"] = review_suction
+    from app.pz.water_station_components import external_items
+    env.globals["station_external_items"] = external_items
     return env
 
 
@@ -110,11 +149,14 @@ def _pump_chart_for(p) -> str:
     """SVG характеристики Q-H принятого насоса (пусто, если насос не нужен)."""
     if not (p.required and p.curve):
         return ""
+    from app.pz.pump_validation import check_saved_pump_intersection
+    valid_intersection, _ = check_saved_pump_intersection(p)
     return render_pump_chart_svg(PumpChart(
         curve=p.curve,
-        h_stat=p.h_stat,
-        k_sys=p.k_sys,
-        wp=((p.wp_q, p.wp_h) if p.wp_q else None),
+        h_stat=p.h_stat if p.curve_kind == "quadratic_estimate" else None,
+        k_sys=p.k_sys if p.curve_kind == "quadratic_estimate" else None,
+        wp=((p.wp_q, p.wp_h) if valid_intersection or p.pressure_review else None),
+        duty=((p.q_design_m3h, p.h_design_m) if p.q_design_m3h else None),
         q_opt=p.q_opt,
         title=p.model,
     ))
@@ -124,8 +166,39 @@ def _pump_chart_svg(project: Project) -> str:
     return _pump_chart_for(project.pumps)
 
 
+def _rainwater_body(project: Project, env) -> str:
+    if not project.rainwater_reuse.enabled:
+        return ""
+    return env.get_template("rainwater_reuse_body.html").render(r=assess_rainwater(project.rainwater_reuse, **rainwater_context(project)))
+
+
+def generate_rainwater_reuse_html(project: Project) -> str:
+    from app.pz.rainwater_reuse import functional_svg, assembly_rows, pump_chart_svg, treatment_rows
+    env = _build_env()
+    body = env.get_template("rainwater_reuse_calculation.html").render(
+        r=assess_rainwater(project.rainwater_reuse, **rainwater_context(project)), diagram=functional_svg(project),
+        assembly=assembly_rows(project), pump_chart=pump_chart_svg(project),
+        treatment_rows=treatment_rows(project),
+    )
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".ДВ"),
+                  sheet_title="Использование дождевой воды", sheet_no="1", sheet_total="—")
+    return env.get_template("document.html").render(
+        doc=doc, body_html=body, document_title="Использование дождевой воды · расчётное приложение",
+    )
+
+
+def generate_rainwater_reuse_pdf(project: Project, output_path: str) -> str:
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".ДВ"),
+                  sheet_title="Использование дождевой воды")
+    return _write_text_pdf(generate_rainwater_reuse_html(project), output_path, doc,
+                           (*_CSS_FILES, "wastewater.css"))
+
+
 def generate_pz_html(project: Project) -> str:
     """Собрать HTML пояснительной записки (без CSS — для отладки/предпросмотра)."""
+    from app.pz.fire_review_binding import validate_binding
+    from app.pz.metering_presentation import metering_presentation
+    validate_binding(project)
     env = _build_env()
 
     subitems_tpl = env.get_template(_subitems_template_name(project.building.purpose))
@@ -137,10 +210,19 @@ def generate_pz_html(project: Project) -> str:
     )
     tu_check = check_tu_limits(project.flows, project.source)
     body_html = subitems_tpl.render(
+        project=project,
+        **_fire_station_document_context(project),
+        metering_options=metering_option_rows(project),
+        metering_options_notice=OPTIONS_NOTICE,
+        metering_principle=metering_presentation(project),
         doc=project.document,
         building=project.building,
         source=project.source,
         materials=project.materials,
+        water_materials=water_material_context(project),
+        water_pressure=water_pressure_presentation(project),
+        hws_principle=hws_principle(project),
+        hws_circulation=stage_p_circulation(project),
         flows=project.flows,
         fire=project.fire,
         meters=project.meters,
@@ -153,6 +235,7 @@ def generate_pz_html(project: Project) -> str:
         head=head,
         tu_check=tu_check,
         v1_hydraulics=project.v1_hydraulic_result,
+        t3_hydraulics=project.t3_hydraulic_result,
         v1_stage_p=project.v1_stage_p_result,
         normative=project.normative,
         sewage=project.sewage,
@@ -163,6 +246,7 @@ def generate_pz_html(project: Project) -> str:
     )
 
     doc_tpl = env.get_template("document.html")
+    body_html += _rainwater_body(project, env)
     return doc_tpl.render(
         doc=project.document,
         body_html=body_html,
@@ -184,11 +268,20 @@ def generate_pz_pdf(project: Project, output_path: str) -> str:
     html_str = generate_pz_html(project)
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in _CSS_FILES
+        for name in (*_CSS_FILES, "measured_text_frame.css")
     ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets
-    )
+    rendered = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).render(stylesheets=stylesheets)
+    # Count this text document, not the separately numbered calculation annexes.
+    # A saved/demo stamp total is not evidence of the current pagination.
+    total = str(len(rendered.pages))
+    if project.document.sheet_total != total:
+        stamped = replace(project, document=replace(project.document, sheet_total=total))
+        rendered = HTML(string=generate_pz_html(stamped), base_url=str(TEMPLATES_DIR)).render(
+            stylesheets=stylesheets)
+        if str(len(rendered.pages)) != total:
+            raise ValueError("Число листов ПЗ изменилось при заполнении штампа; проверьте вёрстку")
+    from app.pz.text_document_frame import apply_frame
+    Path(output_path).write_bytes(apply_frame(rendered.write_pdf(), project.document))
     return output_path
 
 
@@ -215,13 +308,17 @@ def generate_balance_html(project: Project) -> str:
 def generate_balance_pdf(project: Project, output_path: str) -> str:
     """Сформировать нормативный баланс на листе А3 альбомной ориентации."""
     html_str = generate_balance_html(project)
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=[CSS(
-            filename=str(TEMPLATES_DIR / "balance_document.css"),
-            base_url=str(TEMPLATES_DIR),
-        )],
-    )
+    return _write_balance_pdf(project, html_str, output_path, project.document.cipher or "")
+
+
+def _write_balance_pdf(project, html_str, output_path, cipher):
+    from app.pz.text_document_frame import apply_frame
+    body = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
+        stylesheets=[CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
+                     for name in ("balance_document.css", "measured_balance_frame.css")])
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".БВ"),
+                  sheet_title="Баланс водопотребления и водоотведения")
+    Path(output_path).write_bytes(apply_frame(body, doc, layout='a3_graphic'))
     return output_path
 
 
@@ -251,14 +348,8 @@ def generate_wastewater_balance_html(project: Project) -> str:
 
 def generate_wastewater_balance_pdf(project: Project, output_path: str) -> str:
     html_str = generate_wastewater_balance_html(project)
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=[CSS(
-            filename=str(TEMPLATES_DIR / "balance_document.css"),
-            base_url=str(TEMPLATES_DIR),
-        )],
-    )
-    return output_path
+    return _write_balance_pdf(project, html_str, output_path,
+                              _wastewater_document_cipher(project.document.cipher or ""))
 
 
 # ── РАСЧЁТНЫЙ ЛИСТ В1 / Т3 (отдельное приложение) ────────────────────────
@@ -283,6 +374,11 @@ def generate_v1_calculation_html(project: Project) -> str:
         project, fallback_h_vod_m=cold_meter_loss(project.meters),
     )
     body_html = env.get_template("v1_calculation_body.html").render(
+        project=project,
+        metering_principle=metering_presentation(project),
+        metering_options=metering_option_rows(project),
+        metering_options_notice=OPTIONS_NOTICE,
+        source=project.source,
         balance=project.balance,
         flows=project.flows,
         meters=project.meters,
@@ -290,6 +386,7 @@ def generate_v1_calculation_html(project: Project) -> str:
         head=head,
         v1_stage_p=project.v1_stage_p_result,
         v1_hydraulics=project.v1_hydraulic_result,
+        t3_hydraulics=project.t3_hydraulic_result,
         head_paths=project.head_paths,
     )
     return env.get_template("document.html").render(
@@ -302,14 +399,9 @@ def generate_v1_calculation_html(project: Project) -> str:
 def generate_v1_calculation_pdf(project: Project, output_path: str) -> str:
     """Сформировать самостоятельный PDF расчётов В1 / Т3 на листах А4."""
     html_str = generate_v1_calculation_html(project)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in (*_CSS_FILES, "v1_calculation.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets,
-    )
-    return output_path
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".РВ1"),
+                  sheet_title="Расчёты систем В1 и Т3")
+    return _write_text_pdf(html_str, output_path, doc, (*_CSS_FILES, "v1_calculation.css"))
 
 
 # ── РАСЧЁТНЫЕ ОБОСНОВАНИЯ К1 / К2 ─────────────────────────────────────
@@ -318,9 +410,10 @@ def generate_wastewater_calculation_html(project: Project) -> str:
     """Собрать отдельное приложение К1/К2 из результатов расчётного ядра."""
     from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
     from app.pz.wastewater_transients import assess_wastewater_transients
+    from app.pz.wastewater_graphic_exports import representative_document_model
 
-    if project.sewage.hydraulic_assessment is None:
-        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
+    # Old cached assessments may contain sums of riser maxima. Re-evaluate.
+    project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
     if project.sewage.transient_assessment is None:
         project.sewage.transient_assessment = assess_wastewater_transients(project)
     env = _build_env()
@@ -333,6 +426,7 @@ def generate_wastewater_calculation_html(project: Project) -> str:
         sheet_total="—",
     )
     body_html = env.get_template("wastewater_calculation_body.html").render(
+        section=representative_document_model(project),
         sewage=project.sewage,
         diagnostics=project.sewage.hydraulic_assessment,
         storm=project.storm,
@@ -351,23 +445,20 @@ def generate_wastewater_calculation_pdf(
 ) -> str:
     """Сформировать самостоятельный PDF расчётов К1/К2 на листах А4."""
     html_str = generate_wastewater_calculation_html(project)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in (*_CSS_FILES, "wastewater.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=stylesheets,
-    )
-    return output_path
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".РР"),
+                  sheet_title="Расчётные обоснования систем К1 и К2")
+    return _write_text_pdf(html_str, output_path, doc, (*_CSS_FILES, "wastewater.css"))
 
 
 def generate_wastewater_pz_html(project: Project) -> str:
     """Самостоятельная текстовая часть подраздела «Система водоотведения»."""
     from app.pz.wastewater_diagnostics import assess_wastewater_diagnostics
+    from app.pz.wastewater_graphic_exports import representative_document_model, assess_wastewater_graphic_exports
+    from app.pz.section_level_mark import level_text
+    from app.pz.wastewater_service import assess as assess_service
 
-    if project.sewage.hydraulic_assessment is None:
-        project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
+    project.sewage.hydraulic_assessment = assess_wastewater_diagnostics(project)
     env = _build_env()
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     doc = replace(
@@ -408,6 +499,10 @@ def generate_wastewater_pz_html(project: Project) -> str:
         balance=project.balance,
         flows=project.flows,
         sewage=project.sewage,
+        wastewater_service=assess_service(project.wastewater_service),
+        section=representative_document_model(project),
+        graphic_exports=assess_wastewater_graphic_exports(project),
+        level_text=level_text,
         sewage_day_m3=sewage_day_m3,
         storm=project.storm,
         grease_trap=project.grease_trap,
@@ -420,6 +515,7 @@ def generate_wastewater_pz_html(project: Project) -> str:
             project.storm.roof_type, project.storm.roof_type
         ),
     )
+    body_html += _rainwater_body(project, env)
     return env.get_template("document.html").render(
         doc=doc,
         document_title="Подраздел 5.3 «Система водоотведения»",
@@ -432,12 +528,14 @@ def generate_wastewater_pz_pdf(project: Project, output_path: str) -> str:
     html_str = generate_wastewater_pz_html(project)
     stylesheets = [
         CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in (*_CSS_FILES, "wastewater.css")
+        for name in (*_CSS_FILES, "wastewater.css", "measured_text_frame.css")
     ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=stylesheets,
-    )
+    from app.pz.text_document_frame import apply_frame
+    body = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(stylesheets=stylesheets)
+    doc = replace(project.document,
+                  cipher=_wastewater_document_cipher(project.document.cipher or ""),
+                  sheet_title="Текстовая часть. Система водоотведения")
+    Path(output_path).write_bytes(apply_frame(body, doc))
     return output_path
 
 
@@ -607,8 +705,8 @@ def generate_wastewater_ugo_pdf(
         project.document,
         cipher=_document_cipher(cipher, ".СК"),
         sheet_title="Ведомость условных графических обозначений К1, К2 и К3",
-        sheet_no="3",
-        sheet_total="3",
+        sheet_no="1",
+        sheet_total="1",
     )
     svg = build_wastewater_ugo_sheet(replace(project, document=ugo_doc))
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
@@ -634,7 +732,7 @@ def generate_wastewater_scheme_result(
         cipher=_document_cipher(cipher, ".СК"),
         sheet_title="Принципиальная схема внутренних систем К1, К2 и К3",
         sheet_no="1",
-        sheet_total="2",
+        sheet_total="1",
     )
     return build_wastewater_scheme(
         replace(project, document=scheme_doc),
@@ -849,6 +947,8 @@ def generate_pump_selection_html(project: Project) -> str:
     Лист ничего не пересчитывает: использует уже сформированные HeadCalc и
     PumpSystem, то есть те же результаты, что показаны в основной ПЗ.
     """
+    from app.pz.fire_review_binding import validate_binding
+    validate_binding(project)
     env = _build_env()
     cipher = project.document.cipher or ""
     doc = replace(
@@ -860,6 +960,8 @@ def generate_pump_selection_html(project: Project) -> str:
         project, fallback_h_vod_m=cold_meter_loss(project.meters),
     )
     return env.get_template("pump_document.html").render(
+        **_fire_station_document_context(project),
+        project=project,
         doc=doc,
         head=head,
         v1=project.pumps,
@@ -879,9 +981,12 @@ def generate_pump_selection_pdf(project: Project, output_path: str) -> str:
         CSS(filename=str(TEMPLATES_DIR / "equipment.css"),
             base_url=str(TEMPLATES_DIR)),
     ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets,
-    )
+    from app.pz.text_document_frame import apply_frame
+    body = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(stylesheets=stylesheets)
+    doc = replace(project.document,
+                  cipher=_document_cipher(project.document.cipher or '', '.РН'),
+                  sheet_title='Расчёт и подбор насосных установок')
+    Path(output_path).write_bytes(apply_frame(body, doc))
     return output_path
 
 
@@ -926,42 +1031,53 @@ def generate_commission_control_html(project: Project, report=None) -> str:
 def generate_commission_control_pdf(project: Project, output_path: str, report=None) -> str:
     """Сформировать самостоятельный комиссионный паспорт на листах А4."""
     html_str = generate_commission_control_html(project, report=report)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in (*_CSS_FILES, "commission_control.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets,
-    )
-    return output_path
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".НК"),
+                  sheet_title="Паспорт и нормативный контроль")
+    return _write_text_pdf(html_str, output_path, doc, (*_CSS_FILES, "commission_control.css"))
 
 
 def append_pdf(base_path: str, appendix_path: str) -> str:
-    """Добавить приложение в конец PDF атомарной заменой исходного файла."""
+    """Добавить приложение, сохранив закладки и атомарно заменив исходный PDF."""
+    return merge_pdfs([base_path, appendix_path], str(base_path))
+
+
+def merge_pdfs(source_paths: list[str], output_path: str, *,
+               section_titles: list[str] | None = None) -> str:
+    """Склеить документы с иерархией закладок и переназначением ссылок на страницы.
+
+    add_page переносит только страницы, поэтому теряет оглавление. append
+    импортирует outline и внутренние назначения с учётом нового смещения.
+    Выход можно использовать как первый источник: замена только после записи.
+    """
+    import os
+    import tempfile
     from pypdf import PdfReader, PdfWriter
 
-    base = Path(base_path)
-    tmp = base.with_name(base.stem + ".with-appendix.pdf")
-    writer = PdfWriter()
-    for source in (base_path, appendix_path):
-        for page in PdfReader(source).pages:
-            writer.add_page(page)
-    with tmp.open("wb") as fh:
-        writer.write(fh)
-    tmp.replace(base)
-    return str(base)
-
-
-def merge_pdfs(source_paths: list[str], output_path: str) -> str:
-    """Собрать единый PDF из готовых документов без изменения их страниц."""
-    from pypdf import PdfReader, PdfWriter
-
-    writer = PdfWriter()
-    for source in source_paths:
-        for page in PdfReader(source).pages:
-            writer.add_page(page)
-    with Path(output_path).open("wb") as fh:
-        writer.write(fh)
+    if not source_paths:
+        raise ValueError("Для объединения PDF нужен хотя бы один документ")
+    if section_titles is not None and len(section_titles) != len(source_paths):
+        raise ValueError("Каждому PDF должно соответствовать название раздела")
+    target = Path(output_path)
+    tmp = None
+    try:
+        with PdfWriter() as writer:
+            for index, source in enumerate(source_paths):
+                reader = PdfReader(source)
+                writer.append(reader, import_outline=True,
+                              outline_item=section_titles[index] if section_titles else None)
+                if index == 0 and reader.metadata:
+                    writer.add_metadata({k: str(v) for k, v in reader.metadata.items() if v is not None})
+            with tempfile.NamedTemporaryFile(
+                dir=target.parent, prefix=f".{target.stem}-", suffix=".pdf", delete=False,
+            ) as fh:
+                tmp = Path(fh.name)
+                writer.write(fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+        tmp.replace(target)
+    finally:
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
     return output_path
 
 
@@ -970,8 +1086,9 @@ def merge_pdfs(source_paths: list[str], output_path: str) -> str:
 def generate_spec_html(project: Project) -> str:
     """HTML спецификации оборудования, изделий и материалов (ГОСТ 21.110)."""
     env = _build_env()
-    spec = build_specification(project)
-    body_html = env.get_template("spec_table.html").render(spec=spec)
+    spec = build_water_specification(project)
+    from app.pz.spec_pagination import render_specification_body
+    body_html = render_specification_body(spec, env)
     cipher = project.document.cipher
     spec_doc = replace(
         project.document,
@@ -983,22 +1100,18 @@ def generate_spec_html(project: Project) -> str:
 
 def generate_spec_pdf(project: Project, output_path: str) -> str:
     """PDF спецификации. CSS: рамка + spec.css."""
-    html_str = generate_spec_html(project)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in ("spec_frame.css", "spec.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets
-    )
-    return output_path
+    from app.pz.spec_pagination import write_specification_pdf
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".СО"),
+                  sheet_title="Спецификация оборудования, изделий и материалов")
+    return write_specification_pdf(generate_spec_html(project), output_path, doc)
 
 
 def generate_wastewater_spec_html(project: Project) -> str:
     """HTML самостоятельной спецификации оборудования К1/К2/К3."""
     env = _build_env()
     spec = build_wastewater_specification(project)
-    body_html = env.get_template("spec_table.html").render(spec=spec)
+    from app.pz.spec_pagination import render_specification_body
+    body_html = render_specification_body(spec, env)
     cipher = _wastewater_document_cipher(project.document.cipher or "")
     spec_doc = replace(
         project.document,
@@ -1013,19 +1126,14 @@ def generate_wastewater_spec_html(project: Project) -> str:
 
 def generate_wastewater_spec_pdf(project: Project, output_path: str) -> str:
     """PDF самостоятельной спецификации К1/К2/К3 по ГОСТ 21.110."""
-    html_str = generate_wastewater_spec_html(project)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / name), base_url=str(TEMPLATES_DIR))
-        for name in ("spec_frame.css", "spec.css")
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
-        stylesheets=stylesheets,
-    )
-    return output_path
+    from app.pz.spec_pagination import write_specification_pdf
+    cipher = _wastewater_document_cipher(project.document.cipher or "")
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".СО"),
+                  sheet_title="Спецификация оборудования, изделий и материалов К1/К2/К3")
+    return write_specification_pdf(generate_wastewater_spec_html(project), output_path, doc)
 
 
-# ── ПРИНЦИПИАЛЬНАЯ СХЕМА В1/В2 (отдельный лист А1, штамп форма 3) ───────────
+# ── ПРИНЦИПИАЛЬНАЯ СХЕМА (разрез В1/Т3/Т4 А2; прежняя ветвь В1/В2 А1) ─────
 
 # Физический размер листа А1 по ГОСТ 2.301 (альбомная): 841×594 мм.
 # SVG схемы задан в пикселях (SCHEME_W×SCHEME_H) с сохранением этой пропорции;
@@ -1035,17 +1143,28 @@ _A1_MM = (841, 594)
 
 
 def generate_scheme_svg(project: Project, params: "SchemeParams | None" = None) -> str:
-    """SVG принципиальной схемы систем В1, В2 (лист А1 со штампом форма 3).
+    """SVG: общий жилой разрез В1/Т3/Т4 А2 либо прежняя схема В1/В2 А1.
 
     Предупреждения раскладки выносок (если есть) не роняют генерацию —
     они доступны через generate_scheme_result().
     """
-    return build_scheme(project, params).svg
+    return generate_scheme_result(project, params).svg
 
 
 def generate_scheme_result(project: Project, params: "SchemeParams | None" = None) -> SchemeResult:
     """Полный результат схемы: .svg + .warnings (для логов/валидации пайплайна)."""
-    return build_scheme(project, params)
+    from app.pz.water_residential_section import can_draw_residential_water_section, build_residential_water_section
+    if params is None and can_draw_residential_water_section(project):
+        return build_residential_water_section(project, profile="residential_full_bath")
+    from app.pz.water_building_section import can_draw_water_section, build_water_section
+    if params is None and can_draw_water_section(project):
+        return build_water_section(project)
+    result = build_scheme(project, params)
+    if params is None and project.building.purpose.value == 'residential':
+        result.warnings.append(
+            'Сохранена прежняя компоновка воды: общий разрез В1/Т3/Т4 пока не охватывает '
+            'все заданные условия (зоны/В2/полив/повторное использование/стадия).')
+    return result
 
 
 def _svg_to_a1_mm(svg: str) -> str:
@@ -1063,16 +1182,21 @@ def _svg_to_a1_mm(svg: str) -> str:
 
 
 def generate_scheme_pdf(project: Project, output_path: str,
-                        params: "SchemeParams | None" = None) -> str:
-    """PDF принципиальной схемы В1/В2, лист А1 в натуральную величину.
+                        params: "SchemeParams | None" = None, *,
+                        scheme_result: SchemeResult | None = None) -> str:
+    """Векторный PDF: А2 для общего разреза, А1 для прежней ветви В1/В2.
 
     Рендер SVG→PDF напрямую через cairosvg (не WeasyPrint): лист чисто
     векторный и уже собран целиком, включая рамку и штамп форма 3, — прямой
-    векторный вывод сохраняет качество линий и текста при печати А1.
+    векторный вывод сохраняет физические размеры линий и текста при печати.
     """
     import cairosvg  # опциональная зависимость вывода схемы
 
-    svg = _svg_to_a1_mm(generate_scheme_svg(project, params))
+    # Use the exact reviewed SVG: do not choose/build a second drawing during export.
+    if scheme_result is not None and params is not None:
+        raise ValueError("Передайте готовую схему либо параметры, не оба варианта")
+    result = scheme_result if scheme_result is not None else generate_scheme_result(project, params)
+    svg = _svg_to_a1_mm(result.svg)
     cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=output_path)
     return output_path
 
@@ -1084,13 +1208,47 @@ def _generate_aux_scheme_pdf(svg: str, output_path: str) -> str:
 
 
 def generate_metering_scheme_pdf(project: Project, output_path: str) -> str:
-    from app.pz.aux_schemes import build_metering_scheme_svg
-    return _generate_aux_scheme_pdf(build_metering_scheme_svg(project), output_path)
+    from io import BytesIO
+    from xml.etree import ElementTree
+    import cairosvg
+    from pypdf import PdfReader, PdfWriter
+    from app.pz.drafting_font import ensure_drafting_font_registered
+    from app.pz.metering_detail import build_metering_detail_pages
+
+    ensure_drafting_font_registered()
+    writer = PdfWriter()
+    previous_title = None
+    for svg in build_metering_detail_pages(project):
+        root = ElementTree.fromstring(svg)
+        title_node = root.find("{http://www.w3.org/2000/svg}text")
+        title = "".join(title_node.itertext()).strip() if title_node is not None else "Водомерный узел"
+        page_index = len(writer.pages)
+        rendered = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
+        writer.add_page(PdfReader(BytesIO(rendered)).pages[0])
+        if title != previous_title:
+            writer.add_outline_item(title, page_index)
+            previous_title = title
+    with open(output_path, "wb") as stream:
+        writer.write(stream)
+    return output_path
 
 
-def generate_pump_zone_scheme_pdf(project: Project, output_path: str) -> str:
-    from app.pz.aux_schemes import build_pump_zone_scheme_svg
-    return _generate_aux_scheme_pdf(build_pump_zone_scheme_svg(project), output_path)
+def generate_pump_zone_scheme_pdf(project: Project, output_path: str, *, include_building_section=True) -> str:
+    from io import BytesIO
+    import cairosvg
+    from pypdf import PdfReader, PdfWriter
+    from app.pz.water_station_drafting import build_pump_zone_scheme_pages
+
+    writer = PdfWriter()
+    for page, svg in enumerate(build_pump_zone_scheme_pages(project, include_building_section=include_building_section, include_review=True)):
+        rendered = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
+        writer.add_page(PdfReader(BytesIO(rendered)).pages[0])
+        from xml.etree import ElementTree as ET
+        texts = [e.text for e in ET.fromstring(svg).iter() if e.tag.endswith('text') and e.text]
+        writer.add_outline_item(texts[0] if texts else 'В1. Насосная и проверки', page)
+    with open(output_path, "wb") as stream:
+        writer.write(stream)
+    return output_path
 
 
 # ── ГИДРАВЛИЧЕСКИЙ РАСЧЁТ В2 (лист расчёта, ГОСТ 21.110) ────────────────────
@@ -1119,6 +1277,7 @@ def generate_hydraulic_report_html(project: Project, report) -> str:
     )
     return env.get_template("hydraulic_document.html").render(
         doc=doc, h=report.header, segments=report.segments,
+        station_preliminary=project.fire_station_input is not None,
         fire_pumps=project.fire_pumps,
         dictating_paths=report.dictating_paths,
         conclusion_html=_conclusion_to_html(report),
@@ -1128,15 +1287,9 @@ def generate_hydraulic_report_html(project: Project, report) -> str:
 def generate_hydraulic_report_pdf(project: Project, report, output_path: str) -> str:
     """PDF листа гидравлического расчёта В2. CSS: hydraulic.css (А4 книжная)."""
     html_str = generate_hydraulic_report_html(project, report)
-    stylesheets = [
-        CSS(filename=str(TEMPLATES_DIR / "hydraulic.css"),
-            base_url=str(TEMPLATES_DIR)),
-        CSS(filename=str(TEMPLATES_DIR / "equipment.css"),
-            base_url=str(TEMPLATES_DIR)),
-    ]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets)
-    return output_path
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".ГР"),
+                  sheet_title="Гидравлический расчёт В2")
+    return _write_text_pdf(html_str, output_path, doc, ("hydraulic.css", "equipment.css"))
 
 
 # ── ЛИСТ ПРОВЕРКИ ЖИВУЧЕСТИ КОЛЬЦА В2 ───────────────────────────────────────
@@ -1157,11 +1310,9 @@ def generate_resilience_pdf(project: Project, resilience_report,
                             output_path: str) -> str:
     """PDF листа живучести (А4, рамка+штамп — колея гидролиста)."""
     html_str = generate_resilience_html(project, resilience_report)
-    stylesheets = [CSS(filename=str(TEMPLATES_DIR / "resilience.css"),
-                       base_url=str(TEMPLATES_DIR))]
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=stylesheets)
-    return output_path
+    doc = replace(project.document, cipher=_document_cipher(project.document.cipher or "", ".ЖВ"),
+                  sheet_title="Проверка живучести сети В2")
+    return _write_text_pdf(html_str, output_path, doc, ("resilience.css",))
 
 
 # ── ТЗ и ТУ (исходные документы проекта) ─────────────────────────────────────
@@ -1179,23 +1330,19 @@ def generate_tz_pdf(project, output_path, source_data=None):
     """PDF задания на проектирование В2 (А4, рамка+штамп)."""
     env = _build_env()
     cipher = project.document.cipher or ""
-    doc = replace(project.document, cipher=_document_cipher(cipher, ".ТЗ"))
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".ТЗ"),
+                  sheet_title="Задание на проектирование В2")
     ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
     html_str = env.get_template("tz_document.html").render(**ctx)
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=[CSS(filename=str(TEMPLATES_DIR / "tz.css"),
-                                      base_url=str(TEMPLATES_DIR))])
-    return output_path
+    return _write_text_pdf(html_str, output_path, doc, ("tz.css",))
 
 
 def generate_tu_pdf(project, output_path, source_data=None):
     """PDF листа исходных данных (ТУ на подключение) (А4, рамка+штамп)."""
     env = _build_env()
     cipher = project.document.cipher or ""
-    doc = replace(project.document, cipher=_document_cipher(cipher, ".ИД"))
+    doc = replace(project.document, cipher=_document_cipher(cipher, ".ИД"),
+                  sheet_title="Исходные данные (ТУ на подключение)")
     ctx = _tz_ctx(project, source_data); ctx["doc"] = doc
     html_str = env.get_template("tu_document.html").render(**ctx)
-    HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path, stylesheets=[CSS(filename=str(TEMPLATES_DIR / "tz.css"),
-                                      base_url=str(TEMPLATES_DIR))])
-    return output_path
+    return _write_text_pdf(html_str, output_path, doc, ("tz.css",))

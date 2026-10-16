@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from math import isclose, isfinite
 from typing import List
 
-from app.pz.wastewater_diagnostics import resolve_k1_main_flows
+from app.pz.wastewater_diagnostics import resolve_k1_main_flows, is_pumped_sewer_section
 from app.pz.wastewater_topology import _is_riser as is_sewer_riser
 
 
@@ -70,10 +70,15 @@ def _current_calculated_fill(pipe, assessment, *, design_flow_lps):
 
 def audit_wastewater_gost(project) -> WastewaterGostAudit:
     """Проверить обязательные сведения в границах фактического проекта."""
+    from app.pz.wastewater_graphic_exports import representative_document_model
+    section = representative_document_model(project)
     s = project.sewage
-    storm_required = project.storm.system_kind == "internal"
+    storm_required = section.drainage == "internal" if section else project.storm.system_kind == "internal"
     production_required = project.grease_trap.preparation_type != "none"
     checks: List[WastewaterGostCheck] = []
+
+    def value_or_missing(value):
+        return str(value).replace(".", ",") if value is not None else "не задано"
 
     def add(code, requirement, reference, ok, evidence, *, applicable=True):
         checks.append(WastewaterGostCheck(
@@ -130,10 +135,10 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         ),
         (
             f"{s.existing_network_type}; {s.existing_network_material}; "
-            f"{s.existing_network_outer_diameter_mm}×"
-            f"{s.existing_network_wall_thickness_mm} мм; "
+            f"{value_or_missing(s.existing_network_outer_diameter_mm)}×"
+            f"{value_or_missing(s.existing_network_wall_thickness_mm)} мм; "
             f"{s.existing_network_standard}"
-        ),
+        ) if centralized else "централизованное подключение исходными данными не заявлено",
         applicable=centralized,
     )
     add(
@@ -148,20 +153,24 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         ) if water_body else "сброс в водный объект не предусмотрен",
         applicable=water_body,
     )
-    points_ok = bool(s.discharge_point_k1)
+    point_k1 = section.k1.discharge_point if section else s.discharge_point_k1
+    point_k2 = section.k2.discharge_point if section else s.discharge_point_k2
+    # A target label on an unbound cutaway is not verified external connectivity.
+    points_ok = section is None and bool(point_k1)
     if storm_required:
-        points_ok = points_ok and bool(s.discharge_point_k2)
+        points_ok = points_ok and bool(point_k2)
     if production_required:
         points_ok = points_ok and bool(s.discharge_point_k3)
     add(
         "K-GOST-05", "Источники стоков, марки систем и точки сброса",
         "ГОСТ Р 21.620-2023, п. 5.1.3.2",
         points_ok,
-        "; ".join(filter(None, [
-            f"К1 → {s.discharge_point_k1}" if s.discharge_point_k1 else "",
-            f"К2 → {s.discharge_point_k2}" if storm_required and s.discharge_point_k2 else "",
+        ("; ".join(filter(None, [
+            f"К1 → {point_k1}" if point_k1 else "",
+            f"К2 → {point_k2}" if storm_required and point_k2 else "",
             f"К3 → {s.discharge_point_k3}" if production_required and s.discharge_point_k3 else "",
-        ])) or "точки сброса не заданы",
+        ])) or "точки сброса не заданы") + (
+            "; обозначения характерного разреза; увязка выпусков с приёмниками не подтверждена" if section else ""),
     )
     add(
         "K-GOST-06", "Баланс водопотребления и водоотведения по приложению А",
@@ -198,18 +207,35 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
     gravity = [
         p for p in s.pipes
         if not is_sewer_riser(p)
+        and not is_pumped_sewer_section(project, p)
     ]
     missing_slopes = []
     missing_fills = []
     calculated_fills = []
     declared_fills = []
     current_flows, _ = resolve_k1_main_flows(project)
+    domestic_horizontal = [pipe for pipe in gravity if pipe.system == "K1"]
+    unconfirmed_flows = [pipe.section_id for pipe in domestic_horizontal if pipe.section_id not in current_flows]
+    section_flow = section.main_checks[0].flow_result if section else None
+    section_flow_note = (
+        f"Характерный конечный участок: q_sL={section_flow.q_sewage_lps:.3f} л/с по формуле (7); "
+        "расходы остальных горизонтальных участков не подтверждены."
+        if section_flow else ((section.main_checks[0].short + ". ") if section else "")
+        + "Расходы остальных горизонтальных участков не подтверждены."
+    )
+    add("K-GOST-08F", "Расходы горизонтальных участков К1 по п. 5.7 СП 30",
+        "СП 30.13330.2020, п. 5.7(7), таблица 5.1; ГОСТ Р 21.620-2023, п. 5.1.4.1",
+        bool(domestic_horizontal) and not unconfirmed_flows,
+        section_flow_note if section and not domestic_horizontal else
+        "Нужен расчёт горизонтального расхода: " + ", ".join(unconfirmed_flows) if unconfirmed_flows
+        else "Формула (7) либо ручной расход с основанием; максимумы стояков не суммируются",
+        applicable=bool(domestic_horizontal or section))
     for pipe in gravity:
         if pipe.slope_per_mille is None:
             missing_slopes.append(pipe.section_id)
         calculated_fill = _current_calculated_fill(
             pipe, s.hydraulic_assessment,
-            design_flow_lps=current_flows.get(pipe.section_id, pipe.design_flow_lps),
+            design_flow_lps=current_flows.get(pipe.section_id) if pipe.system == "K1" else pipe.design_flow_lps,
         )
         if calculated_fill is not None:
             calculated_fills.append(pipe.section_id)
@@ -325,6 +351,8 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
         "K-GOST-13", "Принципиальная схема внутренних систем",
         "ГОСТ Р 21.620-2023, пп. 5.2.2.1-5.2.2.4",
         topology_ok,
+        ("Характерный разрез сформирован из исходных параметров. Полная топология, "
+         "привязки и обслуживание сети не подтверждены." if section else
         (
             f"стояков {len(s.risers)}; выпусков {s.outlets_count}; "
             f"топологических участков {len(s.pipes)}; "
@@ -333,7 +361,7 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
                 "граф связен"
                 if topology.ready else "ошибки графа: " + "; ".join(topology.errors)
             )
-        ),
+        )),
     )
     add(
         "K-GOST-13A", "Текстовые решения по наружным сетям водоотведения",
@@ -379,12 +407,23 @@ def audit_wastewater_gost(project) -> WastewaterGostAudit:
             and project.storm.melt_m3_year is not None
         ),
         (
-            f"дождевые {project.storm.design_m3_day} м³/сут, "
-            f"{project.storm.annual_m3} м³/год; талые "
-            f"{project.storm.melt_m3h} м³/ч, "
-            f"{project.storm.melt_m3_day} м³/сут, "
-            f"{project.storm.melt_m3_year} м³/год"
+            f"дождевые {value_or_missing(project.storm.design_m3_day)} м³/сут, "
+            f"{value_or_missing(project.storm.annual_m3)} м³/год; талые "
+            f"{value_or_missing(project.storm.melt_m3h)} м³/ч, "
+            f"{value_or_missing(project.storm.melt_m3_day)} м³/сут, "
+            f"{value_or_missing(project.storm.melt_m3_year)} м³/год"
         ) if storm_required else "внутренний водосток К2 не предусмотрен",
         applicable=storm_required,
     )
+    # Opt-in requirements cannot become a completed design merely by ticking a box.
+    from app.pz.wastewater_service import assess as assess_service
+    service = assess_service(project.wastewater_service)
+    for key, code, reference in (
+        ("meter", "K-GOST-SERVICE-METER", "ГОСТ Р 21.620-2023, пп. 5.1.4.1, 5.2.2.1; документация изготовителя"),
+        ("sump", "K-GOST-SERVICE-SUMP", "ГОСТ Р 21.620-2023, пп. 5.1.4.2, 5.2.2.4; СП 30, пп. 20.13–20.15"),
+    ):
+        item = service[key]
+        if item["enabled"]:
+            add(code, item["title"], reference, False,
+                "; ".join(item["errors"]) or "Заданы требования. Расчёт, подбор и деталировка не выполнены.")
     return WastewaterGostAudit(checks)

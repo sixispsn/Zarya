@@ -1,0 +1,82 @@
+{
+  "revision": "2026-10-12.2",
+  "sources": {
+    "valfex-582-drawing": {
+      "url": "https://valfex.ru/upload/iblock/416/VF.582.L.pdf",
+      "title": "VALFEX VF.582.L.114 / VF.582.N.114, чертёж изготовителя",
+      "pages": "5: G1 1/4 НР/НР; L=40, SW=43,5, наружный габарит 46 мм",
+      "checked_on": "2026-10-12", "sha256": "a640a3156520c72db0bf2d8bf794174db1137769515a30ee26598da758d8ad77",
+      "note": "Размеры корпуса, не посадки резьбы. На чертеже прямо указано применение для никелированного VF.582.N.114."
+    },
+    "valfex-catalogue-2025": {
+      "url": "https://valfex.ru/upload/iblock/c1e/Zapornaya-armatura-2025-dlya-sayta.pdf",
+      "title": "VALFEX. Запорная арматура, каталог 2025",
+      "pages": "60: материал, G по ГОСТ 6357, PN40, -20...+200 °C; 79: VF.582.N.114, G1 1/4, L=40, наружный габарит 46 мм",
+      "checked_on": "2026-10-12", "sha256": "6d1d2c841f6cbe00c78cc937001c151ea954e65bdfe40db55bfd25d03cca7fd3",
+      "note": "Внесён только согласованный по двум источникам DN32. DN20/25 имеют расхождения осевых размеров и не внесены. PN не является кривой P/T. Страна изготовления конкретного артикула не подтверждена."
+    },
+    "decast-production": {
+      "url": "https://decast.com/about/", "title": "ДЕКАСТ: производство приборов ВСКМ 90 в России",
+      "checked_on": "2026-10-12", "note": "Заявление изготовителя; не заменяет запись реестра Минпромторга для закупок с отдельными требованиями локализации."
+    },
+    "pulsar-m2-re3": {
+      "url": "https://pulsarm.ru/upload/iblock/565/kg90hm6f3utscu6lwe6l2set8hbyj8iv/RE-Schetchik-vody-UZ-model-2-isp-1-2-Du15_Du40-Red-3.pdf",
+      "title": "Пульсар модель 2, исп. 1/2, ЮТЛИ.407223.006-04 РЭ, редакция 3",
+      "pages": "1: приложение А, таблицы 1/2, Сделано в России; 2: монтаж 5.2/5.3",
+      "checked_on": "2026-10-12", "sha256": "d8f8b32f0c07a756afc443ec8b4e98e629ba668a9143bafbb4a1ae1d1af12e33",
+      "note": "L и H - предельные габариты; монтажная посадка, комплект и прямые участки проверяются отдельно. RS-485 требует внешнего питания 9-30 В. Положение индикатора по приложению Д; полный трубопровод."
+    },
+    "ld47-passport-20261012": {
+      "url": "https://xn--d1an.xn--p1ai/api/v1/getDocument/5cd2589d-136e-11ef-804a-005056a4b6de",
+      "title": "LD Pride 47 В-В, паспорт DN15-50, ТУ 2024", "pages": "1: изготовитель, монтаж; 2: P/T, ГОСТ 6357",
+      "checked_on": "2026-10-12", "sha256": "202e1ae56a6c210f6898b63ce467670b1c3ab4c7e8e4d0b90f15aadcd4ee9010",
+      "note": "Неполнопроходная серия. Не заменяет автоматически полнопроходную арматуру; Kv сайта и паспорта не совпадают. В расчёт Kv не перенесён."
+    },
+    "ld47-32-page": {
+      "url": "https://xn--d1an.xn--p1ai/products/18477--kran_sarovoj_latunnyj_ld_pride_47_32_v_v_r_du_32_ru_25_rycag/",
+      "title": "LD 47.112.1.32.M02, карточка изготовителя", "pages": "Габариты, страна изготовления",
+      "checked_on": "2026-10-12", "note": "L=68; H от оси=58; h=83,5; рукоять=98,5 мм. Россия."
+    },
+    "ld-nipple-passport": {
+      "url": "https://xn--d1an.xn--p1ai/api/v1/getDocument/a2890b15-c3da-11ed-b250-005056a4b6de",
+      "title": "LD Pride 65/67 НР-НР, паспорт фитингов DN15-50", "pages": "1: монтаж и изготовитель; 2: размерная таблица",
+      "checked_on": "2026-10-12", "sha256": "c7c616770c397b9d80ee93f0b9524e2aafb9c7511c64d27854db842f9c6a8e4d",
+      "note": "Для DN32 длина 32,5 мм расходится с карточкой (35). DN32 в размерную сборку не допущен."
+    },
+    "ld-nipple50-page": {
+      "url": "https://xn--d1an.xn--p1ai/products/1216--nippel_pramoj_ld_pride_dn50_2_nr_nr_latun_nikel/",
+      "title": "LD.67.501.50, карточка изготовителя", "pages": "Габариты и страна изготовления",
+      "checked_on": "2026-10-12", "note": "L=39 мм, ширина 61 мм; совпадает с паспортом. Производство Россия."
+    }
+  },
+  "family_updates": {
+    "decast-vskm90": {"country_of_manufacture": "RU", "origin_source_ids": ["decast-production"]},
+    "decast-vskm90-dg": {"country_of_manufacture": "RU", "origin_source_ids": ["decast-production", "decast-106"]}
+  },
+  "families": [
+    {
+      "id": "pulsar-m2-e1-t105-rs485", "manufacturer": "ТЕПЛОВОДОХРАН", "model": "Пульсар модель 2, исп.1, T105, RS-485",
+      "kind": "meter", "technology": "ultrasonic", "source_ids": ["pulsar-m2-re3"], "dimension_status": "verified", "dimension_basis": "maximum",
+      "country_of_manufacture": "RU", "origin_source_ids": ["pulsar-m2-re3"],
+      "temperature_c": [5,105], "pn_bar": 16, "connection_sex": "male", "connection_standard": "G",
+      "drive": "none", "mounting": "per_passport", "remote_readout": true, "remote_interface": "RS-485, Modbus RTU; питание 9-30 В",
+      "notes": ["Современное ультразвуковое исполнение; модель 2, не модель 1 из старой карточки.", "Прямые участки по приложению В либо штатный комплект изготовителя; габариты комплекта пока не подтверждены.", "Вычислитель расположить по приложению Д. Потери механического счётчика не являются потерями этой модели.", "Qmin метрологического класса C; нельзя подписывать классом B."],
+      "columns": ["dn","L","H","body_thread","qmin_C","qn","qmax"],
+      "rows": [[15,110,75,"3/4",0.015,1.5,3],[20,130,90,"1",0.025,2.5,5],[25,160,90,"1 1/4",0.035,3.5,7],[32,180,95,"1 1/2",0.06,6,12],[40,200,105,"2",0.1,10,20]]
+    },
+    {
+      "id": "ld47-vv-m02", "manufacturer": "ЛД ПРАЙД", "model": "LD Pride 47 В-В.Р M02", "kind": "shutoff",
+      "source_ids": ["ld47-32-page", "ld47-passport-20261012"], "dimension_status": "verified",
+      "country_of_manufacture": "RU", "origin_source_ids": ["ld47-32-page", "ld47-passport-20261012"],
+      "temperature_c": [-20,150], "connection_sex": "female", "connection_standard": "G", "full_bore": false,
+      "drive": "manual", "mounting": "any", "notes": ["Неполнопроходной. Отдельный выбор проектировщика; не автоматическая замена полнопроходного крана.", "Не использовать как опору или регулирующую арматуру. Проверить пространство поворота рукоятки."],
+      "columns": ["dn","article","thread","L","B_above_axis","H_total","A_handle","pn_bar"],
+      "rows": [[32,"LD 47.112.1.32.M02","1 1/4",68,58,83.5,98.5,25]],
+      "pressure_temperature_table": {"temperatures_c": [0,25,50,75,100,125,150], "by_dn": {"32": [25,25,25,23,18,13,8]}}
+    }
+  ],
+  "thread_connectors": [
+    {"id":"valfex-vf582n114","article":"VF.582.N.114","manufacturer":"VALFEX","connection_standard":"G","equipment_thread":"1 1/4","equipment_sex":"male","pipe_connector_thread":"1 1/4","pipe_connector_sex":"male","pn_bar":40,"temperature_c":[-20,200],"dimension_status":"verified","dimensions_mm":{"L":40,"SW":43.5,"D":46},"source_ids":["valfex-582-drawing","valfex-catalogue-2025"]},
+    {"id":"ld-67-501-50","article":"LD.67.501.50","manufacturer":"ЛД ПРАЙД","connection_standard":"G","equipment_thread":"2","equipment_sex":"male","pipe_connector_thread":"2","pipe_connector_sex":"male","pn_bar":25,"temperature_c":[-60,250],"dimension_status":"verified","dimensions_mm":{"L":39,"SW":61},"source_ids":["ld-nipple-passport","ld-nipple50-page"]}
+  ]
+}

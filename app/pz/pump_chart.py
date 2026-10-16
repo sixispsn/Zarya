@@ -1,8 +1,8 @@
 """
 app/pz/pump_chart.py — генератор графика Q-H для пояснительной записки.
 
-Чистый порт drawChart/findWorkingPoint/buildEffectiveCurve/interpH из
-sp30_calculator.html. Никакой селекции насоса здесь нет — её делает
+Рендер каталожной кривой, расчётной точки и, при наличии данных, оценки сети.
+Поиск точки использует общий модуль L04. Никакой селекции насоса здесь нет — её делает
 flows_bridge.pump_from_calc (ядро Антона). Этот модуль ТОЛЬКО рисует
 то, что ему передали, и отдаёт строку SVG для вставки в шаблон:
 
@@ -15,15 +15,16 @@ WeasyPrint-специфика (из STATUS.md «Ключевые техниче�
   (надёжнее в SVG-движке WeasyPrint);
 - SVG инлайнится в HTML напрямую, base_url для него не нужен.
 
-Внутренние координаты графика (viewBox 600×320) совпадают с JS-версией
-один в один, поэтому картинка в PDF идентична картинке в калькуляторе.
+Исправление L02: разложение напора приходит из ядра без повторного расчёта.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 from xml.sax.saxutils import escape
+from app.calc.pump_system_curve import required_boost_head
+from app.calc.pump_curve import find_intersections, interpolate_head
 
 # Точка кривой: (Q, м³/ч; H, м)
 Point = tuple[float, float]
@@ -31,21 +32,9 @@ Point = tuple[float, float]
 
 # ── Геометрия системы и рабочая точка (порт JS) ──────────────────────────
 
-def interp_h(curve: Sequence[Point], q: float) -> float:
-    """Линейная интерполяция напора насоса по расходу (порт interpH)."""
-    if not curve:
-        return 0.0
-    if q <= curve[0][0]:
-        return curve[0][1]
-    if q >= curve[-1][0]:
-        return 0.0
-    for i in range(len(curve) - 1):
-        q0, h0 = curve[i]
-        q1, h1 = curve[i + 1]
-        if q0 <= q <= q1:
-            k = (q - q0) / (q1 - q0)
-            return h0 + k * (h1 - h0)
-    return 0.0
+def interp_h(curve: Sequence[Point], q: float) -> float | None:
+    """Общий интерполятор L04; отсутствие данных не является нулём напора."""
+    return interpolate_head(curve, q)
 
 
 def build_effective_curve(curve: Sequence[Point], mode: str) -> list[Point]:
@@ -63,21 +52,9 @@ def build_effective_curve(curve: Sequence[Point], mode: str) -> list[Point]:
 
 def find_working_point(curve: Sequence[Point], h_stat: float,
                        k_sys: float, steps: int = 200) -> Point | None:
-    """Пересечение кривой насоса и кривой системы H=H_стат+k·Q² (порт findWorkingPoint)."""
-    if not curve:
-        return None
-    q_max = curve[-1][0]
-    best: Point | None = None
-    best_diff = float("inf")
-    for i in range(steps + 1):
-        q = q_max * i / steps
-        h_pump = interp_h(curve, q)
-        h_sys = h_stat + k_sys * q * q
-        diff = abs(h_pump - h_sys)
-        if diff < best_diff:
-            best_diff = diff
-            best = (q, h_pump)
-    return best
+    """Общий поиск L04. steps оставлен для совместимости, сетка не применяется."""
+    wp = find_intersections(curve, h_stat, k_sys).working_point
+    return (wp.q, wp.h) if wp else None
 
 
 # ── Параметры графика ────────────────────────────────────────────────────
@@ -86,14 +63,15 @@ def find_working_point(curve: Sequence[Point], h_stat: float,
 class PumpChart:
     """Всё, что нужно нарисовать. Заполняется из flows_bridge.pump_from_calc."""
     curve: list[Point]                 # эффективная кривая (уже с учётом mode)
-    h_stat: float                      # статический напор системы, м
-    k_sys: float                       # коэф. кривой системы, м/(м³/ч)²
+    h_stat: float | None               # signed intercept; None = нет разложения
+    k_sys: float | None
     wp: Point | None = None            # рабочая точка (Q, H); None — не считать
     q_opt: float | None = None         # BEP насоса, м³/ч (для полосы КПД)
     title: str = ""                    # подпись, напр. "Grundfos Hydro MPC-E CR15-9"
     # масштаб в PDF
     width_mm: float = 165.0
     font_family: str = "Times New Roman, serif"
+    duty: Point | None = None          # требуемая расчётная точка, не пересечение
 
 
 # ── Рендер SVG (порт drawChart) ──────────────────────────────────────────
@@ -121,7 +99,9 @@ def render_pump_chart_svg(chart: PumpChart) -> str:
         )
 
     q_max = chart.curve[-1][0] * 1.1
-    h_max = chart.curve[0][1] * 1.15
+    h_max = max(chart.curve[0][1], chart.duty[1] if chart.duty else 0) * 1.15
+    if chart.duty:
+        q_max = max(q_max, chart.duty[0] * 1.1)
     if q_max <= 0 or h_max <= 0:
         return f'{open_tag}</svg>'
 
@@ -178,19 +158,30 @@ def render_pump_chart_svg(chart: PumpChart) -> str:
                f'font-size="11" fill="#555">Q, м³/ч</text>')
 
     # Кривая системы H=H_стат+k·Q²
-    sys_pts = []
-    for i in range(41):
-        q = q_max * i / 40
-        h = chart.h_stat + chart.k_sys * q * q
-        if h <= h_max * 1.05:
-            sys_pts.append(f'{sx(q):.1f},{sy(h):.1f}')
-    out.append(f'<polyline points="{" ".join(sys_pts)}" fill="none" '
-               f'stroke="#c0392b" stroke-width="2" stroke-dasharray="6,3"/>')
+    if chart.h_stat is not None and chart.k_sys is not None:
+        sys_pts = []
+        samples = [q_max * i / 160 for i in range(161)]
+        if chart.duty:
+            samples.append(chart.duty[0])  # точная привязка, не ближайший пиксель сетки
+        for q in sorted(set(samples)):
+            h = required_boost_head(chart.h_stat, chart.k_sys, q)
+            if h <= h_max:
+                sys_pts.append(f'{sx(q):.1f},{sy(h):.1f}')
+        out.append(f'<polyline data-role="system-curve" points="{" ".join(sys_pts)}" fill="none" '
+                   f'stroke="#c0392b" stroke-width="2" stroke-dasharray="6,3"/>')
 
     # Кривая насоса
     pump_pts = [f'{sx(q):.1f},{sy(h):.1f}' for q, h in chart.curve]
     out.append(f'<polyline points="{" ".join(pump_pts)}" fill="none" '
                f'stroke="#1a6aaa" stroke-width="2.5"/>')
+
+    if chart.duty:
+        dx, dy = sx(chart.duty[0]), sy(chart.duty[1])
+        out.append(f'<path data-role="design-point" d="M{dx-5:.1f},{dy:.1f} '
+                   f'L{dx+5:.1f},{dy:.1f} M{dx:.1f},{dy-5:.1f} L{dx:.1f},{dy+5:.1f}" '
+                   f'stroke="#b55a00" stroke-width="2"/>')
+        out.append(f'<text x="{pl + _CW - 5}" y="{pt + 32}" text-anchor="end" '
+                   f'font-size="10" fill="#b55a00">Расчётная точка Q/H</text>')
 
     # Рабочая точка
     if chart.wp:
@@ -203,7 +194,7 @@ def render_pump_chart_svg(chart: PumpChart) -> str:
                    f'stroke="#27ae60" stroke-width="1" stroke-dasharray="3,3"/>')
         out.append(f'<circle cx="{wx:.1f}" cy="{wy:.1f}" r="7" '
                    f'fill="#27ae60" fill-opacity="0.25"/>')
-        out.append(f'<circle cx="{wx:.1f}" cy="{wy:.1f}" r="4" fill="#27ae60"/>')
+        out.append(f'<circle data-role="working-point" cx="{wx:.1f}" cy="{wy:.1f}" r="4" fill="#27ae60"/>')
         # Плашка с подписью; клампим вправо/вверх, чтобы не уходила за поле PDF
         lbl_w = 92
         lx = min(wx + 8, pl + _CW - lbl_w)

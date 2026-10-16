@@ -1,7 +1,8 @@
 """
 Расчёт водопотребления по СП 30.13330.2020.
 
-Алгоритм 1-в-1 как в legacy/sp30_calculator.html, функция calcBlock().
+Формулы calcBlock() — из legacy/sp30_calculator.html; таблица Б.2 и её границы
+исправлены отдельно с согласия пользователя (L01, 21.09.2026).
 
 Ключевая идея: расчёт идёт по часовой норме q_hr (л/ч на потребителя),
 без использования отдельного числа санитарных приборов N.
@@ -45,7 +46,7 @@ from app.data.sp30_tables import ConsumerNorm, get_alpha, get_consumer_norm
 class ConsumerGroup:
     """Группа однотипных потребителей в здании."""
     code: str    # код типа потребителя из CONSUMER_NORMS
-    count: int   # количество потребителей U
+    count: int | float   # U; дробное только для явно выбранной усреднённой оценки
 
 
 @dataclass
@@ -68,7 +69,7 @@ class WaterDemandResult:
     total: FlowResult       # общий поток
     cold: FlowResult        # холодная вода
     hot: FlowResult         # горячая вода
-    sewage_flow: float      # расход хозяйственно-бытовых стоков, л/с
+    sewage_flow: float      # СП30 5.5(5), справочное q_s для стояков, НЕ горизонтального выпуска
     sewage_fixture_discharge: float  # q_0s диктующего прибора, л/с
     heat_max_kw: float      # максимальный тепловой поток на ГВС, кВт
     heat_avg_kw: float      # среднечасовой тепловой поток на ГВС, кВт
@@ -145,6 +146,8 @@ def calculate_water_demand(
     groups: list[ConsumerGroup],
     apply_k06: bool = False,
     sewage_max_fixture_lps: float = 1.6,
+    *,
+    round_consumers: bool = True,
 ) -> WaterDemandResult:
     """
     Главная функция расчёта водопотребления.
@@ -153,6 +156,9 @@ def calculate_water_demand(
         groups: список групп потребителей в здании
         apply_k06: применить коэффициент 0.6 к числу потребителей U
                    (для бытового корпуса промпредприятия, прим. 7 СП 30)
+        round_consumers: обычный ввод оставляет прежнее округление. False —
+                         согласованная оценка средней квартиры U=жители/квартиры;
+                         дробное U передаётся в тот же legacy calcBlock.
 
     Returns:
         WaterDemandResult с расчётами для трёх потоков.
@@ -166,7 +172,7 @@ def calculate_water_demand(
     # Применяем k06 — округляем U как в HTML (Math.round)
     k = 0.6 if apply_k06 else 1.0
     eff_groups = [
-        ConsumerGroup(code=g.code, count=round(g.count * k))
+        ConsumerGroup(code=g.code, count=round(g.count * k) if round_consumers else g.count * k)
         for g in groups
     ]
     # Фильтруем пустые группы

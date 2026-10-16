@@ -6,7 +6,9 @@ ProofGraph с фактически выпущенными PDF и формиру�
 """
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -14,12 +16,18 @@ from typing import Iterable
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pypdf import PdfReader
 from weasyprint import CSS, HTML
+from weasyprint.text.fonts import FontConfiguration
 
 from app.pz.proof import ProofDecision, ProofGraph
 from app.pz.project import Project
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+
+class DefenseLayoutError(ValueError):
+    """Evidence cannot be published with complete readable page layout."""
+
 
 DEFAULT_QUESTIONS = {
     "v1-q-day": "Чем подтверждён суточный расход воды?",
@@ -262,11 +270,70 @@ def generate_expert_response_pdf(
         question=clean_question,
         documents=documents,
     )
-    HTML(string=html, base_url=str(TEMPLATES_DIR)).write_pdf(
-        output_path,
+    fonts = FontConfiguration()
+    rendered = HTML(string=html, base_url=str(TEMPLATES_DIR)).render(
+        font_config=fonts,
         stylesheets=[CSS(
             filename=str(TEMPLATES_DIR / "defense_answer.css"),
             base_url=str(TEMPLATES_DIR),
+            font_config=fonts,
         )],
     )
+    _validate_response_layout(rendered)
+    pdf = rendered.write_pdf()
+    destination = Path(output_path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent, prefix=".defense-", suffix=".pdf", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf)
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return output_path
+
+
+def _validate_response_layout(document) -> None:
+    """Reject actual layout overflow before writing.
+
+    WeasyPrint's internal page boxes are covered by PDF regression tests.
+    Margin boxes hold page counters outside the main content rectangle.
+    """
+    rows = set()
+
+    def check(box, bounds, page_number):
+        if type(box).__name__ == "MarginBox":
+            return
+        if type(box).__name__ == "TableRowBox" and any(
+            child.element_tag == "td" for child in box.children
+        ):
+            # Oversize rows can lose a header/bottom border when WeasyPrint
+            # forcibly splits them. Do not publish these incomplete tables.
+            identity = id(box.element)
+            if identity in rows:
+                raise DefenseLayoutError(
+                    "Ответ эксперту: строка таблицы не помещается целиком на листе. "
+                    "Разделите исходное табличное поле; прежний PDF сохранён."
+                )
+            rows.add(identity)
+        if type(box).__name__ in {
+            "TextBox", "InlineReplacedBox", "BlockReplacedBox", "TableCellBox",
+        }:
+            left, top, right, bottom = bounds
+            x, y = box.position_x, box.position_y
+            if (x < left - 1 or y < top - 1
+                    or x + box.width > right + 1 or y + box.height > bottom + 1):
+                raise DefenseLayoutError(
+                    f"Ответ эксперту: содержимое не помещается на листе {page_number}; "
+                    "проверьте длину полей. Прежний PDF сохранён."
+                )
+        for child in getattr(box, "children", ()):
+            check(child, bounds, page_number)
+
+    for number, page in enumerate(document.pages, 1):
+        root = page._page_box
+        left, top = root.content_box_x(), root.content_box_y()
+        check(root, (left, top, left + root.width, top + root.height), number)

@@ -17,6 +17,24 @@ from app.calc.sewer_hydraulics import (
 )
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
 from app.pz.wastewater_topology import SewerBranch, build_wastewater_topology
+from app.calc.sewage_horizontal import resolve_horizontal_flow
+
+
+def pipe_horizontal_flow(pipe):
+    return resolve_horizontal_flow(**{key: getattr(pipe, key) for key in (
+        "design_flow_lps", "flow_source", "q_hour_max_m3h", "fixtures_count",
+        "receiving_length_m", "fixture_max_lps")})
+
+
+def is_pumped_sewer_section(project, pipe):
+    """Keep declared pump discharge lines out of gravity formula (7).
+
+    A pressure-rated material alone is not proof of a pumped flow regime.
+    Pump hydraulics remain in the existing separate pressure-sewer module.
+    """
+    sewage = project.sewage
+    return (pipe.system in {"K1", "K3"} and pipe.pressure_rated is True
+            and (sewage.pump_required or sewage.pump_system == pipe.system))
 
 
 @dataclass(frozen=True)
@@ -91,6 +109,8 @@ class SedimentRiskZone:
 class WastewaterDiagnosticAssessment:
     resolved_flows_lps: Dict[str, float] = field(default_factory=dict)
     hydraulics: List[SewerHydraulicResult] = field(default_factory=list)
+    horizontal_flow_notes: Dict[str, str] = field(default_factory=dict)
+    pending_horizontal_flows: List[str] = field(default_factory=list)
     diameter_checks: List[FixtureDiameterCheck] = field(default_factory=list)
     network_diameter_checks: List[NetworkDiameterCheck] = field(default_factory=list)
     ventilation_checks: List[VentilationCheck] = field(default_factory=list)
@@ -102,7 +122,7 @@ class WastewaterDiagnosticAssessment:
 
     @property
     def ready(self) -> bool:
-        return not self.errors
+        return not self.errors and not self.pending_horizontal_flows
 
 
 def _is_riser(pipe: SewerPipeSpec) -> bool:
@@ -136,57 +156,21 @@ def _outgoing_mains(
 
 
 def resolve_k1_main_flows(project: Project) -> tuple[Dict[str, float], List[str]]:
-    """Суммировать только явно заданные нагрузки стояков по направленному графу."""
+    """СП30 5.7: calculate each horizontal segment, NEVER sum riser maxima."""
     pipes = [
         pipe for pipe in project.sewage.pipes
-        if pipe.system == "K1" and not _is_riser(pipe) and not _is_branch(pipe)
+        if pipe.system == "K1" and not _is_riser(pipe)
+        and not is_pumped_sewer_section(project, pipe)
     ]
-    outgoing: Dict[str, List[SewerPipeSpec]] = {}
-    for pipe in pipes:
-        outgoing.setdefault(pipe.from_node, []).append(pipe)
-    result: Dict[str, float] = {
-        pipe.section_id: float(pipe.design_flow_lps)
-        for pipe in pipes
-        if pipe.design_flow_lps is not None
-    }
-    derived: Dict[str, float] = {}
+    result: Dict[str, float] = {}
     warnings: List[str] = []
-
-    for riser in project.sewage.risers:
-        if riser.design_flow_lps <= 0:
-            continue
-        node = riser.riser_id
-        visited_nodes = set()
-        while node in outgoing:
-            if node in visited_nodes:
-                warnings.append(
-                    f"{riser.riser_id}: цикл не позволяет суммировать расход К1"
-                )
-                break
-            visited_nodes.add(node)
-            choices = outgoing[node]
-            if len(choices) != 1:
-                warnings.append(
-                    f"{node}: расход стояка нельзя распределить между "
-                    f"{len(choices)} выходящими участками без явных долей"
-                )
-                break
-            pipe = choices[0]
-            derived[pipe.section_id] = (
-                derived.get(pipe.section_id, 0.0) + riser.design_flow_lps
-            )
-            node = pipe.to_node
-
-    for section_id, value in derived.items():
-        if section_id in result:
-            if abs(result[section_id] - value) > 0.001:
-                warnings.append(
-                    f"{section_id}: явный расход {result[section_id]:.3f} л/с "
-                    f"не совпадает с суммой стояков {value:.3f} л/с"
-                )
+    for pipe in pipes:
+        flow, _, note = pipe_horizontal_flow(pipe)
+        if flow is None:
+            warnings.append(f"{pipe.section_id}: {note}")
         else:
-            result[section_id] = value
-    return {key: round(value, 3) for key, value in result.items()}, warnings
+            result[pipe.section_id] = flow
+    return result, warnings
 
 
 def _fixture_minimum_dn(kind: str) -> int:
@@ -685,6 +669,8 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
     for pipe in pipes:
         if _is_riser(pipe):
             continue
+        if is_pumped_sewer_section(project, pipe):
+            continue
         is_branch = _is_branch(pipe)
         if (
             pipe.calculation_length_m is not None
@@ -726,7 +712,11 @@ def assess_wastewater_diagnostics(project: Project) -> WastewaterDiagnosticAsses
             elif service.status == "pending":
                 assessment.warnings.append(f"{pipe.section_id}: {service.note}")
 
-        flow = flows.get(pipe.section_id, pipe.design_flow_lps)
+        flow = flows.get(pipe.section_id) if pipe.system == "K1" else pipe.design_flow_lps
+        if pipe.system == "K1":
+            assessment.horizontal_flow_notes[pipe.section_id] = pipe_horizontal_flow(pipe)[2]
+            if flow is None:
+                assessment.pending_horizontal_flows.append(pipe.section_id)
         # Для ветви используется ТОЛЬКО её явно заданный расход. Общий расход
         # здания/стояка между приборами не распределяется. К2 не наследует
         # критерии самоочищения бытовых стоков из этого расчётного модуля.

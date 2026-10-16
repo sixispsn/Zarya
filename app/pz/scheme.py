@@ -4,7 +4,9 @@ app/pz/scheme.py — принципиальная схема систем В1, �
 
 Точка входа: build_scheme(project: Project) -> SchemeResult(svg=...).
 Обёртка эталонного движка (full_scheme v6) параметрами из модели Project:
-  • этажность/отметки           — BuildingFlags (floors_above/below, height_m);
+  • этажность                  — BuildingFlags (floors_above/below);
+  • отметки этажей             — BuildingFlags.floor_elevations_m;
+  • кровля/подвал              — заданные архитектурные отметки Project;
   • зоны водоснабжения          — building.zones (2 -> пары стояков В1.1/В1.2);
   • ПК, стояки В2, кольцо, ПТ   — FireSystem (required, pk_total);
   • насосная ПОЗ                — PumpSystem.required;
@@ -12,7 +14,10 @@ app/pz/scheme.py — принципиальная схема систем В1, �
   • санприборы квартирной ветки — project.fixtures (FixtureGroup);
   • ПЛК                         — flows.irrigation_m3_day > 0;
   • штамп форма 3               — project.document (185×55, геометрия document.html).
-Чего в модели нет (Ду стояков/вводов, отметка ввода) — SchemeParams с дефолтами.
+Сечения характерного пути берутся из расчётных участков В1 без подбора заново.
+SchemeParams допускает явное графическое задание, но не содержит типовых DN В1.
+Неизвестные отметки
+подписываются «отм. по АР», а не восстанавливаются из геометрии картинки.
 
 Компоновка листа (эталон): n≥4 -> полосы этажей «2, 3, n» с обрывом;
 n≤3 -> полосы сплошняком, кровля на верхней. Цоколь (1 этаж) — всегда.
@@ -21,6 +26,7 @@ n≤3 -> полосы сплошняком, кровля на верхней. Ц
 from __future__ import annotations
 
 import math
+from html import escape
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -28,6 +34,9 @@ from app.pz import ugo
 from app.pz.annotate import Occ, place, text_w
 from app.pz.project import Project
 from app.pz.section_scaffold import build_section_scaffold
+from app.pz.section_construction import section_slab_svg
+from app.pz.water_pipe_binding import bind_v1_pipes, ROLES
+from app.pz.drawing_numbers import water_elevation_text
 
 BLK = "#000"; FONT = "osifont"; DIA = "\u2205"
 PIPE = 2.4; BLD = 1.2; LDR = 1.2; UGW = 2.0
@@ -39,16 +48,16 @@ PXMM = W / 841
 class SchemeParams:
     """Параметры, отсутствующие в Project. Дефолты — эталонные, уточняются."""
     inlet_count: int = 2          # число вводов (2 -> перемычка с задвижкой, п.8.5)
-    inlet_dn: int = 100           # Ду ввода
+    inlet_dn: Optional[int] = None
     inlet_abs: str = ""           # абс. отметка ввода, текст ("146,8")
-    inlet_mark_m: float = -2.2    # относительная отметка ввода
-    riser_v1_dn: int = 80         # Ду стояков В1 (шахтных)
+    inlet_mark_m: Optional[float] = None  # отметка именно ввода, не коллектора насоса
+    riser_v1_dn: Optional[int] = None
     riser_v2_dn: int = 100        # Ду стояков В2
-    floor_conn_dn: int = 32       # Ду поэтажной врезки от стояка
-    apt_line_dn: int = 25         # Ду квартирной разводки
+    floor_conn_dn: Optional[int] = None
+    apt_line_dn: Optional[int] = None
     plk_dn: int = 25              # Ду поливочного крана
-    basement_depth_m: float = 4.0 # глубина -1 этажа (при floors_below>0)
-    ground_h_m: float = 5.2       # высота цоколя (техпростр. над 1 этажом)
+    basement_depth_m: float = 4.0 # устаревший параметр; подписи только по АР
+    ground_h_m: float = 5.2       # устаревший параметр; подписи только по АР
     title_line1: str = "Принципиальная схема"
     title_line2: str = "систем В1, В2"
 
@@ -62,13 +71,17 @@ class SchemeResult:
 
 
 def _fmt_mark(v: float) -> str:
-    """+5,200 / -4,000 — знак всегда, запятая, 3 знака."""
-    return ("{:+.3f}".format(v)).replace(".", ",")
+    """Paper-only rounding: ГОСТ Р 21.619-2023, 5.2.1.6 (two decimals)."""
+    return water_elevation_text(v)
 
 
 def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> SchemeResult:
+    from app.pz.drafting_font import ensure_drafting_font_registered
+    ensure_drafting_font_registered()
     P = params or SchemeParams()
     warns: List[str] = []
+    from app.pz.water_regulation_plan import branch_regulation_plan
+    regulation = branch_regulation_plan(project)
     b = project.building
     doc = project.document
     fire_on = bool(project.fire and project.fire.required)
@@ -85,9 +98,21 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     if (b.zones or 1) > 2:
         warns.append("расчётных зон больше двух: на принципиальной схеме показаны две характерные зоны")
     plk_on = bool(project.flows and project.flows.irrigation_m3_day > 0)
-    n = max(1, b.floors_above or 1)
     scaffold = build_section_scaffold(project)
-    fh = scaffold.floor_height_m
+    pipes = bind_v1_pipes(project)
+    warns.extend(row.issue for row in pipes.values() if row.issue)
+
+    def pipe_label(role, explicit=None):
+        pipe = pipes[role].pipe
+        if pipe:
+            if explicit is not None and explicit != pipe.dn:
+                raise ValueError(f"В1, {ROLES[role]}: DN схемы противоречит сечению расчёта {pipe.label}")
+            return pipe.label
+        return f"DN{explicit}" if explicit is not None else pipes[role].label
+
+    riser_label = pipe_label("riser", P.riser_v1_dn)
+    inlet_label = pipe_label("inlet", P.inlet_dn)
+    apt_label = pipe_label("apartment", P.apt_line_dn)
 
     # ── данные ВПВ из модели (FireSystem), а не из SchemeParams ──
     fire = project.fire
@@ -102,8 +127,6 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     else:
         v2_dn = P.riser_v2_dn
     fire_pk_total = (fire.pk_total if fire else 0) or 0
-    fire_streams = (fire.streams if fire else 0) or 0
-    has_aupt = bool(fire and fire.has_aupt)
 
     occ = Occ((W, H)); G: List[str] = []
 
@@ -117,7 +140,7 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         occ.add_line(min(x1, x2), y, max(x1, x2), y, kind)
 
     def txt(x, y, t, sz=13, anc="middle", reg=True):
-        G.append(f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{sz}" text-anchor="{anc}" fill="{BLK}">{t}</text>')
+        G.append(f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{sz}" text-anchor="{anc}" fill="{BLK}">{escape(t)}</text>')
         if reg:
             tw = text_w(t, sz); x0 = x - tw / 2 if anc == "middle" else (x - tw if anc == "end" else x)
             occ.add(x0, y - sz, x0 + tw, y + 3)
@@ -132,10 +155,12 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
 
     def vyn(ax, ay, dx, dy, shelf, label, sz=12):
         kx, ky = ax + dx, ay + dy
+        from app.pz.annotate import arrow
+        G.append(arrow(ax, ay, math.atan2(-dy, -dx), s=6))
         G.append(f'<line x1="{ax}" y1="{ay}" x2="{kx}" y2="{ky}" stroke="{BLK}" stroke-width="{LDR}"/>')
         x2 = kx + shelf
         G.append(f'<line x1="{min(kx,x2)}" y1="{ky}" x2="{max(kx,x2)}" y2="{ky}" stroke="{BLK}" stroke-width="{LDR}"/>')
-        G.append(f'<text x="{min(kx,x2)+4}" y="{ky-4}" font-family="{FONT}" font-size="{sz}" fill="{BLK}">{label}</text>')
+        G.append(f'<text x="{min(kx,x2)+4}" y="{ky-4}" font-family="{FONT}" font-size="{sz}" fill="{BLK}">{escape(label)}</text>')
         occ.add(min(kx, x2), ky - sz - 4, max(kx, x2) + 4, ky + 4)
 
     def vbreak(x, y1, y2, label, cy=None, sz=13):
@@ -180,8 +205,8 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     def valve_h(x, y): G.append(ugo.valve_h(x, y, tri=9, dot=4.5)); occ.add(x-9, y-9, x+9, y+9)
     def filt_v(x, y): G.append(ugo.filt(x, y, hd=9, vd=9, ext=0, seg_n=3, rot=90)); occ.add(x-9, y-9, x+9, y+9)
     def filt_h(x, y): G.append(ugo.filt(x, y, hd=9, vd=9, ext=0, seg_n=3)); occ.add(x-9, y-9, x+9, y+9)
-    def redv_v(x, y): G.append(ugo.redvalve(x, y, rw=14, rh=10, ext=0, apex="right", rot=-90)); occ.add(x-9, y-9, x+9, y+9)
-    def redv_h(x, y, apex="right"): G.append(ugo.redvalve(x, y, rw=14, rh=10, ext=0, apex=apex)); occ.add(x-9, y-9, x+9, y+9)
+    def redv_v(x, y): G.append('<g data-pressure-regulator="model">' + ugo.redvalve(x, y, rw=14, rh=10, ext=0, apex="right", rot=-90) + '</g>'); occ.add(x-9, y-9, x+9, y+9)
+    def redv_h(x, y, apex="right"): G.append('<g data-pressure-regulator="model">' + ugo.redvalve(x, y, rw=14, rh=10, ext=0, apex=apex) + '</g>'); occ.add(x-9, y-9, x+9, y+9)
     def meter_v(x, y): G.append(ugo.meter(x, y, rw=17, rh=11, ext=0, rot=90)); occ.add(x-9, y-9, x+9, y+9)
     def meter_h(x, y): G.append(ugo.meter(x, y, rw=17, rh=11, ext=0)); occ.add(x-9, y-9, x+9, y+9)
     def check_v(x, y): G.append(ugo.check_v(x, y, tri=9, flow="down")); occ.add(x-9, y-9, x+9, y+9)
@@ -248,33 +273,56 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     y_gb = scaffold.ground_bottom_y
     y_m1 = scaffold.basement_y
     y_roof = scaffold.roof_y
-    roof_mark = b.height_m if (b.height_m or 0) > 0 else P.ground_h_m + (n - 1) * fh + fh
+    # Drawing ordinates are a schematic composition, not building elevations.
+    # Never obtain AR levels from fire height / floor count / fixed template offsets.
+    levels = b.floor_elevations_m or {}
 
-    ph(XL, XR, y_m1, BLD, "bld"); ph(XL, XR, y_0, BLD, "bld"); ph(XL, XR, y_tech, BLD, "bld")
+    def level_text(value, label):
+        if value is None:
+            warns.append(f"{label}: отметка по АР не задана")
+            return "отм. по АР"
+        if not math.isfinite(float(value)):
+            raise ValueError(f"{label}: отметка должна быть конечным числом")
+        return _fmt_mark(float(value))
+
+    basement_mark = levels.get(-1, project.sewage.basement_floor_elevation_m)
+    roof_mark = project.sewage.roof_relative_elevation_m
+
+    # Architectural background precedes the pipework. Keep the floor datum on
+    # the upper edge; the drawn band does not assign a structural thickness.
+    G.append(section_slab_svg("v1-base", XL, XR, y_m1,
+                             units_per_mm=PXMM, depth_mm=8, role="base"))
+    for floor, y in [(1, y_0), *bands]:
+        G.append(section_slab_svg(f"v1-floor-{floor}", XL, XR, y,
+                                 units_per_mm=PXMM))
+    ph(XL, XR, y_tech, BLD, "bld")
     ph(XL, XR, y_roof, BLD, "bld")
     pv(XL, y_roof, y_m1, BLD, "bld"); pv(XR, y_roof, y_m1, BLD, "bld")
     for _, yb_ in bands:
         ph(XL, XR, yb_, BLD, "bld"); ph(XL, XR, yb_ - FLB, BLD, "bld")
 
     has_m1 = (b.floors_below or 0) > 0
-    otm(x_otm, y_m1, _fmt_mark(-P.basement_depth_m), "-1 этаж" if has_m1 else "Подвал")
-    otm(x_otm, y_0, _fmt_mark(0.0), "1 этаж")
-    otm(x_otm, y_tech, _fmt_mark(P.ground_h_m), "Тех. простр.")
+    otm(x_otm, y_m1, level_text(basement_mark, "Подвал"), "-1 этаж" if has_m1 else "Подвал")
+    otm(x_otm, y_0, level_text(levels.get(1), "1 этаж"), "1 этаж")
+    # This strip belongs to the old graphic template, not an AR level. Do not
+    # add a fictitious ordinate, or a label overlapping the second-floor mark.
     for k, yb_ in bands:
-        otm(x_otm, yb_, _fmt_mark(P.ground_h_m + 0.7 + (k - 2) * fh), f"{k} этаж")
-    otm(x_otm, y_roof, _fmt_mark(roof_mark), "Кровля")
+        otm(x_otm, yb_, level_text(levels.get(k), f"{k} этаж"), f"{k} этаж")
+    otm(x_otm, y_roof, level_text(roof_mark, "Кровля"), "Кровля")
 
     # ================= ЭТАЖНАЯ ПОЛОСА =================
-    def floor_band(y_fl, pk_nums=(0, 0), last=False):
+    def floor_band(y_fl, pk_nums=(0, 0), last=False, floor=None):
         y_rt = y_fl - FLB + 4; y_rb = y_rt + RHf; y_tr = y_rb + CHf // 2
         bx = [
             (
                 slot.x0,
                 slot.x1,
                 (
-                    "Пом. С"
-                    if slot.role == "service" and b.purpose.value != "residential"
-                    else slot.default_label
+                    "Квартира (характерная)" if slot.role.startswith("apartment")
+                    and b.purpose.value == "residential" else
+                    "Помещения" if slot.role.startswith("apartment") else
+                    None if slot.role.startswith("shaft") else
+                    "Общая зона" if slot.role == "lift" else None
                 ),
             )
             for slot in scaffold.room_slots
@@ -282,7 +330,6 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         for a, bb, nm in bx:
             G.append(f'<rect x="{a}" y="{y_rt}" width="{bb-a}" height="{RHf}" fill="none" stroke="{BLK}" stroke-width="{BLD}"/>')
             if nm: txt((a + bb) / 2, y_rt + 20, nm, 12)
-            if nm == "Лифтовой холл": txt((a + bb) / 2, y_rt + 44, "Запотолочное пространство", 9)
         G.append(f'<rect x="{200}" y="{y_rb}" width="{2060}" height="{CHf}" fill="none" stroke="{BLK}" stroke-width="{BLD}"/>')
 
         def room(x0, x1, m):
@@ -290,7 +337,13 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
             xa = xr - m * 40; y_hi = y_rt + 30; y_app = y_rt + RHf - 28
             dot(xr, y_tr); pv(xr, y_tr, y_hi); ph(xa, xr, y_hi); pv(xa, y_hi, y_app)
             dy = 24; ys = [y_hi + 14 + i * dy for i in range(5)]
-            valve_v(xa, ys[0]); filt_v(xa, ys[1]); redv_v(xa, ys[2]); meter_v(xa, ys[3]); check_v(xa, ys[4])
+            # Not a template item: only an explicit project stage-P decision.
+            valve_v(xa, ys[0]); filt_v(xa, ys[1]); meter_v(xa, ys[3]); check_v(xa, ys[4])
+            if regulation.shows("В1", floor):
+                G.append(f'<g data-pressure-regulator="stage-p" data-system="В1" data-floor="{floor}">'
+                    + ugo.redvalve(xa, ys[2], rw=14, rh=10, ext=0, apex="right", rot=90) + '</g>')
+                occ.add(xa-9, ys[2]-9, xa+9, ys[2]+9)
+                txt(xa-m*24, ys[2]+3, "РД", 12, "end" if m > 0 else "start")
             # приборы вдоль подводки — по составу из АР, шаг 34
             slot = 34; k = 1
             xend = xa
@@ -307,19 +360,19 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
                     raise AssertionError("душ пересекает стену: ось=%.1f край=%.1f комната(%d,%d)" % (_xd, _edge, x0, x1))
                 shower(_xd, y_app - OFF, "left" if m > 0 else "right"); xend = _xd
             ph(xend, xa, y_app)
+            txt((xend + xa) / 2, y_app + 19, "В1 " + apt_label, 11)
             return xr
 
         def stub(x0, x1, m, hi, v2):
             xL = (x0 + 28) if m > 0 else (x1 - 28)
             dot(xL, y_tr); pv(xL, y_tr, (y_hi := y_rt + 30))
             ph(xL, hi, y_hi)
-            redv_h(xL + m * 26, y_hi, apex="right" if m > 0 else "left")
             filt_h(xL + m * 54, y_hi)
             xdr = xL + m * 82; dot(xdr, y_hi); pv(xdr, y_hi, y_hi + 22, PIPE * 0.8); valve_v(xdr, y_hi + 15)
             valve_h(xL + m * 110, y_hi)
             dot(hi, y_hi)
             riser_tag = "В1.2" if two_zones else "В1"
-            lab = riser_tag + DIA + str(P.floor_conn_dn); tw = text_w(lab, 12); gap = tw + 10
+            lab = riser_tag + " " + riser_label; tw = text_w(lab, 12); gap = tw + 10
             cy = (y_rt + 12 + y_rb - 10) / 2 + 28
             y_top_r = (y_hi if last else y_rt + 12)
             pv(hi, y_top_r, cy - gap / 2); pv(hi, cy + gap / 2, y_rb - 10)
@@ -333,17 +386,12 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
                 pk_box(v2 + m * 34, y_pk, side="l" if m > 0 else "r", num=(pk_nums[0] if m > 0 else pk_nums[1]))
             return xL
 
-        apt_lab = ("В1.1.2" if two_zones else "В1.1") + DIA + str(P.apt_line_dn)
+        apt_lab = ("В1.1.2" if two_zones else "В1") + (f" DN{P.floor_conn_dn}" if P.floor_conn_dn else " · этажная ветвь")
         xr01 = room(*bx[0][:2], +1); room(*bx[1][:2], +1)
         xL3 = stub(*bx[2][:2], +1, HI1, V21)
         hbreak(xr01, xL3, y_tr, apt_lab, sz=11)
-        if b.purpose.value == "residential":
-            xm = bx[3][0] + 30; ph(HI1, xm, y_rt + 30); y_kr = y_rt + RHf - 24
-            pv(xm, y_rt + 30, y_kr)
-            valve_v(xm, y_rt + 52); meter_v(xm, y_rt + 74); check_v(xm, y_rt + 96)
-            ybr = y_rt + 118; dot(xm, ybr); ph(xm, xm + 40, ybr, PIPE * 0.85); valve_h(xm + 26, ybr)
-            vyn(xm + 40, ybr, 14, -16, 86, "К прочистке ствола " + DIA + "20", 10)
-            ph(xm, xm + 34, y_kr, PIPE * 0.85); kran_leg(xm + 34, y_kr, "right", h=12)
+        # A residential purpose alone does not imply a refuse chute or its
+        # washing connection. Do not copy service equipment from the GOST example.
         xL6 = stub(*bx[5][:2], -1, HI2, V22)
         xr08 = room(*bx[7][:2], -1); room(*bx[6][:2], -1)
         hbreak(xL6, xr08, y_tr, apt_lab, sz=11)
@@ -358,7 +406,7 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     for i, (k, yb_) in enumerate(bands):
         nums = (pk_counter + 1, pk_counter + 2) if fire_on else (0, 0)
         pk_counter += 2 if fire_on else 0
-        band_tops.append(floor_band(yb_, nums, last=(i == len(bands) - 1)))
+        band_tops.append(floor_band(yb_, nums, last=(i == len(bands) - 1), floor=k))
     pk_shown = pk_counter
     if fire_on and not fire_pk_total:
         warns.append(f"на схеме показано ПК: {pk_shown} (характерные этажи); "
@@ -388,21 +436,23 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         def rupture(y, gap=24):
             G.append(f'<rect x="{XL-6}" y="{y}" width="{XR-XL+12}" height="{gap}" fill="white"/>')
             for yy in (y, y + gap):
-                zz = (XL + 520, XR - 520)
-                for a, bb in ((XL, zz[0] - 9), (zz[0] + 9, zz[1] - 9), (zz[1] + 9, XR)):
+                zz = ((XL + XR) / 2,)
+                for a, bb in ((XL - 33, zz[0] - 9), (zz[0] + 9, XR + 33)):
                     G.append(f'<line x1="{a}" y1="{yy}" x2="{bb}" y2="{yy}" stroke="{BLK}" stroke-width="0.9"/>')
                 for z in zz:
                     G.append(f'<path d="M{z-9},{yy} l6,-12 l6,24 l6,-12" fill="none" stroke="{BLK}" stroke-width="0.9"/>')
             occ.add(XL, y, XR, y + gap)
         rupture((bands[-1][1] + (bands[-2][1] - FLB)) / 2)
+        omitted = max(0, scaffold.floors - len({1, *(k for k, _ in bands)}))
 
     # ================= ЦОКОЛЬ (1 этаж) =================
     def ground():
         y_rt = y_tech; y_rb = y_0; y_mag = y_0 + CHg - 46
-        # встроенные помещения из модели -> правый блок; левый — эталонный сервисный
-        left = [(200, 440, "ПУИ", "pui", 1), (450, 660, "Санузел", "san", 1),
-                (670, 880, "Мусорокамера" if b.purpose.value == "residential" else "Пом. С", "pui", 1)]
-        mid = [(895, 985, "Шахта", None, 0), (995, 1465, "Вестибюль", None, 0), (1475, 1565, "Шахта", None, 0)]
+        left = [(200, 500, "Квартира (характерная)", "apt", 1),
+                (510, 880, "Квартира (характерная)", "apt", 1)]
+        if b.purpose.value != "residential":
+            left = [(200, 880, "Помещения по АР", None, 0)]
+        mid = [(895, 985, "Шахта", None, 0), (995, 1465, "Общая зона", None, 0), (1475, 1565, "Шахта", None, 0)]
         spans = [(1580, 1740), (1750, 1910), (1920, 2080), (2090, 2260)]
         units = list(b.built_in_units or [])
         if len(units) > len(spans):
@@ -416,6 +466,9 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
                 right.append((a, bb, nm, "t20", 1 if i < len(spans) - 1 else -1))
             else:
                 right.append((a, bb, "Пом.", None, 0))
+        if b.purpose.value == "residential" and not units:
+            right = [(1580, 1900, "Квартира (характерная)", "apt", -1),
+                     (1910, 2260, "Квартира (характерная)", "apt", -1)]
         bx = left + mid + right
         for a, bb, nm, _, _m in bx:
             G.append(f'<rect x="{a}" y="{y_rt}" width="{bb-a}" height="{RHg}" fill="none" stroke="{BLK}" stroke-width="{BLD}"/>')
@@ -425,16 +478,21 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         v1tag = ("Ст.В1.1-%d", "Ст.В1.2-%d") if two_zones else (None, "Ст.В1-%d")
         stq = []
         if two_zones:
-            stq += [(LO1, v1tag[0] % 1 + " " + DIA + str(P.riser_v1_dn), 1090),
-                    (LO2, v1tag[0] % 2 + " " + DIA + str(P.riser_v1_dn), 1090)]
-        stq += [(HI1, v1tag[1] % 1 + " " + DIA + str(P.riser_v1_dn), 1150),
-                (HI2, v1tag[1] % 2 + " " + DIA + str(P.riser_v1_dn), 1150)]
+            stq += [(LO1, v1tag[0] % 1 + " " + riser_label, 1090),
+                    (LO2, v1tag[0] % 2 + " " + riser_label, 1090)]
+        stq += [(HI1, v1tag[1] % 1 + " " + riser_label, 1150),
+                (HI2, v1tag[1] % 2 + " " + riser_label, 1150)]
         if fire_on:
             stq += [(V21, "Ст.В2-1 " + DIA + str(v2_dn), 1210),
                     (V22, "Ст.В2-2 " + DIA + str(v2_dn), 1210)]
-        for xs, lab_, cy in stq: vbreak(xs, y_rt + 8, y_gb - 12, lab_, cy=cy, sz=11)
+        for xs, lab_, cy in stq: vbreak(xs, y_rt, y_gb, lab_, cy=cy, sz=11)
         x_up = 214
-        ph(x_up, 2246, y_mag)      # магистраль нижней зоны
+        branch_xs = [(bb - 44 if m > 0 else a + 36) for a, bb, _, kd, m in bx if kd]
+        main_xs = branch_xs + ([LO1, LO2] if two_zones else [HI1, HI2])
+        ph_gap(x_up if plk_on else min(main_xs), 2246 if plk_on else max(main_xs),
+               y_mag, [HI1, HI2] if two_zones else [])
+        if not two_zones:
+            dot(HI1, y_mag); dot(HI2, y_mag)
         if two_zones:
             dot(LO1, y_mag); dot(LO2, y_mag)
             for xs, dx in ((LO1, -26), (LO2, +26)):
@@ -454,24 +512,29 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
             y_app = y_rb - 30
             pv(xa, y_hi, y_app)
             dy = 25; ys = [y_hi + 14 + i * dy for i in range(5)]
-            valve_v(xa, ys[0]); filt_v(xa, ys[1]); redv_v(xa, ys[2]); meter_v(xa, ys[3]); check_v(xa, ys[4])
+            valve_v(xa, ys[0]); filt_v(xa, ys[1]); meter_v(xa, ys[3]); check_v(xa, ys[4])
+            if kind == "apt" and regulation.shows("В1", 1):
+                G.append('<g data-pressure-regulator="stage-p" data-system="В1" data-floor="1">'
+                    + ugo.redvalve(xa, ys[2], rw=14, rh=10, ext=0, apex="right", rot=90) + '</g>')
+                occ.add(xa-9, ys[2]-9, xa+9, ys[2]+9)
+                txt(xa-m*24, ys[2]+3, "РД", 12, "end" if m > 0 else "start")
             if kind.startswith("t"):
                 tilde(xa, y_app)
             else:
                 xend = xa - m * 112
                 ph(xend, xa, y_app)
                 washbasin(xa - m * 56, y_app - OFF, "right" if m > 0 else "left")
-                if kind == "san": toilet_st(xend, y_app)
+                if kind in {"san", "apt"}: toilet_st(xend, y_app)
                 else: kran_leg(xend, y_app, "left" if m > 0 else "right", h=14)
-            vyn(xr, (y_rb + y_hi) / 2 + 26, m * 16, -20, m * 30, DIA + dn, 11)
+            txt((x0 + x1) / 2, y_app + 19, "В1 " + apt_label if kind == "apt" else "DN" + dn, 11)
 
-        kinds = {"pui": "pui", "san": "san", "t20": "t", "t40": "t", "t32": "t", "t15": "t"}
-        dnn = {"pui": "15", "san": "15", "t20": "20", "t40": "40", "t32": "32", "t15": "15"}
+        kinds = {"apt": "apt", "pui": "pui", "san": "san", "t20": "t", "t40": "t", "t32": "t", "t15": "t"}
+        dnn = {"apt": "", "pui": "15", "san": "15", "t20": "20", "t40": "40", "t32": "32", "t15": "15"}
         for a, bb, nm, kd, m in bx:
             if kd: room_branch(a, bb, kinds[kd], dnn[kd], m)
         # ПЛК (поливочные краны) — при поливе в балансе
         if plk_on:
-            valve_h(x_up + 120, y_mag); filt_h(x_up + 90, y_mag); redv_h(x_up + 60, y_mag); meter_h(x_up + 30, y_mag)
+            valve_h(x_up + 120, y_mag); filt_h(x_up + 90, y_mag); meter_h(x_up + 30, y_mag)
             pv(x_up, y_mag, y_rb); dot(x_up, y_mag)
             spusknik_v(x_up, y_mag)
             y_plk = y_rb - 30 - OFF - S - 12
@@ -479,13 +542,13 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
             kran_leg(XL - 34, y_plk, "left", h=0)
             vyn(XL - 34, y_plk - 24, -14, -22, -36, "ПЛК " + DIA + str(P.plk_dn), 11)
             x_upR = 2246
-            valve_h(x_upR - 120, y_mag); filt_h(x_upR - 90, y_mag); redv_h(x_upR - 60, y_mag, apex="left"); meter_h(x_upR - 30, y_mag)
+            valve_h(x_upR - 120, y_mag); filt_h(x_upR - 90, y_mag); meter_h(x_upR - 30, y_mag)
             pv(x_upR, y_mag, y_rb); dot(x_upR, y_mag)
             spusknik_v(x_upR, y_mag)
             pv(x_upR, y_rb, y_plk); ph(x_upR, XR + 34, y_plk)
             kran_leg(XR + 34, y_plk, "right", h=0)
             vyn(XR + 34, y_plk - 24, 14, -22, 36, "ПЛК " + DIA + str(P.plk_dn), 11)
-        vyn(700, y_mag, -30, -26, -120, "Магистраль нижней зоны, в подвале", 10)
+        vyn(800, y_mag, -30, -26, -240, "В1 " + pipe_label("main") + "; в подвале", 12)
         return y_mag
 
     ymag_g = ground()
@@ -493,20 +556,30 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
     # ================= НИЗ: вводы (п.8.5), транзит ПК, насосные =================
     ym = 1560; y_low = 1658
     xe = XL + 40
+    # An inlet crosses the building envelope; do not move the interior valves
+    # and collector when extending the external portion of the same pipe.
+    inlet_start_x = XL - 40
     inlet2 = inlet_count >= 2
     if inlet2:
         for yy in (ym - 34, ym + 34):
-            ph(xe, xe + 66, yy); gate_hh(xe + 42, yy); flow_r(xe + 22, yy)
+            ph(inlet_start_x, xe + 66, yy); gate_hh(xe + 42, yy); flow_r(xe + 22, yy)
         pv(xe + 66, ym - 34, ym + 34); xA = xe + 66
         gate_vv(xA, ym - 17)               # задвижка на перемычке вводов (СП 30 п.8.5)
     else:
-        ph(xe, xe + 66, ym); gate_hh(xe + 42, ym); flow_r(xe + 22, ym)
+        ph(inlet_start_x, xe + 66, ym); gate_hh(xe + 42, ym); flow_r(xe + 22, ym)
         xA = xe + 66
     dot(xA, ym)
-    pv(xA + 38, ym, y_low); ph(xA, xA + 38, ym)
-    ph(xA + 38, 2050, y_low)
+    hws_branch = bool(project.source.hws_heater_in_scope)
+    ph(xA, xA + 38, ym)
+    header_end = max(xA + 360 if pump_on else xA + 38,
+                     (xA + 1000 if pump_on else xA + 700) if fire_on else xA + 38)
+    if pump_on or fire_on or hws_branch:
+        pv(xA + 38, ym, y_low)
+        ph(xA + 38, 2050 if hws_branch else header_end, y_low)
+    if hws_branch:
+        G.append(f'<path d="M2050,{y_low-12} q-8,6 0,12 q8,6 0,12" '
+                 f'fill="none" stroke="{BLK}" stroke-width="{UGW}"/>')
     xfl = 1140
-    ph(xA + 38, xfl + 22, y_low)
     # ПК-врезки СРАЗУ ПОСЛЕ ввода (до насосных), транзит по подвалу цоколя
     if fire_on:
         y_hif = y_tech + 24
@@ -531,8 +604,8 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
         a = xc - w_ / 2
         G.append(f'<rect x="{a}" y="{yr_t}" width="{w_}" height="{yr_b-yr_t}" fill="none" stroke="{BLK}" stroke-width="{BLD}"/>')
         occ.add(a, yr_t, a + w_, yr_b)
-        txt(xc, yr_t + 22, name, 13, reg=False)
-        txt(xc, yr_t + 42, "см. принципиальную схему", 10, reg=False)
+        txt(a + 16, yr_t + 22, name, 13, "start", reg=False)
+        txt(a + 16, yr_t + 42, "См. лист насосов", 11, "start", reg=False)
 
     yj = y_gb + 22
 
@@ -561,24 +634,25 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
                 9, "middle", reg=False)
 
     if pump_on:
-        xpoz = xA + 360; pump_room(xpoz, 300, "Насосная станция ПОЗ")
+        xpoz = xA + 360; pump_room(xpoz, 300, "Насосная В1")
         pv(xpoz, y_low, yr_t + 118); dot(xpoz, y_low); tilde(xpoz, yr_t + 118)
         outs = ((xpoz - 70, "lo"), (xpoz + 70, "hi")) if two_zones else ((xpoz + 70, "hi"),)
         for index, (xo, tag) in enumerate(outs):
             tilde(xo, yr_t + 96); pv(xo, yr_t + 96, yj if tag == "lo" else yj - 16)
             draw_zone_regulator(index, xo, yr_t + 62, vertical=True)
         if two_zones:
-            ph(xpoz - 70, LO1, yj); pv(LO1, yj, y_gb - 2)
+            ph(xpoz - 70, LO2, yj); pv(LO1, yj, y_gb); pv(LO2, yj, y_gb)
         ph(xpoz + 70, HI1, yj - 16); dot(HI1, yj - 16); ph(HI1, HI2, yj - 16)
-        pv(HI1, yj - 16, y_gb - 2); pv(HI2, yj - 16, y_gb - 2)
+        pv(HI1, yj - 16, y_gb); pv(HI2, yj - 16, y_gb)
     else:
         # без повысительной установки — магистраль напрямую к стоякам
+        pv(xA + 38, ym, yj - 16)
         if two_zones:
-            ph(xA + 38, LO1, yj); pv(LO1, yj, y_gb - 2); dot(LO1, yj)
+            ph(xA + 38, LO2, yj); pv(LO1, yj, y_gb); pv(LO2, yj, y_gb); dot(LO1, yj)
             draw_zone_regulator(0, xA + 105, yj, vertical=False)
         ph(xA + 38, HI1, yj - 16); dot(HI1, yj - 16); ph(HI1, HI2, yj - 16)
         draw_zone_regulator(1 if two_zones else 0, xA + 145, yj - 16, vertical=False)
-        pv(HI1, yj - 16, y_gb - 2); pv(HI2, yj - 16, y_gb - 2)
+        pv(HI1, yj - 16, y_gb); pv(HI2, yj - 16, y_gb)
     if fire_on:
         xpt = (xA + 360 + 640) if pump_on else (xA + 700)
         pump_room(xpt, 300, "Насосная станция пожаротушения")
@@ -588,67 +662,73 @@ def build_scheme(project: Project, params: Optional[SchemeParams] = None) -> Sch
             tilde(xo, yr_t + 96); pv(xo, yr_t + 96, yv); ph(min(xo, xg), max(xo, xg), yv); pv(xg, yv, y_gb - 2)
 
     # выноски низа
-    inlet_txt = (f"Ввод водопровода {inlet_count}x{DIA}{P.inlet_dn}"
-                 + (f", абс. отметка {P.inlet_abs} ({_fmt_mark(P.inlet_mark_m)})" if P.inlet_abs
-                    else f", отм. {_fmt_mark(P.inlet_mark_m)}"))
-    lbl((xe + 33, ym + (34 if inlet2 else 0)), inlet_txt, 11)
+    inlet_mark = P.inlet_mark_m if P.inlet_mark_m is not None else project.metering_detail.inlet_elevation_m
+    inlet_mark_text = level_text(inlet_mark, "Ввод")
+    inlet_anchor_y = ym + (34 if inlet2 else 0)
+    vyn(xe, inlet_anchor_y, 90, 1460 - inlet_anchor_y, 175,
+        f"Вводы В1 ({inlet_count} шт.)" if inlet2 else "Ввод В1", 12)
+    txt(xe + 94, 1480, inlet_label, 12, "start")
+    txt(xe + 94, 1500, "отм. оси " + inlet_mark_text, 12, "start")
+    if P.inlet_abs:
+        txt(xe + 94, 1520, "абс. " + P.inlet_abs, 12, "start")
     if fire_on:
-        lbl((378, 1470), f"На пожаротушение нижней зоны {inlet_count}x{DIA}{P.inlet_dn}", 11, maxr=480)
-    vyn(1900, y_low, 26, -26, 44, "отм. " + _fmt_mark(-(P.basement_depth_m - 0.6)), 11)
-    vyn(1250, y_0 + CHg - 46, 24, -22, 44, "отм. -0,700", 11)
+        lbl((378, 1470), "На пожаротушение нижней зоны; см. схему В2", 11, maxr=480)
+    if hws_branch:
+        vyn(1950, y_low, -40, -40, -300, "К узлу ГВС; см. отдельный лист", 12)
+    vyn(1250, y_0 + CHg - 46, 24, -22, 84, "отм. трубы по трассе", 11)
     if fire_on:
-        vyn(1250, y_tech + 24, 22, 26, 44, "отм. " + _fmt_mark(P.ground_h_m - 0.2), 11)
+        vyn(1250, y_tech + 24, 22, 26, 84, "отм. трубы по трассе", 11)
 
-    # ================= РАМКА + ШТАМП ФОРМА 3 (из project.document) =================
-    fx0, fy0, fx1, fy1 = 20 * PXMM, 5 * PXMM, W - 5 * PXMM, H - 5 * PXMM
-    G.append(f'<rect x="{fx0:.1f}" y="{fy0:.1f}" width="{fx1-fx0:.1f}" height="{fy1-fy0:.1f}" fill="none" stroke="{BLK}" stroke-width="2"/>')
+    # A small source schedule reconciles the representative diagram with the
+    # same geometry used by the specification, without presenting it as AR.
+    notes_x = 2350
+    txt(notes_x, 145, "Характерный путь В1", 14, "start")
+    yy = 175
+    for role, name in ROLES.items():
+        binding = pipes[role]
+        txt(notes_x, yy, name.capitalize() + ": " + binding.label, 12, "start")
+        if binding.pipe:
+            material = {"steel": "сталь", "pex": "PE-X", "pe": "ПЭ"}[binding.pipe.family]
+            txt(notes_x, yy + 19, material + f"; dвн={binding.pipe.inner_mm:g} мм".replace(".", ","), 12, "start")
+        yy += 53
+    notes = ["Показаны характерные квартиры и стояки.",
+             "Нумерация помещений по АР не назначена.",
+             "Толщина плит условная; конструкции по АР/КР.",
+             "Длины в спецификации — оценка по площади.",
+             "Этажные ветви: сечения уточнить по планам."]
+    if not P.inlet_abs:
+        notes.append("Абс. отметка ввода: нужна привязка ±0,00.")
+    if with_rupture and len(bands) >= 2 and omitted:
+        notes.append(f"На разрыве не показано этажей: {omitted}.")
+    if not project.fixtures:
+        notes.append("Состав приборов показан типовым условно.")
+    from app.pz.water_document_binding import water_pressure_presentation
+    pressure = water_pressure_presentation(project)
+    notes.extend(pressure.drawing_lines)
+    if pressure.state != "checked_nodes":
+        warns.append(pressure.text)
+    for line in notes:
+        txt(notes_x, yy, line, 11, "start"); yy += 20
+    if project.source.elev_fixture_m is not None:
+        txt(notes_x, yy + 20, "Диктующий прибор: " + level_text(project.source.elev_fixture_m, "Прибор"), 12, "start")
+    lowest = project.source.lowest_fixture_elevation_m
+    if lowest is not None and project.source.lowest_fixture_basis.strip():
+        txt(notes_x, yy + 44, "Нижний прибор: " + level_text(lowest, "Нижний прибор"), 12, "start")
+        txt(notes_x, yy + 64, "Основание отметки - см. ПЗ.", 11, "start")
 
-    def mmx(v): return fx1 - (185 - v) * PXMM
-    def mmy(v): return fy1 - (55 - v) * PXMM
-    def L(x1, y1, x2, y2, w=1.0): G.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{BLK}" stroke-width="{w}"/>')
-    def T(x, y, t, sz=9, anc="middle"): G.append(f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{sz}" text-anchor="{anc}" fill="{BLK}">{t}</text>')
+    # Keep the original body coordinates; map the physical frame to this viewBox.
+    from app.pz.graphic_document_frame import drawing_frame_svg
 
-    G.append(f'<rect x="{mmx(0):.1f}" y="{mmy(0):.1f}" width="{185*PXMM:.1f}" height="{55*PXMM:.1f}" fill="white" stroke="{BLK}" stroke-width="2"/>')
-    L(mmx(65), mmy(0), mmx(65), mmy(55), 1.6)
-    for cx in (7, 17, 25, 37, 53): L(mmx(cx), mmy(0), mmx(cx), mmy(25))
-    for cx in (17, 37, 53): L(mmx(cx), mmy(25), mmx(cx), mmy(55))
-    L(mmx(135), mmy(25), mmx(135), mmy(55), 1.3)
-    for cx in (150, 165): L(mmx(cx), mmy(25), mmx(cx), mmy(40))
-    for yy in range(5, 55, 5): L(mmx(0), mmy(yy), mmx(65), mmy(yy))
-    L(mmx(65), mmy(10), mmx(185), mmy(10))
-    L(mmx(65), mmy(25), mmx(185), mmy(25))
-    L(mmx(135), mmy(30), mmx(185), mmy(30))
-    L(mmx(65), mmy(40), mmx(185), mmy(40))
-    for t, c0, c1 in (("Изм.", 0, 7), ("Кол.уч.", 7, 17), ("Лист", 17, 25), ("№ док.", 25, 37), ("Подп.", 37, 53), ("Дата", 53, 65)):
-        T(mmx((c0 + c1) / 2), mmy(25) - 4, t, 8)
-    signers = (("Разраб.", doc.developer_name, 30), ("Проверил", doc.inspector_name, 35),
-               ("Нач. отдела", doc.dept_head_name, 40), ("ГИП", doc.gip_name, 45),
-               ("Н. контр.", doc.norm_control_name, 55))
-    for t, nm, row in signers:
-        T(mmx(1) + 2, mmy(row) - 4.5, t, 8.5, "start")
-        if nm: T(mmx(27), mmy(row) - 4.5, nm, 8.5)
-    T(mmx(125), mmy(8), doc.cipher or "", 15.5)
-    T(mmx(125), mmy(19), doc.object_name or "", 9.5)
-    T(mmx(100), mmy(34.5), doc.object_part or "", 12)
-    T(mmx(142.5), mmy(30) - 4, "Стадия", 7.5); T(mmx(157.5), mmy(30) - 4, "Лист", 7.5); T(mmx(175), mmy(30) - 4, "Листов", 7.5)
-    T(mmx(142.5), mmy(37), doc.stage_label or "П", 11)
-    T(mmx(157.5), mmy(37), doc.sheet_no or "1", 11)
-    T(mmx(175), mmy(37), doc.sheet_total or "1", 11)
     title_line2 = P.title_line2
     if params is None:
         title_line2 = "систем В1, В2" if fire_on else "системы В1"
-    T(mmx(100), mmy(46.5), P.title_line1, 12)
-    T(mmx(100), mmy(52.5), title_line2, 12)
-    T(mmx(160), mmy(49), doc.organization or "", 10)
-    # боковая графа (25|35|25, снизу вверх)
-    bg = fx0 - 12 * PXMM
-    for h0, h1, t in ((0, 25, "Инв. № подл."), (25, 60, "Подп. и дата"), (60, 85, "Взам. инв. №")):
-        y0 = fy1 - h0 * PXMM; y1 = fy1 - h1 * PXMM
-        G.append(f'<rect x="{bg:.1f}" y="{y1:.1f}" width="{12*PXMM:.1f}" height="{(h1-h0)*PXMM:.1f}" fill="none" stroke="{BLK}" stroke-width="1.3"/>')
-        cyb = (y0 + y1) / 2
-        G.append(f'<text x="{bg+6*PXMM:.1f}" y="{cyb:.1f}" font-family="{FONT}" font-size="9.5" text-anchor="middle" dominant-baseline="middle" fill="{BLK}" transform="rotate(-90,{bg+6*PXMM:.1f},{cyb:.1f})">{t}</text>')
+    frame = drawing_frame_svg(
+        doc, width_mm=841, height_mm=594,
+        title=P.title_line1, system_label=title_line2,
+    )
+    G.append(f'<g transform="scale({W / 841:.12f} {H / 594:.12f})">{frame}</g>')
 
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" preserveAspectRatio="none" viewBox="0 0 {W} {H}">'
            f'<rect width="{W}" height="{H}" fill="white"/>{"".join(G)}</svg>')
     return SchemeResult(svg=svg, warnings=warns)
 

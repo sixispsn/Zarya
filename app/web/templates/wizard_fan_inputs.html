@@ -1,0 +1,21 @@
+<section class="fan-summary" data-fan-editor data-project-id="{{ project_id|default('', true) }}" data-revision="{{ fan_revision|default('') }}" data-fan-matches-saved="{{ 'true' if fan_matches_saved else 'false' }}">
+  <input type="hidden" name="fan_data" value="{{ fan_raw|default('{}') }}">
+  <div><strong>Фановая вентиляция</strong><p data-fan-summary>Группы, отметки и подтверждения</p></div>
+  <button type="button" class="btn" data-fan-open>Уточнить узлы <i class="fan-lamp" aria-hidden="true"></i></button>
+  <dialog class="fan-dialog" aria-labelledby="fan-title">
+    <header><div><p class="eyebrow">К1 / ИСХОДНЫЕ ДАННЫЕ</p><h2 id="fan-title">Фановые узлы</h2></div><button type="button" class="btn" data-fan-cancel aria-label="Закрыть без применения">✕</button></header>
+    <p class="fan-notice">Геометрия, нормативные подтверждения и готовность к выпуску проверяются отдельно. Пустое поле означает «нет данных». Стояки не объединяются автоматически.</p>
+    <div class="fan-body" data-fan-body></div>
+    <section class="fan-review" aria-label="Проверка сохранённого проекта">
+      <h3>Проверка и контрольный PDF</h3>
+      <p>Проверяется только сохранённая версия всего проекта. Несохранённые изменения формы в PDF не попадут.</p>
+      {% if project_id %}
+      <div class="fan-review-actions"><button type="button" class="btn" data-fan-review>Проверить сохранённый проект</button><button type="button" class="btn" data-fan-download disabled>Скачать контрольный PDF</button></div>
+      {% else %}<p>Сначала сохраните проект. Здесь появятся проверка привязки узлов и скачивание PDF.</p>{% endif %}
+      <div data-fan-report aria-live="polite"></div>
+    </section>
+    <p class="fan-error" role="alert" data-fan-error></p>
+    <p role="status" data-fan-status></p>
+    <footer><button type="button" class="btn" data-fan-cancel>Отмена</button><button type="button" class="btn" data-fan-apply>Применить к форме</button>{% if project_id %}<button type="button" class="btn btn-primary" data-fan-save>Сохранить только узлы</button>{% endif %}</footer>
+  </dialog>
+</section>

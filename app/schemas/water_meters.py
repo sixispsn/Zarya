@@ -3,11 +3,21 @@ Pydantic-схемы для API подбора счётчиков воды.
 """
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class MeterMinimumEvidenceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    dn_mm: int | None = Field(default=None, gt=0, strict=True)
+    q_min_hourly_m3h: float | None = Field(default=None, ge=0, strict=True)
+    q_min_passport_m3h: float | None = Field(default=None, gt=0, strict=True)
+    passport_reference: str = Field(default="", max_length=500)
+    flow_reference: str = Field(default="", max_length=500)
 
 
 class MeterRequest(BaseModel):
     """Входные данные подбора счётчиков."""
+    model_config = ConfigDict(allow_inf_nan=False)
     hws_type: Literal["central", "local"] = Field(
         default="central",
         description="Тип ГВС: central (централизованное) или local (местный нагрев)",
@@ -25,6 +35,7 @@ class MeterRequest(BaseModel):
     q_day_h: float = Field(default=0.0, ge=0, description="Суточный горячий, м³/сут")
     q_hr_c: float = Field(default=0.0, ge=0, description="Часовой холодный, м³/ч")
     q_hr_h: float = Field(default=0.0, ge=0, description="Часовой горячий, м³/ч")
+    minimum_flow_checks: dict[Literal["total", "cold", "hot"], MeterMinimumEvidenceRequest] = Field(default_factory=dict)
 
 
 class WaterMeterInfo(BaseModel):
@@ -41,6 +52,8 @@ class WaterMeterInfo(BaseModel):
 class MeterCheckOutput(BaseModel):
     """Результат проверки одного счётчика."""
     label: str
+    q_average_m3h: float | None = None
+    pass_average: bool | None = None
     meter: WaterMeterInfo
     h_normal: float
     h_limit_normal: float
@@ -49,9 +62,11 @@ class MeterCheckOutput(BaseModel):
     h_limit_fire: float | None
     pass_fire: bool | None
     need_bypass: bool
-    pass_sensitivity: bool
+    pass_sensitivity: bool | None
     need_combo: bool
     has_fire_check: bool
+    minimum_flow_note: str = ""
+    minimum_flow_evidence: MeterMinimumEvidenceRequest | None = None
 
 
 class MeterResponse(BaseModel):

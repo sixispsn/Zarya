@@ -7,8 +7,10 @@
 - тип (крыльчатый/турбинный).
 
 Перенесено из legacy/sp30_calculator.html (массив METERS).
+Согласованное 21.09.2026 исключение: DN65 S=810*10^-5 по таблице 12.1.
 """
 from dataclasses import dataclass
+from math import isfinite
 from typing import Literal
 
 
@@ -41,12 +43,12 @@ WATER_METERS: list[WaterMeter] = [
     WaterMeter(d_mm=32,  q_min=0.1,  q_expl=4,    q_max=10,   q_threshold=0.05,  s=1.3,     type="wing"),
     WaterMeter(d_mm=40,  q_min=0.16, q_expl=6.4,  q_max=16,   q_threshold=0.08,  s=0.5,     type="wing"),
     WaterMeter(d_mm=50,  q_min=0.3,  q_expl=12,   q_max=30,   q_threshold=0.15,  s=0.143,   type="wing"),
-    WaterMeter(d_mm=65,  q_min=1.5,  q_expl=17,   q_max=70,   q_threshold=0.6,   s=0.00081, type="turbine"),
-    WaterMeter(d_mm=80,  q_min=2,    q_expl=36,   q_max=110,  q_threshold=0.7,   s=0.00264, type="turbine"),
-    WaterMeter(d_mm=100, q_min=3,    q_expl=65,   q_max=180,  q_threshold=1.2,   s=0.000766,type="turbine"),
-    WaterMeter(d_mm=150, q_min=4,    q_expl=140,  q_max=350,  q_threshold=1.6,   s=0.00013, type="turbine"),
-    WaterMeter(d_mm=200, q_min=6,    q_expl=210,  q_max=600,  q_threshold=3,     s=0.000035,type="turbine"),
-    WaterMeter(d_mm=250, q_min=15,   q_expl=380,  q_max=1000, q_threshold=7,     s=0.000018,type="turbine"),
+    WaterMeter(d_mm=65,  q_min=1.5,  q_expl=17,   q_max=70,   q_threshold=0.6,   s=810 * 1e-5, type="turbine"),
+    WaterMeter(d_mm=80,  q_min=2,    q_expl=36,   q_max=110,  q_threshold=0.7,   s=264 * 1e-5, type="turbine"),
+    WaterMeter(d_mm=100, q_min=3,    q_expl=65,   q_max=180,  q_threshold=1.2,   s=76.6 * 1e-5,type="turbine"),
+    WaterMeter(d_mm=150, q_min=4,    q_expl=140,  q_max=350,  q_threshold=1.6,   s=13 * 1e-5, type="turbine"),
+    WaterMeter(d_mm=200, q_min=6,    q_expl=210,  q_max=600,  q_threshold=3,     s=3.5 * 1e-5,type="turbine"),
+    WaterMeter(d_mm=250, q_min=15,   q_expl=380,  q_max=1000, q_threshold=7,     s=1.8 * 1e-5,type="turbine"),
 ]
 
 
@@ -62,16 +64,18 @@ HEAD_LIMITS_FIRE: dict[MeterType, float] = {
 }
 
 
-def pick_meter(q_sr_hr: float) -> WaterMeter:
+def pick_meter(q_sr_hr: float) -> WaterMeter | None:
     """
     Подобрать наименьший счётчик, у которого q_expl ≥ заданный средний расход.
 
-    Если требуемый расход больше максимально доступного — возвращаем самый большой.
+    L05: вне каталога возвращаем None, а не заведомо непригодный DN250.
     """
+    if not isfinite(q_sr_hr) or q_sr_hr < 0:
+        raise ValueError("Средний часовой расход должен быть конечным неотрицательным числом")
     for m in WATER_METERS:
         if m.q_expl >= q_sr_hr:
             return m
-    return WATER_METERS[-1]
+    return None
 
 
 def get_meter_by_d(d_mm: int) -> WaterMeter | None:

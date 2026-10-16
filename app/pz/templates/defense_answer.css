@@ -1,171 +1,79 @@
+/* Plain information blocks and complete tables; no decorative rules. */
+@font-face {
+  font-family: "Zarya Defense";
+  src: url("../../assets/fonts/OpenGOSTtypeB-Regular.ttf");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Zarya Defense";
+  src: url("../../assets/fonts/OpenGOSTtypeB-Regular.ttf");
+  font-weight: 700;
+}
 @page {
   size: A4;
   margin: 15mm 15mm 16mm;
   @bottom-right {
     content: "Лист " counter(page) " из " counter(pages);
     color: #56616d;
-    font: 8pt "DejaVu Sans", sans-serif;
+    font: 9pt "Zarya Defense", sans-serif;
   }
 }
-
 * { box-sizing: border-box; }
 body {
   margin: 0;
   color: #17202a;
-  font: 9.5pt/1.45 "DejaVu Sans", sans-serif;
+  font: 11pt/1.35 "Zarya Defense", sans-serif;
+  overflow-wrap: anywhere;
+  orphans: 3;
+  widows: 3;
 }
 main { width: 100%; }
-.document-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding-bottom: 7mm;
-  border-bottom: 1.2pt solid #17202a;
-}
-.overline {
-  margin: 0 0 2mm;
-  color: #5e5ce6;
-  font-size: 7.5pt;
-  font-weight: 700;
-  letter-spacing: .11em;
-}
-h1 { margin: 0; font-size: 18pt; line-height: 1.15; }
-.system {
-  min-width: 15mm;
-  padding: 2.2mm 3mm;
-  border: 1pt solid #5e5ce6;
-  color: #5e5ce6;
-  font-weight: 700;
-  text-align: center;
-}
-.passport {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
-  margin: 6mm 0;
-  border: .6pt solid #aab2bb;
-}
-.passport div { min-height: 15mm; padding: 3mm; border-left: .6pt solid #d3d7dc; }
-.passport div:first-child { border-left: 0; }
+h1, h2, h3, small { break-after: avoid; }
+h1 { margin: 0; font-size: 18pt; line-height: 1.2; }
+.overline { margin: 0 0 2mm; color: #4b499f; font-size: 9pt; font-weight: 700; }
+.system { display: block; margin-top: 2mm; font-weight: 700; }
+.passport { margin: 3mm 0; }
+.passport div { margin-bottom: 0; }
 .passport small, .question small, .answer small, .proof-chain small {
   display: block;
-  color: #64707c;
-  font-size: 7.3pt;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-.passport strong { display: block; margin-top: 1.3mm; font-size: 8.5pt; }
-.question {
-  margin: 0 0 5mm;
-  padding: 5mm;
-  border-left: 2.2pt solid #5e5ce6;
-  background: #f2f2fa;
-}
-.question h2 { margin: 1.5mm 0 0; font-size: 13pt; line-height: 1.35; }
-.answer {
-  display: grid;
-  grid-template-columns: 1fr 42mm;
-  gap: 6mm;
-  align-items: stretch;
-  margin-bottom: 6mm;
-}
-.answer > div:first-child { padding: 4mm; border: .6pt solid #c5cbd2; }
-.answer h2 { margin: 1.5mm 0 1mm; font-size: 12pt; }
-.answer p { margin: 0; color: #56616d; }
-.result {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 4mm;
-  border: .7pt solid #93a09b;
-  background: #eff8f5;
-  text-align: right;
-}
-.result[data-status="missing"], .result[data-status="fail"] {
-  border-color: #d48b8f;
-  background: #fff1f2;
-}
-.result[data-status="stage_r"] {
-  border-color: #d8b26f;
-  background: #fff8e9;
-}
-.result span { color: #087d68; font-size: 7.5pt; text-transform: uppercase; }
-.result strong { display: block; margin-top: 1.3mm; font-size: 14pt; line-height: 1.18; }
-.result small { margin-top: 1mm; }
-.proof-chain {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: proof;
-}
-.proof-chain li {
-  display: grid;
-  grid-template-columns: 11mm 1fr;
-  break-inside: avoid;
-  border-top: .6pt solid #d5d9de;
-}
-.proof-chain li > span {
-  padding: 3.2mm 2mm;
-  color: #5e5ce6;
-  font-size: 8pt;
-  font-weight: 700;
-}
-.proof-chain li > div { padding: 3.2mm 0; }
-.proof-chain h3 { margin: .8mm 0; font-size: 9pt; }
-.proof-chain strong { font-size: 8.5pt; }
-.proof-chain p { margin: 1mm 0 0; color: #5b6671; font-size: 8pt; }
-.documents { margin-top: 6mm; break-inside: avoid; }
-.documents h2 { margin: 0 0 2.5mm; font-size: 11pt; }
-table { width: 100%; border-collapse: collapse; font-size: 7.8pt; }
-th, td { padding: 2.2mm; border: .6pt solid #cbd0d6; text-align: left; }
-th { color: #596571; background: #f1f3f5; font-size: 7pt; text-transform: uppercase; }
-.answer-digital-passport {
-  display: grid;
-  grid-template-columns: 25mm 1fr;
-  gap: 4mm;
-  align-items: center;
-  margin-top: 5mm;
-  padding: 3mm;
-  border: .6pt solid #5e5ce6;
-  break-inside: avoid;
-}
-.answer-digital-passport img {
-  display: block;
-  width: 22mm;
-  height: 22mm;
-}
-.answer-digital-passport small,
-.answer-digital-passport strong,
-.answer-digital-passport span {
-  display: block;
-}
-.answer-digital-passport small {
-  color: #5e5ce6;
-  font-size: 7pt;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-.answer-digital-passport strong {
-  margin-top: 1mm;
-  font-family: monospace;
-  font-size: 8pt;
-}
-.answer-digital-passport span {
-  margin-top: .5mm;
-  overflow-wrap: anywhere;
   color: #56616d;
-  font-size: 7pt;
+  font-size: 9pt;
+  text-transform: uppercase;
 }
-.answer-digital-passport p {
-  margin: 1mm 0 0;
-  color: #626d78;
-  font-size: 7pt;
-}
-footer {
-  margin-top: 7mm;
-  padding-top: 4mm;
-  border-top: 1pt solid #17202a;
-  color: #626d78;
-  font-size: 7.2pt;
-}
+.passport small { display: inline; margin-right: 3mm; }
+.passport strong { font-size: 10pt; word-break: break-all; }
+.question { margin-bottom: 3mm; }
+.question h2 { margin: 1mm 0 0; font-size: 12pt; line-height: 1.35; }
+.answer { margin-bottom: 3mm; }
+.answer h2 { margin: 1mm 0; font-size: 12pt; }
+.answer p { margin: 0; }
+.result { margin-top: 3mm; break-inside: avoid; }
+.result span { color: #08705f; font-size: 10pt; }
+.result[data-status="missing"] span, .result[data-status="fail"] span { color: #922e36; }
+.result[data-status="stage_r"] span { color: #775318; }
+.result strong { display: block; font-size: 14pt; line-height: 1.3; }
+.proof-chain { margin: 0; padding: 0; list-style: none; }
+.proof-chain li { margin-top: 1.5mm; }
+.proof-chain li > span { display: block; break-after: avoid; color: #4b499f; font-size: 9pt; font-weight: 700; }
+.proof-chain h3 { margin: .8mm 0; font-size: 11pt; }
+.proof-chain strong { font-size: 10pt; }
+.proof-chain p { margin: 1mm 0 0; font-size: 10pt; break-before: avoid; }
+.documents { margin-top: 4mm; }
+.documents h2 { margin: 0 0 2.5mm; font-size: 11pt; }
+table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 10pt; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th, td { padding: 2.2mm; border: .6pt solid #8b949e; text-align: left; vertical-align: top; }
+th { color: #36414b; background: #f1f3f5; font-size: 10pt; }
+.answer-digital-passport { margin-top: 2mm; }
+.answer-digital-passport img { display: block; width: 22mm; height: 22mm; break-after: avoid; }
+.answer-digital-passport small, .answer-digital-passport strong,
+.answer-digital-passport span { display: block; }
+.answer-digital-passport small { color: #4b499f; font-size: 9pt; }
+.answer-digital-passport strong { margin-top: 1mm; font-size: 9pt; }
+.answer-digital-passport span, .answer-digital-passport p { font-size: 9pt; }
+.answer-digital-passport p { margin: 1mm 0 0; }
+footer { margin-top: 3mm; color: #56616d; font-size: 9pt; }
+footer div { break-inside: avoid; }
 footer p { margin: 0 0 2mm; }
-footer div { display: flex; justify-content: space-between; font-family: monospace; }
+footer span { display: block; }

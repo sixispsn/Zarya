@@ -232,6 +232,30 @@ def pk(x, y, r=13, w=2.4, conn=("l", "r"), rot=0):
     return f'<g transform="rotate({rot},{x},{y})">{body}</g>' if rot else body
 
 
+def pump_general(x, y, r=4.5, w=.35, *, regulated=False):
+    """ГОСТ 21.205-2016, табл.2, 3а/3б; вертикально, выход сверху.
+
+    No flange ticks or invented mounting dimensions in this general symbol.
+    The regulating arrow is drawn only for a confirmed regulated assembly.
+    """
+    g = [f'<g data-ugo="pump-general" data-regulated="{str(regulated).lower()}">',
+         f'<circle cx="{x}" cy="{y}" r="{r}" fill="white" stroke="black" stroke-width="{w}"/>',
+         f'<path d="M{x},{y-r} l{-r*.4},{r*.65} h{r*.8} Z" fill="black"/>']
+    if regulated:
+        g += [f'<path d="M{x-r*1.35},{y+r*1.15} L{x+r*1.35},{y-r*1.15}" '
+              f'fill="none" stroke="black" stroke-width="{w}"/>',
+              f'<path d="M{x+r*1.35},{y-r*1.15} l{-r*.7},{r*.15} l{r*.35},{r*.4} Z" fill="black"/>']
+    return ''.join(g) + '</g>'
+
+
+def closed_tank(x, y, width=14, height=9, w=.35):
+    """Closed pressure tank, ГОСТ 21.205-2016 table 2, 1б."""
+    a, b, c = width/2, height/2, width*.16
+    return (f'<path data-ugo="closed-pressure-tank" d="M{x-a+c},{y-b} H{x+a-c} '
+            f'Q{x+a+c},{y} {x+a-c},{y+b} H{x-a+c} Q{x-a-c},{y} {x-a+c},{y-b} Z" '
+            f'fill="white" stroke="black" stroke-width="{w}"/>')
+
+
 def pump(x, y, r=15, w=2.4, seg=None, gap=None, ext=None, rot=0):
     """Линейный насос: окружность с чёрным треугольником и фланцами."""
     if seg is None:

@@ -20,14 +20,13 @@ def calculate_request_fire(request: IOS2Request) -> FireResult:
     """Рассчитать автоматический режим В2 без дублирования маппинга Builder."""
     category = request.fire_category or "residential_f13"
     fire_type = FIRE_CATEGORY_MAP[category]
-    corridor_length = next(
-        (
-            room.length_m
-            for room in request.rooms
-            if room.space_kind == "corridor"
-        ),
-        None,
-    )
+    # A normative scalar is not a fabricated room / coverage geometry.
+    corridor_length = request.fire_corridor_length_m
+    if corridor_length is None:
+        corridor_length = next(
+            (room.length_m for room in request.rooms if room.space_kind == "corridor"),
+            None,
+        )
     return calculate_fire(FireInput(
         building_type=fire_type,
         floors=request.floors,

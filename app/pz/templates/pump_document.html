@@ -2,23 +2,14 @@
 <html lang="ru">
 <head><meta charset="utf-8"></head>
 <body>
-<div class="stamp">
-  <table>
-    <tr><td class="cipher" colspan="4">{{ doc.cipher or '' }}</td></tr>
-    <tr><td class="object" colspan="4">{{ doc.object_name or '' }}</td></tr>
-    <tr>
-      <td>{{ doc.stage_label or 'П' }}</td>
-      <td class="title">Расчёт и подбор насосных установок</td>
-      <td>{{ doc.developer_name or '' }}</td>
-      <td>{{ doc.organization or '' }}</td>
-    </tr>
-  </table>
-</div>
+{# PDF frame and forms 3/6 are applied in physical mm after pagination. #}
 
 <section class="calculation-sheet">
   <h1>Расчёт и подбор повысительной насосной установки В1</h1>
-  <p class="lead">Расчёт выполнен по принятому расходу В1 и составляющим требуемого
-  напора. Свободный напор у диктующего санитарно-технического прибора входит в
+  {% for note in doc.review_notes %}<p class="lead"><b>{{ note }}</b></p>{% endfor %}
+  <p class="lead">{% if doc.review_head_pending %}Показаны имеющиеся исходные данные по расходу В1 и составляющим требуемого
+  напора. Расчёт не завершён.{% else %}Расчёт выполнен по принятому расходу В1 и составляющим требуемого
+  напора.{% endif %} Свободный напор у диктующего санитарно-технического прибора входит в
   H<sub>тр</sub> отдельным слагаемым.</p>
 
   <h2>1. Расчёт требуемого напора</h2>
@@ -39,14 +30,28 @@
 
   <p class="formula">H<sub>тр</sub> = H<sub>geom</sub> + ΣH<sub>il</sub> +
   H<sub>пр</sub> + ΣH<sub>вод</sub> + H<sub>тепл</sub> + H<sub>ввод</sub>.</p>
-  <p class="formula">Кривая системы для подбора:
-  H<sub>сист</sub> = {{ v1.h_stat | num(2) }} +
-  {{ v1.k_sys | num(4) }}·Q².</p>
+  {% if v1.required and v1.curve_kind == 'quadratic_estimate' %}
+  <p class="formula">Оценочная кривая требуемого напора насоса:<br>
+  H<sub>сист</sub>(Q) = max(0; H<sub>geom</sub> + H<sub>пр</sub> − H<sub>гар</sub> +
+  ΣH<sub>потерь, расч</sub>·(Q/Q<sub>расч</sub>)²).</p>
+  <p>Постоянная часть H<sub>geom</sub> + H<sub>пр</sub> − H<sub>гар</sub> =
+  {{ v1.h_stat | num(2) }} м.
+  При Q<sub>расч</sub> = {{ v1.q_design_m3h | num(2) }} м³/ч:
+  H<sub>сист</sub> = H<sub>нас</sub> = {{ v1.h_design_m | num(2) }} м.</p>
+  {% endif %}
 
   <h2>2. Подбор по рабочей точке</h2>
   {% set pumps = v1 %}
   {% set pump_chart_svg = v1_chart %}
+  {% if head.pump_needed is sameas false %}
+  <p>При расчётном расходе повышение напора не требуется.
+  Максимальное давление и необходимость его снижения проверяются отдельно.</p>
+  {% elif head.pump_needed is none %}
+  <p>Недостаточно исходных данных для определения необходимости насоса.</p>
+  {% else %}
   {% include "pump_table.html" %}
+  {% endif %}
+  {% include "suction_check_table.html" %}
 </section>
 
 {% if v2.required %}

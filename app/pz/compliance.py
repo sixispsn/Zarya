@@ -115,16 +115,20 @@ def _check_8_13(p: Project):
 def _check_5_12(p: Project):
     if p.building.hws_type.value == "none":
         return Verdict.NOT_APPLICABLE, "ГВС отсутствует."
-    if not p.flows.q_hr_h:
-        return Verdict.NO_DATA, "Не задан часовой расход ГВС."
-    base = 1.16 * p.flows.q_hr_h * (65 - 5)   # кВт, полный расход тепла на ГВС
-    pct_max = 0.60 if p.building.zones > 1 else 0.40
-    qht_lo = round(0.30 * base, 1)
-    qht_hi = round(pct_max * base, 1)
-    return Verdict.COMPLIANT, (
-        f"Потери тепла Qht (стадия П) принимаются 30–{int(pct_max*100)}% от "
-        f"{base:.1f} кВт = {qht_lo}…{qht_hi} кВт"
-        f"{' (до 60% — двухзонная система)' if p.building.zones > 1 else ''}.")
+    from app.pz.hws_stage_p import stage_p_circulation
+    result = stage_p_circulation(p)
+    if result.status == "not_requested":
+        return Verdict.MANUAL, "Теплопотери ГВС требуют обоснования. Укрупнённый режим п. 5.12 не включён."
+    if result.status == "not_applicable":
+        return Verdict.MANUAL, " ".join(result.notes)  # clause still applies; only simplified method does not
+    if result.status == "needs_data":
+        return Verdict.NO_DATA, "; ".join(result.missing)
+    lo, hi = result.heat_loss_range_kw
+    return Verdict.MANUAL, (
+        f"Предварительная оценка п. 5.12: Qht = {lo:.1f}…{hi:.1f} кВт. "
+        + (f"Проектировщиком принято {result.selected_heat_loss_kw:.1f} кВт. "
+           if result.selected_heat_loss_kw is not None else "Одно значение не выбрано. ")
+        + "Общий тепловой баланс не подтверждает гидравлическую увязку и температуры всех ветвей.")
 
 
 # --- п.13.20 (Изм.3): категория надёжности электроснабжения насосов ---
@@ -229,7 +233,8 @@ def _check_11_3(p: Project):
 
 # --- п.12.11 (Изм.3): обводная линия опломбирована, автооткрытие при пожаре ---
 def _check_12_11(p: Project):
-    if not p.meters.has_bypass:
+    from app.pz.metering_detail import drawing_state
+    if not drawing_state(p).bypass:
         return Verdict.NOT_APPLICABLE, "Обводная линия не предусмотрена."
     detail = ("Проверить: запорное устройство на обводной линии опломбировано в "
               "закрытом состоянии (п.12.11).")

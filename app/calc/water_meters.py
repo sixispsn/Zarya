@@ -1,21 +1,29 @@
 """
 Подбор счётчиков воды (СП 30.13330.2020, п. 12.14-12.17).
 
-Алгоритм 1-в-1 из legacy/sp30_calculator.html.
+Legacy-алгоритм с явно согласованными 21.09.2026 исправлениями DN65,
+проверки минимума и округления. См. docs/water_meter_audit_2026-09-20.md.
 
 Логика:
   1. q_sr = q_day / T  (средний часовой расход)
   2. Выбираем наименьший счётчик с q_expl >= q_sr
   3. Проверка (а): h = S × q_sec² <= лимит. Если нет — берём больший и повторяем
   4. Проверка (б): h = S × (q_sec + q_fire)² <= лимит. Если нет — нужна обводная линия
-  5. Проверка (в): q_threshold <= q_hr. Если нет — рекомендуем комбинированный счётчик
+  5. Проверка (в): паспортный q_min <= минимальный часовой расход.
+     Без отдельных подтверждённых данных результат проверки неизвестен.
 
 Сценарии:
   - "central" (централизованное ГВС): 2 счётчика — ХВС и ГВС
   - "local"   (местный нагрев): 3 счётчика — общий ввод, ХВС, ГВС перед нагревателем
 """
 from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_HALF_UP
+from math import isfinite
 from typing import Literal
+
+from app.calc.meter_verification import (
+    MeterMinimumEvidence, check_minimum_flow, validate_meter_minimum_checks,
+)
 
 from app.data.water_meters import (
     HEAD_LIMITS_FIRE,
@@ -29,6 +37,23 @@ from app.data.water_meters import (
 
 # Тип системы ГВС
 HwsType = Literal["central", "local"]
+
+
+class MeterSelectionUnavailable(ValueError):
+    """L05: no published meter satisfies the average-flow admission criterion."""
+
+
+def _require_meter(q_average: float, label: str) -> WaterMeter:
+    meter = pick_meter(q_average)
+    if meter is None:
+        limit = max((m.q_expl for m in WATER_METERS), default=0)
+        raise MeterSelectionUnavailable(
+            f"{label}: нет подходящего водомера. Qсред={q_average:.6g} м³/ч "
+            f"превышает предел каталога Qэкспл={limit:.6g} м³/ч (п. 12.14 СП 30). "
+            "Требуется другой подтверждённый каталог либо отдельно рассчитанное решение; "
+            "максимальный DN автоматически не принимается."
+        )
+    return meter
 
 
 @dataclass
@@ -48,6 +73,7 @@ class MeterInput:
     q_day_h: float = 0.0
     q_hr_c: float = 0.0                    # м³/ч
     q_hr_h: float = 0.0
+    minimum_flow_checks: dict[str, MeterMinimumEvidence] = field(default_factory=dict)
 
 
 @dataclass
@@ -65,11 +91,15 @@ class MeterCheck:
     pass_fire: bool | None
     need_bypass: bool                # нужна ли обводная линия
     # Проверка (в) - чувствительность
-    pass_sensitivity: bool           # прошла ли (в)
+    pass_sensitivity: bool | None    # None: минимум/паспорт не подтверждён
     need_combo: bool                 # рекомендовать комбинированный
     q_hr_m3_per_h: float             # расчётный часовой расход для проверки (в)
     # Доп. флаги
     has_fire_check: bool             # применяется ли проверка (б)
+    minimum_flow_evidence: MeterMinimumEvidence | None = None
+    minimum_flow_note: str = ""
+    q_average_m3h: float | None = None
+    pass_average: bool | None = None
 
 
 @dataclass
@@ -89,6 +119,8 @@ def _check_meter(
     q_hr_m3_per_h: float,
     label: str,
     has_fire_check: bool,
+    minimum_evidence: MeterMinimumEvidence | None = None,
+    q_average_m3h: float | None = None,
 ) -> MeterCheck:
     """
     Проверить один счётчик по трём критериям.
@@ -100,7 +132,8 @@ def _check_meter(
     h_limit_fire = HEAD_LIMITS_FIRE[type_]
 
     # === Проверка (а): h = S × q² ≤ лимит ===
-    h_normal = meter.s * q_sec_l_per_s ** 2
+    # Preserve JS evaluation order; x*x vs pow can land on opposite rounding sides.
+    h_normal = meter.s * q_sec_l_per_s * q_sec_l_per_s
     pass_normal = h_normal <= h_limit_normal
 
     # Если не прошла (а) — пробуем следующий больший
@@ -109,7 +142,7 @@ def _check_meter(
         if next_m is not None:
             return _check_meter(
                 next_m, q_sec_l_per_s, q_fire_l_per_s,
-                q_hr_m3_per_h, label, has_fire_check,
+                q_hr_m3_per_h, label, has_fire_check, minimum_evidence, q_average_m3h,
             )
         # Иначе остаёмся с самым большим, но фиксируем что не прошла
 
@@ -124,18 +157,18 @@ def _check_meter(
             need_bypass = True
 
     # === Проверка (в): чувствительность ===
-    pass_sensitivity = meter.q_threshold <= q_hr_m3_per_h
+    pass_sensitivity, minimum_note = check_minimum_flow(meter.d_mm, minimum_evidence)
     # Комбинированный счётчик рекомендуем только если (а) прошла,
     # но (в) не прошла, и диаметр больше 15 мм
-    need_combo = pass_normal and not pass_sensitivity and meter.d_mm > 15
+    need_combo = pass_normal and pass_sensitivity is False and meter.d_mm > 15
 
     return MeterCheck(
         label=label,
         meter=meter,
-        h_normal=round(h_normal, 3),
+        h_normal=_js_fixed3(h_normal),
         h_limit_normal=h_limit_normal,
         pass_normal=pass_normal,
-        h_fire=round(h_fire, 3) if h_fire is not None else None,
+        h_fire=_js_fixed3(h_fire) if h_fire is not None else None,
         h_limit_fire=h_limit_fire if has_fire_check and q_fire_l_per_s > 0 else None,
         pass_fire=pass_fire,
         need_bypass=need_bypass,
@@ -143,7 +176,16 @@ def _check_meter(
         need_combo=need_combo,
         q_hr_m3_per_h=round(q_hr_m3_per_h, 3),
         has_fire_check=has_fire_check and q_fire_l_per_s > 0,
+        minimum_flow_evidence=minimum_evidence,
+        minimum_flow_note=minimum_note,
+        q_average_m3h=q_average_m3h,
+        pass_average=(q_average_m3h <= meter.q_expl if q_average_m3h is not None else None),
     )
+
+
+def _js_fixed3(value: float) -> float:
+    """JS toFixed(3) semantics for finite nonnegative meter losses, not round-even."""
+    return float(Decimal.from_float(float(value)).quantize(Decimal(".001"), rounding=ROUND_HALF_UP))
 
 
 def calculate_meters(data: MeterInput) -> MeterResult:
@@ -153,10 +195,11 @@ def calculate_meters(data: MeterInput) -> MeterResult:
     Returns:
         MeterResult со списком подобранных счётчиков и примечаниями.
     """
-    if data.period_hours <= 0:
+    if not isfinite(data.period_hours) or data.period_hours <= 0:
         raise ValueError("Период водопотребления должен быть больше 0")
     if data.q_sec_tot == 0 and data.q_sec_c == 0 and data.q_sec_h == 0:
         raise ValueError("Все секундные расходы равны 0 — нечего считать")
+    minimum_checks = validate_meter_minimum_checks(data.minimum_flow_checks)
 
     result = MeterResult(
         hws_type=data.hws_type,
@@ -170,21 +213,25 @@ def calculate_meters(data: MeterInput) -> MeterResult:
 
         # ХВС - с проверкой по пожарному
         q_sr_c = data.q_day_c / T
-        m_c = pick_meter(q_sr_c)
+        m_c = _require_meter(q_sr_c, "Счётчик ХВС")
         check_c = _check_meter(
             m_c, data.q_sec_c, data.q_fire_l_per_s, data.q_hr_c,
             "Счётчик ХВС (холодная вода)",
             has_fire_check=True,
+            minimum_evidence=minimum_checks.get("cold"),
+            q_average_m3h=q_sr_c,
         )
         result.meters.append(check_c)
 
         # ГВС - без пожарного (п. 12.12 — обводная не требуется)
         q_sr_h = data.q_day_h / T
-        m_h = pick_meter(q_sr_h)
+        m_h = _require_meter(q_sr_h, "Счётчик ГВС")
         check_h = _check_meter(
             m_h, data.q_sec_h, 0.0, data.q_hr_h,
             "Счётчик ГВС (горячая вода, п. 12.12 — обводная не требуется)",
             has_fire_check=False,
+            minimum_evidence=minimum_checks.get("hot"),
+            q_average_m3h=q_sr_h,
         )
         result.meters.append(check_h)
 
@@ -193,31 +240,37 @@ def calculate_meters(data: MeterInput) -> MeterResult:
 
         # Общий ввод (tot) — с проверкой по пожарному
         q_sr_tot = data.q_day_tot / T
-        m_tot = pick_meter(q_sr_tot)
+        m_tot = _require_meter(q_sr_tot, "Счётчик на вводе (общий)")
         check_tot = _check_meter(
             m_tot, data.q_sec_tot, data.q_fire_l_per_s, data.q_hr_c + data.q_hr_h,
             "Счётчик на вводе (общий)",
             has_fire_check=True,
+            minimum_evidence=minimum_checks.get("total"),
+            q_average_m3h=q_sr_tot,
         )
         result.meters.append(check_tot)
 
         # ХВС - без пожарного (тут пожарный учитывается на вводе)
         q_sr_c = data.q_day_c / T
-        m_c = pick_meter(q_sr_c)
+        m_c = _require_meter(q_sr_c, "Счётчик ХВС")
         check_c = _check_meter(
             m_c, data.q_sec_c, 0.0, data.q_hr_c,
             "Счётчик ХВС",
             has_fire_check=False,
+            minimum_evidence=minimum_checks.get("cold"),
+            q_average_m3h=q_sr_c,
         )
         result.meters.append(check_c)
 
         # ГВС перед нагревателем - без пожарного
         q_sr_h = data.q_day_h / T
-        m_h = pick_meter(q_sr_h)
+        m_h = _require_meter(q_sr_h, "Счётчик перед водонагревателем")
         check_h = _check_meter(
             m_h, data.q_sec_h, 0.0, data.q_hr_h,
             "Счётчик перед водонагревателем (ГВС, п. 12.12)",
             has_fire_check=False,
+            minimum_evidence=minimum_checks.get("hot"),
+            q_average_m3h=q_sr_h,
         )
         result.meters.append(check_h)
 

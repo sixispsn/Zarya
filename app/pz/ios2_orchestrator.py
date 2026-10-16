@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 from app.pz.project import Project
@@ -29,7 +30,7 @@ from app.pz.flows_bridge import (
 )
 from app.pz.commission import CommissionReport, build_commission_report
 from app.pz.generator import (
-    generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf,
+    generate_pz_pdf, generate_spec_pdf, generate_scheme_pdf, generate_scheme_result,
     generate_hydraulic_report_pdf, generate_pump_selection_pdf,
     generate_balance_pdf, generate_v1_calculation_pdf,
     generate_wastewater_calculation_pdf, generate_wastewater_pz_pdf,
@@ -41,6 +42,7 @@ from app.pz.generator import (
     generate_metering_scheme_pdf, generate_pump_zone_scheme_pdf,
 )
 from app.pz.wastewater_graphic_exports import (
+    WastewaterGraphicGenerationResult,
     assess_wastewater_graphic_exports,
     generate_wastewater_graphic_export,
 )
@@ -55,12 +57,16 @@ class IOS2DesignBundle:
     project: Project
     fire_layout_results: Optional[list] = None
     fire_hydraulic_result: Optional[object] = None
+    fire_station_result: Optional[object] = None
+    fire_pressure_review: Optional[dict] = None
     diameter_audit: Optional[object] = None
     hydraulic_report: Optional[object] = None
     pz_pdf: Optional[str] = None
     spec_pdf: Optional[str] = None
     scheme_pdf: Optional[str] = None
+    water_scheme_delivery: Optional[dict] = None
     metering_scheme_pdf: Optional[str] = None
+    rainwater_reuse_pdf: Optional[str] = None
     pump_zone_scheme_pdf: Optional[str] = None
     hydraulic_pdf: Optional[str] = None
     pump_selection_pdf: Optional[str] = None
@@ -68,20 +74,91 @@ class IOS2DesignBundle:
     wastewater_pz_pdf: Optional[str] = None
     wastewater_calculation_pdf: Optional[str] = None
     wastewater_scheme_pdf: Optional[str] = None
+    # Actual generation outcomes, not a guess from a nonempty PDF path.
+    wastewater_graphic_results: dict[str, WastewaterGraphicGenerationResult] = field(default_factory=dict)
+    wastewater_graphic_required: Optional[tuple[str, ...]] = None
     wastewater_k3_scheme_pdf: Optional[str] = None
     wastewater_pressure_scheme_pdf: Optional[str] = None
     wastewater_diagnostic_pdf: Optional[str] = None
     wastewater_ugo_pdf: Optional[str] = None
     wastewater_spec_pdf: Optional[str] = None
     wastewater_package_pdf: Optional[str] = None
+    water_package_pdf: Optional[str] = None
     wastewater_balance_pdf: Optional[str] = None
     balance_pdf: Optional[str] = None
     commission_control_pdf: Optional[str] = None
     commission_report: Optional[CommissionReport] = None
     resilience_report: Optional[object] = None
     resilience_pdf: Optional[str] = None
+    fire_station_design_pdf: Optional[str] = None
+    fire_station_input_pdf: Optional[str] = None
+    fire_pressure_review_pdf: Optional[str] = None
+    fire_station_scheme_pdf: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
     status: List[str] = field(default_factory=list)
+
+
+def bundle_artifact_files(bundle: IOS2DesignBundle) -> dict[str, list[str]]:
+    """One document-to-file mapping shared by immediate and repeated checks."""
+    fields = {
+        "Пояснительная записка": ("pz_pdf",),
+        "Расчёты В1": ("v1_calculation_pdf",),
+        "Расчёты К1/К2": ("wastewater_calculation_pdf",),
+        "Пояснительная записка К1/К2": ("wastewater_pz_pdf",),
+        "Баланс ВиВ": ("balance_pdf",),
+        "Баланс ИОС3 по ГОСТ Р 21.620": ("wastewater_balance_pdf",),
+        "Подбор насосов": ("pump_selection_pdf",),
+        "Спецификация": ("spec_pdf",),
+        "Принципиальная схема": ("scheme_pdf",),
+        "Схема вводов и узлов учёта": ("metering_scheme_pdf",),
+        "Схема насосов, зон и ГВС": ("pump_zone_scheme_pdf",),
+        "Принципиальная схема К1/К2": ("wastewater_scheme_pdf",),
+        "Принципиальная схема К3": ("wastewater_k3_scheme_pdf",),
+        "Напорная канализация и рабочая точка": ("wastewater_pressure_scheme_pdf",),
+        "Ведомость УГО ИОС3": ("wastewater_ugo_pdf",),
+        "Спецификация ИОС3": ("wastewater_spec_pdf",),
+        "Комплект ИОС3": ("wastewater_package_pdf",),
+        "Гидравлический расчёт В2": ("hydraulic_pdf", "fire_pressure_review_pdf"),
+    }
+
+    return {name: [str(getattr(bundle, attr)) for attr in attributes if getattr(bundle, attr, None)]
+            for name, attributes in fields.items()}
+
+
+def bundle_artifact_readiness(bundle: IOS2DesignBundle) -> dict[str, bool]:
+    """Serializable completion evidence for the exact generated graphic files."""
+    from app.pz.artifact_readiness import WASTEWATER_GRAPHIC_ARTIFACTS, WASTEWATER_PACKAGE
+
+    results = getattr(bundle, "wastewater_graphic_results", {})
+    readiness = {}
+    for key, (label, attribute) in WASTEWATER_GRAPHIC_ARTIFACTS.items():
+        result = results.get(key)
+        readiness[label] = bool(
+            result and result.key == key and result.ready is True
+            and str(result.output_path) == str(getattr(bundle, attribute, None))
+        )
+    required = getattr(bundle, "wastewater_graphic_required", None)
+    readiness[WASTEWATER_PACKAGE] = bool(
+        required and "k1-k2" in required
+        and all(key in WASTEWATER_GRAPHIC_ARTIFACTS
+                and readiness[WASTEWATER_GRAPHIC_ARTIFACTS[key][0]] for key in required)
+    )
+    return readiness
+
+
+def bundle_artifacts(bundle: IOS2DesignBundle) -> dict[str, bool]:
+    """Completed artifacts present on disk; not overall engineering approval."""
+    from app.pz.artifact_readiness import qualify_artifact_presence, WASTEWATER_GRAPHIC_ARTIFACTS
+
+    def exists(value):
+        path = Path(value)
+        return path.is_file() and path.stat().st_size > 0
+
+    presence = {name: any(exists(value) for value in paths)
+                for name, paths in bundle_artifact_files(bundle).items()}
+    required = [WASTEWATER_GRAPHIC_ARTIFACTS[key][0] if key in WASTEWATER_GRAPHIC_ARTIFACTS else key
+                for key in bundle.wastewater_graphic_required or ()]
+    return qualify_artifact_presence(presence, bundle_artifact_readiness(bundle), required)
 
 
 def design_ios2(
@@ -95,6 +172,8 @@ def design_ios2(
     dn_by_segment: Optional[dict] = None,
     hydraulic_report: Optional[object] = None,
     scenario_filter: Optional[object] = None,
+    fire_station: Optional[object] = None,
+    fire_station_design: Optional[dict] = None,
     render_documents: bool = True,
 ) -> IOS2DesignBundle:
     """Координатор комплекта ИОС2.
@@ -108,6 +187,11 @@ def design_ios2(
     dn_by_segment: карта {segment_id: Ду} для аудита диаметров.
     hydraulic_report: готовый FireHydraulicReport (для режима 2, если сеть не дана).
     scenario_filter: предикат допустимости сценария (напр. разные стояки).
+    fire_station: явно заданная общая насосная с наружными подводами; network
+        в этом случае начинается от выходов её единого напорного коллектора.
+    fire_station_design: явно согласованный результат совместной проверки В2.
+        Применяется только после проверки исходных и целостности результата;
+        заменяет старый подбор и выдачу В2 целиком, а не только имя насоса.
     render_documents: False выполняет тот же расчётный конвейер, но не создаёт
         PDF. Используется только для несохраняемого предпросмотра изменений.
 
@@ -128,6 +212,8 @@ def design_ios2(
             "по п. 5.1.20, форма 1 приложения А"
         )
     fire = project.fire
+    if fire_station is None and fire.required:
+        fire_station = project.fire_station_input
     if fire.required:
         required_jets = required_jets or fire.streams
     else:
@@ -192,10 +278,32 @@ def design_ios2(
         from app.calc.fire_hydraulic_report import build_hydraulic_report
         mode = network_mode or NetworkMode.PURE_FIRE
 
-        hydraulic_result = solve_fire_hydraulics_scenario(
-            network, required_jets, mode=mode, scenario_filter=scenario_filter)
+        if fire_station is not None:
+            from app.calc.fire_pump_station import calculate_common_fire_station
+            from app.intake.studio_fire_pipework import from_model
+            try:
+                station_result = calculate_common_fire_station(
+                    network, fire_station, required_jets, mode=mode,
+                    scenario_filter=scenario_filter,
+                    pipework=from_model(project.fire_station_model_input))
+            except ValueError as exc:
+                # Only the opt-in preliminary input may fail without taking away
+                # the water/sewer preview. Explicit reviewed studies still fail.
+                if project.fire_station_input is None or fire_station_design is not None:
+                    raise
+                bundle.warnings.append(f"fire_station: расчёт не выполнен: {exc}")
+                hydraulic_result = None
+            else:
+                bundle.fire_station_result = station_result
+                network = station_result.network
+                hydraulic_result = station_result.hydraulic
+        else:
+            hydraulic_result = solve_fire_hydraulics_scenario(
+                network, required_jets, mode=mode, scenario_filter=scenario_filter)
         bundle.fire_hydraulic_result = hydraulic_result
-        if hydraulic_result.dictating_scenario is None:
+        if hydraulic_result is None:
+            bundle.status.append("fire_station: нужны данные; подбор насоса не выполнен")
+        elif hydraulic_result.dictating_scenario is None:
             bundle.warnings.append(
                 "fire_hydraulics: сценарий не рассчитан "
                 f"({'; '.join(hydraulic_result.warnings) or 'нет диктующего'})")
@@ -293,8 +401,9 @@ def design_ios2(
         project.fire, project.materials, project.normative,
     )
     if resolved_fire_network is not None:
-        project.source.network_kind = (
-            "combined" if resolved_fire_network.combined else "domestic"
+        from app.calc.water_local_losses import with_fire_topology
+        project.source.network_kind = with_fire_topology(
+            project.source.network_kind, combined=resolved_fire_network.combined,
         )
         bundle.status.append(
             f"fire_topology: {resolved_fire_network.topology}; "
@@ -309,7 +418,8 @@ def design_ios2(
         project.fire_pumps = compute_fire_pump_from_duty(
             hydraulic_result.pump_duty,
             npsh_a_m=project.source.npsh_available_m,
-            maximum_source_head_m=project.source.maximum_head_m,
+            maximum_source_head_m=(bundle.fire_station_result.maximum_static_suction_head_m
+                if bundle.fire_station_result else project.source.maximum_head_m),
             pk_total=project.fire.pk_total,
         )
         if project.fire_pumps.model:
@@ -323,9 +433,65 @@ def design_ios2(
                 "кандидата; в ПЗ сохранена расчётная точка")
         bundle.project = project
 
-    # ── Документы: всегда собираются из текущего project ──
-    doc_cipher = (project.document.cipher or "ИОС2")
+        if bundle.fire_station_result is not None:
+            # This is ONE explicitly connected pump feeding both header ports.
+            # The independent-two-city-source case must never enter this branch.
+            from app.calc.pump_curve import interpolate_head
+            from app.calc.ring_hydraulics import analyze_ring_resilience
+            ps = project.fire_pumps
+            if project.fire_station_input is not None:
+                # Explicit two-by-two boundary; an unknown total PK count (0)
+                # must not be presented as proof of the "fewer than 12" exception.
+                for check in ps.sp10_checks:
+                    if check.clause == "12.27":
+                        check.decision = (
+                            "В расчётной модели заданы два наружных ввода и два выхода "
+                            "общего напорного коллектора. Общее число ПК и проектное "
+                            "секционирование требуют подтверждения."
+                        )
+                        check.status = "pending"
+            catalog_head = interpolate_head(ps.curve, ps.q_design_m3h)
+            bundle.resilience_report = analyze_ring_resilience(
+                network, required_jets, mode=network_mode,
+                scenario_filter=scenario_filter,
+                verified_pump_head_m=catalog_head,
+                verified_pump_flow_lps=ps.q_design_m3h / 3.6 if catalog_head is not None else None)
+            ps.selection_note += (
+                " Общая насосная В2: 1 рабочий + 1 резервный; оба напорных выхода "
+                "относятся к одному коллектору. Каждый наружный ввод проверен на полный расход. "
+                "Минимальный напор до насоса после потерь в подводе "
+                f"{bundle.fire_station_result.minimum_suction_head_m:.3f} м."
+            )
+            ps.selection_note += " " + " ".join(fire_station.review_notes)
+            if project.fire.network_topology == "separate":
+                # Distinguish the pump casing PN from the independent VPV's
+                # permitted static pressure. A Q/H candidate is not approval.
+                from app.pz.project import PumpComplianceCheck
+                pressure = project.fire.pressure_at_lowest_pk_mpa
+                pressure_ok = pressure is not None and pressure <= .9
+                ps.sp10_checks.append(PumpComplianceCheck(
+                    clause="6.2.20 (изм. 1)",
+                    requirement="Гидростатическое давление самостоятельного ВПВ не более 0,9 МПа",
+                    decision=("Максимальное давление на отметке нижнего ПК не определено"
+                        if pressure is None else
+                        f"Давление у нижнего ПК {pressure:.3f} МПа; предел 0,900 МПа. "
+                        + ("Проверка предела пройдена." if pressure_ok else
+                           "Без снижения давления/зонирования решение не проходит проверку.")),
+                    status="pending" if pressure is None else "verified" if pressure_ok else "fail"))
+                if pressure is not None and not pressure_ok:
+                    ps.sp10_compliant = False
+                    bundle.warnings.append("fire_pump: превышен предел статического давления В2; "
+                        "каталожный кандидат не является готовым проектным подбором")
+                elif ps.sp10_compliant is True and pressure is None:
+                    ps.sp10_compliant = None
+            if bundle.resilience_report is not None:
+                bundle.resilience_report.normative_warnings.append(
+                    "Для общей насосной строки отказов источников ниже означают отключение "
+                    "одного из напорных выходов коллектора, а не наружного ввода. "
+                    "Наружные вводы отдельно проверены на полный расход в расчёте насосной. "
+                    "Проверка по Q/H не подтверждает электроснабжение, автоматику и NPSH.")
 
+    # ── Документы: всегда собираются из текущего project ──
     # ── Расходы В1/Т3 из групп потребителей (СП 30, метод α) ──
     if (getattr(project, "consumer_groups", None)
             or getattr(project, "v1_network", None)):
@@ -382,6 +548,7 @@ def design_ios2(
                     [V1NetworkSectionInput(**vars(section)) for section in network.sections],
                     network.source_node,
                     flow_kind="total" if hws == "local" else "cold",
+                    network_kind=project.source.network_kind,
                 )
                 if network.inlets:
                     v1_result = apply_v1_inlets(
@@ -462,13 +629,17 @@ def design_ios2(
                     bundle.warnings.append(
                         f"v1_hydraulics: превышена допустимая скорость на участках {bad}")
             except Exception as e:
+                # Не выпускать старые готовые потери после отказа актуального расчёта.
+                project.v1_hydraulic_result = None
+                project.source.il_dict_m = project.source.h_il_m = None
+                project.source.il_vvod_m = project.source.h_vvod_m = None
                 bundle.warnings.append(f"v1_hydraulics: расчёт не выполнен ({e})")
         elif getattr(project, "v1_sections", None):
             from app.calc.v1_hydraulics import V1SectionInput, calculate_v1_hydraulics
             try:
                 v1_result = calculate_v1_hydraulics([
                     V1SectionInput(**vars(section)) for section in project.v1_sections
-                ])
+                ], network_kind=project.source.network_kind)
                 project.v1_hydraulic_result = v1_result
                 # Готовые суммы уже содержат местные сопротивления по формуле (15),
                 # поэтому кладём их в ready-поля, не применяя k_l второй раз.
@@ -486,19 +657,42 @@ def design_ios2(
                     bundle.warnings.append(
                         f"v1_hydraulics: превышена допустимая скорость на участках {bad}")
             except Exception as e:
+                project.v1_hydraulic_result = None
+                project.source.il_dict_m = project.source.h_il_m = None
+                project.source.il_vvod_m = project.source.h_vvod_m = None
                 bundle.warnings.append(f"v1_hydraulics: расчёт не выполнен ({e})")
         else:
             bundle.warnings.append(
                 "v1_hydraulics: участки диктующего направления не заданы; "
                 "потери В1 принимаются только из явных исходных данных")
 
+        # T3 is an explicitly approved extension, separate from the V1 route.
+        # Clear stale ready totals before attempting a current calculation.
+        project.t3_hydraulic_result = None
+        if project.t3_sections:
+            from app.calc.t3_hydraulics import calculate_t3_hydraulics
+            project.source.internal_losses_scope = "cold_only"
+            project.source.h_il_hot_m = None
+            try:
+                t3 = calculate_t3_hydraulics(project.t3_sections)
+                project.t3_hydraulic_result = t3
+                project.source.h_il_hot_m = t3.total_loss_m
+                if t3.missing:
+                    bundle.warnings.extend(f"t3_hydraulics: {item}" for item in t3.missing)
+                else:
+                    bundle.status.append(f"t3_hydraulics: ΣHil={t3.total_loss_m:.3f} м; {t3.method}")
+                if not t3.all_velocities_ok:
+                    bundle.warnings.append("t3_hydraulics: допустимые скорости не подтверждены")
+            except ValueError as exc:
+                bundle.warnings.append(f"t3_hydraulics: расчёт не выполнен ({exc})")
+
         # ── Водомер → Hтр → насос В1. Порядок важен: потери в водомере
         # входят в формулу (14) п. 8.27 СП 30.13330.2020. ──
         try:
-            from app.calc.water_meters import MeterInput, calculate_meters
+            from app.calc.water_meters import MeterInput, MeterSelectionUnavailable, calculate_meters
             from app.pz.flows_bridge import meters_from_calc
             from app.pz.rules import calc_head_paths
-            from app.pz.pump_bridge import compute_pump_from_head
+            from app.pz.pump_bridge import compute_pump_from_head, project_booster_flow_m3h
 
             hws = getattr(project.building.hws_type, "value", project.building.hws_type)
             # Legacy-сценарий local означает, что весь расход приходит холодной
@@ -526,6 +720,7 @@ def design_ios2(
                 q_day_h=project.flows.q_day_h,
                 q_hr_c=project.flows.q_hr_c,
                 q_hr_h=project.flows.q_hr_h,
+                minimum_flow_checks=project.source.meter_minimum_checks,
             ))
             # В legacy нет отдельной ветви ``none``: для холодной части она
             # совпадает с ``central``. Горячий узел с нулевым расходом здесь
@@ -551,6 +746,8 @@ def design_ios2(
                 has_apartment_meters or residential_apartments
             )
             project.meters.has_askue = has_askue
+            from app.pz.meter_products import bind_meter_products
+            bind_meter_products(project)
             head_paths = calc_head_paths(
                 project.source,
                 project.meters,
@@ -591,13 +788,8 @@ def design_ios2(
                 bundle.status.append(
                     f"head: H_тр={head.h_required_m:.2f} м; "
                     f"H_гар={head.h_guaranteed_m:.2f} м")
-                q_sec = (
-                    project.flows.q_sec_tot
-                    if hws_type == "local" or project.source.hws_heater_in_scope
-                    else project.flows.q_sec_c
-                )
                 ps = compute_pump_from_head(
-                    q_design_m3h=q_sec * 3.6,
+                    q_design_m3h=project_booster_flow_m3h(project),
                     head=head,
                     npsh_a_m=project.source.npsh_available_m,
                 )
@@ -670,6 +862,18 @@ def design_ios2(
                     bundle.warnings.append(
                         f"v1_pressure_zones: превышен максимальный статический напор "
                         f"в узлах {bad}; требуется зонирование/регулирование давления")
+        except MeterSelectionUnavailable as e:
+            # A failed recalculation must not leave the previous meter, its losses
+            # and dependent pump available for specification/document generation.
+            from app.pz.project import PumpSystem
+            project.meters = replace(
+                project.meters, rows=[], cold_meter_dn=None, hot_meter_dn=None,
+                selection_error=str(e), has_bypass=False, single_input_bypass_note=False,
+            )
+            project.source.h_vod_m = None
+            project.head_paths = None
+            project.pumps = PumpSystem(required=True, selection_note="Подбор ожидает расчёт водомерных узлов")
+            bundle.warnings.append(f"meters/head/pump: {e}")
         except Exception as e:
             bundle.warnings.append(f"meters/head/pump: расчётная цепочка не выполнена ({e})")
     else:
@@ -679,11 +883,18 @@ def design_ios2(
 
     # К1: общий расход — канонический legacy-алгоритм; нагрузка на стояки
     # принимается только из явных данных аксонометрии.
-    from app.calc.sewage import SewageRiserInput, calculate_sewage_system
+    from app.calc.sewage import (
+        DomesticSewageResult, SewageRiserInput, check_sewage_system,
+    )
     if project.flows.q_sec_tot > 0 or project.flows.sewage_l_per_s > 0:
-        project.sewage.result = calculate_sewage_system(
-            project.flows.q_sec_tot,
-            project.sewage_max_fixture_lps,
+        # q_s is already calculated by the canonical demand core from unrounded
+        # q_tot. Do not recalculate it from the rounded display value in FlowsData.
+        project.sewage.result = check_sewage_system(
+            DomesticSewageResult(
+                project.flows.q_sec_tot,
+                project.sewage_max_fixture_lps,
+                project.flows.sewage_l_per_s,
+            ),
             [SewageRiserInput(**vars(row)) for row in project.sewage.risers],
         )
         if (
@@ -804,6 +1015,23 @@ def design_ios2(
         f"wastewater_diagnostics: {row}" for row in diagnostic.warnings
     )
 
+    if fire.required and (project.fire_station_model_input or {}).get("pressure_review"):
+        from app.intake.studio_fire_review import calculate_review, NOTICE as REVIEW_NOTICE
+        try:
+            if network is None:
+                raise ValueError("Не построена сеть В2")
+            bundle.fire_pressure_review = calculate_review(project, network)
+        except ValueError as exc:
+            bundle.fire_pressure_review = dict(state="needs_data", note=REVIEW_NOTICE,
+                error=str(exc), release_ready=False)
+        bundle.warnings.append("fire_pressure_review: " + REVIEW_NOTICE)
+        from app.pz.fire_review_binding import apply_review
+        apply_review(bundle)
+
+    if fire_station_design is not None:
+        from app.pz.fire_station_binding import bind_design
+        bind_design(bundle, fire_station, fire_station_design)
+
     # СП 253 задаёт исполнение насосных установок независимо от результата
     # каталожного подбора. Рабочая точка при этом остаётся расчётной.
     for pump_system in (project.pumps, project.fire_pumps):
@@ -826,6 +1054,14 @@ def design_ios2(
             )
         )
 
+    if project.document.review_head_pending:
+        # Keep calculated paths/components, but publish no equipment candidate
+        # based on only a subset of the required paths in a private preview.
+        from app.pz.project import PumpSystem
+        project.pumps = PumpSystem(required=False, selection_note="Подбор ожидает завершения расчёта напора.")
+
+    from app.pz.metering_rules import metering_composition_warnings
+    bundle.warnings.extend(metering_composition_warnings(project))
     if not render_documents:
         bundle.commission_report = build_commission_report(project)
         bundle.status.append(
@@ -846,10 +1082,9 @@ def design_ios2(
     bundle.wastewater_calculation_pdf = generate_wastewater_calculation_pdf(
         project, os.path.join(output_dir, "Расчеты_К1_К2.pdf")
     )
-    append_pdf(bundle.pz_pdf, bundle.wastewater_calculation_pdf)
     bundle.status.append(
         "Расчеты_К1_К2.pdf собран отдельным расчётным приложением "
-        "и добавлен в конец ПЗ.pdf"
+        "только для ИОС3; в ПЗ водоснабжения не включается"
     )
 
     bundle.wastewater_pz_pdf = generate_wastewater_pz_pdf(
@@ -863,6 +1098,14 @@ def design_ios2(
         project, os.path.join(output_dir, "Баланс_ИОС3.pdf")
     )
     append_pdf(bundle.wastewater_pz_pdf, bundle.wastewater_balance_pdf)
+    if project.rainwater_reuse.enabled:
+        from app.pz.generator import generate_rainwater_reuse_pdf
+        bundle.rainwater_reuse_pdf = generate_rainwater_reuse_pdf(
+            project, os.path.join(output_dir, "Дождевая_вода.pdf"),
+        )
+        append_pdf(bundle.pz_pdf, bundle.rainwater_reuse_pdf)
+        append_pdf(bundle.wastewater_pz_pdf, bundle.rainwater_reuse_pdf)
+        bundle.status.append("Дождевая_вода.pdf: предварительный баланс и функциональная структура; проектное решение требует дополнения")
     bundle.status.append(
         "ПЗ_К1_К2.pdf собрана как самостоятельная текстовая часть "
         "подраздела 5.3 по пункту 18 ПП РФ № 87 и ГОСТ Р 21.620-2023; "
@@ -872,18 +1115,20 @@ def design_ios2(
     graphic_exports = {
         row.key: row for row in assess_wastewater_graphic_exports(project)
     }
-    k1_k2_result = generate_wastewater_graphic_export(
-        project,
-        "k1-k2",
-        os.path.join(output_dir, graphic_exports["k1-k2"].filename),
-    )
-    bundle.wastewater_scheme_pdf = k1_k2_result.output_path
-    bundle.status.append(
-        "Схема_К1_К2.pdf собрана каноническим многостраничным векторным "
-        "генератором А1: надземная часть и подвал/выпуски; основная надпись "
-        "учитывает третий лист УГО. Неподтверждённые трубы, прочистки и "
-        "переходы не подставляются"
-    )
+    bundle.wastewater_graphic_required = tuple(key for key, row in graphic_exports.items() if row.applicable)
+    k1_k2 = graphic_exports["k1-k2"]
+    if k1_k2.available:
+        k1_k2_result = generate_wastewater_graphic_export(
+            project, "k1-k2", os.path.join(output_dir, k1_k2.filename),
+        )
+        bundle.wastewater_scheme_pdf = k1_k2_result.output_path
+        bundle.wastewater_graphic_results["k1-k2"] = k1_k2_result
+        if k1_k2_result.ready:
+            bundle.status.append("Схема_К1_К2.pdf: канонический векторный генератор по данным проекта")
+        else:
+            bundle.warnings.append(k1_k2.filename + ": " + "; ".join(k1_k2_result.reasons))
+    else:
+        bundle.warnings.extend(k1_k2.reasons)
 
     if graphic_exports["k3"].applicable:
         k3_result = generate_wastewater_graphic_export(
@@ -892,6 +1137,7 @@ def design_ios2(
             os.path.join(output_dir, graphic_exports["k3"].filename),
         )
         bundle.wastewater_k3_scheme_pdf = k3_result.output_path
+        bundle.wastewater_graphic_results["k3"] = k3_result
         if k3_result.ready:
             bundle.status.append(
                 "Схема_К3.pdf собрана отдельным каноническим векторным "
@@ -916,6 +1162,7 @@ def design_ios2(
             os.path.join(output_dir, graphic_exports["pressure"].filename),
         )
         bundle.wastewater_pressure_scheme_pdf = pressure_result.output_path
+        bundle.wastewater_graphic_results["pressure"] = pressure_result
         if pressure_result.ready:
             bundle.status.append(
                 "Схема_напорной_канализации.pdf: выпущены самостоятельная "
@@ -966,12 +1213,13 @@ def design_ios2(
             bundle.wastewater_spec_pdf,
         ) if path],
         os.path.join(output_dir, "Комплект_К1_К2.pdf"),
-    )
-    bundle.status.append(
-        "Комплект_К1_К2.pdf собран единым файлом: ПЗ с расчётами, "
-        "канонические схемы самотечных и применимых напорных систем, "
-        "ведомость УГО и спецификация"
-    )
+    ) if k1_k2.available else None
+    if bundle.wastewater_package_pdf:
+        bundle.status.append(
+            "Комплект_К1_К2.pdf: ПЗ с расчётами, те же схемы, что в отдельных PDF, УГО и спецификация. "
+            + ("Условный разрез включён как предварительный; не для выпуска."
+               if k1_k2.presentation == "representative" else "")
+        )
 
     bundle.balance_pdf = generate_balance_pdf(
         project, os.path.join(output_dir, "Баланс_ВиВ.pdf"))
@@ -986,16 +1234,60 @@ def design_ios2(
     bundle.status.append(
         "Подбор_насосов.pdf собран отдельным приложением и добавлен в конец ПЗ.pdf")
 
+    if project.fire_station_input is not None and bundle.fire_station_result is not None:
+        from app.pz.fire_station_input_report import render_station_input_report
+        bundle.fire_station_input_pdf = render_station_input_report(
+            os.path.join(output_dir, "В2_вводы_и_насос.pdf"), project, bundle.fire_station_result)
+        append_pdf(bundle.pz_pdf, bundle.fire_station_input_pdf)
+
+    if bundle.fire_pressure_review is not None:
+        from app.pz.fire_pressure_review_report import render_pressure_review
+        bundle.fire_pressure_review_pdf = render_pressure_review(
+            os.path.join(output_dir, "В2_диафрагмы_и_отключения.pdf"), project, bundle.fire_pressure_review)
+        append_pdf(bundle.pz_pdf, bundle.fire_pressure_review_pdf)
+
+    if project.fire_pumps.pressure_review:
+        from app.pz.fire_review_scheme import generate_review_scheme
+        bundle.fire_station_scheme_pdf = generate_review_scheme(
+            os.path.join(output_dir, "В2_насосная_стояки_узлы.pdf"), project)
+
+    if fire_station_design is not None:
+        from app.pz.fire_station_design_report import render_station_design
+        from app.pz.fire_station_design_scheme import generate_design_scheme
+        bundle.fire_station_design_pdf = render_station_design(
+            os.path.join(output_dir, "В2_расчёт_и_автоматика.pdf"),
+            project.fire_pumps.station_design, document=project.document)
+        append_pdf(bundle.pz_pdf, bundle.fire_station_design_pdf)
+        bundle.fire_station_scheme_pdf = generate_design_scheme(
+            os.path.join(output_dir, "В2_насосная_и_стояки.pdf"), project, bundle.fire_station_result)
+
     bundle.spec_pdf = generate_spec_pdf(project, os.path.join(output_dir, "Спецификация.pdf"))
     bundle.status.append("Спецификация.pdf собрана")
 
     try:
-        bundle.scheme_pdf = generate_scheme_pdf(project, os.path.join(output_dir, "Схема.pdf"))
+        scheme_project = project
+        if fire_station_design is not None or project.fire_pumps.pressure_review:
+            # The older composite illustration has a different V2 topology.
+            from copy import deepcopy
+            scheme_project = deepcopy(project)
+            scheme_project.fire.required = False
+            scheme_project.fire_pumps.required = False
+        scheme_result = generate_scheme_result(scheme_project)
+        bundle.warnings.extend(f"Принципиальная схема воды: {warning}" for warning in scheme_result.warnings)
+        bundle.scheme_pdf = generate_scheme_pdf(scheme_project, os.path.join(output_dir, "Схема.pdf"),
+                                                scheme_result=scheme_result)
+        from app.pz.water_scheme_delivery import describe_scheme
+        bundle.water_scheme_delivery = describe_scheme(scheme_result)
         bundle.status.append("Схема.pdf собрана")
         bundle.metering_scheme_pdf = generate_metering_scheme_pdf(
             project, os.path.join(output_dir, "Схема_вводов_и_ВУ.pdf"))
+        bundle.status.append(
+            "Схема_вводов_и_ВУ.pdf: деталировка А3 по приложению Г ГОСТ Р 21.619-2023"
+        )
+        from app.pz.water_building_section import can_draw_water_section
         bundle.pump_zone_scheme_pdf = generate_pump_zone_scheme_pdf(
-            project, os.path.join(output_dir, "Схема_насосов_зон_и_ГВС.pdf"))
+            project, os.path.join(output_dir, "Схема_насосов_зон_и_ГВС.pdf"),
+            include_building_section=not can_draw_water_section(scheme_project))
         bundle.status.append(
             "Схемы вводов/ВУ и насосов/зон/ГВС собраны отдельными листами"
         )
@@ -1003,50 +1295,39 @@ def design_ios2(
         bundle.warnings.append(f"scheme skipped: {e}")
 
     # гидролист — только если есть отчёт (расчётный или переданный)
-    if report is not None:
+    if report is not None and fire_station_design is None and not project.fire_pumps.pressure_review:
         bundle.hydraulic_pdf = generate_hydraulic_report_pdf(
             project, report, os.path.join(output_dir, "Гидравлический_расчет.pdf"))
         bundle.status.append("Гидравлический_расчет.pdf собран")
     else:
         bundle.warnings.append("hydraulic report PDF skipped: no hydraulic report available")
 
-    if bundle.resilience_report is not None:
+    if bundle.resilience_report is not None and fire_station_design is None and not project.fire_pumps.pressure_review:
         from app.pz.generator import generate_resilience_pdf
         bundle.resilience_pdf = generate_resilience_pdf(
             project, bundle.resilience_report,
             os.path.join(output_dir, "Проверка_живучести.pdf"))
         bundle.status.append("Проверка_живучести.pdf собрана")
 
-    bundle.commission_report = build_commission_report(project, artifacts={
-        "Пояснительная записка": bool(bundle.pz_pdf),
-        "Расчёты В1": bool(bundle.v1_calculation_pdf),
-        "Расчёты К1/К2": bool(bundle.wastewater_calculation_pdf),
-        "Пояснительная записка К1/К2": bool(bundle.wastewater_pz_pdf),
-        "Баланс ВиВ": bool(bundle.balance_pdf),
-        "Баланс ИОС3 по ГОСТ Р 21.620": bool(bundle.wastewater_balance_pdf),
-        "Подбор насосов": bool(bundle.pump_selection_pdf),
-        "Спецификация": bool(bundle.spec_pdf),
-        "Принципиальная схема": bool(bundle.scheme_pdf),
-        "Схема вводов и узлов учёта": bool(bundle.metering_scheme_pdf),
-        "Схема насосов, зон и ГВС": bool(bundle.pump_zone_scheme_pdf),
-        "Принципиальная схема К1/К2": bool(bundle.wastewater_scheme_pdf),
-        "Принципиальная схема К3": bool(bundle.wastewater_k3_scheme_pdf),
-        "Напорная канализация и рабочая точка": bool(
-            bundle.wastewater_pressure_scheme_pdf
-        ),
-        "Ведомость УГО ИОС3": bool(bundle.wastewater_ugo_pdf),
-        "Спецификация ИОС3": bool(bundle.wastewater_spec_pdf),
-        "Комплект ИОС3": bool(bundle.wastewater_package_pdf),
-        "Гидравлический расчёт В2": bool(bundle.hydraulic_pdf),
-    })
+    from app.pz.water_package import generate_water_package, missing_water_parts
+    bundle.water_package_pdf = generate_water_package(
+        bundle, os.path.join(output_dir, "Комплект_ИОС2.pdf"))
+    missing_parts = missing_water_parts(bundle)
+    if missing_parts:
+        bundle.warnings.append("ИОС2: объединённый PDF неполон — " + "; ".join(missing_parts))
+    bundle.status.append(
+        "Комплект_ИОС2.pdf: существующие ПЗ с приложениями, схемы и спецификация; "
+        "закладки сохранены. Сборка PDF не заменяет проверку допуска к выпуску.")
+
+    bundle.commission_report = build_commission_report(project, artifacts=bundle_artifacts(bundle))
     bundle.commission_control_pdf = generate_commission_control_pdf(
         project,
         os.path.join(output_dir, "Паспорт_и_нормативный_контроль.pdf"),
         report=bundle.commission_report,
     )
-    append_pdf(bundle.pz_pdf, bundle.commission_control_pdf)
     bundle.status.append(
         "Паспорт_и_нормативный_контроль.pdf собран: версия, fingerprint, "
-        "матрица требований и протокол проверок документов; добавлен в конец ПЗ.pdf")
+        "матрица требований и протокол проверок документов; самостоятельный "
+        "контрольный документ, не приложение к ПЗ водоснабжения")
 
     return bundle

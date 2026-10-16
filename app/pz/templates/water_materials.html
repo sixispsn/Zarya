@@ -1,0 +1,37 @@
+{% if water_materials.cold_bound or water_materials.hot_bound %}
+<p class="subitem water-materials-intro">Материалы и размеры характерных расчётных участков согласованы с принципиальными схемами и спецификацией:</p>
+<table class="equip" id="water-materials">
+  <thead><tr><th>Система / участок</th><th>Материал</th><th>Dн × s, мм</th><th>dвн, мм</th><th>Источник</th></tr></thead>
+  <tbody>
+  {% for row in water_materials.cold_rows + water_materials.hot_rows %}
+    <tr data-pipe-key="{{ row.key }}"><td>{{ row.system }} / {{ row.role }}</td>
+      <td>{{ row.material }}</td><td>{{ row.size }}</td>
+      <td>{{ row.inner_mm|compact(3)|replace('.', ',') }}</td><td>{{ row.source }}</td></tr>
+  {% endfor %}
+  {% if water_materials.hot_bound %}
+    <tr data-pipe-key="Т4-network"><td>Т4 / циркуляционная сеть</td><td colspan="4">Материал и размеры требуют исходных данных по сети Т4; сечения Т3 автоматически не применяются.</td></tr>
+  {% endif %}
+  </tbody>
+</table>
+<p class="equip-note">Характерный расчётный путь не является ведомостью всех участков здания. При неоднозначной геометрии размер не заменяется шаблонным DN.</p>
+{% endif %}
+{% if not water_materials.cold_bound %}
+<p class="subitem">Магистрали холодного водоснабжения — {{ materials.cold_mains }};
+стояки и поквартирная разводка — {{ materials.cold_distribution }}.</p>
+{% endif %}
+{% if building.hws_type.value != 'none' and not water_materials.hot_bound %}
+<p class="subitem">Магистрали горячего водоснабжения — {{ materials.hot_mains }};
+разводка — {{ materials.hot_distribution }}.</p>
+{% endif %}
+{% if fire_net and not fire_net.combined %}
+<p class="subitem">Трубопроводы самостоятельного противопожарного водопровода — {{ materials.fire_pipes }}.</p>
+{% endif %}
+{% if water_materials.apartment_rows %}
+<p class="subitem" data-apartment-assembly="representative">Состав характерного квартирного ответвления,
+показанного на принципиальной схеме и включённого в спецификацию:
+{% for row in water_materials.apartment_rows %}<span data-apartment-component="{{ row.key }}">{{ row.name }}</span>{% if not loop.last %}; {% endif %}{% endfor %}.
+Регуляторы давления учитываются отдельно по принятому решению.
+Количество квартирных ответвлений и комплектацию уточняют по АР и схеме учёта;
+количество символов на характерном разрезе не является количеством оборудования здания.
+DN и модели квартирных изделий требуют подбора.</p>
+{% endif %}

@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "revision": "2026-10-13.2",
+  "units": {"dimensions": "mm", "pressure": "bar", "temperature": "degC"},
+  "sources": {
+    "gost-9941-2022-user": {
+      "title": "ГОСТ 9941-2022, предоставленный PDF", "kind": "standard",
+      "filename": "gost-9941-2022.pdf", "sha256": "49167e14a47f567fa2db69b3de1054297656e6adfba9d783fd1d3a54e284665e",
+      "checked_on": "2026-10-13", "locator": "Таблица 1; PDF с. 10, 12; марки стали п. 5.1"
+    },
+    "gost-17375-2001-user": {
+      "title": "ГОСТ 17375-2001, предоставленный PDF", "kind": "standard",
+      "filename": "gost-17375-2001.pdf", "sha256": "efe013465690d2bdb3dc801067099af2a78e37922e9ed32ecadc05ed141abd08",
+      "checked_on": "2026-10-13", "locator": "Таблица 1, исполнение 1; PDF с. 4; рисунки PDF с. 3"
+    },
+    "gost-17376-2001-user": {
+      "title": "ГОСТ 17376-2001, предоставленный PDF", "kind": "standard",
+      "filename": "gost-17376-2001.pdf", "sha256": "54e2a8285c9ed5eed5939ecac7f3f8e1465e627205771fc384c6b8e844ba9224",
+      "checked_on": "2026-10-13", "locator": "Область применения и рисунок 1; размерные ряды ещё не импортированы"
+    },
+    "gost-17380-2001-user": {
+      "title": "ГОСТ 17380-2001, предоставленный PDF", "kind": "standard",
+      "filename": "gost-17380-2001.pdf", "sha256": "f1840a0e4b61cb289c8b9a8f2dc81a0f4cc23594028ab2d5c290ff5677905d25",
+      "checked_on": "2026-10-13", "locator": "Общие требования; не самостоятельная таблица габаритов"
+    },
+    "gost-33259-2015-user": {
+      "title": "ГОСТ 33259-2015, предоставленный PDF", "kind": "standard",
+      "filename": "gost-33259-2015.pdf", "sha256": "2738fdcc14cf92ae64045e8568ec5b23f70da2958b5abb2481e616bbe00db602",
+      "checked_on": "2026-10-13", "locator": "Типы и уплотнительные поверхности; самостоятельные размерные ряды ещё не импортированы"
+    },
+    "polyplastic-water-20250902": {
+      "title": "ПОЛИПЛАСТИК, напорные системы, 02.09.2025", "kind": "manufacturer_catalogue",
+      "url": "https://www.polyplastic.ru/upload/price/price-napor.pdf",
+      "sha256": "1f804d22e62d18e8427cf802244c0ab74bd03445a616cc664bfb7d3832dde944",
+      "checked_on": "2026-10-13", "locator": "PDF с. 1: столбцы SDR 11, 17; только размеры, не цены",
+      "note": "PN относится к указанной серии ПЭ100; температурное снижение, условия эксплуатации и сертификаты проверяются отдельно."
+    },
+    "stami-ew-3p5": {
+      "title": "СТАМИ, выпускаемый сортамент прямошовных труб, стенка 3,5 мм", "kind": "manufacturer_catalogue",
+      "url": "https://www.stami.ru/pipe/_t_/type=%D0%BF%D1%80%D1%8F%D0%BC%D0%BE%D1%88%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5/size_s=3,5/",
+      "checked_on": "2026-10-13", "locator": "Таблица «Выпускаемый сортамент», 12 строк D=48–219, ст3пс5, ГОСТ 10704-91",
+      "note": "Сортамент, а не подтверждение пригодности для конкретного давления или питьевой воды."
+    }
+  },
+  "families": [
+    {
+      "id": "stami-ew-10704-s3p5", "kind": "pipe", "material": "steel", "grade": "Ст3пс5",
+      "manufacturing": "electric_welded_longitudinal", "coating": "unknown", "manufacturer": "СТАМИ",
+      "standard": "ГОСТ 10704-91", "series": "Прямошовная, стенка 3,5 мм", "system_id": "",
+      "source_ids": ["stami-ew-3p5"], "locator": "Таблица выпускаемого сортамента, s=3,5 мм",
+      "joinings": ["welded"], "columns": ["outer_diameter_mm", "wall_thickness_mm"],
+      "rows": [[48,3.5],[57,3.5],[60,3.5],[76,3.5],[89,3.5],[102,3.5],[108,3.5],[114,3.5],[127,3.5],[133,3.5],[159,3.5],[219,3.5]]
+    },
+    {
+      "id": "gost9941-12x18n10t", "kind": "pipe", "material": "stainless_steel", "grade": "12Х18Н10Т",
+      "manufacturing": "seamless_cold_formed", "coating": "none", "manufacturer": "",
+      "standard": "ГОСТ 9941-2022", "series": "Нормативный сортамент; выбранные сочетания D×s", "system_id": "",
+      "source_ids": ["gost-9941-2022-user"], "locator": "Таблица 1, PDF с. 10, 12; п. 5.1",
+      "joinings": ["welded"], "notes": ["Размерный образец по стандарту, не товар изготовителя; DN не назначен по наружному диаметру."],
+      "columns": ["outer_diameter_mm", "wall_thickness_mm"],
+      "rows": [[48,2],[57,2],[60,2],[63,2],[76,2],[89,2],[108,2],[114,2],[140,2.5],[150,3],[160,3],[180,3],[200,3],[220,3],[250,3],[273,6]]
+    },
+    {
+      "id": "proaqua-ppr-sdr6-white", "kind": "pipe", "material": "ppr", "grade": "PP-R",
+      "manufacturing": "extruded", "coating": "none", "manufacturer": "PRO AQUA",
+      "standard": "Каталог PRO AQUA PP-R 2026", "series": "SDR6, белая", "system_id": "proaqua_ppr", "sdr": 6,
+      "source_ids": ["proaqua-ppr-2026"], "locator": "PDF с. 42 / печ. с. 41, труба SDR6, белая",
+      "joinings": ["socket_fusion"], "columns": ["article", "outer_diameter_mm", "wall_thickness_mm"],
+      "rows": [["PA10008",20,3.4],["PA10010",25,4.2],["PA10012",32,5.4],["PA10014",40,6.7],["PA10016",50,8.3],["PA10018",63,10.5],["PA10020",75,12.5],["PA10022",90,15],["PA10024",110,18.3],["PA10026",125,20.8],["PA10028",160,26.6]]
+    },
+    {
+      "id": "proaqua-ppr-sdr11-white", "kind": "pipe", "material": "ppr", "grade": "PP-R",
+      "manufacturing": "extruded", "coating": "none", "manufacturer": "PRO AQUA",
+      "standard": "Каталог PRO AQUA PP-R 2026", "series": "SDR11, белая", "system_id": "proaqua_ppr", "sdr": 11,
+      "source_ids": ["proaqua-ppr-2026"], "locator": "PDF с. 42 / печ. с. 41, труба SDR11, белая",
+      "joinings": ["socket_fusion"], "columns": ["article", "outer_diameter_mm", "wall_thickness_mm", "status", "note"],
+      "rows": [["PA11008",20,1.9,"verified",""],["PA11010",25,2.3,"verified",""],["PA11012",32,2.9,"verified",""],["PA11014",40,3.7,"verified",""],["PA11016",50,4.6,"verified",""],["PA11018",63,5.8,"verified",""],["PA11020",75,6.9,"verified",""],["PA11022",90,8.2,"verified",""],["PA11024",110,10,"verified",""],["PA11026",125,11.4,"verified",""],["PA11028",160,26.6,"conflict","В таблице SDR11 указан размер 160×26,6: отношение D/s≈6, а не 11. Не исправлять догадкой; запросить паспорт исполнения."]]
+    },
+    {
+      "id": "polyplastic-pe100-sdr11", "kind": "pipe", "material": "pe", "grade": "PE100",
+      "manufacturing": "extruded", "coating": "none", "manufacturer": "ПОЛИПЛАСТИК",
+      "standard": "ГОСТ Р 70628.2-2023; ТУ 22.21.21-019-73011750-2020", "series": "PE100 SDR11", "system_id": "polyplastic_pe100", "sdr": 11,
+      "pn_bar": 16, "source_ids": ["polyplastic-water-20250902"], "locator": "PDF с. 1, столбец SDR11",
+      "joinings": ["butt_fusion","electrofusion","compression"],
+      "notes": ["Способ соединения выбирается явно; допустимость для данного диаметра и фитинга проверяется отдельно."],
+      "columns": ["outer_diameter_mm", "wall_thickness_mm"],
+      "rows": [[20,2],[25,2.3],[32,3],[40,3.7],[50,4.6],[63,5.8],[75,6.8],[90,8.2],[110,10],[125,11.4],[140,12.7],[160,14.6],[180,16.4],[200,18.2],[225,20.5],[250,22.7],[280,25.4],[315,28.6]]
+    },
+    {
+      "id": "polyplastic-pe100-sdr17", "kind": "pipe", "material": "pe", "grade": "PE100",
+      "manufacturing": "extruded", "coating": "none", "manufacturer": "ПОЛИПЛАСТИК",
+      "standard": "ГОСТ Р 70628.2-2023; ТУ 22.21.21-019-73011750-2020", "series": "PE100 SDR17", "system_id": "polyplastic_pe100", "sdr": 17,
+      "pn_bar": 10, "source_ids": ["polyplastic-water-20250902"], "locator": "PDF с. 1, столбец SDR17",
+      "joinings": ["butt_fusion","electrofusion","compression"],
+      "columns": ["outer_diameter_mm", "wall_thickness_mm"],
+      "rows": [[32,2],[40,2.4],[50,3],[63,3.8],[75,4.5],[90,5.4],[110,6.6],[125,7.4],[140,8.3],[160,9.5],[180,10.7],[200,11.9],[225,13.4],[250,14.8],[280,16.6],[315,18.7]]
+    },
+    {
+      "id": "proaqua-pa120-white", "kind": "coupling", "material": "ppr", "manufacturer": "PRO AQUA",
+      "manufacturing": "moulded", "standard": "Каталог PRO AQUA PP-R 2026", "series": "Муфта PP-R, белая", "system_id": "proaqua_ppr",
+      "source_ids": ["proaqua-ppr-2026"], "locator": "PDF с. 44 / печ. с. 43, муфта",
+      "connection": "socket_fusion", "port_sex": "socket", "port_count": 2,
+      "dimension_meanings": {"L":"полный осевой габарит корпуса", "D":"наружный габарит корпуса", "Z":"размер между внутренними упорами по чертежу; не монтажная посадка"},
+      "columns": ["article","outer_diameter_mm","D","L","Z"],
+      "rows": [["PA12008P",20,29,35.5,6.5],["PA12010P",25,34,38.5,6.5],["PA12012P",32,42,44,8],["PA12014P",40,52,47,6],["PA12016P",50,65,52,5],["PA12018P",63,82,60,6],["PA12020P",75,100,66,5],["PA12022P",90,120,72,6],["PA12024P",110,147,80,6],["PA12026P",125,163,88,6],["PA12028P",160,213,114,6.5]]
+    },
+    {
+      "id": "proaqua-pa130-white", "kind": "elbow90", "material": "ppr", "manufacturer": "PRO AQUA",
+      "manufacturing": "moulded", "standard": "Каталог PRO AQUA PP-R 2026", "series": "Угольник 90°, белый", "system_id": "proaqua_ppr",
+      "source_ids": ["proaqua-ppr-2026"], "locator": "PDF с. 45 / печ. с. 44, угольник 90°",
+      "connection": "socket_fusion", "port_sex": "socket", "port_count": 2, "angle_deg": 90,
+      "dimension_meanings": {"A":"ось пересечения — торец (L на рисунке)", "D":"наружный габарит раструба", "Z":"размер от оси до упора по чертежу"},
+      "columns": ["article","outer_diameter_mm","D","A","Z","status"],
+      "rows": [["PA13008P",20,29,25.5,11,"verified"],["PA13010P",25,34,30,14,"verified"],["PA13012P",32,42,36,18,"verified"],["PA13014P",40,52,40.5,20,"verified"],["PA13016P",50,65,49.5,26,"verified"],["PA13018P",63,82,59.5,32.5,"verified"],["PA13020P",75,100,69.5,39,"verified"],["PA13022P",90,121,79.5,46.5,"verified"],["PA13024P",110,147,93,56,"verified"],["PA13026P",125,163,100,60,"verified"],["PA13028P",160,null,null,null,"missing"]]
+    },
+    {
+      "id": "proaqua-pa140-white", "kind": "tee", "material": "ppr", "manufacturer": "PRO AQUA",
+      "manufacturing": "moulded", "standard": "Каталог PRO AQUA PP-R 2026", "series": "Тройник равнопроходный, белый", "system_id": "proaqua_ppr",
+      "source_ids": ["proaqua-ppr-2026"], "locator": "PDF с. 48 / печ. с. 47, тройник",
+      "connection": "socket_fusion", "port_sex": "socket", "port_count": 3,
+      "dimension_meanings": {"L":"полный габарит проходной ветви (l)", "H":"внешний габарит ответвления от наружной стенки, НЕ от оси", "D":"наружный габарит корпуса", "Z":"глубина раструба на рисунке; не заданная монтажная посадка"},
+      "columns": ["article","outer_diameter_mm","D","L","H","Z"],
+      "rows": [["PA14008P",20,29,52,40,14.5],["PA14010P",25,34,62,45,16],["PA14012P",32,42,72,56,18],["PA14014P",40,52,86,69,20.5],["PA14016P",50,65,104,85,23.5],["PA14018P",63,82,126,105,27.4],["PA14020P",75,100,142,121,30],["PA14022P",90,120,164,142,33.5],["PA14024P",110,147,192,169,37],["PA14026P",125,167,207,185,42],["PA14028P",160,213.4,271,244,60]]
+    },
+    {
+      "id": "gost17375-ex1-90", "kind": "elbow90", "material": "steel", "manufacturer": "",
+      "manufacturing": "seamless_fitting", "standard": "ГОСТ 17375-2001; ГОСТ 17380-2001", "series": "Исполнение 1, 90°, выбранные стенки", "system_id": "",
+      "source_ids": ["gost-17375-2001-user","gost-17380-2001-user"], "locator": "Таблица 1, PDF с. 4",
+      "connection": "welded", "port_sex": "plain", "port_count": 2, "angle_deg": 90,
+      "dimension_meanings": {"A":"F=R, от пересечения осей до торца; не 1,5×DN"},
+      "columns": ["dn","outer_diameter_mm","wall_thickness_mm","A"],
+      "rows": [[15,21.3,3.2,28],[20,26.9,3.2,29],[25,33.7,3.2,38],[32,42.4,3.6,48],[40,48.3,3.6,57],[50,60.3,4,76],[65,76.1,5,95],[80,88.9,5.6,114],[100,114.3,6.3,152],[125,139.7,6.3,190],[150,168.3,7.1,229],[200,219.1,8,305],[250,273,10,381]],
+      "notes": ["Углеродистая/низколегированная сталь; это не автоматическое разрешение нержавеющего исполнения. Марка и расчётное давление не назначены."]
+    }
+  ]
+}

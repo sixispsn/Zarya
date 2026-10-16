@@ -1,33 +1,37 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="ru" data-theme="light" data-ui="white"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="light">
 <title>Заря — мои проекты</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/wizard.css?v=20260907-4">
 <script defer src="/static/wizard.js?v=20260907-2"></script>
+{% include 'site_assets.html' %}
 </head><body>
-<header class="topbar">
-  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects" aria-current="page">Мои проекты</a><a href="/wizard/building-model">Модель здания</a><a href="/wizard/architecture">Планы в схему</a><a href="/wizard/analyze">Анализ проекта</a><a class="normative-radar-link" href="/wizard/normatives" data-normative-radar-link><i class="radar-nav-lamp" data-state="gray"></i>Нормативы</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
-</header>
-<main class="projects-shell">
-  <div class="projects-head"><div><p class="eyebrow">ИОС2 + ИОС3 · локальное хранилище</p><h1>Мои проекты</h1><p>Единые исходные данные водоснабжения и водоотведения сохраняются в YAML и доступны для повторного выпуска обоих подразделов.</p></div><div class="projects-actions"><a class="button-secondary" href="/wizard/analyze">Анализ проекта</a><a class="button-primary" href="/wizard">+ Новый проект</a></div></div>
-  <section class="card">
-  {% if projects %}
-    <table class="projects-table">
-      <tr><th>Проект</th><th>Последнее изменение</th><th></th></tr>
-      {% for p in projects %}
-      <tr>
-        <td><a class="project-link" href="/wizard/open/{{ p.project_id }}">{{ p.title }}</a><span class="project-id">{{ p.project_id }}</span></td>
-        <td>{{ p.updated_at[:16].replace('T', ' ') }}</td>
-        <td><form method="post" action="/wizard/projects/{{ p.project_id }}/delete" onsubmit="return confirm('Удалить проект «{{ p.title }}»?')"><button class="delete-button" type="submit">Удалить</button></form></td>
-      </tr>
-      {% endfor %}
-    </table>
-  {% else %}
-    <div class="empty-state"><strong>Сохранённых проектов пока нет</strong><p>Создайте первый расчёт — исходные данные будут сохранены автоматически после успешной проверки.</p><a class="button-primary" href="/wizard">Создать проект</a></div>
-  {% endif %}
+{% include 'site_header.html' %}
+<main id="main-content" tabindex="-1" class="projects-shell">
+  <div class="projects-head"><div><p class="eyebrow">Ваше рабочее пространство</p><h1>Мои проекты</h1><p>Вернитесь к исходным данным и продолжите работу.</p></div><div class="projects-actions"><a class="button-primary" href="/">Рабочее место →</a></div></div>
+  <section class="library-current" data-library-current hidden aria-label="Текущий черновик">
+    <div><p class="eyebrow">В этом браузере</p><h2>Текущий проект</h2><p data-current-description>Исходные данные сохраняются автоматически</p></div>
+    <a class="button-secondary" href="/studio?view=project">Продолжить →</a>
   </section>
+  <div class="library-heading"><h2>Сохранённые проекты</h2><span>{{ projects|length }} в хранилище</span></div>
+  {% if projects %}
+    <div class="library-grid">
+      {% for p in projects %}
+      <article class="library-project">
+        <p>ИОС2 + ИОС3</p><h3><a href="/wizard/open/{{ p.project_id }}">{{ 'Проект без названия' if p.title == p.project_id else p.title }}</a></h3>
+        {% if p.title == p.project_id %}<span class="project-id">{{ p.project_id }}</span>{% endif %}
+        <p>Изменён {{ p.updated_at[:16].replace('T', ' ') }}</p>
+        <div class="library-project-footer"><a class="button-secondary" href="/wizard/open/{{ p.project_id }}">Открыть проект →</a>
+          <details class="library-actions"><summary aria-label="Действия с проектом {{ p.title }}">•••</summary><form method="post" action="/wizard/projects/{{ p.project_id }}/delete" data-confirm-delete="{{ p.title }}"><button class="delete-button" type="submit">Удалить</button></form></details>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <section class="card empty-state"><strong>Здесь будут ваши проекты</strong><p>Проекты из расширенного редактора появятся здесь. Черновик нового рабочего места доступен отдельно, выше.</p><a class="button-secondary" href="/">Перейти к проекту →</a></section>
+  {% endif %}
+  <p class="library-note">Сохранённые проекты открываются в расширенном редакторе со всеми исходными данными. <a href="/wizard">Создать отдельный проект в редакторе →</a></p>
 </main></body></html>

@@ -1,18 +1,16 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="ru" data-theme="light" data-ui="white"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="light">
 <title>Заря — анализ проекта</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/wizard.css?v=20260907-4">
 <script defer src="/static/wizard.js?v=20260907-2"></script>
+{% include 'site_assets.html' %}
 </head><body>
-<header class="topbar">
-  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/building-model">Модель здания</a><a href="/wizard/architecture">Планы в схему</a><a href="/wizard/analyze" aria-current="page">Анализ проекта</a><a class="normative-radar-link" href="/wizard/normatives" data-normative-radar-link><i class="radar-nav-lamp" data-state="gray"></i>Нормативы</a><a href="/docs" target="_blank">API</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
-</header>
-<main class="analysis-shell">
+{% include 'site_header.html' %}
+<main id="main-content" tabindex="-1" class="analysis-shell">
   <section class="analysis-hero">
     <div><p class="eyebrow">ZARYA REFERENCE / 01</p><h1>Разбор проекта-аналога</h1><p>Загрузите проект, заключение экспертизы и расчёты. «Заря» восстановит проверяемые решения и покажет расхождения с точностью до страницы.</p></div>
     <span class="analysis-mode">PDF TEXT · LOCAL</span>

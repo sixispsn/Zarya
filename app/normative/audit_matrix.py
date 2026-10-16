@@ -194,6 +194,7 @@ _IOS3_META: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     "K-GOST-06A": ("text", ("sewage.flows", "sewage.quality"), ("Пояснительная записка К1/К2", "Расчёты К1/К2")),
     "K-GOST-07": ("text", ("sewage.pipes.geometry",), ("Пояснительная записка К1/К2", "Спецификация ИОС3")),
     "K-GOST-08": ("text", ("sewage.pipes.slope", "sewage.pipes.fill"), ("Расчёты К1/К2", "Принципиальная схема К1/К2")),
+    "K-GOST-08F": ("text", ("sewage.pipes.horizontal_flow",), ("Расчёты К1/К2", "Пояснительная записка К1/К2")),
     "K-GOST-09": ("text", ("sewage.laying", "building.penetrations"), ("Пояснительная записка К1/К2",)),
     "K-GOST-10": ("text", ("sewage.pump" ,), ("Напорная канализация и рабочая точка",)),
     "K-GOST-11": ("text", ("sewage.treatment" ,), ("Пояснительная записка К1/К2",)),
@@ -203,6 +204,8 @@ _IOS3_META: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     "K-GOST-14": ("graphic", ("sewage.external_scheme",), ("Принципиальная схема наружных сетей",)),
     "K-GOST-15": ("graphic", ("sewage.site_plan",), ("План наружных сетей",)),
     "K-GOST-16": ("text", ("storm.flows",), ("Пояснительная записка К1/К2", "Расчёты К1/К2")),
+    "K-GOST-SERVICE-METER": ("text", ("sewage.service.k1_metering",), ("Пояснительная записка К1/К2", "Принципиальная схема К1/К2")),
+    "K-GOST-SERVICE-SUMP": ("text", ("sewage.service.sump",), ("Пояснительная записка К1/К2", "Принципиальная схема К1/К2")),
 }
 
 
@@ -219,8 +222,16 @@ def build_ios3_gost_matrix(
     rows: list[NormativeAuditRow] = []
     for check in audit_wastewater_gost(project).checks:
         part, fact_ids, deliverables = _IOS3_META[check.code]
-        clause_text = check.reference.partition(",")[2].strip()
+        reference = check.reference
+        calculation_reference = ""
+        if check.code == "K-GOST-08F":
+            # This check cites two documents. Bind the matrix clause to its
+            # GOST, retaining the full SP calculation reference separately.
+            calculation_reference, reference = reference.split("; ", 1)
+        clause_text = reference.partition(",")[2].strip()
         clause_text = clause_text.removeprefix("пп. ").removeprefix("п. ")
+        if calculation_reference:
+            clause_text += "; " + calculation_reference
         rows.append(make(
             check.code,
             (clause_text,),
@@ -352,18 +363,17 @@ def build_ios2_gost_matrix(
         f"групп {len(project.consumer_groups)}; Qсут={project.flows.q_day_tot:.3f} м³/сут; q={project.flows.q_sec_tot:.3f} л/с",
         ("Пояснительная записка", "Расчёты В1", "Баланс ВиВ"),
     )
-    fire_ok = bool(project.fire.q_total > 0 and project.fire.required_head_m is not None)
+    from app.pz.fire_calculation_evidence import fire_calculation_evidence
+    fire_evidence = fire_calculation_evidence(project)
     add(
         "V-GOST-05", ("5.1.6.3",), "Расход и напор внутреннего противопожарного водопровода",
         ("В2",),
         ("fire.applicability", "fire.q_total", "fire.required_head"),
-        fire_ok,
-        (
-            f"q={project.fire.q_total:.3f} л/с; Hтр={project.fire.required_head_m} м"
-            if project.fire.required else "В2 не требуется по нормативному решению"
-        ),
+        fire_evidence["status"] == "verified",
+        fire_evidence["result"],
         ("Пояснительная записка", "Гидравлический расчёт В2"),
         applicable=project.fire.required,
+        open_status=fire_evidence["status"],
     )
     pump_ok = bool(
         head.h_required_m is not None and head.h_guaranteed_m is not None
@@ -473,6 +483,29 @@ def build_ios2_gost_matrix(
             status, evidence = "not_applicable", "требование неприменимо к принятому составу систем"
         else:
             status, evidence = _artifact_status(artifacts, required)
+        if (project.fire.required and project.fire_pumps.pressure_review and
+                rule_id in {"V-GOST-A04", "V-GOST-A05"}):
+            status = "missing"
+            evidence = (
+                "Сформированы характерные стояки В2 с заданными ПК, расчётная сеть и узлы. "
+                "Помещения, отсеки, нижние ПК и полная схема здания не подтверждены. "
+                "Общий лист содержит В1/Т3/Т4."
+                if rule_id == "V-GOST-A04" else
+                "Сформирована предварительная схема насосной В2 с минимальной арматурой и КИП. "
+                + ("DN и заданные вспомогательные подключения согласованы с расчётной моделью; "
+                   "полнота компоновки, марки изделий и привязки помещения не подтверждены."
+                   if (project.fire_station_model_input or {}).get('schema_version') == 3 else
+                   "DN обвязки, вспомогательные линии и привязки помещения не подтверждены.")
+            )
+            if rule_id == 'V-GOST-A05' and (project.fire_station_model_input or {}).get('location'):
+                evidence = evidence.replace('и привязки помещения не подтверждены.', 'не подтверждены.')
+                evidence += (' Номер помещения, пол, ось всасывающих патрубков и проходки заданы явно; '
+                             'это не проверка монтажных габаритов, проходов и отметок всех выпусков.')
+            if rule_id == 'V-GOST-A05':
+                from app.data.fire_pump_geometry import connection_review
+                geometry = connection_review(project.fire_station_model_input, project.fire_pumps.model)
+                if geometry:
+                    evidence += ' ' + geometry['note']
         if rule_id == "V-GOST-A07" and status == "missing":
             evidence += (
                 "; требуется опорный план с трассой от точки подключения до ввода, "

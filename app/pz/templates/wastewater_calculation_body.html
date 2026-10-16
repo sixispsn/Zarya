@@ -4,20 +4,23 @@
   не распределяются между стояками и воронками без плана и аксонометрии.
 </p>
 
-<p class="subhead">1. Расчётный расход хозяйственно-бытовых стоков К1</p>
+<p class="subhead">1. Расход К1 по формуле для стояков</p>
 {% if sewage.result %}
 <p class="formula">
-  q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub> =
-  {{ sewage.result.total.q_water_total_lps|num(3) }} +
-  {{ sewage.result.total.q_fixture_max_lps|num(3) }} =
+  q<sub>s</sub> =
+  q<sub>tot</sub> + q<sub>0s</sub>;
+  результат
   <b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b>.
+  Сложение выполняется до округления. В таблице ниже слагаемые округлены для вывода;
+  повторное сложение этих значений не заменяет результат рабочего расчётного ядра.
 </p>
 <table class="data calc-table compact-calc">
   <tr><th>Максимальный секундный расход воды q<sub>tot</sub></th><td>{{ sewage.result.total.q_water_total_lps|num(3) }} л/с</td></tr>
   <tr><th>Расход прибора с максимальным водоотведением q<sub>0s</sub></th><td>{{ sewage.result.total.q_fixture_max_lps|num(3) }} л/с</td></tr>
-  <tr><th>Расчётный расход К1 q<sub>s</sub></th><td><b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b></td></tr>
+  <tr><th>q<sub>s</sub> по формуле (5), справочно для заданных потребителей</th><td><b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b></td></tr>
 </table>
 <p class="source-line">СП 30.13330.2020, п. 5.5, формула (5). Значение q<sub>0s</sub> принимается по фактически установленному прибору с максимальным водоотведением.</p>
+<p class="stage-note">Это не расход горизонтального выпуска и не нагрузка каждого стояка: для отдельного стояка нужны его потребители. Для горизонтальных участков применяется п. 5.7, формула (7).</p>
 {% else %}
 <p class="stage-note">Расход К1 не определён: группы потребителей отсутствуют. Условный расход не подставляется.</p>
 {% endif %}
@@ -159,13 +162,40 @@
 {% endif %}
 
 <p class="subhead">4. Гидравлика горизонтальных участков К1 по уравнению Шези</p>
+<p class="formula">q<sub>sL</sub> = q<sub>hr</sub><sup>tot</sup>/3,6 + K<sub>s</sub>·q<sub>0s</sub>.</p>
+<p class="source-line">СП 30, п. 5.7, формула (7), таблица 5.1. Используется максимальный часовой расход подключённых потребителей, не средний Qсут/24. N — число приборов; L — от последнего стояка до следующего присоединения, а при его отсутствии — до ближайшего колодца.</p>
+{% if section %}{% set check = section.main_checks[0] %}
+<p class="subitem no-indent">{{ check.note }}</p>
+{% if check.flow_result %}{% set f = check.flow_result %}
+<table class="data calc-table compact-calc" data-horizontal-flow="sp30-5.7">
+  <tr><th>Максимальный часовой расход, м³/ч</th><td>{{ f.q_hour_max_m3h|num(3) }}</td></tr>
+  <tr><th>N, шт. / L по таблице 5.1, м / Ks</th><td>{{ f.fixtures_count }} / {{ f.receiving_length_m|compact(6)|replace(".", ",") }} / {{ f.ks|compact(6)|replace(".", ",") }}</td></tr>
+  <tr><th>q0s, л/с / q_sL, л/с</th><td>{{ f.fixture_max_lps|num(3) }} / <b>{{ f.q_sewage_lps|num(3) }}</b></td></tr>
+</table>
+{% endif %}
+{% if check.result %}{% set r = check.result %}
+<table class="data calc-table" data-section-main-hydraulics="К1">
+  <thead><tr><th>q_sL, л/с</th><th>dвн, мм</th><th>Уклон, ‰</th><th>n</th><th>V, м/с</th><th>h/d</th></tr></thead>
+  <tbody><tr><td>{{ r.design_flow_lps|num(3) }}</td><td>{{ r.inner_diameter_mm|num(2) }}</td><td>{{ r.slope_per_mille|num(3) }}</td>
+  <td>{{ r.manning_n|num(4) }}</td><td>{{ r.velocity_mps|num(3) if r.velocity_mps is not none else "не определена" }}</td>
+  <td>{{ r.fill_ratio|num(2) if r.fill_ratio is not none else "не определено" }}</td></tr></tbody>
+</table>
+<p class="source-line">Труба: {{ section.k1.material_label }}, {{ section.k1.outer_diameter_mm|num(2) }}×{{ section.k1.wall_thickness_mm|num(2) }} мм.
+{{ section.k1.source_ref }} {{ r.roughness_source }}
+V√(h/d) = {{ r.self_cleaning_value|num(3) if r.self_cleaning_value is not none else "не определено" }};
+K = {{ r.self_cleaning_k|num(2) }}. {{ check.short }}.</p>
+{% endif %}{% endif %}
+{% if diagnostics %}{% for id, note in diagnostics.horizontal_flow_notes.items() %}
+<p class="source-line">{{ id }}: {{ note }}</p>
+{% endfor %}{% endif %}
 <p class="formula">
   V = C√(R·i); &nbsp; Q = A·V; &nbsp; C = R<sup>1/6</sup>/n.
   Проверка самоочищения: V√(h/d) ≥ K.
 </p>
 <p class="subitem no-indent">
-  Расходы магистралей получены суммированием только явно заданных нагрузок
-  стояков по направленному графу. Для ветвей без точной аксонометрии расход,
+  Расходы горизонтальных участков определяются отдельно по п. 5.7 либо
+  принимаются из явно указанного расчёта. Максимальные расходы стояков не суммируются.
+  Для ветвей без точной аксонометрии расход,
   расчётная длина и коэффициент шероховатости не назначаются автоматически.
 </p>
 {% if diagnostics and diagnostics.hydraulics %}
@@ -191,6 +221,9 @@
 {% endif %}
 
 <p class="subhead">5. Проверка DN приборов и труб</p>
+{% if not diagnostics or not (diagnostics.diameter_checks or diagnostics.network_diameter_checks or diagnostics.ventilation_checks) %}
+<p class="stage-note">Поэлементная проверка не выполнена: расчётная сеть не задана. Диаметры условного разреза являются предварительными проектными решениями, а не результатом проверки всей сети.</p>
+{% endif %}
 {% if diagnostics and diagnostics.diameter_checks %}
 <table class="data calc-table check-calc">
   <thead><tr><th>Прибор</th><th>Ветвь</th><th>DN выпуска</th><th>DN сегмента после прибора</th><th>Макс. DN ветви у стояка</th><th>Минимум</th><th>Результат</th></tr></thead>
@@ -217,7 +250,7 @@
 {% endif %}
 
 <p class="subhead">6. Доступ для прочистки и зоны риска</p>
-{% if diagnostics %}
+{% if diagnostics and (diagnostics.turn_checks or diagnostics.linear_service_checks) %}
 <table class="data calc-table check-calc">
   <thead><tr><th>Проверка</th><th>Участок</th><th>Доступ / расстояния</th><th>Результат</th></tr></thead>
   <tbody>
@@ -229,6 +262,8 @@
   {% endfor %}
   </tbody>
 </table>
+{% else %}
+<p class="stage-note">Доступ к каждому участку фактической сети не проверен: нет привязанных трасс и расчётных длин. Ревизии и прочистки условного разреза не подтверждают обслуживание всех участков здания.</p>
 {% endif %}
 
 {% if sewage.pipes %}

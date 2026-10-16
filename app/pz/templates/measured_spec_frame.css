@@ -1,0 +1,11 @@
+/* Keep measured 395 mm specification grid and pagination. Only replace
+   the obsolete running stamp/background with vector forms 3/6. */
+@page {
+  background-image: none;
+  @bottom-right { content: none; }
+}
+@page:first {
+  background-image: none;
+  @bottom-right { content: none; }
+}
+.stamp3, .stamp6 { display: none; }

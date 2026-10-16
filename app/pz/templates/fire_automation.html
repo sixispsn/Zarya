@@ -1,0 +1,9 @@
+{% set assignment = fire_pumps.pressure_review.automation if fire_pumps.pressure_review else fire_pumps.station_design.automation if fire_pumps.station_design else none %}
+{% if assignment %}
+<div data-fire-automation="true">
+<p class="subitem">Пожарная насосная В2 имеет самостоятельный алгоритм. Требования к защите хозяйственных
+насосов не распространяются автоматически на резервный пожарный насос.</p>
+{% for text in assignment.requirements %}<p class="subitem">{{ text }}</p>{% endfor %}
+<p class="subitem">{{ assignment.equipment_acceptance }}</p>
+</div>
+{% endif %}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru" data-theme="light" data-ui="white">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ЗАРЯ — закрытая альфа</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/pilot.css?v=2">
+  <script defer src="/static/pilot.js?v=3"></script>
+</head>
+<body>
+<main>
+  <svg class="pilot-logo" viewBox="0 0 1492 275" role="img" aria-label="ЗАРЯ">{% include 'site_logo.html' %}</svg>
+  {% include 'site_version.html' %}
+  <h1>Добро пожаловать в закрытую альфу</h1>
+  <p>Один персональный ключ — все функции Studio. При первом входе покажем условия сохранения результатов пилота.</p>
+  <form id="pilot-login">
+    <label for="pilot-key">Персональный ключ</label>
+    <input id="pilot-key" name="key" type="password" autocomplete="current-password" required maxlength="100" placeholder="Вставьте ключ приглашения" spellcheck="false">
+    <label class="pilot-remember"><input id="pilot-remember" name="remember_device" type="checkbox" checked><span>Запомнить на этом устройстве на 30 дней</span></label>
+    <small>Не дольше срока доступа. На чужом компьютере снимите галочку.</small>
+    <button type="submit">Войти в ЗАРЮ →</button>
+    <p id="pilot-error" role="alert" aria-live="polite"></p>
+  </form>
+  <small>Нет ключа или он потерян? Обратитесь к владельцу ЗАРИ.<br>Не передавайте свой ключ другим участникам.</small>
+</main>
+</body>
+</html>

@@ -230,6 +230,18 @@ def calculate_sewage_system(
         q_water_total_lps,
         q_fixture_max_lps,
     )
+    return check_sewage_system(total, risers)
+
+
+def check_sewage_system(
+    total: DomesticSewageResult, risers: list[SewageRiserInput],
+) -> SewageSystemResult:
+    """Check risers against an already calculated total, without re-rounding Q.
+
+    The project pipeline supplies the canonical demand result: legacy adds q₀s
+    BEFORE rounding the total water flow for display. Recomputing it from the
+    display value here can change the final third decimal place.
+    """
     checked = []
     for row in risers:
         result = check_sewage_riser(row)

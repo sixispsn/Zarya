@@ -1,0 +1,122 @@
+<h2>Проверка накопления дождевой воды</h2>
+<p>Назначение: {{ r.purpose }}. Размещение: {{ r.location }}.</p>
+<p><strong>Предварительная проверка заданной ёмкости.</strong> Не является окончательным подбором бака, очистки или насоса.</p>
+<table class="data-table" style="width:100%;border-collapse:collapse">
+<thead><tr><th>Параметр</th><th>Значение</th></tr></thead>
+<tbody>
+{% for title,value,unit in [
+('Площадь подключённой кровли', r.input.collection_area_m2, 'м²'),
+('Коэффициент сбора с учётом потерь', r.input.collection_factor, ''),
+('Постоянная потребность (если нет графика)', r.input.demand_m3_day, 'м³/сут'),
+('Проверяемый полезный объём', r.input.useful_volume_m3, 'м³')] %}
+<tr><td>{{ title }}</td><td>{{ value|num if value is not none else 'не задано' }} {{ unit }}</td></tr>
+{% endfor %}
+</tbody></table>
+<p>Источник: {{ r.input.source or 'не задан' }}.</p>
+<p>Суточное поступление: V<sub>д</sub> = P · F · η / 1000, м³.
+P — осадки за сутки, мм; F — площадь, м²; η — заданный коэффициент сбора.
+Уравнение сохранения объёма: S<sub>нач</sub> + V<sub>д</sub> = V<sub>исп</sub> + V<sub>пер</sub> + S<sub>кон</sub>.</p>
+{% if r.totals %}
+<table class="data-table" style="width:100%;border-collapse:collapse"><tbody>
+{% for title,key in [('Поступило','inflow_m3'),('Потребность','demand_m3'),('Использовано','supplied_m3'),('Не покрыто дождём','deficit_m3'),('Перелив','overflow_m3'),('Остаток в баке','stored_m3')] %}
+<tr><td>{{ title }} за {{ r.days|length }} суток</td><td>{{ r.totals[key]|num }} м³</td></tr>
+{% endfor %}</tbody></table>
+{% else %}<p><strong>Расчёт не выполнен:</strong> {{ (r.missing + r.errors)|join('; ') }}.</p>{% endif %}
+<p>{{ r.limitations }}</p>
+<section style="break-before:page">
+<h2>Функциональная структура системы</h2>
+<p>Связи процессов, без назначения DN, отметок и трасс. Не заменяет принципиальную схему по ГОСТ Р 21.619/21.620-2023.</p>
+{{ diagram|safe }}
+<p>{{ r.storage_rule or '' }} Полный объём резервуара, свободный борт, осадочная зона и конструкция требуют отдельного назначения.</p>
+</section>
+{% if r.treatment.status != 'not_configured' %}
+<section style="break-before:page">
+<h2>Подготовка воды: жилая терраса</h2>
+<p>Только плоская эксплуатируемая кровля с твёрдым покрытием и полив декоративного озеленения.
+Не распространяется автоматически на зелёные кровли, парковки, пищевые культуры, смыв и другие технические нужды.</p>
+<ol>{% for step in r.treatment.process %}<li>{{ step }}</li>{% endfor %}</ol>
+{% for item in r.treatment.candidates %}
+<h3>{{ item.model }}</h3>
+<p>{{ item.manufacturer }}{% if item.article %}; арт. {{ item.article }}{% endif %}; присоединение {{ item.connection }}.
+{{ item.pressure_note }} {{ item.rating_note }}</p>
+<p>{{ item.included }} <a href="{{ item.source }}">Данные изготовителя</a>.</p>
+{% if item.reasons %}<p><strong>Не подходит:</strong> {{ item.reasons|join('; ') }}</p>{% endif %}
+{% endfor %}
+{% if r.treatment.head_loss_m is not none %}
+<p>H<sub>подготовка</sub> = {{ r.input.treatment_filter_loss_m|num }} + {{ r.input.treatment_uv_loss_m|num }}
+= {{ r.treatment.head_loss_m|num }} м при Q={{ r.input.treatment_selection_flow_lps|num }} л/с.
+Значения введены по листу подбора, не восстановлены из максимальной производительности.</p>
+{% endif %}
+<p>Лист подбора: {{ r.input.treatment_selection_source or 'не предоставлен' }}.<br>
+Основание по качеству: {{ r.input.treatment_quality_basis or 'не предоставлено' }}.</p>
+{% if r.treatment.missing or r.treatment.errors %}<p><strong>Подбор не завершён:</strong> {{ (r.treatment.missing + r.treatment.errors)|join('; ') }}.</p>{% endif %}
+<p>Санитарная пригодность и качество воды этим расчётом не подтверждены. Верхние каталожные расходы используются только для отсева заведомо неподходящего оборудования.</p>
+</section>
+<section style="break-before:page">
+<h2>Состав подготовки и эксплуатация</h2>
+<table class="data-table" style="width:100%;font-size:9pt;border-collapse:collapse"><thead><tr><th>Элемент</th><th>Кол.</th><th>Ед.</th></tr></thead><tbody>
+{% for row in treatment_rows %}<tr><td>{{ row.name }}{% if row.type_mark %} · {{ row.type_mark }}{% endif %}</td><td>{{ row.qty|int if row.qty is not none else '—' }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
+</tbody></table>
+<p>Комплектные картридж, УФ-датчик, блок промывки и пробоотборники повторно не включены. Неизвестные количества не заменяются единицей.
+Арматура отключения и разъёмы всего блока учтены в обвязке насоса; дополнительные сервисные точки по принятой компоновке.</p>
+<ul>{% for item in r.treatment.pending %}<li>{{ item }}</li>{% endfor %}</ul>
+<p>Выбор очистки не снимает требования к ТЭО, безопасному переливу, сроку хранения и обслуживанию. Выпуск незавершённой системы остаётся ограничен.</p>
+</section>
+{% endif %}
+{% if r.input.pump_setup %}
+<section style="break-before:page">
+<h2>Насос подачи дождевой воды на полив</h2>
+<p>{{ r.pump.method }}</p>
+<p>H = max(0; Δz + H<sub>потреб</sub> + H<sub>сеть</sub> + H<sub>подготовка</sub> + H<sub>шланг</sub>).
+Δz отсчитывается от минимального уровня воды. Суточный объём не заменяет секундный расход.</p>
+{% if r.pump.duty %}
+<table class="data-table" style="width:100%;border-collapse:collapse"><tbody>
+{% for title,key,unit in [('Расчётный расход','q_m3h','м³/ч'),('Геометрический подъём','geometric_m','м'),('Напор потребителя','terminal_m','м'),('Трубы и арматура','network_m','м'),('Подготовка воды','treatment_m','м'),('Диктующий шланг','hose_m','м'),('Требуемый напор','h_m','м')] %}
+<tr><td>{{ title }}</td><td>{{ r.pump.duty[key]|num }} {{ unit }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+<p>Источник потерь и параметров потребителя: {{ r.input.pump_loss_source or 'не задан' }}.</p>
+{% if r.pump.selected %}
+<p><strong>{{ r.pump.selected.model }}</strong>, {{ r.pump.selected.power_kw|num }} кВт, 220 В.
+Каталожный напор {{ r.pump.selected.nominal_head_m|num }} м; с допуском −15%: {{ r.pump.selected.lower_head_m|num }} м.
+Проверочное статическое давление {{ r.pump.selected.pressure_check_bar|num }} бар (без гидроудара).</p>
+{{ pump_chart|safe }}
+{% elif r.pump.status == 'not_required' %}<p><strong>Добавочный напор не требуется.</strong> Насос не назначается; самотечная подача и её управление требуют отдельной проверки.</p>
+{% else %}<p><strong>Насос не подобран.</strong> {{ (r.pump.missing + r.pump.errors)|join('; ') }}</p>
+{% for c in r.pump.candidates %}<p>{{ c.model }}: {{ c.reasons|join('; ') }}</p>{% endfor %}{% endif %}
+<p style="font-size:9pt">Кривые оцифрованы по паспорту ДЖИЛЕКС ВОДОМЕТ 1.23-26, стр. 8, с округлением до 0,1 м;
+проверенный диапазон 3–50 л/мин. Это предварительная проверка, не паспортная гарантия рабочей точки.
+<a href="{{ r.pump.source }}">Паспорт изготовителя</a>.</p>
+</section>
+<section style="break-before:page">
+<h2>Обвязка, арматура и шланг</h2>
+<p>Выбранный состав для одного рабочего погружного насоса. Резерв не назначен автоматически.
+Последовательность: насос с обратным клапаном → блок подготовки с двумя отключениями и разъёмами → контроллер → распределение → краны полива.
+Спускник — отдельный отвод в нижней точке. Байпас очистки и связь с В1 не предусмотрены.</p>
+<table class="data-table" style="width:100%;font-size:9pt;border-collapse:collapse"><thead><tr><th>Элемент</th><th>Кол.</th><th>Ед.</th></tr></thead><tbody>
+{% for row in assembly %}<tr><td>{{ row.name }}{% if row.type_mark %} · {{ row.type_mark }}{% endif %}</td><td>{{ row.qty|int if row.qty is not none and row.unit in ['шт.','компл.'] else row.qty|num if row.qty is not none else '—' }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
+</tbody></table>
+{% if r.input.hose_choice == 'custom' %}<p>Шланг: {{ r.input.hose_model or 'модель не задана' }};
+L={{ r.input.hose_length_m|num if r.input.hose_length_m is not none else '—' }} м на комплект;
+dвн={{ r.input.hose_inner_mm|num if r.input.hose_inner_mm is not none else '—' }} мм;
+рабочее давление {{ r.input.hose_pn_bar|num if r.input.hose_pn_bar is not none else '—' }} бар.</p>{% endif %}
+<p>Количества относятся к типовой обвязке, не ко всей трассе здания. Тройники: N−1 для распределения + 1 для спускника.
+Отводы, переходы, крепёж и уплотнения требуют размеров и трассы. Комплектные части шланга не закупаются повторно.</p>
+<ul>{% for item in r.pump.pending %}<li>{{ item }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section style="break-before:page">
+<h2>Условия завершения проектного решения</h2>
+{% include 'rainwater_design.html' %}
+<p>{{ r.reference }}. Состав ИОС2: ГОСТ Р 21.619-2023, пп. 5.1.21–5.1.22, 5.2.2;
+ИОС3: ГОСТ Р 21.620-2023, пп. 5.1.3.3, 5.1.4, 5.2.2.</p>
+{% if r.days %}
+<h3>Суточная проверка объёма</h3>
+<p>{{ r.days[0].date }} — {{ r.days[-1].date }}. Полный профиль сохраняется в исходных данных проекта.
+{% if r.days|length > 31 %}Ниже первые 31 сутки.{% endif %}</p>
+<table class="data-table" style="width:100%;font-size:9pt;border-collapse:collapse">
+<thead><tr><th>Дата</th><th>Дождь,<br>мм</th><th>Приход,<br>м³</th><th>Расход,<br>м³</th><th>Дефицит,<br>м³</th><th>Перелив,<br>м³</th><th>Остаток,<br>м³</th></tr></thead>
+<tbody>{% for day in r.days[:31] %}<tr><td>{{ day.date }}</td>{% for key in ['rain_mm','inflow_m3','supplied_m3','deficit_m3','overflow_m3','stored_m3'] %}<td>{{ day[key]|num }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+</section>

@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ru" data-theme="light" data-ui="white">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>ЗАРЯ — замечания альфы</title>{% include 'site_assets.html' %}</head>
+<body>{% include 'site_header.html' %}
+<main id="main-content" class="feedback-inbox"><h1>Замечания альфы</h1><p>Только для владельца. Здесь нет автоматических вложений из проектов.</p>
+{% for item in items %}
+<article class="feedback-item"><div class="feedback-item-meta"><strong>{{ item.ticket }} · {{ item.category_label }}</strong><time>{{ item.date }}</time></div><p class="feedback-message">{{ item.message }}</p><small>{{ item.user_name }} · сборка {{ item.build }}</small></article>
+{% else %}<p class="feedback-empty">Пока замечаний нет.</p>{% endfor %}
+{% if next_before %}<a href="/access/feedback?before={{ next_before }}">Предыдущие замечания →</a>{% endif %}
+</main></body></html>

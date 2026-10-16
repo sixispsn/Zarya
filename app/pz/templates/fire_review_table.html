@@ -1,0 +1,43 @@
+{% set r = pumps.pressure_review %}
+{% set mode = r.control_mode %}
+<p class="equip-verdict"><b>{{ pumps.model }} · 1 рабочий + 1 установленный резервный.</b>
+{{ r.note }}</p>
+<table class="equip"><thead><tr><th>Параметр</th><th>Значение</th></tr></thead><tbody>
+<tr><td>Контрольный режим неповреждённой сети</td><td>{{ mode.group|join(', ') }}; {{ mode.boundary }}</td></tr>
+<tr><td>Рабочая точка этого режима: Q, м³/ч / H насоса, м</td><td>{{ pumps.wp_q|num(3) }} / {{ pumps.wp_h|num(3) }}</td></tr>
+<tr><td>Напор на всасывании в этом режиме, м</td><td>{{ mode.result.suction_head_m|num(3) }}; NPSH проверяется отдельно</td></tr>
+<tr><td>Номинальная мощность двигателя каждого насоса, кВт</td><td>{{ pumps.power_kw|num(1) }}; потребляемая мощность в точке не подтверждена</td></tr>
+<tr><td>Заданные режимы: рассчитано / проходят минимумы</td><td>{{ r.solved_count }} / {{ r.minimum_pass_count }} из {{ r.scenario_count }}</td></tr>
+{% if r.pipework %}
+<tr><td>Потери отдельной обвязки при контрольном Q, м</td><td>Всасывание {{ r.pipework.losses_m.suction|num(3) }};
+напор {{ r.pipework.losses_m.discharge|num(3) }}. Резервная ветвь не суммируется.</td></tr>
+{% endif %}
+</tbody></table>
+{% if fire_station_location %}
+<p>Размещение насосной: помещение {{ fire_station_location.room_number }} — {{ fire_station_location.room_name }};
+пол {{ fire_station_location.floor_elevation_m|num(2) }} м,
+ось всасывающих патрубков {{ fire_station_location.suction_nozzle_elevation_m|num(2) }} м.
+Основание: {{ fire_station_location.basis }}.
+Отметки проходок — на схеме и в расчёте вводов. Монтажные габариты и проходы этим не подтверждены.</p>
+{% endif %}
+{% if fire_pump_geometry %}<p>{{ fire_pump_geometry.note }}</p>{% endif %}
+{% if fire_pump_geometry and fire_pump_geometry.fittings_coverage.included %}
+{% set f = fire_pump_geometry.fittings_coverage %}
+<p>Суммарный ζ фасонины: всасывание {{ f.sides.suction.zeta|num(3) }} при dвн={{ f.sides.suction.reference_inner_mm|num(1) }} мм;
+напор {{ f.sides.discharge.zeta|num(3) }} при dвн={{ f.sides.discharge.reference_inner_mm|num(1) }} мм.
+Основание включения переходов: {{ f.basis }}.</p>
+{% endif %}
+{% if r.pipework %}<p>Обвязка принята предварительно: {{ r.pipework.basis }}.
+Потери не включены повторно во вводы и сеть здания. Значения Kv и местных сопротивлений —
+требования/исходные проектировщика, не паспорт выбранного изделия.</p>{% endif %}
+<p>Ведомость диафрагм заданных ПК. При Q = 0 диафрагма статическое давление не ограничивает.</p>
+<table class="equip"><thead><tr><th>Позиция</th><th>ПК / стояк</th><th>Отметка, м</th><th>Клапан</th><th>Отверстие, мм</th></tr></thead>
+<tbody>{% for row in r.schedule %}<tr><td>{{ row.id if row.aperture_mm is not none else '—' }}</td>
+<td>{{ row.riser }}</td><td>{{ row.elevation_m|num(3) }}</td><td>DN{{ row.valve_dn }}</td>
+<td>{{ row.aperture_mm|num(1) if row.aperture_mm is not none else 'без диафрагмы' }}</td></tr>{% endfor %}</tbody></table>
+<p>Место установки — между пожарным клапаном и соединительной головкой (СП 10, п. 7.5).
+Позиции совпадают с листом узлов и спецификацией. Неуказанные ПК и количество изделий по зданию не восстановлены из характерной схемы.
+Режимы и границы источников приведены в приложении «В2. Диафрагмы и отключения».</p>
+{% if pump_chart_svg %}<div class="figure">{{ pump_chart_svg|safe }}
+<p class="figure-cap">Каталожная кривая одного насоса. Маркер — контрольный режим L06, не кривая всего здания.
+Резервный агрегат не увеличивает подачу.</p></div>{% endif %}

@@ -1,0 +1,25 @@
+<dialog id="site-location-dialog" aria-labelledby="site-location-title" aria-describedby="site-location-note">
+  <div class="location-heading"><div><p class="location-kicker">МЕСТО СТРОИТЕЛЬСТВА</p><h2 id="site-location-title">Найдём ваш объект</h2></div><button type="button" class="text-button" data-location-close aria-label="Закрыть карту">×</button></div>
+  <p id="site-location-note">Только для ориентира. Карта не заменяет топосъёмку, геологию и проектные отметки.</p>
+  <div class="location-consent">
+    <p>При открытии карты OpenStreetMap получит IP-адрес и область просмотра. Поиск передаёт введённый адрес сервису Photon; запрос высоты — координаты в Open Topo Data. PDF и данные расчёта не передаются. Для конфиденциального объекта используйте ручной ввод.</p>
+    <button type="button" class="soft-button" data-location-enable>Показать карту</button>
+  </div>
+  <div class="location-online" hidden>
+    <div class="location-search"><label class="sr-only" for="location-query">Город или адрес</label><input id="location-query" class="field-control" maxlength="200" placeholder="Город, улица, дом" autocomplete="off"><button type="button" class="soft-button" data-location-search>Найти</button></div>
+    <div class="location-results" aria-label="Найденные места"></div>
+    <div id="location-map" role="region" aria-label="Карта. Нажмите, чтобы выбрать точку"></div>
+    <p class="location-map-hint">Нажмите на здание или переместите метку. <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Ошибка на карте?</a></p>
+  </div>
+  <details class="location-manual"><summary>Ввести координаты вручную</summary><div class="location-coordinates">
+    <label>Широта, WGS 84<input id="location-lat" class="field-control" inputmode="decimal" placeholder="55,750000" autocomplete="off"></label>
+    <label>Долгота, WGS 84<input id="location-lon" class="field-control" inputmode="decimal" placeholder="37,620000" autocomplete="off"></label>
+  </div></details>
+  <label class="location-label">Место / адрес <span>необязательно</span><input id="location-label" class="field-control" maxlength="400" placeholder="Название места для себя" autocomplete="off"></label>
+  <p class="location-point" aria-live="polite"></p>
+  <label class="location-elevation-option" hidden><input type="checkbox" id="location-elevation">Узнать справочную высоту рельефа при сохранении</label>
+  <p class="location-elevation"></p>
+  <p class="location-status" role="status" aria-live="polite"></p>
+  <div class="location-footer"><button type="button" class="text-button" data-location-clear>Убрать место</button><button type="button" class="soft-button" data-location-save>Сохранить место</button></div>
+  <p class="location-footnote">Город для расчёта дождя выбирается отдельно. Никакие инженерные исходные не меняются автоматически.</p>
+</dialog>

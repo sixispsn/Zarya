@@ -1,0 +1,8 @@
+{% if service.enabled %}
+<p class="subhead">{{ service.title }} · требования к разработке решения</p>
+<p class="stage-note">В исходных данных включена опция. Расчёт, подбор оборудования и деталировка не выполнены; решение требует дополнения до выпуска комплекта.</p>
+{% for label, value in service.settings %}<p class="subitem">{{ label }}: {{ value }}.</p>{% endfor %}
+{% for error in service.errors %}<p class="stage-note">{{ error }}</p>{% endfor %}
+{% for requirement in service.requirements %}<p class="subitem">{{ requirement }}</p>{% endfor %}
+<p class="subitem">Основание проверки: {{ service.reference }}.</p>
+{% endif %}

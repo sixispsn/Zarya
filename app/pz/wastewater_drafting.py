@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from html import escape
 from math import acos, atan2, ceil, degrees, hypot
 from pathlib import Path
+import os
+import tempfile
+from xml.etree import ElementTree as ET
 from app.pz.drawing_sheet_style import FittingGraphicSize
 from app.pz.drafting_font import (
     DRAFTING_FONT_FAMILY,
@@ -455,6 +458,7 @@ def build_lower_turn_cleanout_assembly(
     assembly_id: str = "К1-Узел-НП1",
     system: str = "K1",
     dn_mm: int = 100,
+    riser_dn_mm: int | None = None,
 ) -> WastewaterDraftAssembly:
     """Build the first parametric installation node of the sewer generator.
 
@@ -467,6 +471,9 @@ def build_lower_turn_cleanout_assembly(
         raise ValueError("system must be K1, K2 or K3")
     if dn_mm <= 0:
         raise ValueError("dn_mm must be positive")
+    branch_dn = dn_mm if riser_dn_mm is None else riser_dn_mm
+    if not 0 < branch_dn <= dn_mm:
+        raise ValueError("riser DN must be positive and no greater than the main DN")
 
     inlet = DraftPoint(0.0, 0.0)
     elbow = DraftPoint(0.0, 38.0)
@@ -481,8 +488,8 @@ def build_lower_turn_cleanout_assembly(
         DraftPort("cleanout_cap", cleanout_cap, "service_access", accessible=True),
     )
     segments = (
-        DraftPipeSegment("riser", "riser_in", "elbow_45", dn_mm, "riser"),
-        DraftPipeSegment("diagonal", "elbow_45", "wye_45", dn_mm, "diagonal"),
+        DraftPipeSegment("riser", "riser_in", "elbow_45", branch_dn, "riser"),
+        DraftPipeSegment("diagonal", "elbow_45", "wye_45", branch_dn, "diagonal"),
         DraftPipeSegment("main", "wye_45", "main_out", dn_mm, "main"),
         DraftPipeSegment(
             "cleanout_access",
@@ -498,7 +505,7 @@ def build_lower_turn_cleanout_assembly(
             "lower_elbow_45",
             "elbow_45",
             elbow,
-            dn_mm,
+            branch_dn,
             ("riser", "diagonal"),
         ),
         DraftFitting(
@@ -549,6 +556,7 @@ def build_lower_turn_through_junction_assembly(
     assembly_id: str = "К1-Узел-НП-Проточный",
     system: str = "K1",
     dn_mm: int = 100,
+    riser_dn_mm: int | None = None,
 ) -> WastewaterDraftAssembly:
     """Build a lower turn at a node with an incoming horizontal main.
 
@@ -559,6 +567,9 @@ def build_lower_turn_through_junction_assembly(
         raise ValueError("system must be K1, K2 or K3")
     if dn_mm <= 0:
         raise ValueError("dn_mm must be positive")
+    branch_dn = dn_mm if riser_dn_mm is None else riser_dn_mm
+    if not 0 < branch_dn <= dn_mm:
+        raise ValueError("riser DN must be positive and no greater than the main DN")
 
     inlet = DraftPoint(0.0, 0.0)
     elbow = DraftPoint(0.0, 38.0)
@@ -576,8 +587,8 @@ def build_lower_turn_through_junction_assembly(
             DraftPort("main_out", main_out, "hydraulic_outlet"),
         ),
         segments=(
-            DraftPipeSegment("riser", "riser_in", "elbow_45", dn_mm, "riser"),
-            DraftPipeSegment("diagonal", "elbow_45", "wye_45", dn_mm, "diagonal"),
+            DraftPipeSegment("riser", "riser_in", "elbow_45", branch_dn, "riser"),
+            DraftPipeSegment("diagonal", "elbow_45", "wye_45", branch_dn, "diagonal"),
             DraftPipeSegment("incoming_main", "main_in", "wye_45", dn_mm, "incoming_main"),
             DraftPipeSegment("main", "wye_45", "main_out", dn_mm, "main"),
         ),
@@ -586,7 +597,7 @@ def build_lower_turn_through_junction_assembly(
                 "lower_elbow_45",
                 "elbow_45",
                 elbow,
-                dn_mm,
+                branch_dn,
                 ("riser", "diagonal"),
             ),
             DraftFitting(
@@ -827,26 +838,79 @@ def render_lower_turn_assembly_svg(
     return "".join(body)
 
 
+_LOWER_CONTROL_NOTES = (
+    "1. Косой тройник заменяет второй полуотвод 45°; его свободный прямой конец заглушён и доступен.",
+    "2. Ось заглушённого доступа соосна магистрали; трос входит в неё без дополнительного поворота.",
+    "3. Фиолетовый маршрут является диагностическим слоем и не выводится на нормативный лист.",
+)
+_LOWER_CONTROL_NOTICE = "Контроль монтажной логики. Не проектная документация. Не для выпуска."
+
+
+def _lower_control_notes_svg(notes, *, y=630, bottom=730, width=1023):
+    """Wrap full notes using the bundled font; never ellipsize or shrink."""
+    from app.pz.leader_layout import _text_width
+
+    body = ['<g data-control-notes="true">']
+    for note in notes:
+        text = " ".join(note.split())
+        while text:
+            end = 0
+            for index in range(1, len(text) + 1):
+                if _text_width(text[:index], 12) > width:
+                    break
+                end = index
+            if not end or y > bottom:
+                raise ValueError("Пояснения контрольного узла не помещаются; PDF не изменён")
+            if end < len(text):
+                space = text.rfind(" ", 0, end + 1)
+                if space > 0:
+                    end = space
+            body.append(f'<text x="50" y="{y:g}" font-family="{FONT}" '
+                        f'font-size="12">{escape(text[:end])}</text>')
+            text = text[end:].lstrip()
+            y += 20
+    body.append("</g>")
+    return "".join(body)
+
+
+def _validate_lower_control_svg(svg):
+    from app.pz.leader_layout import _text_width
+
+    root = ET.fromstring(svg)
+    if root.get("data-release-ready") != "false":
+        raise ValueError("Контрольный узел не является проектным выпуском")
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "text":
+            continue
+        size = float(element.get("font-size"))
+        width = _text_width("".join(element.itertext()), size)
+        x, y = float(element.get("x")), float(element.get("y"))
+        anchor = element.get("text-anchor", "start")
+        left = x - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+        if left < 34 or left + width > 1089 or y - size < 34 or y > 760:
+            raise ValueError("Подпись контрольного узла выходит за поля; PDF не изменён")
+
+
 def build_lower_turn_control_sheet_svg(
     assembly: WastewaterDraftAssembly,
 ) -> str:
-    """A4 landscape approval sheet for the first generator component."""
+    """Non-release A4 landscape control of the terminal cleanout component."""
+    if assembly.service_path is None:
+        raise ValueError("Этот контрольный лист предназначен для тупикового узла с прочисткой")
     width, height = 1123, 794
     margin = 34
     body = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
         'width="1122.519685" height="793.700787" '
-        f'viewBox="0 0 {width} {height}">',
+        f'viewBox="0 0 {width} {height}" data-release-ready="false">',
         f'<rect width="{width}" height="{height}" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="2"/>',
         f'<text x="{margin+24}" y="{margin+38}" font-family="{FONT}" '
         'font-size="22" font-weight="bold">Контрольный узел 01. Нижний поворот стояка с прочисткой</text>',
         f'<text x="{margin+24}" y="{margin+62}" font-family="{FONT}" '
         f'font-size="12" fill="{GRAY}">Монтажная логика: логика1.pdf; оформление - '
         'по графическому языку приложения В ГОСТ Р 21.620-2023</text>',
-        f'<line x1="{width/2:.1f}" y1="{margin+88}" x2="{width/2:.1f}" '
-        f'y2="{height-margin-86}" stroke="{GRAY}" stroke-width="1"/>',
+        f'<text x="{margin+24}" y="118" font-family="{FONT}" '
+        f'font-size="12">{_LOWER_CONTROL_NOTICE}</text>',
         f'<text x="{margin+24}" y="{margin+104}" font-family="{FONT}" '
         'font-size="16" font-weight="bold">Монтажная геометрия</text>',
         f'<text x="{width/2+24:.1f}" y="{margin+104}" font-family="{FONT}" '
@@ -868,22 +932,18 @@ def build_lower_turn_control_sheet_svg(
             scale=1.6,
         ),
     ]
-    notes_y = height - margin - 70
     body.extend((
-        f'<line x1="{margin}" y1="{notes_y-28}" x2="{width-margin}" '
-        f'y2="{notes_y-28}" stroke="{BLACK}" stroke-width="1.2"/>',
-        f'<text x="{margin+16}" y="{notes_y}" font-family="{FONT}" '
-        'font-size="12">1. Косой тройник заменяет второй полуотвод 45°; '
-        'его свободный прямой конец заглушён и доступен.</text>',
-        f'<text x="{margin+16}" y="{notes_y+20}" font-family="{FONT}" '
-        'font-size="12">2. Ось заглушённого доступа соосна магистрали; '
-        'трос входит в неё без дополнительного поворота.</text>',
-        f'<text x="{margin+16}" y="{notes_y+40}" font-family="{FONT}" '
-        f'font-size="12">3. Фиолетовый маршрут является диагностическим слоем '
-        'и не выводится на нормативный лист.</text>',
+        _lower_control_notes_svg(_LOWER_CONTROL_NOTES),
+        f'<text x="50" y="760" font-family="{FONT}" font-size="12">'
+        f'{escape(_system_mark(assembly.system))}; DN{assembly.segment("main").dn_mm}. '
+        'Контрольный лист, не инструкция по выполнению работ.</text>',
+        f'<text x="1073" y="760" text-anchor="end" font-family="{FONT}" '
+        'font-size="12">Лист 1 из 1</text>',
         "</svg>",
     ))
-    return "".join(body)
+    svg = "".join(body)
+    _validate_lower_control_svg(svg)
+    return svg
 
 
 def generate_lower_turn_control_pdf(
@@ -898,10 +958,18 @@ def generate_lower_turn_control_pdf(
 
     assembly = build_lower_turn_cleanout_assembly(system=system, dn_mm=dn_mm)
     svg = build_lower_turn_control_sheet_svg(assembly)
+    _validate_lower_control_svg(svg)
+    pdf = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(
-        bytestring=svg.encode("utf-8"),
-        write_to=str(path),
-    )
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".lower-turn-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)

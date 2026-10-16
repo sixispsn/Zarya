@@ -1,0 +1,9 @@
+<!doctype html><html lang="ru" data-theme="light" data-ui="white"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>ЗАРЯ — участие в пилоте</title><link rel="stylesheet" href="/static/pilot.css?v=1"><link rel="stylesheet" href="/static/pilot_admin.css?v=1"><script src="/static/pilot_admin.js?v=1" defer></script></head><body><main>
+<svg class="pilot-logo" viewBox="0 0 1492 275" role="img" aria-label="ЗАРЯ">{% include 'site_logo.html' %}</svg>
+<h1>Проверяем ЗАРЮ на реальных объектах</h1>
+<p>Вы получите все функции Studio: расчёты, ПЗ, схемы, комплекты и нормативную базу. Результаты альфа-версии требуют проверки инженером.</p>
+<p>После расчёта сохраняем версию исходных параметров и результатов. После формирования PDF сохраняем точную копию выдачи ЗАРИ, включая сведения об объекте в этих PDF. История доступна вам и владельцу ЗАРИ, но не другим тестерам.</p>
+<p>Исходные загруженные планы, ТЗ и ТУ автоматически в архив пилота не копируются. После экспертизы вы сможете отдельно приложить итоговый комплект и описать изменения. Удаление документов из рабочего проекта и отзыв ключа не удаляют уже сохранённую историю; вопросы об удалении — владельцу ЗАРИ.</p>
+<p>Добавляйте только материалы, которые вправе передавать для тестирования. Архив не публикуется и не используется для автоматического изменения расчётных алгоритмов.</p>
+<form id="pilot-consent" data-version="{{ version }}"><label class="admin-consent"><input type="checkbox" name="accepted" required><span>Согласен участвовать и сохранять версии параметров, результатов и выдаваемых PDF для сравнения с комплектом после экспертизы.</span></label><button type="submit">Принять и открыть Studio →</button><p data-admin-error role="alert"></p></form><form method="post" action="/access/logout"><button type="submit">Пока выйти</button></form>
+</main></body></html>

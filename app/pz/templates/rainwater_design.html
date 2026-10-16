@@ -1,0 +1,17 @@
+<section class="rainwater-design">
+<h3>Паспорт проектного решения дождевой системы</h3>
+<p><strong>{% if r.design.confirmed %}Проверено проектировщиком: {{ r.design.review.reviewer }}.
+Дата проверки: {{ r.design.review.reviewed_at }}.
+{% elif r.design.status == 'stale' %}Подтверждение устарело: исходные данные изменились.
+{% elif r.design.ready_for_review %}Данные указаны; требуется проверка проектировщика.
+{% else %}Требуется дополнение: {{ r.design.missing|join('; ') }}.{% endif %}</strong></p>
+<p>{{ r.design.notice }}</p>
+{% if r.input.design_storage_days is not none %}<p>Принятый предельный срок хранения: {{ r.input.design_storage_days|num }} сут.
+Это заданный режим, а не результат моделирования возраста воды. Управление застоем — по решению ниже.</p>{% endif %}
+{% if r.input.design_annual_saving_m3 is not none %}<p>Годовая экономия по отдельному обоснованию проектировщика:
+{{ r.input.design_annual_saving_m3|num }} м³/год. Не получена экстраполяцией приведённого суточного ряда;
+автоматического уменьшения расчётных расходов В1/Т3 и К2 нет.</p>{% endif %}
+{% for row in r.design.rows if row.kind == 'document' %}
+<p style="break-inside:avoid"><strong>{{ row.title }} — {{ 'указано' if row.ready else 'нужно дополнить' }}.</strong><br>{{ row.note }}</p>
+{% endfor %}
+</section>

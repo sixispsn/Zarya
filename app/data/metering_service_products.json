@@ -1,0 +1,60 @@
+{
+  "revision": "2026-10-14.1",
+  "sources": {
+    "vu-service-vtr1025": {
+      "url": "https://valtec.ru/document/technical/VTr-1025.pdf",
+      "title": "VALTEC VTr, ПС 47639-4, редакция 10.2025", "checked_on": "2026-10-12",
+      "pages": "2: резьба и P/T; 9: пробка VTr.583.N", "sha256": "44e8069b8d2e0660acd4e1ca60a2e4f9b42c047db86bf31bafc22ca1a76be6f6"
+    },
+    "vu-service-plug-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VTr.583.N/VTr.583.N.pdf",
+      "title": "VALTEC VTr.583.N, габаритный чертёж", "checked_on": "2026-10-12", "pages": "1",
+      "sha256": "ceceb8217ee9f487dc4963f2f89959eb3f4c6e71b5a48a958ca14ce5f9a14b9d"
+    },
+    "vu-service-vt806": {
+      "url": "https://valtec.ru/document/technical/VT.806-807-1067b.pdf",
+      "title": "VALTEC VT.806/807, ПС 47605", "checked_on": "2026-10-14",
+      "pages": "1–3: функции, P/T, габариты, монтаж; прокладка в накидной гайке",
+      "sha256": "92634cc147485097e53889476e8f18aa32a3036a204310d5110aca45828fee29"
+    },
+    "vu-service-vt806-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VT.806.N/VT.806.N.pdf",
+      "title": "VALTEC VT.806.N, габаритный чертёж", "checked_on": "2026-10-14", "pages": "1",
+      "sha256": "156550a437b665d86502358f285789d604901763b0b85bed5f4fe9b0afd25d9e"
+    },
+    "vu-service-rosma": {
+      "url": "https://rosma.spb.ru/manometers/standartnoe_ispolnenie/",
+      "title": "РОСМА: ТМ серии 10, каталог стандартного исполнения", "checked_on": "2026-10-12",
+      "pages": "Каталог: 1 — диапазоны, 3/4 и 2/3 шкалы; 2 — ТМ-510Р D100, h85, G1/2",
+      "sha256": "febe07315c29b33541cc26e302faf3c4ba4ee8d599049f2b51972ec0f58fb003",
+      "note": "Хеш относится к PDF «Манометры стандартного исполнения», доступному по ссылке «Скачать» на карточке. h — от торца штуцера до центра, не монтажная длина."
+    }
+  },
+  "parts": [
+    {"id": "valtec-vtr583-plug-dn15", "manufacturer": "VALTEC", "article": "VTr.583.N.0004", "kind": "plug", "dn": 15,
+     "ports": [["G", "1/2", "male", "thread"]], "dimension_status": "verified", "dimensions_mm": {"L": 14, "SW": 24.5},
+     "pn_bar": 40, "temperature_c": [-40, 250], "source_ids": ["vu-service-vtr1025", "vu-service-plug-drawing"],
+     "notes": ["Постоянная резьбовая пробка, не монтажная пробка-уровень. Уплотнение и посадку уточнить."]},
+    {"id": "valtec-vtr583-plug-dn25", "manufacturer": "VALTEC", "article": "VTr.583.N.0006", "kind": "plug", "dn": 25,
+     "ports": [["G", "1", "male", "thread"]], "dimension_status": "conflict", "dimensions_mm": {"SW": 36.5},
+     "pn_bar": 40, "temperature_c": [-40, 250], "source_ids": ["vu-service-vtr1025", "vu-service-plug-drawing"],
+     "notes": ["Осевая длина не принята: паспорт 17 мм, чертёж 17,5 мм. Присоединение G1 подтверждено."]},
+    {"id": "valtec-vt806-0404", "manufacturer": "VALTEC", "article": "VT.806.N.0404", "kind": "gauge_cock", "dn": 15,
+     "ports": [["G", "1/2", "male", "thread"], ["G", "1/2", "female", "flat_gasket"]],
+     "dimension_status": "passport_nominal", "dimensions_mm": {"L": 75},
+     "dimension_source_id": "vu-service-vt806", "pn_bar": 16, "temperature_c": [1, 130],
+     "source_ids": ["vu-service-vt806", "vu-service-vt806-drawing"],
+     "notes": ["Для компоновки L=75 мм по ПС 47605, раздел 3, VT.806 G1/2×G1/2. Отдельный чертёж: 75,1 мм; расхождение сохранено, монтажную длину уточнить. Не усреднение и не допуск.",
+               "Накидная гайка с комплектной прокладкой; повторная закупка прокладки не добавляется.",
+               "Отсечение, сброс показаний и воздуха; порт поверочного манометра M6 закрыт штатным винтом."]}
+  ],
+  "gauge": {
+    "manufacturer": "РОСМА", "kind": "gauge", "dn": 15,
+    "ports": [["G", "1/2", "male", "flat_gasket"]], "dimension_status": "verified",
+    "dimensions_mm": {"D": 100, "h": 85, "b": 46, "k": 17, "SW": 17},
+    "ranges_bar": [4, 6, 10, 16, 25], "temperature_c": [-50, 150], "source_ids": ["vu-service-rosma"],
+    "notes": ["Класс 1,5; радиальный штуцер G1/2; IP40, вертикальный циферблат.",
+              "Постоянное давление: до 3/4 шкалы; переменное: до 2/3. Не является проверкой пульсаций или гидроудара.",
+              "Совместимость торцевого уплотнения и условия среды/вибрации проверить при монтажной привязке."]
+  }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light" data-ui="white"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ЗАРЯ · Измерение трасс</title>
+<link rel="stylesheet" href="/static/wizard.css?v=20260907-4">
+{% include 'site_assets.html' %}
+<link rel="stylesheet" href="/static/route_measurement.css?v=1">
+<script defer src="/static/route_measurement.js?v=1"></script>
+</head><body>{% include 'site_header.html' %}
+<main id="main-content" class="analysis-shell route-measurement" data-route-workspace
+ data-save-url="/wizard/architecture/{{ import_id }}/routes/save" data-floor="{{ active_floor.floor }}"
+ data-context-hash="{{ context_hash }}" data-revision="{{ revision }}"
+ data-scale="{{ active_floor.scale.metres_per_point }}">
+ <header class="analysis-hero"><div><p class="eyebrow">ПЛАН → МЕТРЫ</p><h1>Измерить трассу</h1>
+ <p>Укажите точки предполагаемой оси трубы на плане. Это обмер, а не автоматический выбор допустимой трассы.</p></div>
+ <a href="/wizard/architecture/{{ import_id }}" class="button-secondary">К разрезу</a></header>
+ <div class="route-workbench">
+  <section class="card"><form method="get" class="route-floor-picker">
+   <label>План этажа<select name="floor">{% for floor in architecture.floors %}
+    <option value="{{ floor.floor }}" {% if floor.floor == active_floor.floor %}selected{% endif %}>{{ floor.floor }} этаж · лист {{ floor.page_number }}</option>
+   {% endfor %}</select></label><button type="submit" class="button-secondary">Показать</button>
+  </form>
+  <p class="field-help">{{ survey.original_name }} · контрольный размер {{ active_floor.scale.real_distance_m }} м. Масштаб взят из подтверждения этажа.</p>
+  <div class="architecture-plan-canvas" data-route-canvas>{{ preview_svg }}</div>
+  <div class="route-tools"><button type="button" class="button-secondary" data-route-undo>Убрать точку</button>
+   <button type="button" class="button-secondary" data-route-clear>Очистить</button>
+   <output data-route-length aria-live="polite">Нажмите на начало трассы, затем на её повороты и конец.</output></div>
+  </section>
+  <section class="card"><form data-route-form>
+   <h2>Участок</h2><div class="route-inputs">
+    <label>ID участка<input name="route_id" required maxlength="100" placeholder="Например, A0001:branch-1"></label>
+    <label>Система<select name="system"><option value="K1">К1</option><option value="K2">К2</option><option value="K3">К3</option></select></label>
+    <label>Начальный узел<input name="start_node" required maxlength="100" placeholder="Прибор или соединение"></label>
+    <label>Конечный узел<input name="end_node" required maxlength="100" placeholder="Соединение или стояк"></label>
+   </div><p class="field-help">Уже есть полная модель сети? Используйте её ID. Повтор ID заменяет прежнее измерение этого участка.</p>
+   <label>Высота трассы<select name="vertical_mode">
+    <option value="unknown">Пока неизвестна · только длина по плану</option>
+    <option value="slope">Начальная отметка и уклон</option>
+    <option value="level">Постоянная отметка оси</option>
+    <option value="vertices">Отметка каждой точки · включая опуски</option>
+   </select></label>
+   <div data-height-fields hidden class="route-inputs">
+    <label>Отметка оси в начале, м<input name="start_elevation_m" inputmode="decimal" placeholder="Относительно 0,000 здания"></label>
+    <label data-slope-field>Уклон, м/м<input name="slope" inputmode="decimal" placeholder="Например, 0,02"></label>
+   </div>
+   <p class="field-help">Точки задаются по ходу стока. Высота не определяется наклоном линии на плане. Напорная канализация и фановая вентиляция здесь не моделируются.</p>
+   <details><summary>Точки трассы / ручная корректировка</summary>
+    <div class="route-points-scroll"><table><thead><tr><th>№</th><th>X, pt</th><th>Y, pt</th><th>Z, м</th></tr></thead><tbody data-route-points></tbody></table></div>
+    <button type="button" class="button-secondary" data-route-duplicate>Повторить XY для опуска</button>
+   </details>
+   <label class="analysis-consent"><input type="checkbox" name="reviewed"><span>Точки и отметки проверены мной. Это не подтверждение гидравлики или возможности монтажа.</span></label>
+   <button type="submit" class="button-primary">Сохранить измерение</button>
+   <p data-route-status role="status" aria-live="polite"></p>
+  </form></section>
+ </div>
+ <section class="card"><div class="card-kicker"><h2>Сохранённые измерения</h2>
+  <a href="/wizard/architecture/{{ import_id }}/routes.json" class="button-secondary">Скачать данные</a></div>
+  <p class="field-help">Ни один обмер не переносится в проект молча. Участки связываются с полной сетью по ID; новые повороты и фасонина проверяются отдельно. При смене масштаба или этажа старые обмеры теряют актуальность.</p>
+  {% if results %}<div class="route-points-scroll"><table><thead><tr><th>Участок</th><th>Этаж</th><th>По плану, м</th><th>В пространстве, м</th><th>Состояние</th><th></th></tr></thead><tbody>
+   {% for row in results %}<tr><td>{{ row.trace.route_id }}</td><td>{{ row.trace.floor }}</td>
+    <td>{{ '%.3f'|format(row.measurement.plan_length_m)|replace('.', ',') if row.measurement else '—' }}</td>
+    <td>{{ '%.3f'|format(row.measurement.spatial_length_m)|replace('.', ',') if row.measurement and row.measurement.spatial_length_m is not none else 'Нужны отметки' }}</td>
+    <td>{% if row.error %}<span class="route-error">{{ row.error }}</span>{% else %}{{ 'Проверено пользователем' if row.trace.reviewed else 'Черновой обмер' }}{% endif %}</td>
+    <td>{% if row.trace.floor == active_floor.floor %}<button type="button" class="button-secondary" data-route-edit="{{ row.trace.route_id }}">Открыть</button>{% else %}<a href="?floor={{ row.trace.floor }}">К этажу</a>{% endif %}
+     <form method="post" action="/wizard/architecture/{{ import_id }}/routes/delete"><input type="hidden" name="revision" value="{{ revision }}"><input type="hidden" name="route_id" value="{{ row.trace.route_id }}"><button class="delete-button" type="submit">Удалить</button></form></td>
+   </tr>{% endfor %}</tbody></table></div>{% else %}<p>Пока нет трасс. Начните с одного участка между двумя узлами.</p>{% endif %}
+ </section>
+ <script type="application/json" data-saved-route-traces>{{ results|map(attribute='trace')|list|tojson }}</script>
+</main></body></html>

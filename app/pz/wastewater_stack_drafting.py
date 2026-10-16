@@ -15,7 +15,10 @@ from dataclasses import dataclass
 from html import escape
 from io import BytesIO
 from pathlib import Path
+import os
+import tempfile
 from typing import Iterable, Mapping
+from xml.etree import ElementTree
 
 from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.wastewater_basement_drafting import (
@@ -38,17 +41,14 @@ from app.pz.wastewater_revision_placement import (
     revision_y_from_clean_floor,
 )
 from app.pz.wastewater_ugo import render_ugo
+from app.pz.wastewater_ventilation import ROOF_VENT_HEIGHT_M as _ROOF_VENT_HEIGHT_M
 
 
-_ROOF_VENT_HEIGHT_M = {
-    "flat_non_accessible": 0.2,
-    "pitched": 0.2,
-    "collecting_vent_shaft": 0.1,
-    "flat_accessible": 3.0,
-}
 _ROOF_LABELS = {
     "flat_non_accessible": "плоская неэксплуатируемая кровля",
     "pitched": "скатная кровля",
+    "single_slope": "односкатная кровля",
+    "gable": "двускатная кровля",
     "collecting_vent_shaft": "обрез сборной вентиляционной шахты",
     "flat_accessible": "плоская эксплуатируемая кровля",
 }
@@ -536,6 +536,65 @@ def _revision_svg(
     return "".join(body)
 
 
+_STACK_CONTROL_NOTICE = "Контроль монтажной логики. Не проектная документация. Не для выпуска."
+
+
+def _stack_control_text(value, *, x, y, width, bottom, size=18, pitch=28):
+    """Keep complete fixed-size text within the control sheet's note area."""
+    from app.pz.leader_layout import _text_width
+
+    remaining = " ".join(value.split())
+    result = []
+    while remaining:
+        end = 0
+        for index in range(1, len(remaining) + 1):
+            if _text_width(remaining[:index], size) > width:
+                break
+            end = index
+        if not end or y > bottom:
+            raise ValueError("Пояснения стояка не помещаются; PDF не изменён")
+        if end < len(remaining):
+            space = remaining.rfind(" ", 0, end + 1)
+            if space > 0:
+                end = space
+        result.append(f'<text x="{x:g}" y="{y:g}" font-family="{FONT}" '
+                      f'font-size="{size:g}">{escape(remaining[:end])}</text>')
+        remaining = remaining[end:].lstrip()
+        y += pitch
+    return "".join(result), y
+
+
+def _validate_stack_control_svg(svg):
+    """Validate printable text bounds, not arbitrary engineering collisions."""
+    from app.pz.leader_layout import _text_width
+
+    root = ElementTree.fromstring(svg)
+    if root.get("data-release-ready") != "false":
+        raise ValueError("Контрольный стояк не является проектным выпуском")
+    _, _, width, height = map(float, root.get("viewBox").split())
+
+    def visit(element, transformed=False, floor=False):
+        transformed = transformed or bool(element.get("transform"))
+        floor = floor or element.get("data-floor-assembly") is not None
+        if element.tag.endswith("text") and not transformed:
+            size = float(element.get("font-size"))
+            text_width = _text_width("".join(element.itertext()), size)
+            x, y = float(element.get("x")), float(element.get("y"))
+            anchor = element.get("text-anchor", "start")
+            left = x - (text_width if anchor == "end" else text_width / 2 if anchor == "middle" else 0)
+            if left < 45 or left + text_width > width - 45 or y - size < 45 or y > height - 45:
+                raise ValueError("Подпись стояка выходит за поле; PDF не изменён")
+            if width == 2800 and ((floor and left + text_width > 1515)
+                                  or (y == 132 and left + text_width > 1200)):
+                raise ValueError("Подпись стояка выходит за своё поле; PDF не изменён")
+        if floor and element.tag.endswith("rect") and element.get("data-architecture"):
+            if float(element.get("x")) + float(element.get("width")) > 1515:
+                raise ValueError("Геометрия стояка не помещается; PDF не изменён")
+        for child in element:
+            visit(child, transformed, floor)
+    visit(root)
+
+
 def build_wastewater_stack_page_svg(
     stack: WastewaterStackAssembly,
     page: WastewaterStackPage,
@@ -557,17 +616,15 @@ def build_wastewater_stack_page_svg(
     total_pages = stack.total_sheet_count
     body: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        'viewBox="0 0 2800 1980">',
+        'viewBox="0 0 2800 1980" data-release-ready="false">',
         '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+38}" y="{margin+48}" font-family="{FONT}" '
         'font-size="30" font-weight="bold">Принципиальная схема К1. Характерные этажи</text>',
         f'<text x="{margin+38}" y="{margin+82}" font-family="{FONT}" '
         f'font-size="16" fill="{GRAY}">{escape(stack.riser_id)} DN{stack.riser_dn_mm}; '
         f'лист {page.page_no} из {total_pages}; режим - самотечный</text>',
-        f'<line x1="{panel_x}" y1="{margin+115}" x2="{panel_x}" '
-        f'y2="{height-margin-85}" stroke="#777" stroke-width="1.5"/>',
+        f'<text x="{panel_x+35}" y="110" font-family="{FONT}" '
+        f'font-size="18">{_STACK_CONTROL_NOTICE}</text>',
     ]
 
     for floor_no in page.floor_numbers:
@@ -626,7 +683,6 @@ def build_wastewater_stack_page_svg(
     top_floor = stack.floor(page.floor_numbers[0])
     riser_x = origin_x + top_floor.port("riser_join").point.x_mm * floor_scale
     top_y = origins[page.floor_numbers[0]] + 5.0 * floor_scale
-    bottom_floor = stack.floor(page.floor_numbers[-1])
     bottom_y = origins[page.floor_numbers[-1]] + 252.0 * floor_scale
     roof_elevation = (
         f"{stack.floors_above * stack.floor_height_m:+.3f}".replace(".", ",")
@@ -689,58 +745,52 @@ def build_wastewater_stack_page_svg(
             )
         )
 
+    cy = 210
+    sections = (
+        ("Параметры стояка", (
+            f"Этажей: {stack.floors_above}",
+            f"Высота этажа: {floor_height_label} м",
+            f"Стояк: {stack.riser_id} DN{stack.riser_dn_mm}",
+            f"Кровля: {_ROOF_LABELS[stack.roof_kind]}",
+            f"Показаны этажи: {', '.join(map(str, stack.displayed_floor_numbers))}",
+        )),
+        ("Ревизии", (
+            f"Этажи: {', '.join(map(str, stack.revision_floors))}",
+            "Нижний и верхний этажи; при 5 этажах и более - не реже чем через три этажа.",
+        )),
+        ("Нормативная трассировка", (
+            "СП 30.13330.2020:", "18.18 - вытяжная часть над кровлей;",
+            "18.19 - DN вытяжной части;", "18.26 - ревизии и прочистки.",
+        )),
+        ("Граница расчёта", (
+            "Этот лист: самотечная К1 и вентиляция.",
+            "Напорная линия после КНС сюда не входит.",
+            "Q/H КНС без расчёта не подтверждаются.",
+        )),
+    )
+    for title, values in sections:
+        text, cy = _stack_control_text(title, x=panel_x+35, y=cy,
+                                       width=width-panel_x-120, bottom=1800, size=22, pitch=40)
+        body.append(text)
+        for value in values:
+            text, cy = _stack_control_text(value, x=panel_x+35, y=cy,
+                                           width=width-panel_x-120, bottom=1800)
+            body.append(text)
+            cy += 7
+        cy += 25
     body.extend(
         (
-            f'<text x="{panel_x+35}" y="{margin+160}" font-family="{FONT}" '
-            'font-size="22" font-weight="bold">Параметры стояка</text>',
-            f'<text x="{panel_x+35}" y="{margin+205}" font-family="{FONT}" '
-            f'font-size="15">Этажей: {stack.floors_above}</text>',
-            f'<text x="{panel_x+35}" y="{margin+235}" font-family="{FONT}" '
-            f'font-size="15">Высота этажа: {floor_height_label} м</text>',
-            f'<text x="{panel_x+35}" y="{margin+265}" font-family="{FONT}" '
-            f'font-size="15">Стояк: {escape(stack.riser_id)} DN{stack.riser_dn_mm}</text>',
-            f'<text x="{panel_x+35}" y="{margin+295}" font-family="{FONT}" '
-            f'font-size="15">Кровля: {escape(_ROOF_LABELS[stack.roof_kind])}</text>',
-            f'<text x="{panel_x+35}" y="{margin+325}" font-family="{FONT}" '
-            f'font-size="15">Показаны этажи: '
-            f'{", ".join(map(str, stack.displayed_floor_numbers))}</text>',
-            f'<text x="{panel_x+35}" y="{margin+365}" font-family="{FONT}" '
-            'font-size="18" font-weight="bold">Ревизии</text>',
-            f'<text x="{panel_x+35}" y="{margin+399}" font-family="{FONT}" '
-            f'font-size="15">Этажи: {", ".join(map(str, stack.revision_floors))}</text>',
-            f'<text x="{panel_x+35}" y="{margin+430}" font-family="{FONT}" '
-            'font-size="13">Нижний и верхний этажи;</text>',
-            f'<text x="{panel_x+35}" y="{margin+455}" font-family="{FONT}" '
-            'font-size="13">при 5 этажах и более - не реже</text>',
-            f'<text x="{panel_x+35}" y="{margin+480}" font-family="{FONT}" '
-            'font-size="13">чем через три этажа.</text>',
-            f'<text x="{panel_x+35}" y="{margin+525}" font-family="{FONT}" '
-            'font-size="18" font-weight="bold">Нормативная трассировка</text>',
-            f'<text x="{panel_x+35}" y="{margin+559}" font-family="{FONT}" '
-            'font-size="13">СП 30.13330.2020:</text>',
-            f'<text x="{panel_x+35}" y="{margin+584}" font-family="{FONT}" '
-            'font-size="13">18.18 - вытяжная часть над кровлей;</text>',
-            f'<text x="{panel_x+35}" y="{margin+609}" font-family="{FONT}" '
-            'font-size="13">18.19 - DN вытяжной части;</text>',
-            f'<text x="{panel_x+35}" y="{margin+634}" font-family="{FONT}" '
-            'font-size="13">18.26 - ревизии и прочистки.</text>',
-            f'<line x1="{panel_x+35}" y1="{margin+680}" '
-            f'x2="{width-margin-35}" y2="{margin+680}" stroke="#777"/>',
-            f'<text x="{panel_x+35}" y="{margin+720}" font-family="{FONT}" '
-            'font-size="18" font-weight="bold">Граница расчёта</text>',
-            f'<text x="{panel_x+35}" y="{margin+755}" font-family="{FONT}" '
-            'font-size="13">Этот лист: самотечная К1 и вентиляция.</text>',
-            f'<text x="{panel_x+35}" y="{margin+780}" font-family="{FONT}" '
-            'font-size="13">Напорная линия после КНС сюда не входит.</text>',
-            f'<text x="{panel_x+35}" y="{margin+805}" font-family="{FONT}" '
-            'font-size="13">Q/H КНС без расчёта не подтверждаются.</text>',
             f'<text x="{margin+28}" y="{height-margin-27}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Контрольный лист генератора; '
             'графический язык - приложение В ГОСТ Р 21.620-2023. Не входит в комплект ПД.</text>',
+            f'<text x="{width-margin-35}" y="{height-margin-27}" text-anchor="end" '
+            f'font-family="{FONT}" font-size="18">Лист {page.page_no} из {total_pages}</text>',
             '</svg>',
         )
     )
-    return "".join(body)
+    svg = "".join(body)
+    _validate_stack_control_svg(svg)
+    return svg
 
 
 def build_wastewater_stack_control_svgs(
@@ -759,7 +809,7 @@ def build_wastewater_stack_basement_page_svg(
     errors = stack.validate()
     if errors:
         raise ValueError("cannot render invalid wastewater stack: " + "; ".join(errors))
-    return build_wastewater_basement_control_svg(
+    svg = build_wastewater_basement_control_svg(
         stack.basement,
         page_width_mm=841,
         page_height_mm=594,
@@ -775,7 +825,12 @@ def build_wastewater_stack_basement_page_svg(
         # size matches the other stack sheets.
         title_font_size=19.3,
         subtitle_font_size=10.3,
+        sheet_no=stack.basement_page_no,
+        sheet_count=stack.total_sheet_count,
+        notice_font_size=11.6,
     )
+    _validate_stack_control_svg(svg)
+    return svg
 
 
 def generate_wastewater_stack_control_pdf(
@@ -821,12 +876,23 @@ def generate_wastewater_stack_control_pdf(
     )
     writer = PdfWriter()
     for svg in build_wastewater_stack_control_svgs(stack):
+        _validate_stack_control_svg(svg)
         page_pdf = BytesIO()
         cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=page_pdf)
         page_pdf.seek(0)
         writer.append(PdfReader(page_pdf))
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as stream:
-        writer.write(stream)
+    pdf = BytesIO()
+    writer.write(pdf)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".stack-control-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf.getvalue())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)

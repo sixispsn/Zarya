@@ -183,7 +183,6 @@ def build_wastewater_pressure_scheme_svg(
         ))
 
     rows.extend((
-        f'<rect x="170" y="1160" width="2460" height="330" fill="none" stroke="{BLACK}" stroke-width="2"/>',
         _text(195, 1200, "ДАННЫЕ И УКАЗАНИЯ", 19, bold=True),
         _text(195, 1240, f"Режим: {"малогабаритная установка" if inputs.mode == "local_fixture_unit" else "внутренняя насосная станция"}.", 15),
         _text(195, 1272, f"Насос: {sewage.pump_model}; {sewage.pump_working_units} раб. + {sewage.pump_reserve_units} рез.; P={_fmt(sewage.pump_power_kw)} кВт.", 15),
@@ -227,7 +226,7 @@ def build_wastewater_pressure_curve_svg(
     rows = [
         _text(170, 165, "Рабочая точка канализационной насосной установки", 31, bold=True),
         _text(170, 205, "Паспортная Q-H характеристика и подтверждённая характеристика системы", 17, color=GRAY),
-        f'<g data-pump-curve="confirmed" data-system-curve="confirmed">',
+        '<g data-pump-curve="confirmed" data-system-curve="confirmed">',
         f'<rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="white" stroke="{BLACK}" stroke-width="2"/>',
     ]
     for index in range(1, 6):
@@ -253,16 +252,20 @@ def build_wastewater_pressure_curve_svg(
             f'<line x1="{wx:.1f}" y1="{gy+gh}" x2="{wx:.1f}" y2="{wy:.1f}" stroke="#777" stroke-dasharray="10 7" stroke-width="2"/>',
             f'<line x1="{gx}" y1="{wy:.1f}" x2="{wx:.1f}" y2="{wy:.1f}" stroke="#777" stroke-dasharray="10 7" stroke-width="2"/>',
             f'<circle cx="{wx:.1f}" cy="{wy:.1f}" r="11" fill="white" stroke="{BLACK}" stroke-width="4"/>',
-            _text(wx + 18, wy - 18, f"РТ: Q={_fmt(wp.q_m3h)}; H={_fmt(wp.pump_head_m)}", 15, bold=True),
+            _text(1760, 450, f"РТ: Q={_fmt(wp.q_m3h)}; H={_fmt(wp.pump_head_m)}", 15, bold=True),
             '</g>',
         ))
     rows.extend((
-        f'<line x1="1760" y1="365" x2="1840" y2="365" stroke="#0057b8" stroke-width="6"/>',
+        '<line x1="1760" y1="365" x2="1840" y2="365" stroke="#0057b8" stroke-width="6"/>',
         _text(1860, 371, f"Q-H: {sewage.pump_model}", 15),
-        f'<line x1="1760" y1="410" x2="1840" y2="410" stroke="#d7263d" stroke-width="6"/>',
+        '<line x1="1760" y1="410" x2="1840" y2="410" stroke="#d7263d" stroke-width="6"/>',
         _text(1860, 416, "Hсист = Hст + k·Q²", 15),
-        f'<rect x="1745" y="480" width="885" height="700" fill="none" stroke="{BLACK}" stroke-width="2"/>',
-        _text(1770, 522, "РАСЧЁТНАЯ ТАБЛИЦА", 19, bold=True),
+        '<g data-pressure-calculation-table="closed-grid">',
+        f'<rect x="1745" y="480" width="885" height="593" fill="none" stroke="{BLACK}" stroke-width="2"/>',
+        f'<line x1="2190" y1="480" x2="2190" y2="1073" stroke="{BLACK}" stroke-width="1"/>',
+        f'<line x1="1745" y1="540" x2="2630" y2="540" stroke="{BLACK}" stroke-width="1"/>',
+        _text(1770, 522, "Параметр", 19, bold=True),
+        _text(2605, 522, "Значение", 19, bold=True, anchor="end"),
     ))
     table_rows = (
         ("Расчётный расход Q", f"{_fmt(sewage.pump_q_m3h)} м³/ч"),
@@ -283,6 +286,7 @@ def build_wastewater_pressure_curve_svg(
             _text(2605, row_y, value, 14, bold=index < 5, anchor="end"),
         ))
     rows.extend((
+        '</g>',
         _text(250, 1395, "Проверка выполняется по введённой паспортной кривой; каталог водопроводных насосов не используется.", 14, color=GRAY),
         _text(250, 1430, "Кривая системы построена только из введённых Hст и динамических потерь в расчётной точке.", 14, color=GRAY),
     ))

@@ -1,0 +1,16 @@
+<section id="circ_inputs" style="display:none">
+  <h4>Т4 · замкнутый контур принудительной циркуляции</h4>
+  <p style="font-size:12px;line-height:1.5">СП 30, пп. 10.8–10.13: отдельные тепловой и гидравлический расчёты.
+    Hgeom, Hпр и Hгар не добавляются. Рекомендуемые 2–5 м по п. 10.14 не заменяют расчёт.
+    Циркуляционно-повысительный режим п. 13.12 и естественная циркуляция здесь не рассчитываются.</p>
+  <label style="display:block;margin:8px 0">Циркуляционный расход по тепловому расчёту, м³/ч
+    <input id="circ_q" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">Требуемый напор по циркуляционному кольцу, м
+    <input id="circ_head" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">Основание Q/H (теплопотери, температурный режим, кольцо и оборудование)
+    <input id="circ_basis" type="text" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">NPSHa по схеме и температуре воды, м (если известен)
+    <input id="circ_npsh" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <p style="font-size:12px">Без схемы кольца — только предварительный кандидат по явно заданным Q/H,
+    не окончательная рабочая точка. Материалы и допустимые условия применения насоса требуют подтверждения.</p>
+</section>

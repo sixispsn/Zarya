@@ -13,6 +13,12 @@ table.equip {
   break-inside: avoid;
 }
 table.equip thead { display: table-header-group; }
+.suction-review { overflow-wrap: anywhere; }
+.suction-review h3, .suction-review h4 { break-after: avoid; }
+.suction-review table.equip { break-inside: auto; }
+.suction-review td:first-child { text-align: left; width: 65%; }
+.suction-review ul { font-size: 8.5pt; line-height: 1.15; margin: 4pt 0; }
+.suction-conclusion { break-inside: avoid; }
 table.equip tr, table.equip td, table.equip th { break-inside: avoid; }
 
 table.equip th, table.equip td {

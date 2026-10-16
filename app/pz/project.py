@@ -6,6 +6,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 
+from app.pz.wastewater_ventilation import FanVentilationInput
+from app.pz.wastewater_fan_geometry import FanGeometryInput
+from app.pz.metering_detail_data import MeteringDetailData
+from app.pz.apartment_water_units import ApartmentWaterUnits
+from app.pz.water_service_assemblies import WaterServiceLayout
+from app.calc.rainwater_reuse import RainwaterReuseInput
+from app.calc.hws_stage_p import HwsStagePInput
+from app.pz.wastewater_presentation import RepresentativeSectionInput
+from app.pz.wastewater_service import WastewaterServiceInput
+
 
 class BuildingPurpose(str, Enum):
     RESIDENTIAL = "residential"
@@ -48,6 +58,9 @@ class DocumentInfo:
     norm_control_name: str = ""
     sheet_no: str = "1"
     sheet_total: str = "—"
+    # Private Studio preview only; never set by a release request.
+    review_notes: tuple[str, ...] = ()
+    review_head_pending: bool = False
 
     @property
     def stage_label(self) -> str:
@@ -72,28 +85,38 @@ class WaterSource:
     # или ось ввода). Если отметки не заданы — берётся прямое h_geom_m.
     elev_header_m: Optional[float] = None   # отметка оси напорного коллектора насоса / ввода, м
     elev_fixture_m: Optional[float] = None  # отметка излива диктующего прибора, м
+    lowest_fixture_elevation_m: Optional[float] = None
+    lowest_fixture_basis: str = ""  # источник/явное допущение, не отметка пола
     h_geom_m: Optional[float] = None        # Hgeom напрямую (если отметки не заданы)
     # ∑Hil = i·l·(1+kм): il_dict_m — линейные потери i·l по диктующему направлению,
     # kм добавляется автоматически по network_kind. h_il_m — готовая сумма (запасной путь).
     il_dict_m: Optional[float] = None       # линейные i·l внутренней сети, м
     h_il_m: Optional[float] = None          # ∑Hil готовой суммой (если задан — используется как есть)
-    network_kind: str = "domestic"          # тип сети для kм: domestic 0,3 / combined 0,2 / fire 0,1
+    internal_losses_scope: str = "shared"
+    h_il_hot_m: Optional[float] = None
+    network_kind: str = "domestic"          # тип сети для k_l по СП 30, п. 8.28
     h_pr_m: float = 20.0                # Hпр — напор перед прибором, п.8.21 (минимум 20 м)
     h_vod_m: Optional[float] = None     # ∑Hвод — потери в узлах учёта (12.15); обычно из расчёта счётчика
     h_tepl_m: float = 0.0               # Hтепл — потери в теплообменнике/ИТП (3 м если ТО наш; 0 если ГВС готовое)
     h_apartment_c_meter_m: Optional[float] = None  # потери квартирного ВУ ХВС по принятому счётчику
     h_apartment_h_meter_m: Optional[float] = None  # потери квартирного ВУ ГВС по принятому счётчику
     hws_heater_in_scope: bool = False    # ГВС готовится в проектируемом ИТП/водонагревателе
-    # Hlввод = i·Lввод·1,1: il_vvod_m — линейные i·l ввода, ×1,1 (стадия П). h_vvod_m — готовой суммой.
+    # Hlввод = i·Lввод·(1+k_l): тот же тип сети. h_vvod_m — уже готовая сумма.
     il_vvod_m: Optional[float] = None       # линейные i·l ввода, м
     h_vvod_m: Optional[float] = None        # Hlввод готовой суммой (если задан — используется как есть)
     water_use_period_h: float = 24.0        # период водопотребления для подбора счётчика
+    meter_minimum_checks: dict = field(default_factory=dict)
     inputs_count: int = 1                   # количество вводов
     npsh_available_m: Optional[float] = None  # располагаемый кавитационный запас насоса
+    # Drawing datums only. Never substitute these for the head-calculation datum.
+    station_room_number: str = ""
+    station_floor_elevation_m: Optional[float] = None
+    station_suction_elevation_m: Optional[float] = None
     # --- лимиты присоединения по ТУ (дебит), для проверки соответствия ---
     tu_limit_q_day: Optional[float] = None      # лимит суточного расхода ХВС, м³/сут
     tu_limit_q_sec: Optional[float] = None      # лимит секундного расхода ХВС, л/с
     tu_fire_outdoor_l_s: Optional[float] = None # наружное пожаротушение по ТУ, л/с
+    tu_org: str = ""                       # issuer, separate from source description
 
 
 @dataclass
@@ -120,7 +143,7 @@ class FlowsData:
     q_hr_tot: float = 0.0
     q_hr_c: float = 0.0
     q_hr_h: float = 0.0
-    sewage_l_per_s: float = 0.0
+    sewage_l_per_s: float = 0.0  # Formula 5.5 reference, not horizontal design flow.
     sewage_q0s_l_per_s: float = 1.6
     heat_max_kw: float = 0.0
     irrigation_m3_day: float = 0.0
@@ -187,6 +210,9 @@ class FireSystem:
     available_head_m: Optional[float] = None  # доступный напор источника, м
     needs_pump: Optional[bool] = None         # нужна ли повысительная насосная В2
     dictating_cabinet_id: Optional[str] = None  # диктующий ПК (или диктующая пара)
+    # Keep the nozzle bore distinct from the valve DN. Previously it was lost
+    # between the intake calculation and the hydraulic network (default 16 mm).
+    nozzle_mm: int = field(default=16, kw_only=True)
 
 
 # ============================================================
@@ -292,8 +318,17 @@ class MeterRow:
     need_bypass: bool = False  # требуется обводная с электрозадвижкой
     # проверка в): измерение малых расходов
     q_hr: float = 0.0          # часовой расход для сравнения
-    ok_v: bool = True
+    ok_v: Optional[bool] = None  # None: нет подтверждённых исходных для п. 12.16в
     need_combo: bool = False   # рекомендован комбинированный счётчик
+    minimum_flow_note: str = ""
+    q_min_hourly_m3h: Optional[float] = None
+    q_min_passport_m3h: Optional[float] = None
+    passport_reference: str = ""
+    flow_reference: str = ""
+    q_average_m3h: Optional[float] = None
+    ok_average: Optional[bool] = None
+    # Derived, source-backed product proposal. Not the legacy hydraulic table.
+    product: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -303,6 +338,7 @@ class MetersSystem:
     hot_meter_dn: Optional[int] = None
     has_bypass: bool = False
     notes: str = ""
+    selection_error: str = ""  # L05: unavailable is not a selected maximum DN
     # --- жилые дома ---
     has_apartment_meters: bool = False   # поквартирные счётчики
     has_askue: bool = False              # импульсный выход / АСКУЭ
@@ -347,6 +383,9 @@ class PumpComplianceCheck:
 
 @dataclass
 class PumpSystem:
+    # Explicit bound stage-P study only; never a default or a factory passport.
+    station_design: Optional[dict] = field(default=None, kw_only=True)
+    pressure_review: Optional[dict] = field(default=None, kw_only=True)
     required: bool = False
     purpose: str = ""
     # итоговые (как было) — дублируют принятый top3[0]
@@ -363,6 +402,8 @@ class PumpSystem:
     curve: list = field(default_factory=list)   # list[(q, h)] эффективная кривая
     h_stat: float = 0.0                          # статич. напор системы, м
     k_sys: float = 0.0                           # коэф. кривой системы
+    curve_kind: str = ""                         # quadratic_estimate / duty_only; пусто = старый расчёт
+    curve_note: str = ""
     wp_q: float = 0.0                            # рабочая точка Q, м³/ч
     wp_h: float = 0.0                            # рабочая точка H, м
     q_opt: float = 0.0                           # BEP насоса, м³/ч
@@ -391,6 +432,9 @@ class BuildingFlags:
     purpose: BuildingPurpose = BuildingPurpose.PUBLIC
     floors_above: int = 1
     floors_below: int = 0
+    basement_clear_height_m: Optional[float] = field(default=None, kw_only=True)
+    floor_elevations_m: dict[int, float] = field(default_factory=dict, kw_only=True)
+    apartments_by_floor: dict[int, int] = field(default_factory=dict, kw_only=True)
     height_m: float = 0.0
     fire_height_m: Optional[float] = None
     total_area_m2: float = 0.0   # общая площадь здания, м² (для удельного расчёта труб, Метод 2)
@@ -406,10 +450,15 @@ class BuildingFlags:
     zone_split_note: str = ""    # описание границы зон (напр. "1 зона 1-5 эт., 2 зона 6-10 эт.")
     built_in_units: list = field(default_factory=list)  # список BuiltInUnit
     separate_k1: bool = False    # раздельные выпуски К1 жильё/встройка
-    # --- число стояков по системам (для воздухоотводчиков в спецификации) ---
+    # Число стояков всего здания; не число символов на характерном разрезе.
     risers_v1: int = 0           # стояки ХВС (В1)
     risers_t3: int = 0           # стояки ГВС подающие (Т3)
     risers_t4: int = 0           # стояки ГВС циркуляционные (Т4)
+    # Дополнительная секционная запорка В1, без повторного учёта узлов/стояков.
+    # None = неизвестно; 0 = явно не предусмотрена по указанной компоновке.
+    v1_sectional_valves_count: Optional[int] = field(default=None, kw_only=True)
+    v1_sectional_valves_basis: str = field(default="", kw_only=True)
+    water_service_layout: WaterServiceLayout = field(default_factory=WaterServiceLayout, kw_only=True)
     # --- условия эксплуатации (дефолты — нормальные; негатив поднимается из ТЗ) ---
     seismicity: int = 0          # балльность; ≥7 → мероприятия по СП 30 р.15.2/22.3
     permafrost: bool = False     # вечномёрзлые грунты
@@ -601,6 +650,14 @@ class SewerPipeSpec:
     insulated: bool = False
     pressure_rated: Optional[bool] = None
     pressure_class_bar: Optional[float] = None
+    catalog_series_id: str = ""
+
+    # Horizontal domestic flow, СП30 5.7; separate from pipe length and risers.
+    q_hour_max_m3h: Optional[float] = None
+    fixtures_count: Optional[int] = None
+    receiving_length_m: Optional[float] = None
+    fixture_max_lps: Optional[float] = None
+    flow_source: str = ""
 
     @property
     def inner_diameter_mm(self) -> float:
@@ -700,6 +757,7 @@ class SewerInternalNodeSpec:
 class SewageDesign:
     """К1: расчёт системы и явно подтверждённые данные стадии П."""
     risers: List[SewageRiserSpec] = field(default_factory=list)
+    presentation: RepresentativeSectionInput | None = field(default=None, kw_only=True)
     pipes: List[SewerPipeSpec] = field(default_factory=list)
     elements: List[SewerElementSpec] = field(default_factory=list)
     discharge_events: List[SewerDischargeEventSpec] = field(default_factory=list)
@@ -713,10 +771,18 @@ class SewageDesign:
     # Явная относительная отметка чистого пола подвала. Она не выводится из
     # этажности или отметок труб: это самостоятельная проектная привязка.
     basement_floor_elevation_m: Optional[float] = None
+    outlet_plan_side: str = field(default="unknown", kw_only=True)
+    first_manhole_cover_relative_elevation_m: Optional[float] = field(default=None, kw_only=True)
+    ground_relative_elevation_m: Optional[float] = field(default=None, kw_only=True)
+    frost_depth_m: Optional[float] = field(default=None, kw_only=True)
+    pipe_series_id: str = field(default="", kw_only=True)
     # Точные входы принципиальной схемы. Их отсутствие не компенсируется
     # делением общей высоты на этажность или догадкой о доступности кровли.
     floor_height_m: Optional[float] = None
     roof_kind: str = "unknown"
+    roof_relative_elevation_m: float | None = None
+    fan_ventilation: FanVentilationInput | None = field(default=None, kw_only=True)
+    fan_geometry: FanGeometryInput | None = field(default=None, kw_only=True)
     result: Optional[object] = None
     hydraulic_assessment: Optional[object] = None
     # Исходные данные и границы проектирования по ГОСТ Р 21.620-2023, 5.1.2.
@@ -832,6 +898,9 @@ class GreaseTrapDesign:
 
 @dataclass
 class Project:
+    suction_check: dict | None = field(default=None, kw_only=True)
+    wastewater_service: WastewaterServiceInput = field(default_factory=WastewaterServiceInput, kw_only=True)
+    hws_stage_p: HwsStagePInput = field(default_factory=HwsStagePInput, kw_only=True)
     document: DocumentInfo = field(default_factory=DocumentInfo)
     building: BuildingFlags = field(default_factory=BuildingFlags)
     source: WaterSource = field(default_factory=WaterSource)
@@ -840,11 +909,16 @@ class Project:
     normative: NormativeRequirements = field(default_factory=NormativeRequirements)
     sewage: SewageDesign = field(default_factory=SewageDesign)
     storm: StormDesign = field(default_factory=StormDesign)
+    rainwater_reuse: RainwaterReuseInput = field(default_factory=RainwaterReuseInput)
     grease_trap: GreaseTrapDesign = field(default_factory=GreaseTrapDesign)
     flows: FlowsData = field(default_factory=FlowsData)
     fire: FireSystem = field(default_factory=FireSystem)
     meters: MetersSystem = field(default_factory=MetersSystem)
+    metering_detail: MeteringDetailData = field(default_factory=MeteringDetailData)
+    apartment_water_units: ApartmentWaterUnits = field(default_factory=ApartmentWaterUnits, kw_only=True)
     pumps: PumpSystem = field(default_factory=PumpSystem)
+    # Explicit stage-P intent, not a calculated valve schedule or pump preset.
+    water_regulation_design: Optional[dict] = field(default=None, kw_only=True)
     fire_pumps: PumpSystem = field(default_factory=PumpSystem)
     balance: BalanceData = field(default_factory=BalanceData)
     fixtures: list = field(default_factory=list)  # список FixtureGroup (от АР)
@@ -855,10 +929,14 @@ class Project:
     v1_sections: List[V1SectionSpec] = field(default_factory=list)
     v1_network: Optional[V1NetworkSpec] = None
     v1_hydraulic_result: Optional[object] = None
+    t3_sections: list = field(default_factory=list)
+    t3_hydraulic_result: Optional[object] = None
     v1_stage_p_result: Optional[object] = None
     water_inlet_decision: Optional[object] = None
     head_paths: Optional[object] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по фактическому диктующему прибору
     storm_city: str = ""        # город для дождя (К2)
     fire_network: Optional["FireNetworkSpec"] = None
+    fire_station_input: Optional[object] = None
+    fire_station_model_input: Optional[dict] = None
     digital_passport: Optional[DigitalPassportInfo] = None

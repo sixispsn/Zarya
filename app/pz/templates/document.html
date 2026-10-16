@@ -83,6 +83,9 @@
 
 {# ── ТЕЛО ДОКУМЕНТА ── #}
 <h1 class="section-title">{{ document_title or 'Подраздел 5.2 «Система водоснабжения»' }}</h1>
+{% for note in doc.review_notes %}
+<p class="subitem stage-note"><b>{{ note }}</b></p>
+{% endfor %}
 
 {{ body_html|safe }}
 

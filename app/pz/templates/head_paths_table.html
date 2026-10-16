@@ -4,11 +4,11 @@
   <tbody>
   {% for path in head_paths.paths %}
     <tr>
-      <td>{{ path.label }}{% if path.code == head_paths.governing.code %}<br><b>Диктующая по имеющимся данным</b>{% endif %}</td>
+      <td>{{ path.label }}{% if head_paths.complete and path.code == head_paths.governing.code %}<br><b>Диктующая по имеющимся данным</b>{% endif %}</td>
       <td>{{ path.meter_loss_m|num(3) }}</td>
       <td>{{ path.heater_loss_m|num(2) }}</td>
       <td><b>{{ path.head.h_required_m|num(2) }}</b></td>
-      <td>{% if path.complete %}рассчитана{% else %}<b>предварительно</b><br>не заданы: {{ path.missing|join(', ') }}{% endif %}</td>
+      <td>{% if path.complete %}рассчитана{% else %}<b>предварительно</b><br>{% if path.missing %}не заданы: {{ path.missing|join(', ') }}{% else %}недостаточно исходных данных для расчёта Hтр{% endif %}{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

@@ -243,14 +243,16 @@ document.addEventListener("DOMContentLoaded", () => {
         : "Задайте точную высоту типового этажа по АР"
     );
     const roofKindComplete = Boolean(
-      roofKindControl && roofKindControl.value !== "unknown"
+      roofKindControl && !['unknown','pitched','complex'].includes(roofKindControl.value)
     );
     setCompletenessLamp(
       roofKindLamp,
       roofKindComplete,
       roofKindComplete
         ? "Вид кровли для выпуска вентиляции подтверждён"
-        : "Подтвердите вид и доступность кровли"
+        : roofKindControl?.value === 'complex'
+          ? "Для сложной кровли нужны участки и места фановых выходов"
+          : "Подтвердите вид и доступность кровли"
     );
 
     const pipeRows = [...document.querySelectorAll(

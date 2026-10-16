@@ -11,9 +11,10 @@
   СП 10.13130.2020 с Изменением № 1
   ГОСТ Р 21.619-2023 (оформление)
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional
 
+from app.calc.water_local_losses import LOCAL_LOSS_FACTORS, local_loss_factor
 from app.pz.project import (
     BuildingFlags, BuildingPurpose, FireSystem, FlowsData, NormativeRequirements,
     PipeMaterials, WaterSource,
@@ -24,11 +25,7 @@ from app.pz.project import (
 PRESSURE_LIMIT_MPA = 0.45
 
 # Коэффициент kм местных сопротивлений (∑Hil = i·l·(1+kм)), раздел 8 СП 30.13330.2020
-KM_BY_NETWORK = {
-    "domestic": 0.3,   # хоз-питьевые сети жилых и общественных зданий
-    "combined": 0.2,   # объединённые хоз-противопожарные / производственные
-    "fire": 0.1,       # противопожарные
-}
+KM_BY_NETWORK = LOCAL_LOSS_FACTORS  # совместимость с прежним именем справочника
 
 
 @dataclass
@@ -290,10 +287,10 @@ def calc_required_head(
       Hпр    — source.h_pr_m (20 м, п.8.21);
       ∑Hвод  — h_vod_m из расчёта счётчика (приоритет), иначе source.h_vod_m;
       Hтепл  — source.h_tepl_m (3 м если ТО наш; 0 если ГВС готовое/внешнее);
-      Hlввод — il_vvod·1,1, иначе source.h_vvod_m готовой суммой.
+      Hlввод — il_vvod·(1+kм), иначе source.h_vvod_m готовой суммой.
     Hтр считается, если заданы Hgeom, ∑Hil, ∑Hвод, Hlввод (Hпр всегда есть).
     """
-    km = KM_BY_NETWORK.get(source.network_kind, 0.3)
+    km = local_loss_factor(source.network_kind)
 
     # Hgeom — отметки в приоритете
     if source.elev_header_m is not None and source.elev_fixture_m is not None:
@@ -311,16 +308,17 @@ def calc_required_head(
     h_vod = h_vod_m if h_vod_m is not None else source.h_vod_m
     h_tepl = source.h_tepl_m if h_tepl_m is None else h_tepl_m
 
-    # Hlввод = i·Lввод·1,1
+    # Ввод использует тот же тип сети, а не фиксированную надбавку 10%.
     if source.il_vvod_m is not None:
-        h_vvod = round(source.il_vvod_m * 1.1, 2)
+        h_vvod = round(source.il_vvod_m * (1 + km), 2)
     else:
         h_vvod = source.h_vvod_m
 
-    h_il_label = (f"∑Hil — потери по диктующему направлению, i·l·(1+{km:.1f})"
+    factor_label = f"{km:g}".replace(".", ",")
+    h_il_label = (f"∑Hil — потери по диктующему направлению, i·l·(1+{factor_label})"
                   if source.il_dict_m is not None
                   else "∑Hil — расчетная сумма потерь по участкам диктующего направления")
-    h_vvod_label = ("Hlввод — потери на вводе, i·L·1,1"
+    h_vvod_label = (f"Hlввод — потери на вводе, i·L·(1+{factor_label})"
                     if source.il_vvod_m is not None
                     else "Hlввод — расчетные потери на участках ввода")
     parts = [
@@ -448,12 +446,17 @@ def calc_head_paths(
         heater = source.h_tepl_m if source.hws_heater_in_scope else 0.0
         if source.hws_heater_in_scope and heater <= 0:
             hot_missing.append("потери в водонагревателе/теплообменнике")
+        hot_source = source
+        if source.internal_losses_scope == "cold_only":
+            hot_source = replace(source, il_dict_m=None, h_il_m=source.h_il_hot_m)
+            if source.h_il_hot_m is None:
+                hot_missing.append("отдельный расчёт потерь труб по трассе Т3")
         hot = HeadPathResult(
             code="T3",
             label="Т3 — через водонагреватель к горячему диктующему прибору",
             meter_loss_m=hot_meter,
             heater_loss_m=heater,
-            head=calc_required_head(source, h_vod_m=hot_meter, h_tepl_m=heater),
+            head=calc_required_head(hot_source, h_vod_m=hot_meter, h_tepl_m=heater),
             missing=hot_missing,
         )
     return HeadPathSet(cold=cold, hot=hot)
@@ -462,9 +465,13 @@ def calc_head_paths(
 def project_governing_head(project, *, fallback_h_vod_m: Optional[float] = None) -> HeadCalc:
     """Единый результат Hтр для документов, API и подбора оборудования."""
     paths = getattr(project, "head_paths", None)
-    if paths is not None:
-        return paths.governing.head
-    return calc_required_head(project.source, h_vod_m=fallback_h_vod_m)
+    head = paths.governing.head if paths is not None else calc_required_head(
+        project.source, h_vod_m=fallback_h_vod_m)
+    if project.document.review_head_pending:
+        # Presentation guard for an explicitly incomplete Studio preview. A
+        # complete cold path alone must not certify a shared V1/T3 pump.
+        return replace(head, h_required_m=None, pump_needed=None)
+    return head
 
 
 @dataclass

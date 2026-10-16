@@ -23,10 +23,17 @@ from app.api import (
 from app.normative.radar import run_radar_check
 from app.web import (
     architecture_import,
+    architecture_routes,
     building_model,
     normative_radar,
     passport,
+    pilot,
+    pilot_attachments,
+    pilot_objects,
+    pilot_admin,
     reference_analysis,
+    studio,
+    studio_location,
     wizard,
 )
 
@@ -90,6 +97,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Outermost boundary: even legacy routers, files and CORS are behind personal
+# authorization when the closed-pilot flag is explicitly enabled.
+app.add_middleware(pilot.PilotMiddleware)
 
 # Подключаем роутеры
 app.include_router(water_demand.router)
@@ -98,8 +108,15 @@ app.include_router(storm.router)
 app.include_router(water_meters.router)
 app.include_router(fire.router)
 app.include_router(wizard.router)
+app.include_router(studio.router)
+app.include_router(studio_location.router)
+app.include_router(pilot.router)
+app.include_router(pilot_objects.router)
+app.include_router(pilot_attachments.router)
+app.include_router(pilot_admin.router)
 app.include_router(building_model.router)
 app.include_router(architecture_import.router)
+app.include_router(architecture_routes.router)
 app.include_router(reference_analysis.router)
 app.include_router(normative_radar.router)
 app.include_router(passport.router)
@@ -115,7 +132,9 @@ app.mount(
 @app.get("/")
 def root():
     """Основная точка входа — рабочее место проектировщика."""
-    return RedirectResponse(url="/wizard", status_code=307)
+    return RedirectResponse(
+        url="/studio" if studio.is_enabled() else "/wizard", status_code=307
+    )
 
 
 @app.get("/health")

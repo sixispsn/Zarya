@@ -19,7 +19,10 @@ from app.architecture.program_store import (
     BuildingProgramDraft,
     BuildingProgramStore,
 )
-from app.architecture.program_report import generate_building_program_report_pdf
+from app.architecture.program_report import (
+    ProgramReportLayoutError,
+    generate_building_program_report_pdf,
+)
 from app.architecture.residential_program import (
     BuildingProgramTopology,
     ResidentialProgramInput,
@@ -362,7 +365,10 @@ def saved_building_model_report_pdf(model_id: str) -> Response:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="zarya-building-report-web-") as tmp_dir:
         path = Path(tmp_dir) / f"building-program-{model_id}.pdf"
-        generate_building_program_report_pdf(draft, path)
+        try:
+            generate_building_program_report_pdf(draft, path)
+        except ProgramReportLayoutError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         content = path.read_bytes()
     return Response(
         content=content,

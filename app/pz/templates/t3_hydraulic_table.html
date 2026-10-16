@@ -1,0 +1,28 @@
+<p class="subitem">Расчёт пути к горячему прибору в режиме водоразбора:
+  {{ t3_hydraulics.method }}. H = i·l·(1+k<sub>l</sub>), k<sub>l</sub> = 0,30.
+  Удельные потери определены общим модулем Darcy–Weisbach / Swamee–Jain
+  при опорных условиях формулы (15), 10 °C. Это отдельное расширение расчётного ядра,
+  не расчёт циркуляционных колец Т4.</p>
+{% for item in t3_hydraulics.missing %}<p class="subitem">Требуются данные: {{ item }}</p>{% endfor %}
+<table class="data calc-table">
+  <thead><tr><th>Участок</th><th>L, м</th><th>dвн, мм</th><th>q исходный, л/с</th><th>kcir</th><th>q расч., л/с</th><th>v, м/с</th><th>H, м</th></tr></thead>
+  <tbody>{% for r in t3_hydraulics.sections if not r.missing %}
+  <tr><td>{{ r.section_id }}</td><td>{{ r.length_m|num(2) }}</td><td>{{ r.inner_diameter_mm|num(2) }}</td><td>{{ r.original_flow_lps|num(3) }}</td><td>{{ r.circulation_factor|num(2) }}</td><td>{{ r.flow_lps|num(3) }}</td><td>{{ r.velocity_mps|num(3) }}{% if not r.velocity_ok %} (выше предела){% endif %}</td><td>{{ r.total_loss_m|num(3) }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% for r in t3_hydraulics.sections if not r.missing %}
+<p class="subitem">{{ r.section_id }}: шероховатость {{ r.roughness_mm|num(3) }} мм,
+  i = {{ r.specific_loss_m_per_m|num(5) }} м/м,
+  линейные потери {{ r.linear_loss_m|num(3) }} м;
+  предел скорости {{ r.velocity_limit_mps|num(2) }} м/с принят проектировщиком по п. 8.26 / приложению И.
+  {% if r.flow_mode == 'corrected' %}Расход уже скорректирован, повторная поправка не вводится. Основание: {{ r.basis }}.
+  {% elif r.flow_mode == 'main' %}qcir = {{ r.circulation_flow_lps|num(3) }} л/с - заданное исходное значение
+  для поправки водоразбора Т3, не результат расчёта кольца Т4; kcir по приложению Г.
+  {% if r.basis %}Основание: {{ r.basis }}.{% endif %}
+  {% elif r.flow_mode == 'none' %}Задана система без циркуляции.
+  {% else %}Задан участок вне поправки по п. 10.11.{% endif %}</p>
+{% endfor %}
+<p class="subitem">Сумма потерь труб пути Т3:
+  {% if t3_hydraulics.total_loss_m is not none %}{{ t3_hydraulics.total_loss_m|num(3) }} м.
+  {% else %}не определена, расчёт неполный.{% endif %}
+  Общий ввод, водомеры и водонагреватель учитываются отдельно в составе напора.</p>

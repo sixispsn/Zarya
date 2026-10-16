@@ -1,0 +1,40 @@
+{% if r.enabled %}
+<section class="rainwater-reuse">
+<h2>Использование дождевой воды</h2>
+<p>Предусмотрена проработка использования атмосферной воды: {{ r.purpose|lower }}.
+Размещение резервуара: {{ r.location|lower }}. {% if r.input.technical_use %}{{ r.input.technical_use }}.{% endif %}
+Это отдельная система технического водоснабжения, не питьевой водопровод.</p>
+<p>Основание: {{ r.reference }}. Для жилого здания требуется технико-экономическое обоснование.
+Подготовка атмосферной воды предусматривает отстаивание и обеззараживание с учётом качества исходной воды и назначения потребителей.</p>
+{% if r.treatment.status != 'not_configured' %}
+<p>Выбран ограниченный сценарий: {{ r.treatment.label }}. Применимость к зданию, кровле и водосбору проверяется отдельно.
+{% if r.treatment.candidates %}Кандидаты: {% for item in r.treatment.candidates %}{{ item.model }}{% if not loop.last %}; {% endif %}{% endfor %}.{% endif %}
+Это не подтверждение санитарной пригодности воды.</p>
+{% if r.treatment.head_loss_m is not none %}<p>По введённому листу подбора потери фильтра {{ r.input.treatment_filter_loss_m|num }} м
+и УФ {{ r.input.treatment_uv_loss_m|num }} м суммируются: {{ r.treatment.head_loss_m|num }} м при {{ r.input.treatment_selection_flow_lps|num }} л/с.
+Основание: {{ r.input.treatment_selection_source }}. Качество: {{ r.input.treatment_quality_basis }}.</p>{% endif %}
+{% if r.treatment.missing or r.treatment.errors %}<p>Подготовка воды не завершена: {{ (r.treatment.missing + r.treatment.errors)|join('; ') }}.</p>{% endif %}
+{% endif %}
+{% if r.storage_rule %}<p>{{ r.storage_rule }}</p>{% endif %}
+{% if r.missing or r.errors %}<p><strong>Недостаточно данных:</strong> {{ (r.missing + r.errors)|join('; ') }}.</p>{% endif %}
+{% if r.totals %}
+<p>Проверка выбранного полезного объёма {{ r.input.useful_volume_m3|num }} м³ выполнена за {{ r.days|length }} суток
+({{ r.days[0].date }} — {{ r.days[-1].date }}): поступило {{ r.totals.inflow_m3|num }} м³,
+использовано {{ r.totals.supplied_m3|num }} м³, дефицит {{ r.totals.deficit_m3|num }} м³,
+перелив {{ r.totals.overflow_m3|num }} м³. Это предварительный баланс, а не завершённый подбор системы.</p>
+{% endif %}
+<p>Автоматическое пополнение из В1 и сброс в К1 не предусмотрены. Точка безопасного отвода перелива и опорожнения требует согласования.
+Оборудование учитывается в отдельной группе спецификации ИОС2; неопределённые количества оставлены пустыми.</p>
+{% if r.pump.selected %}
+<p>Кандидат для подачи на полив: {{ r.pump.selected.model }}, {{ r.pump.selected.power_kw|num }} кВт,
+при требуемых Q={{ r.pump.duty.q_m3h|num }} м³/ч и H={{ r.pump.duty.h_m|num }} м.
+Потери диктующего шланга {{ r.pump.duty.hose_m|num }} м учтены отдельно.
+Встроенный поплавок и комплектный обратный клапан не дублируются в закупке.
+Подбор предварительный; управление, качество воды, давления и монтаж требуют подтверждения.</p>
+{% elif r.input.pump_setup %}<p>Подбор насоса не завершён: {{ (r.pump.missing + r.pump.errors)|join('; ') }}.
+{% if r.pump.status == 'no_match' %}Подходящего кандидата при заданных условиях нет.{% endif %}</p>{% endif %}
+<p>Базовый баланс водопотребления и водоотведения не изменён. Годовое снижение потребления питьевой воды
+по ГОСТ Р 21.619-2023, п. 5.1.22 обосновывается отдельно, с распределением потребителей и принятым проектным решением.</p>
+{% include 'rainwater_design.html' %}
+</section>
+{% endif %}

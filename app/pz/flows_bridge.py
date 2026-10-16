@@ -100,11 +100,25 @@ def _pump_power(pump, wp_q: float, wp_h: float) -> tuple[float, float]:
 def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйственно-питьевой",
                    scheme_note: str = "1 раб. + 1 рез.", mode: str = "1") -> PumpSystem:
     """PumpResult -> PumpSystem (с top3, кривой и данными графика Q-H)."""
+    curve_fields = dict(
+        h_stat=res.h_stat if res.h_stat is not None else 0.0,
+        k_sys=res.k_sys if res.k_sys is not None else 0.0,
+        curve_kind=getattr(res, "curve_kind", ""),
+        curve_note=" ".join(getattr(res, "notes", [])),
+    )
+    if getattr(res, "required", True) is False:
+        return PumpSystem(
+            required=False, purpose=purpose,
+            q_design_m3h=res.q_design, h_design_m=res.h_required,
+            count_note="Повышение напора при расчётном расходе не требуется",
+            **curve_fields,
+        )
     if not getattr(res, "candidates", None):
         return PumpSystem(
             required=True, purpose=purpose, count_note="подбор не дал кандидатов",
             q_design_m3h=float(getattr(res, "q_design", 0.0) or 0.0),
             h_design_m=float(getattr(res, "h_required", 0.0) or 0.0),
+            **curve_fields,
         )
 
     top3: list[PumpCandidate] = []
@@ -141,9 +155,10 @@ def pump_from_calc(res, *, purpose: str = "", type_label: str = "хозяйст�
         q_design_m3h=float(getattr(res, "q_design", 0.0) or 0.0),
         h_design_m=float(getattr(res, "h_required", 0.0) or 0.0),
         # детальный подбор + график
+        pump_head_at_design_m=getattr(acc, "head_at_design", None),
         top3=top3,
         curve=[(p.q, p.h) for p in acc.eff_curve],
-        h_stat=res.h_stat, k_sys=res.k_sys,
+        **curve_fields,
         wp_q=acc.working_point.q, wp_h=acc.working_point.h,
         q_opt=float(_g(acc.pump, "q_opt", default=0) or 0) * mode_factor,
         selection_note=(
@@ -163,6 +178,8 @@ def meters_from_calc(res) -> MetersSystem:
         m = ch.meter
         rows.append(MeterRow(
             label=ch.label,
+            q_average_m3h=ch.q_average_m3h,
+            ok_average=ch.pass_average,
             dn=int(_g(m, "d_mm", "dn", "d", default=0) or 0),
             type_label=_meter_type_label(m),
             s_resist=float(_g(m, "s", "s_resist", default=0) or 0),
@@ -177,6 +194,11 @@ def meters_from_calc(res) -> MetersSystem:
             need_bypass=ch.need_bypass,
             q_hr=float(getattr(ch, "q_hr_m3_per_h", 0) or 0),
             ok_v=ch.pass_sensitivity, need_combo=ch.need_combo,
+            minimum_flow_note=ch.minimum_flow_note,
+            q_min_hourly_m3h=(ch.minimum_flow_evidence.q_min_hourly_m3h if ch.minimum_flow_evidence else None),
+            q_min_passport_m3h=(ch.minimum_flow_evidence.q_min_passport_m3h if ch.minimum_flow_evidence else None),
+            passport_reference=(ch.minimum_flow_evidence.passport_reference if ch.minimum_flow_evidence else ""),
+            flow_reference=(ch.minimum_flow_evidence.flow_reference if ch.minimum_flow_evidence else ""),
         ))
     # примечание про обводную при 1 вводе — если ядро его выдало
     note_bypass = any("обводн" in str(n).lower() for n in getattr(res, "notes", []))

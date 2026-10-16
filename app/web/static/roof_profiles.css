@@ -1,0 +1,7 @@
+/* Compact, deliberately illustrative roof shapes, not drawing previews. */
+.roof-profile { display:flex; align-items:center; gap:12px; margin-top:12px; color:#626f72; }
+.roof-profile svg { width:76px; height:44px; flex:none; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+.roof-profile span { font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.roof-profile small { display:block; margin-top:3px; color:#808b8d; font-size:10px; }
+.roof-control-group { display:grid; align-content:start; min-width:0; }
+.roof-control-note { color:#7a6852; font-size:12px; line-height:1.6; margin-top:8px; }

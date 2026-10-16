@@ -1,0 +1,14 @@
+#suction-dialog { width: min(880px, calc(100vw - 32px)); max-height: 90vh; box-sizing: border-box; border: 1px solid #cbd5cc; border-radius: 16px; padding: 24px; overflow: auto; font: inherit; line-height: 1.45; color: #29392f; }
+#suction-dialog::backdrop { background: #18281c55; }
+#suction-dialog label { display: block; margin: 10px 0; }
+#suction-dialog input:not([type=checkbox]), #suction-dialog select, #suction-dialog textarea { display: block; width: 100%; box-sizing: border-box; }
+#suction-dialog textarea { font: inherit; border: 1px solid #cbd5cc; border-radius: 8px; padding: 8px; resize: vertical; }
+#suction-dialog p { margin: 12px 0; }
+#suction-dialog summary { cursor: pointer; padding: 6px 0; }
+#suction-dialog .suction-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#suction-dialog .suction-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 16px; }
+#suction-dialog fieldset { border: 1px solid #cbd5cc; border-radius: 8px; margin: 16px 0; min-width: 0; }
+#suction-dialog .suction-components { max-height: 220px; overflow: auto; overflow-wrap: anywhere; }
+#suction-dialog [data-suction-error] { color: #982a38; }
+#suction-dialog p, #suction-dialog li, #suction-dialog summary { overflow-wrap: anywhere; }
+@media(max-width:600px) { #suction-dialog { padding: 16px; } #suction-dialog .suction-grid { grid-template-columns: 1fr; } }

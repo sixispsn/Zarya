@@ -10,6 +10,7 @@ incoming horizontal main forces an open through junction.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from html import escape
 from io import BytesIO
 from math import isfinite
@@ -50,14 +51,12 @@ from app.pz.wastewater_stack_drafting import (
     build_wastewater_stack_assembly,
 )
 from app.pz.wastewater_ugo import render_ugo
+from app.pz.wastewater_ventilation import ROOF_VENT_HEIGHT_M as _ROOF_VENT_HEIGHT_M
+
+if TYPE_CHECKING:
+    from app.pz.wastewater_fan_binding import FanBuildingBinding
 
 
-_ROOF_VENT_HEIGHT_M = {
-    "flat_non_accessible": 0.2,
-    "pitched": 0.2,
-    "collecting_vent_shaft": 0.1,
-    "flat_accessible": 3.0,
-}
 
 _SHEET_WIDTH_MM = 841.0
 _SHEET_HEIGHT_MM = 594.0
@@ -133,100 +132,30 @@ def _title_block_svg(
     sheet_total: int,
     title: str,
     system_label: str = "К1, К2",
+    sheet_width_mm: float = _SHEET_WIDTH_MM,
+    sheet_height_mm: float = _SHEET_HEIGHT_MM,
+    units_per_mm: float = _SHEET_SCALE,
 ) -> str:
-    """Основная надпись формы 3 в координатах листа A1."""
-    doc = document
-    scale = _SHEET_SCALE
-    x0 = _FRAME_RIGHT - 185.0 * scale
-    y0 = _FRAME_BOTTOM - 55.0 * scale
+    """Shared measured form 3; physical size is independent of drawing scale."""
+    from app.pz.graphic_document_frame import title_block_svg
+    return title_block_svg(document, sheet_no=sheet_no, sheet_total=sheet_total,
+        title=title, system_label=system_label, sheet_width_mm=sheet_width_mm,
+        sheet_height_mm=sheet_height_mm, units_per_mm=units_per_mm)
 
-    def x(mm: float) -> float:
-        return x0 + mm * scale
 
-    def y(mm: float) -> float:
-        return y0 + mm * scale
+def drawing_frame_svg(document: DocumentInfo, *, width_mm: float, height_mm: float,
+                      title: str, system_label: str, sheet_no: int = 1,
+                      sheet_total: int = 1) -> str:
+    """Paper-mm entry point: standard margins and the shared full title block.
 
-    def line(
-        x1: float,
-        y1: float,
-        x2: float,
-        y2: float,
-        width: float = _LINE_THIN,
-    ) -> str:
-        return (
-            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" '
-            f'y2="{y2:.1f}" stroke="{BLACK}" stroke-width="{width:.1f}"/>'
-        )
-
-    def text_svg(
-        px: float,
-        py: float,
-        value: str,
-        size: float,
-        anchor: str = "middle",
-        weight: str = "normal",
-    ) -> str:
-        return (
-            f'<text x="{px:.1f}" y="{py:.1f}" font-family="{FONT}" '
-            f'font-size="{size:.1f}" text-anchor="{anchor}" '
-            f'font-weight="{weight}">{escape(value)}</text>'
-        )
-
-    rows = [
-        f'<g data-title-block="form-3" data-sheet-no="{sheet_no}" '
-        f'data-sheet-total="{sheet_total}">',
-        f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{185*scale:.1f}" '
-        f'height="{55*scale:.1f}" fill="white" stroke="{BLACK}" '
-        f'stroke-width="{_LINE_MAIN:.1f}"/>',
-        line(x(65), y(0), x(65), y(55), _LINE_MAIN),
-    ]
-    for column in (7, 17, 25, 37, 53):
-        rows.append(line(x(column), y(0), x(column), y(25)))
-    for column in (17, 37, 53):
-        rows.append(line(x(column), y(25), x(column), y(55)))
-    rows.append(line(x(135), y(25), x(135), y(55), _LINE_MAIN))
-    for column in (150, 165):
-        rows.append(line(x(column), y(25), x(column), y(40)))
-    for row_mm in range(5, 55, 5):
-        rows.append(line(x(0), y(row_mm), x(65), y(row_mm)))
-    for row_mm, start_mm in ((10, 65), (25, 65), (30, 135), (40, 65)):
-        rows.append(line(x(start_mm), y(row_mm), x(185), y(row_mm)))
-    for label, c0, c1 in (
-        ("Изм.", 0, 7), ("Кол.уч.", 7, 17), ("Лист", 17, 25),
-        ("№ док.", 25, 37), ("Подп.", 37, 53), ("Дата", 53, 65),
-    ):
-        rows.append(text_svg(x((c0 + c1) / 2), y(23.4), label, _FONT_H_2_5))
-    signers = (
-        ("Разраб.", doc.developer_name, 30),
-        ("Проверил", doc.inspector_name, 35),
-        ("Нач. отдела", doc.dept_head_name, 40),
-        ("ГИП", doc.gip_name, 45),
-        ("Н. контр.", doc.norm_control_name, 55),
+    The drawing must reserve the bottom 55 mm; never scale the inscription
+    down to fit a crowded diagram.
+    """
+    from app.pz.graphic_document_frame import drawing_frame_svg as shared_frame
+    return shared_frame(
+        document, width_mm=width_mm, height_mm=height_mm, title=title,
+        system_label=system_label, sheet_no=sheet_no, sheet_total=sheet_total,
     )
-    for label, name, row_mm in signers:
-        rows.append(text_svg(
-            x(1), y(row_mm - 1.5), label, _FONT_H_2_5, "start"
-        ))
-        if name:
-            rows.append(text_svg(
-                x(27), y(row_mm - 1.5), _short(name, 18), _FONT_H_2_5
-            ))
-    rows.extend((
-        text_svg(x(125), y(7), _short(doc.cipher or "", 34), _FONT_H_3_5),
-        text_svg(x(125), y(18), _short(doc.object_name or "", 68), _FONT_H_2_5),
-        text_svg(x(100), y(34.5), _short(doc.object_part or "", 38), _FONT_H_2_5),
-        text_svg(x(142.5), y(28.5), "Стадия", _FONT_H_2_5),
-        text_svg(x(157.5), y(28.5), "Лист", _FONT_H_2_5),
-        text_svg(x(175), y(28.5), "Листов", _FONT_H_2_5),
-        text_svg(x(142.5), y(37.3), doc.stage_label or "П", _FONT_H_3_5),
-        text_svg(x(157.5), y(37.3), str(sheet_no), _FONT_H_3_5),
-        text_svg(x(175), y(37.3), str(sheet_total), _FONT_H_3_5),
-        text_svg(x(100), y(47), _short(title, 48), _FONT_H_2_5),
-        text_svg(x(100), y(53), system_label, _FONT_H_3_5),
-        text_svg(x(160), y(49), _short(doc.organization or "", 28), _FONT_H_2_5),
-        "</g>",
-    ))
-    return "".join(rows)
 
 
 @dataclass(frozen=True)
@@ -357,8 +286,14 @@ def _line_with_label(
     stroke_width: float = 4.0,
     font_size: float = 14.0,
     extra_attributes: str = "",
+    adjacent_label_section: str | None = None,
 ) -> str:
     label = f"{_system_mark(system)} ⌀{dn_mm}"
+    if adjacent_label_section:
+        extra_attributes += (
+            f' data-label-on-adjacent-section="{escape(adjacent_label_section)}"'
+            f' data-label-dn="{dn_mm}"'
+        )
     return "".join(
         (
             f'<g data-building-pipe-line="{escape(line_id)}" '
@@ -366,7 +301,7 @@ def _line_with_label(
             f'<line x1="{start[0]:.1f}" y1="{start[1]:.1f}" '
             f'x2="{end[0]:.1f}" y2="{end[1]:.1f}" stroke="{BLACK}" '
             f'stroke-width="{stroke_width:g}"/>',
-            render_inline_pipe_label(
+            "" if adjacent_label_section else render_inline_pipe_label(
                 line_id=line_id,
                 label=label,
                 start=start,
@@ -711,6 +646,7 @@ def build_wastewater_building_floors_svg(
     riser_axis_by_id: dict[str, float] | None = None,
     residential_rooms: bool = False,
     mirrored_k1_riser_ids: frozenset[str] = frozenset(),
+    fan_binding: FanBuildingBinding | None = None,
 ) -> str:
     """Render the shared roof and characteristic-floor sheet."""
     errors = assembly.validate()
@@ -805,6 +741,7 @@ def build_wastewater_building_floors_svg(
             )
         )
 
+    fan_ending_layers: list[str] = []
     for stack in selected_k1:
         local_riser_x = stack.floor(floors[0]).port("riser_join").point.x_mm
         riser_x = axis_register[stack.riser_id]
@@ -812,6 +749,8 @@ def build_wastewater_building_floors_svg(
         origin_x = riser_x + local_riser_x if mirror_x else riser_x - local_riser_x
         for floor_no in floors:
             floor = stack.floor(floor_no)
+            if fan_binding is not None and floor_no == floors[0]:
+                floor = fan_binding.terminate_floor(floor)
             body.append(
                 render_typical_floor_assembly_svg(
                     floor,
@@ -823,6 +762,7 @@ def build_wastewater_building_floors_svg(
                     render_architecture=not residential_rooms,
                     compact_fixture_annotations=residential_rooms,
                     annotation_scale=2.0 if residential_rooms else 1.0,
+                    include_riser_id=fan_binding is not None,
                 )
             )
             if floor_no in stack.revision_floors:
@@ -840,27 +780,29 @@ def build_wastewater_building_floors_svg(
 
         top_floor = stack.floor(floors[0])
         top_y = origins[floors[0]] + top_floor.port("riser_top").point.y_mm
-        body.append(
-            _line_with_label(
-                line_id=f"{stack.riser_id}-roof-vent",
-                system="K1",
-                dn_mm=stack.riser_dn_mm,
-                start=(riser_x, roof_y - 55.0),
-                end=(riser_x, top_y),
-                position=0.55,
-            )
-        )
-        body.append(
-            f'<line data-vent-cap="{escape(stack.riser_id)}" '
-            f'x1="{riser_x-13:.1f}" y1="{roof_y-55:.1f}" '
-            f'x2="{riser_x+13:.1f}" y2="{roof_y-55:.1f}" '
-            f'stroke="{BLACK}" stroke-width="2"/>'
-        )
-        body.append(
-            f'<text x="{riser_x+22:.1f}" y="{roof_y-68:.1f}" '
-            f'font-family="{FONT}" font-size="13">{escape(stack.riser_id)}; '
-            f'h={_fmt(stack.vent_height_above_roof_m, 1)} м</text>'
-        )
+        if fan_binding is not None:
+            fan_ending_layers.append(fan_binding.render_ending(
+                stack.riser_id, x=riser_x, origin_y=origins[floors[0]],
+                source_sheet=sheet_no,
+            ))
+        else:
+            body.extend((
+                _line_with_label(
+                    line_id=f"{stack.riser_id}-roof-vent",
+                    system="K1",
+                    dn_mm=stack.riser_dn_mm,
+                    start=(riser_x, roof_y - 55.0),
+                    end=(riser_x, top_y),
+                    position=0.55,
+                ),
+                f'<line data-vent-cap="{escape(stack.riser_id)}" '
+                f'x1="{riser_x-13:.1f}" y1="{roof_y-55:.1f}" '
+                f'x2="{riser_x+13:.1f}" y2="{roof_y-55:.1f}" '
+                f'stroke="{BLACK}" stroke-width="2"/>',
+                f'<text x="{riser_x+22:.1f}" y="{roof_y-68:.1f}" '
+                f'font-family="{FONT}" font-size="13">{escape(stack.riser_id)}; '
+                f'h={_fmt(stack.vent_height_above_roof_m, 1)} м</text>'
+            ))
         for upper, lower in zip(floors, floors[1:]):
             upper_bottom = origins[upper] + stack.floor(upper).port("riser_bottom").point.y_mm
             lower_top = origins[lower] + stack.floor(lower).port("riser_top").point.y_mm
@@ -1061,6 +1003,7 @@ def build_wastewater_building_floors_svg(
             f'{(basement_sheet_by_riser_id or {}).get(riser.riser_id, basement_first_sheet_no)}</text>'
         )
 
+    body.extend(fan_ending_layers)  # never hidden by the next room's white background
     if residential_rooms:
         for upper, lower in zip(floors, floors[1:]):
             if upper - lower <= 1:
@@ -1088,8 +1031,6 @@ def build_wastewater_building_floors_svg(
 
     body.extend(
         (
-            f'<line x1="{margin+30}" y1="{bottom_y+35:.1f}" '
-            f'x2="{_FRAME_RIGHT-650:.1f}" y2="{bottom_y+35:.1f}" stroke="#777"/>',
             f'<text x="{margin+38}" y="{bottom_y+78:.1f}" font-family="{FONT}" '
             'font-size="13">Все показанные приборы и количества получены из реестра проекта. '
             'К2 не соединяется с К1.</text>',
@@ -1624,8 +1565,6 @@ def _build_two_riser_basement_reference_svg(
 
     body.extend(
         (
-            f'<rect x="{margin+35}" y="{1680}" width="{2010}" '
-            'height="215" fill="white" stroke="#777" stroke-width="1"/>',
             f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
             'font-size="14" font-weight="bold">Граница детализации</text>',
             f'<text x="{margin+58}" y="1745" font-family="{FONT}" '
@@ -1703,6 +1642,7 @@ def _render_basement_system_fragment(
     riser_axis_by_id: dict[str, float],
     range_label_offset_y: float = 205.0,
     proportioned_fittings: bool = False,
+    floor_sheet_no: int = 1,
 ) -> None:
     """Draw one paginated fragment of a confirmed linear system chain."""
     fragment = risers[start_index:end_index]
@@ -1807,6 +1747,11 @@ def _render_basement_system_fragment(
         )
         start = (incoming_x, end[1] - 5.0)
         incoming_stub = (start, end)
+        adjacent = collectors[start_index] if start_index < len(collectors) else outlet
+        # A very short continuation is beside the tee, not a fresh unmarked
+        # main. Its DN is repeated on the adjacent through section (only when
+        # identical); its slope is already shown on the preceding sheet.
+        short_continuation = end[0] - start[0] < 160 and incoming.dn_mm == adjacent.dn_mm
         body.append(
             _line_with_label(
                 line_id=incoming.section_id,
@@ -1815,19 +1760,23 @@ def _render_basement_system_fragment(
                 start=start,
                 end=end,
                 position=0.42,
+                adjacent_label_section=adjacent.section_id if short_continuation else None,
             )
         )
-        body.append(
-            _slope_sign_svg(
-                marker_id=f"{incoming.section_id}-slope-in-{start_index}",
-                value_per_mille=float(incoming.slope_per_mille or 0),
-                start=start,
-                end=end,
-                position=0.38,
+        if not short_continuation:
+            body.append(
+                _slope_sign_svg(
+                    marker_id=f"{incoming.section_id}-slope-in-{start_index}",
+                    value_per_mille=float(incoming.slope_per_mille or 0),
+                    start=start,
+                    end=end,
+                    position=0.38,
+                )
             )
-        )
+        source_y = start[1] + 44 if short_continuation else start[1] - 34
+        source_anchor = ' text-anchor="end"' if short_continuation else ''
         body.append(
-            f'<text x="{start[0]:.1f}" y="{start[1]-34:.1f}" '
+            f'<text x="{start[0]:.1f}" y="{source_y:.1f}"{source_anchor} '
             f'font-family="{FONT}" font-size="12">с листа '
             f'{previous_sheet_no or "—"}</text>'
         )
@@ -1882,7 +1831,7 @@ def _render_basement_system_fragment(
                 f'stroke="{BLACK}" stroke-width="1.1"/>'
                 f'<text x="{x+36:.1f}" y="{first_floor_y+reference_offset_y+6:.1f}" '
                 f'font-family="{FONT}" font-size="12">Ревизия на 1 этаже '
-                f'+{revision_height_mm} — см. лист 1</text></g>'
+                f'+{revision_height_mm} — см. лист {floor_sheet_no}</text></g>'
             )
         if riser.lower_cleanout_element_ids:
             cleanout_id = riser.lower_cleanout_element_ids[0]
@@ -2089,6 +2038,7 @@ def build_wastewater_building_basement_fragment_svg(
     fragment_total: int,
     riser_axis_by_id: dict[str, float] | None = None,
     compact_vertical: bool = False,
+    floor_sheet_no: int = 1,
 ) -> str:
     """Render one A1 fragment of the complete lower-node chain."""
     errors = assembly.validate()
@@ -2205,6 +2155,7 @@ def build_wastewater_building_basement_fragment_svg(
         riser_axis_by_id=axis_register,
         range_label_offset_y=130.0 if compact_vertical else 205.0,
         proportioned_fittings=compact_vertical,
+        floor_sheet_no=floor_sheet_no,
     )
     _render_basement_system_fragment(
         body=body,
@@ -2225,10 +2176,9 @@ def build_wastewater_building_basement_fragment_svg(
         riser_axis_by_id=axis_register,
         range_label_offset_y=130.0 if compact_vertical else 205.0,
         proportioned_fittings=compact_vertical,
+        floor_sheet_no=floor_sheet_no,
     )
     body.extend((
-        f'<rect x="{margin+35}" y="1680" width="2010" height="215" '
-        'fill="white" stroke="#777" stroke-width="1"/>',
         f'<text x="{margin+58}" y="1715" font-family="{FONT}" '
         'font-size="14" font-weight="bold">Граница детализации</text>',
         f'<text x="{margin+58}" y="1745" font-family="{FONT}" font-size="12">'
@@ -2249,7 +2199,11 @@ def build_wastewater_building_basement_fragment_svg(
         ),
         '</svg>',
     ))
-    return "".join(body)
+    svg = "".join(body)
+    if not compact_vertical:
+        from app.pz.basement_callout_layout import layout_basement_callouts
+        svg = layout_basement_callouts(svg)
+    return svg
 
 
 def build_wastewater_building_basement_svg(
@@ -2459,6 +2413,8 @@ def audit_confirmed_architecture_basement_svgs(
 
 def build_wastewater_building_svgs(
     assembly: WastewaterBuildingAssembly,
+    *,
+    fan_binding: FanBuildingBinding | None = None,
 ) -> tuple[str, ...]:
     """Compose as many A1 fragments as the confirmed riser count requires."""
     k1_floor_chunks = _chunks(assembly.k1_stacks, _FLOOR_K1_PAGE_CAPACITY)
@@ -2507,7 +2463,8 @@ def build_wastewater_building_svgs(
         for index in range(floor_page_count)
     )
     drawing_page_count = floor_page_count + basement_page_count
-    sheet_total = drawing_page_count + 1  # отдельный лист УГО комплекта
+    sheet_total = (drawing_page_count + len(fan_binding.data.roofs)
+                   if fan_binding else drawing_page_count + 1)
     basement_sheet_by_riser_id: dict[str, int] = {}
     for index in range(basement_page_count):
         sheet_no = floor_page_count + index + 1
@@ -2543,6 +2500,7 @@ def build_wastewater_building_svgs(
                 basement_first_sheet_no=floor_page_count + 1,
                 basement_sheet_by_riser_id=basement_sheet_by_riser_id,
                 riser_axis_by_id=riser_axis_registers[index],
+                fan_binding=fan_binding,
             )
         )
     for index in range(basement_page_count):
@@ -2566,6 +2524,7 @@ def build_wastewater_building_svgs(
                 fragment_index=index + 1,
                 fragment_total=basement_page_count,
                 riser_axis_by_id=riser_axis_registers[index],
+                floor_sheet_no=index + 1,
             )
         )
     return tuple(pages)
@@ -2862,7 +2821,6 @@ def build_residential_wastewater_reference_svg(
     floors_ty = 71.0
     first_floor_target_y = floors_ty + 1478.0 * content_scale
     basement_ty = first_floor_target_y - 255.0 * content_scale
-    title_shift_x = _FRAME_RIGHT - frame_right
     leader_layer = _residential_leader_layer_svg(
         basement_svg=basement_svg,
         assembly=assembly,
@@ -2921,14 +2879,14 @@ def build_residential_wastewater_reference_svg(
         f'scale({content_scale:.3f})">{basement_content}</g>',
         leader_layer,
         _residential_compact_legend_svg(y=1215.0),
-        f'<g transform="translate(-{title_shift_x:.3f} 0)">',
         _title_block_svg(
             assembly.document,
             sheet_no=1,
             sheet_total=1,
             title="Принципиальная схема К1, К2",
+            sheet_width_mm=sheet_width_mm,
+            sheet_height_mm=sheet_height_mm,
         ),
-        '</g>',
         '</svg>',
     ))
 
@@ -3019,6 +2977,8 @@ def audit_residential_wastewater_reference_svg(
 def audit_wastewater_building_svgs(
     assembly: WastewaterBuildingAssembly,
     svgs: tuple[str, ...],
+    *,
+    sheet_total: int | None = None,
 ) -> tuple[str, ...]:
     """Fail-fast graphic audit for the complete paginated assembly."""
     findings: list[str] = []
@@ -3111,7 +3071,7 @@ def audit_wastewater_building_svgs(
                 f"basement fragment {fragment_no}: elevation marks are incomplete"
             )
 
-    expected_sheet_total = str(len(roots) + 1)
+    expected_sheet_total = str(sheet_total if sheet_total is not None else len(roots) + 1)
     for page_no, root in enumerate(roots, start=1):
         visible_text = " ".join(root.itertext())
         if (
@@ -3161,6 +3121,27 @@ def audit_wastewater_building_svgs(
                 if child.get("data-pipe-line-id")
             }
             if line_id not in labels:
+                adjacent_id = group.get("data-label-on-adjacent-section")
+                adjacent = next(
+                    (g for g in root.iter() if g.get("data-building-pipe-line") == adjacent_id),
+                    None,
+                ) if adjacent_id else None
+                if adjacent is not None and adjacent.get("data-building-system") == group.get("data-building-system"):
+                    expected_label = f'{_system_mark(group.get("data-building-system", ""))} ⌀{group.get("data-label-dn", "")}'
+                    current_line = next(iter(group), None)
+                    next_line = next(iter(adjacent), None)
+                    connected_short = (
+                        current_line is not None and next_line is not None
+                        and current_line.get("x2") == next_line.get("x1")
+                        and current_line.get("y2") == next_line.get("y1")
+                        and abs(float(current_line.get("x2", "inf")) - float(current_line.get("x1", "-inf"))) < 160
+                    )
+                    if connected_short and any(
+                        g.get("data-pipe-line-id") == adjacent_id
+                        and g.get("data-inline-pipe-label") == expected_label
+                        for g in adjacent.iter()
+                    ):
+                        continue
                 findings.append(
                     f"sheet {page_no}: pipe line {line_id} has no inline system/DN mark"
                 )
@@ -3193,6 +3174,22 @@ def audit_wastewater_building_svgs(
     }
     if continuation_targets != basement_sheet_by_riser:
         findings.append("above-ground continuation references do not match basement sheets")
+
+    revision_sheets = {
+        row.get("data-building-revision"): page_no
+        for page_no, root in enumerate(roots, 1)
+        if root.get("data-sheet-role") == "floors"
+        for row in root.iter()
+        if row.get("data-building-revision")
+    }
+    for root in roots:
+        for row in root.iter():
+            revision_id = row.get("data-basement-revision-reference")
+            if revision_id:
+                source_sheet = revision_sheets.get(revision_id)
+                printed = re.search(r"см\. лист (\d+)\b", " ".join(row.itertext()))
+                if source_sheet is None or printed is None or int(printed.group(1)) != source_sheet:
+                    findings.append(f"{revision_id}: basement revision reference points to wrong floor sheet")
 
     def axis_register(
         page_roots: tuple[ElementTree.Element, ...],

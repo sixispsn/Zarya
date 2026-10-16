@@ -1,0 +1,32 @@
+{
+  "checked_on": "2026-10-12",
+  "base_geometry_revision": "2026-09-30.5",
+  "extension_revision": "2026-10-12.1",
+  "scope": "Manufacturer dimensions and origin; no hydraulic formula changes. Existing base geometry IDs retain their revision; new entries have separate source dates and immutable source hashes.",
+  "unchanged_source_hashes": ["proaqua-ppr-2026", "proaqua-fittings-passport", "vtr-1025", "vtr580-drawing", "vtr582-drawing", "itap-europa-100", "vtp-0626", "vtp707-drawing", "vtp761-drawing", "decast-106", "walraven-1301-0425", "vt214-1224", "vt192-0825", "vt161-0525"],
+  "no_prior_hash_not_automatically_reapproved": ["decast-2023", "vt161-drawing"],
+  "quarantined": [
+    {"item": "VALTEC VT161 DN15-50", "reason": "Existing passport/drawing dimension conflict retained"},
+    {"item": "VALTEC VTp707/761 63x2", "reason": "Existing dimension conflict retained"},
+    {"item": "LD nipple DN32", "reason": "Manufacturer page L=35 vs passport L=32.5 mm; not added to verified candidates"},
+    {"item": "LD47 DN32 Kv", "reason": "Manufacturer page 98.8 vs passport 123.5; no Kv imported"},
+    {"item": "VALTEC VTr.582.N.0007 DN32", "reason": "VTr-1025.pdf page 9 L=38 vs VTr.582.N.pdf L=37.5 mm; generic G1 1/4 nipple required by mating ports, but no verified model length assigned"}
+  ],
+  "limitations": [
+    "Pulsar model 2 envelope is maximum, not guaranteed installed size. Its own hydraulic curve is not implemented; mechanical S is not assigned to it.",
+    "A Russian manufacturer name alone does not confirm product origin. Origin claims are manufacturer evidence, not proof of compliance with a procurement localization register.",
+    "Straight-section kits, joint insertion, service space, support geometry and branch positions remain incomplete. Do not release a fabrication assembly or infer pipe cuts from drawing coordinates.",
+    "Scaled sheets show verified axial component dimensions, not a fully dimensioned mounted VU. Specification quantities remain derived from the existing composition graph."
+  ],
+  "reproduce_source_audit": "venv/bin/python scripts/audit_metering_sources.py",
+  "reproduce_new_sources": "venv/bin/python scripts/fetch_metering_review_documents.py",
+  "reproduce_pdf": "venv/bin/python scripts/preview_metering_dimensions.py",
+  "reproduce_connected_layout": "venv/bin/python scripts/preview_metering_layout.py",
+  "factory_kit_review": {
+    "source_id": "decast-106",
+    "scope": "VSKM 90 DG factory kit interfaces; drawing 1, sections 5.2, 5.3, 5.8, 6.2. Contents remain subject to order specification.",
+    "implemented": ["threaded pipe ports versus flat-gasket meter faces", "one kit owns two union pieces and two gaskets", "protected factory straight-section topology", "signed engagement/gasket dimension stack"],
+    "not_assumed": ["L1 split into two equal tails", "compressed gasket thickness", "thread engagement from DN", "3DN/1DN for every meter"],
+    "regression": "tests/test_metering_union_joints.py"
+  }
+}

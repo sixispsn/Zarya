@@ -8,13 +8,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from html import escape
 from io import BytesIO
 from pathlib import Path
-from textwrap import wrap
+from app.pz.wastewater_status_document import generate_status_pdf
 
 from app.pz.drafting_font import ensure_drafting_font_registered
 from app.pz.project import Project
+from app.pz.wastewater_ventilation import (
+    audit_project_fan_ventilation,
+    fan_drafting_limitations,
+)
 from app.pz.wastewater_building_drafting import (
     audit_confirmed_architecture_basement_svgs,
     build_confirmed_architecture_basement_svgs,
@@ -142,6 +145,15 @@ def assess_wastewater_scheme_readiness(
         reasons.append(
             "Не подтверждён вид и доступность кровли для выпуска вентиляции."
         )
+    elif project.sewage.roof_kind == "complex":
+        reasons.append(
+            "Сложная кровля требует участков с отметками, доступностью и привязкой "
+            "фановых выходов. Единый профиль и высота не назначаются автоматически."
+        )
+    # Наличие линии на крыше не доказывает работоспособность вентиляции.
+    # Неизвестные данные не превращаются в разрешение на выпуск схемы.
+    reasons.extend(audit_project_fan_ventilation(project).reasons)
+    reasons.extend(fan_drafting_limitations(project))
     # К3 выпускается самостоятельным каноническим листом. Наличие её строк в
     # общем реестре не должно блокировать уже подтверждённую схему К1/К2.
     unique = tuple(dict.fromkeys(reason for reason in reasons if reason))
@@ -152,60 +164,8 @@ def assess_wastewater_scheme_readiness(
     )
 
 
-def _status_svg(project: Project, reasons: tuple[str, ...]) -> str:
-    lines: list[str] = []
-    for index, reason in enumerate(reasons[:14], start=1):
-        wrapped = wrap(reason, width=105) or [reason]
-        lines.append(f"{index}. {wrapped[0]}")
-        lines.extend(f"   {part}" for part in wrapped[1:])
-    if len(reasons) > 14:
-        lines.append(f"… ещё замечаний: {len(reasons) - 14}")
-    text_rows = "".join(
-        f'<text x="74" y="{190 + index * 21}" font-size="13">'
-        f'{escape(line)}</text>'
-        for index, line in enumerate(lines)
-    )
-    object_name = project.document.object_name or "Объект не указан"
-    cipher = project.document.cipher or "Шифр не указан"
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" '
-        'height="594mm" viewBox="0 0 841 594">'
-        '<rect width="841" height="594" fill="white"/>'
-        '<rect x="20" y="15" width="816" height="574" fill="none" '
-        'stroke="#000" stroke-width="0.7"/>'
-        '<g font-family="DejaVu Sans, sans-serif" fill="#111">'
-        '<text x="56" y="65" font-size="12" font-weight="bold">'
-        'ИОС3 · КОНТРОЛЬ ПОЛНОТЫ ИСХОДНЫХ ДАННЫХ</text>'
-        '<text x="56" y="112" font-size="25" font-weight="bold">'
-        'ПРИНЦИПИАЛЬНАЯ СХЕМА НЕ СФОРМИРОВАНА</text>'
-        '<text x="56" y="145" font-size="14">'
-        'Рендерер не добавляет условные трубы, прочистки, переходы и отметки.</text>'
-        f'<text x="56" y="168" font-size="12">{escape(object_name)} · '
-        f'{escape(cipher)}</text>'
-        + text_rows
-        + '<text x="56" y="548" font-size="11">После заполнения реестра '
-        'будет выпущен многостраничный векторный PDF: этажи и нижние узлы.</text>'
-        '<text x="56" y="571" font-size="10">ГОСТ Р 21.620-2023 · '
-        'внутренние К1/К2 · без подмены стадии Р</text>'
-        '</g></svg>'
-    )
-
-
-def _generate_incomplete_status_pdf(
-    project: Project,
-    output_path: str,
-    reasons: tuple[str, ...],
-) -> str:
-    ensure_drafting_font_registered()
-    import cairosvg
-
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(
-        bytestring=_status_svg(project, reasons).encode("utf-8"),
-        write_to=str(path),
-    )
-    return str(path)
+def _generate_incomplete_status_pdf(project: Project, output_path: str, reasons: tuple[str, ...]) -> str:
+    return generate_status_pdf(project.document, reasons, output_path, kind="k1-k2")
 
 
 def _release_project(project: Project) -> Project:
@@ -368,3 +328,26 @@ def generate_wastewater_scheme(
             else "registry-building-v2-paginated"
         ),
     )
+
+
+def generate_wastewater_fan_binding_preview(project: Project, fan_details, output_path: str) -> WastewaterSchemeGenerationResult:
+    """Opt-in full-building control; does not bypass the production gate.
+
+    Keep this entry point distinct from a ready-for-release drawing. A saved
+    geometry confirmation alone does not approve equipment or the PD release.
+    """
+    from app.pz.wastewater_fan_binding import build_bound_fan_preview_svgs
+
+    svgs = build_bound_fan_preview_svgs(_release_project(project), fan_details)
+    path = _write_svg_pages(output_path, svgs)
+    return WastewaterSchemeGenerationResult(
+        path, False, "fan-binding-control",
+        ("Контроль привязки фановых узлов; не готовая проектная документация.",),
+    )
+
+
+def generate_saved_fan_binding_preview(project: Project, output_path: str) -> WastewaterSchemeGenerationResult:
+    """Use the same confirmed geometry that the Wizard/YAML store preserves."""
+    from app.pz.wastewater_fan_binding import fan_details_from_project
+
+    return generate_wastewater_fan_binding_preview(project, fan_details_from_project(project), output_path)

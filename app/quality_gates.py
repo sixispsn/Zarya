@@ -313,6 +313,27 @@ def build_release_quality_report(
             source="commission",
         ))
 
+    # The same GOST rows already participate in Studio's release decision.
+    # Omitting them here made the documentation indicator falsely green.
+    # Preserve their blocking flag and stage boundary; do not invent new checks.
+    for audit in _rows(commission, "normative_audits"):
+        for row in _rows(audit, "rows"):
+            status = _text(_value(row, "status"))
+            state = (QualityState.BLOCKED if _value(row, "blocks_release", False)
+                     else QualityState.READY if status in {"verified", "not_applicable"}
+                     else QualityState.CONDITIONAL)
+            add("documentation", QualityFinding(
+                code=str(_value(row, "rule_id")),
+                title=str(_value(row, "title")),
+                detail=str(_value(row, "evidence")),
+                action=("Дополнить указанные сведения или документы" if state == QualityState.BLOCKED
+                        else "Нет действий" if state == QualityState.READY
+                        else "Завершить сборку или подтвердить указанные сведения"),
+                reference=str(_value(row, "reference")), state=state,
+                source="normative_audit", systems=tuple(_value(row, "systems", ()) or ()),
+                fact_ids=tuple(_value(row, "fact_ids", ()) or ()),
+            ))
+
     gates = tuple(
         QualityGate(
             gate_id=gate_id,

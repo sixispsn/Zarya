@@ -14,6 +14,8 @@ Builder:
 from __future__ import annotations
 
 from typing import List
+from dataclasses import asdict
+from app.calc.meter_verification import validate_meter_minimum_checks
 
 from app.intake.project_intent import IntentLike, unwrap_project_intent
 from app.intake.fire_applicability import calculate_request_fire
@@ -73,6 +75,9 @@ def build_project(intent: IntentLike) -> Project:
         raise RequestValidationError(problems)
 
     p = Project()
+    from copy import deepcopy
+    p.suction_check = deepcopy(req.suction_check)
+    p.hws_stage_p = req.hws_stage_p  # immutable inputs; results are never persisted
 
     d = req.document
     p.document = DocumentInfo(
@@ -85,11 +90,20 @@ def build_project(intent: IntentLike) -> Project:
     p.building = BuildingFlags(
         purpose=_BUILDING_MAP[req.building_type],
         floors_above=req.floors, height_m=req.building_height_m,
+        floors_below=req.floors_below,
+        residents=req.residents,
+        seismicity=req.seismicity, permafrost=req.permafrost,
+        basement_clear_height_m=req.basement_clear_height_m,
+        floor_elevations_m=dict(req.floor_elevations_m),
+        apartments_by_floor=dict(req.apartments_by_floor),
         fire_height_m=req.fire_height_m, zones=req.zones,
         apartments=req.apartments,
         hws_type=HwsType(req.hws_type),
         total_area_m2=req.total_area_m2, risers_v1=req.risers_v1,
-        risers_t3=req.risers_t3, risers_t4=req.risers_t4)
+        risers_t3=req.risers_t3, risers_t4=req.risers_t4,
+        v1_sectional_valves_count=req.v1_sectional_valves_count,
+        v1_sectional_valves_basis=req.v1_sectional_valves_basis,
+        water_service_layout=req.water_service_layout)
     p.insulation = InsulationDesign(
         location=req.insulation_location,
         t_room_manual=req.insulation_t_room_manual,
@@ -100,6 +114,21 @@ def build_project(intent: IntentLike) -> Project:
 
     from app.pz.project import WaterSource
     sd = req.source_data
+    p.apartment_water_units = req.apartment_water_units
+    if req.metering_detail is not None:
+        from dataclasses import replace
+        from copy import deepcopy
+        p.metering_detail = replace(req.metering_detail,
+                                   mounting=deepcopy(req.metering_detail.mounting),
+                                   enhancements=dict(req.metering_detail.enhancements),
+                                   catalogue_items=dict(req.metering_detail.catalogue_items),
+                                   meter_products=dict(req.metering_detail.meter_products),
+                                   meter_orientations=dict(req.metering_detail.meter_orientations),
+                                   connection_items=dict(req.metering_detail.connection_items),
+                                   connection_thread_items=dict(req.metering_detail.connection_thread_items),
+                                   reducer_items=dict(req.metering_detail.reducer_items),
+                                   fitting_items=dict(req.metering_detail.fitting_items),
+                                   pipe_sections=dict(req.metering_detail.pipe_sections))
     if sd is not None:
         p.source = WaterSource(
             description=(sd.source_description or sd.tu_org),
@@ -107,19 +136,28 @@ def build_project(intent: IntentLike) -> Project:
             reserve_water_note=sd.reserve_water_note,
             connection_point=sd.connection_point,
             tu_number=sd.tu_number, tu_date=sd.tu_date,
+            tu_org=sd.tu_org,
             guaranteed_head_m=sd.guaranteed_head_m,
             maximum_head_m=sd.maximum_head_m,
+            pressure_note=sd.apartment_meter_basis,
             tu_limit_q_day=sd.tu_limit_q_day,
             tu_fire_outdoor_l_s=sd.tu_fire_outdoor_l_s,
             elev_header_m=sd.elev_header_m, elev_fixture_m=sd.elev_fixture_m,
+            lowest_fixture_elevation_m=sd.lowest_fixture_elevation_m,
+            lowest_fixture_basis=sd.lowest_fixture_basis,
             h_geom_m=sd.h_geom_m, il_dict_m=sd.il_dict_m, h_il_m=sd.h_il_m,
+            internal_losses_scope=sd.internal_losses_scope, h_il_hot_m=sd.h_il_hot_m,
             network_kind=sd.network_kind, h_pr_m=sd.h_pr_m,
             h_tepl_m=sd.h_tepl_m, il_vvod_m=sd.il_vvod_m,
             h_apartment_c_meter_m=sd.h_apartment_c_meter_m,
             h_apartment_h_meter_m=sd.h_apartment_h_meter_m,
             hws_heater_in_scope=sd.hws_heater_in_scope,
             h_vvod_m=sd.h_vvod_m, water_use_period_h=sd.water_use_period_h,
-            inputs_count=sd.inputs_count, npsh_available_m=sd.npsh_available_m)
+            meter_minimum_checks={k: asdict(v) for k, v in validate_meter_minimum_checks(sd.meter_minimum_checks).items()},
+            inputs_count=sd.inputs_count, npsh_available_m=sd.npsh_available_m,
+            station_room_number=sd.station_room_number,
+            station_floor_elevation_m=sd.station_floor_elevation_m,
+            station_suction_elevation_m=sd.station_suction_elevation_m)
 
     if req.fire_mode == "not_required":
         p.fire = FireSystem(
@@ -161,13 +199,18 @@ def build_project(intent: IntentLike) -> Project:
         p.fire.topology_basis = req.fire_topology_basis
         p.fire.branch_electric_valves = req.fire_branch_electric_valves
 
+    # One table-7.3 key for the intake/PZ and hydraulic cabinets. This is data
+    # binding, not a change to the legacy table or its flow/head calculation.
+    p.fire.nozzle_mm = req.nozzle_mm
+
     # Без ВПВ система В1 не может оставаться «объединённой В1+В2».
     # Нормализуем старые анкеты, в которых combined был скрытым UI-дефолтом.
-    if not p.fire.required and p.source.network_kind == "combined":
-        p.source.network_kind = "domestic"
+    from app.calc.water_local_losses import with_fire_topology
+    if not p.fire.required and p.source.network_kind in {"combined", "industrial_fire"}:
+        p.source.network_kind = with_fire_topology(p.source.network_kind, combined=False)
     elif p.fire.required:
-        p.source.network_kind = (
-            "combined" if p.fire.network_topology == "combined" else "domestic"
+        p.source.network_kind = with_fire_topology(
+            p.source.network_kind, combined=p.fire.network_topology == "combined",
         )
 
     p.pumps = PumpSystem(required=req.needs_booster_pumps)
@@ -181,9 +224,18 @@ def build_project(intent: IntentLike) -> Project:
         for r in req.rooms
     ] if p.fire.required else []
 
+    # Common-station data is explicit and independent of the example project.
+    fire_network = req.network
+    if req.fire_station_model is not None and p.fire.required:
+        from app.intake.studio_fire_station import parse_model
+        parsed = parse_model(req.fire_station_model)
+        fire_network = parsed.network
+        p.fire_station_input = parsed.station
+        p.fire_station_model_input = parsed.model
+
     # сеть В2: узлы собираются из участков (namespace runs), отметки из карты
-    if req.network is not None and p.fire.required:
-        n = req.network
+    if fire_network is not None and p.fire.required:
+        n = fire_network
         p.fire.ring_distribution = _network_has_cycle(n.runs)
         node_ids = sorted({x for r in n.runs for x in (r.from_node, r.to_node)})
         nodes = [MainNodeSpec(nid, float(n.node_elevations.get(nid, 0.0)))
@@ -197,6 +249,7 @@ def build_project(intent: IntentLike) -> Project:
             RiserSpec(r.name, r.at_node, length_m=r.height_m,
                       cabinet_elevation_m=r.cabinet_elevation_m, A=r.A,
                       dn=r.dn, equiv_length_m=r.equiv_length_m,
+                      jet_m=req.compact_jet_m,
                       repair_section_id=r.repair_section_id)
             for r in n.risers]
         p.fire_network = FireNetworkSpec(
@@ -210,6 +263,7 @@ def build_project(intent: IntentLike) -> Project:
     p.consumer_groups = [(g.code, g.count) for g in req.consumers]
     p.consumer_details = [(g.name, g.code, g.count) for g in req.consumers]
     p.v1_sections = [V1SectionSpec(**vars(s)) for s in req.v1_sections]
+    p.t3_sections = list(req.t3_sections)
     if req.v1_network is not None:
         p.v1_network = V1NetworkSpec(
             source_node=req.v1_network.source_node,
@@ -279,7 +333,18 @@ def build_project(intent: IntentLike) -> Project:
         req.wastewater_basement_floor_elevation_m
     )
     p.sewage.floor_height_m = req.wastewater_floor_height_m
+    p.sewage.presentation = req.wastewater_presentation
+    p.sewage.outlet_plan_side = req.wastewater_outlet_plan_side
+    p.sewage.first_manhole_cover_relative_elevation_m = (
+        req.wastewater_first_manhole_cover_relative_elevation_m
+    )
+    p.sewage.pipe_series_id = req.wastewater_pipe_series_id
+    p.sewage.ground_relative_elevation_m = req.wastewater_ground_relative_elevation_m
+    p.sewage.frost_depth_m = req.wastewater_frost_depth_m
     p.sewage.roof_kind = req.wastewater_roof_kind
+    p.sewage.fan_ventilation = req.wastewater_fan_ventilation
+    p.sewage.fan_geometry = req.wastewater_fan_geometry
+    p.sewage.roof_relative_elevation_m = req.wastewater_roof_relative_elevation_m
     p.sewage.design_assignment_ref = req.wastewater_design_assignment_ref
     p.sewage.survey_ref = req.wastewater_survey_ref
     p.sewage.service_life_years = req.wastewater_service_life_years
@@ -357,6 +422,9 @@ def build_project(intent: IntentLike) -> Project:
     )
     p.sewage.treatment_technology = req.wastewater_treatment_technology
     p.storm_city = req.storm_city
+    from copy import deepcopy
+    p.rainwater_reuse = deepcopy(req.rainwater_reuse)
+    p.wastewater_service = deepcopy(req.wastewater_service)
     p.storm = decide_storm_system(req.roof_type, req.floors)
     p.storm.city_code = req.storm_city
     p.storm.roof_area_m2 = req.storm_roof_area_m2

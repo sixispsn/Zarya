@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import re
 import shutil
+import threading
 import uuid
 
 from app.analysis.architecture_pdf import ArchitecturePdfSurvey, survey_architecture_pdf
@@ -13,6 +15,7 @@ from app.analysis.architecture_pdf import ArchitecturePdfSurvey, survey_architec
 
 _ID_RE = re.compile(r"^[a-f0-9]{10}$")
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+_ROUTE_LOCK = threading.RLock()
 
 
 class ArchitectureImportStore:
@@ -161,6 +164,41 @@ class ArchitectureImportStore:
         target = directory / "project_link.json"
         if target.is_file():
             target.unlink()
+
+    def load_route_traces(self, import_id: str) -> dict:
+        self.metadata(import_id)
+        path = self._directory(import_id) / "route_traces.json"
+        if not path.is_file():
+            return {"version": 1, "revision": 0, "traces": []}
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(value, dict) or value.get("version") != 1
+                or type(value.get("revision")) is not int or not isinstance(value.get("traces"), list)):
+            raise ValueError("invalid route measurement state")
+        return value
+
+    def save_route_traces(self, import_id: str, traces: list[dict], *, expected_revision: int) -> None:
+        # One lock across processes sharing the local store, plus optimistic
+        # revision control: a second tab must not overwrite an unseen edit.
+        self.metadata(import_id)
+        lock_path = self._directory(import_id) / "route_traces.lock"
+        with _ROUTE_LOCK, lock_path.open("a") as lock:
+            lock_path.chmod(0o600)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            current = self.load_route_traces(import_id)
+            if type(expected_revision) is not int or current["revision"] != expected_revision:
+                raise ValueError("Список трасс изменился в другой вкладке. Обновите страницу.")
+            if len(traces) > 100:
+                raise ValueError("В одной сессии измерения допускается до 100 трасс.")
+            value = {"version": 1, "revision": expected_revision+1, "traces": traces}
+            content = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)
+            directory = self._directory(import_id)
+            temporary = directory / f"routes-{uuid.uuid4().hex}.tmp"
+            try:
+                temporary.write_text(content, encoding="utf-8")
+                temporary.chmod(0o600)
+                temporary.replace(directory / "route_traces.json")
+            finally:
+                temporary.unlink(missing_ok=True)
 
     def delete(self, import_id: str) -> None:
         directory = self._directory(import_id)

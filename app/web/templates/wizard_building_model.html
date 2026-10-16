@@ -1,19 +1,17 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="ru" data-theme="light" data-ui="white"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="light">
 <title>Заря — модель здания</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("zarya-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/wizard.css?v=20260907-4">
 <script defer src="/static/wizard.js?v=20260907-2"></script>
+{% include 'site_assets.html' %}
 </head><body>
-<header class="topbar">
-  <a class="brand" href="/wizard"><span class="brand-mark">З</span><span class="brand-copy"><strong>Заря</strong><span>проектирование ИОС2 + ИОС3</span></span></a>
-  <nav class="topnav" aria-label="Основная навигация"><a href="/wizard">Расчёт</a><a href="/wizard/projects">Мои проекты</a><a href="/wizard/building-model" aria-current="page">Модель здания</a><a href="/wizard/architecture">Планы в схему</a><a href="/wizard/analyze">Анализ проекта</a><a class="normative-radar-link" href="/wizard/normatives" data-normative-radar-link><i class="radar-nav-lamp" data-state="gray"></i>Нормативы</a></nav><button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить цветовую тему"><span aria-hidden="true">◐</span><span data-theme-label>Светлая</span></button>
-</header>
+{% include 'site_header.html' %}
 
-<main class="building-model-shell">
+<main id="main-content" tabindex="-1" class="building-model-shell">
   <section class="building-model-hero">
     <div><p class="eyebrow">BUILDING PROGRAM / 01</p><h1>Модель здания</h1><p>Черновая функциональная топология для ранней стадии П. Она связывает этажи, квартиры, помещения, приборы и шахты, но не подменяет планы АР.</p></div>
     <div class="building-model-priority"><span class="verdict-light" data-state="warning"></span><div><strong>АР всегда главнее шаблона</strong><small>После загрузки и подтверждения планов типологическая модель заменяется фактической.</small></div></div>

@@ -121,6 +121,8 @@ class LeaderLayoutEngine:
         units_per_mm: float,
         clearance_mm: float = 2.0,
         line_width_mm: float = 0.25,
+        vertical_offsets_mm: tuple[float, ...] = (18., 24., 30., 36.),
+        horizontal_offsets_mm: tuple[float, ...] = (18., 24., 30., 36.),
     ) -> None:
         if units_per_mm <= 0:
             raise ValueError("leader units_per_mm must be positive")
@@ -130,6 +132,12 @@ class LeaderLayoutEngine:
         if line_width_mm <= 0:
             raise ValueError("leader line width must be positive")
         self.line_width_mm = line_width_mm
+        if not vertical_offsets_mm or any(not 0 < v < float("inf") for v in vertical_offsets_mm):
+            raise ValueError("leader vertical offsets must be finite and positive")
+        self.vertical_offsets_mm = vertical_offsets_mm
+        if not horizontal_offsets_mm or any(not 0 < v < float("inf") for v in horizontal_offsets_mm):
+            raise ValueError("leader horizontal offsets must be finite and positive")
+        self.horizontal_offsets_mm = horizontal_offsets_mm
         self._text_boxes: list[tuple[float, float, float, float]] = []
         self._segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
 
@@ -186,8 +194,8 @@ class LeaderLayoutEngine:
         verticals += (-verticals[0],)
         for vertical in verticals:
             for side in sides:
-                for vertical_mm in (18.0, 24.0, 30.0, 36.0):
-                    for horizontal_mm in (18.0, 24.0, 30.0, 36.0):
+                for vertical_mm in self.vertical_offsets_mm:
+                    for horizontal_mm in self.horizontal_offsets_mm:
                         placement = self._candidate(
                             request,
                             side=side,

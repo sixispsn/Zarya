@@ -1,0 +1,8 @@
+{% if pumps.q_design_m3h > 0 and pumps.h_design_m > 0 %}
+для расчётной потребности Qрасч = {{ pumps.q_design_m3h|num(3) }} м³/ч,
+Hтреб = {{ pumps.h_design_m|num(2) }} м
+{% else %}
+(расчётная потребность Q/H требует подтверждения)
+{% endif %}
+{% if pumps.count_note %}; состав: {{ pumps.count_note }}{% endif %}.
+Оценочное пересечение кривых и каталожные мощности приведены отдельно ниже.

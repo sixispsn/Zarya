@@ -14,7 +14,7 @@
   }
 }
 @page :first {
-  margin-bottom: 65mm;         /* запас: 55 мм штамп + 5 мм поле + 5 мм на шрифт */
+  margin-bottom: 60mm;         /* 55 мм штамп + 5 мм поле: сетка до верха штампа */
   @bottom-right {
     content: element(stamp3);
     vertical-align: bottom;

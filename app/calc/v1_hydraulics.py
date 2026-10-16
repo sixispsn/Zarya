@@ -15,6 +15,7 @@ import math
 from typing import Literal, Optional
 
 from app.calc.water_demand import ConsumerGroup, calculate_water_demand
+from app.calc.water_local_losses import local_loss_factor
 
 
 SectionRole = Literal["internal", "input"]
@@ -207,6 +208,7 @@ class V1HydraulicResult:
     static_source_head_m: Optional[float] = None
     all_minimum_pressures_ok: Optional[bool] = None
     all_maximum_pressures_ok: Optional[bool] = None
+    network_kind: str = "domestic"
 
 
 def _friction_factor(reynolds: float, roughness_m: float, diameter_m: float) -> float:
@@ -242,6 +244,7 @@ def calculate_v1_hydraulics(
     sections: list[V1SectionInput],
     *,
     water_temperature_c: float = 10.0,
+    network_kind: str = "domestic",
 ) -> V1HydraulicResult:
     """Рассчитать потери по последовательным участкам диктующего направления."""
     if not sections:
@@ -272,11 +275,7 @@ def calculate_v1_hydraulics(
         friction = _friction_factor(reynolds, s.roughness_mm / 1000.0, d)
         specific = friction * velocity * velocity / (2.0 * 9.80665 * d)
         linear = specific * s.length_m
-        # Для хозяйственно-питьевой сети жилых и общественных зданий
-        # k_l=0,3 по п. 8.28. Иное значение задаётся участку явно.
-        local_factor = 0.3 if s.local_loss_factor is None else s.local_loss_factor
-        if local_factor < 0:
-            raise ValueError(f"Участок {s.section_id}: k_l не может быть отрицательным")
+        local_factor = local_loss_factor(network_kind, s.local_loss_factor)
         total = linear * (1.0 + local_factor)
         out.append(V1SectionResult(
             section_id=s.section_id,
@@ -300,6 +299,7 @@ def calculate_v1_hydraulics(
     input_loss = sum(x.total_loss_m for x in out if x.role == "input")
     return V1HydraulicResult(
         sections=out,
+        network_kind=network_kind,
         internal_loss_m=round(internal, 3),
         input_loss_m=round(input_loss, 3),
         total_loss_m=round(internal + input_loss, 3),
@@ -315,6 +315,7 @@ def _calculate_v1_tree_network(
     *,
     flow_kind: Literal["cold", "total"] = "cold",
     water_temperature_c: float = 10.0,
+    network_kind: str = "domestic",
 ) -> V1HydraulicResult:
     """Распределить расходы по дереву В1 и найти диктующий узел/путь.
 
@@ -349,6 +350,7 @@ def _calculate_v1_tree_network(
     parent_section: dict[str, V1NetworkSectionInput] = {}
     for section in sections:
         sid = section.section_id.strip()
+        local_loss_factor(network_kind, section.local_loss_factor)
         if not sid or sid in section_by_id:
             raise ValueError("Обозначения участков В1 должны быть непустыми и уникальными")
         if section.from_node not in node_by_id or section.to_node not in node_by_id:
@@ -435,8 +437,7 @@ def _calculate_v1_tree_network(
                 velocity_limit_mps=section.velocity_limit_mps, velocity_ok=True,
                 reynolds=0.0, friction_factor=0.0,
                 specific_loss_m_per_m=0.0, linear_loss_m=0.0,
-                local_loss_factor=(section.local_loss_factor
-                                   if section.local_loss_factor is not None else 0.3),
+                local_loss_factor=local_loss_factor(network_kind, section.local_loss_factor),
                 total_loss_m=0.0, from_node=section.from_node,
                 to_node=section.to_node, diameter_selection=selection,
                 specific_loss_limit_m_per_m=section.max_specific_loss_m_per_m,
@@ -456,7 +457,8 @@ def _calculate_v1_tree_network(
                 local_loss_factor=section.local_loss_factor,
                 velocity_limit_mps=section.velocity_limit_mps,
                 material=section.material,
-            )], water_temperature_c=water_temperature_c).sections[0]
+            )], water_temperature_c=water_temperature_c,
+                network_kind=network_kind).sections[0]
 
         if section.inner_diameter_mm is not None:
             calculated = calculate_at(section.inner_diameter_mm)
@@ -534,6 +536,7 @@ def _calculate_v1_tree_network(
     dictating = max(checks, key=lambda x: (x.required_before_common_m, x.node_id))
     return V1HydraulicResult(
         sections=section_results,
+        network_kind=network_kind,
         internal_loss_m=dictating.internal_loss_m,
         input_loss_m=dictating.input_loss_m,
         total_loss_m=round(dictating.internal_loss_m + dictating.input_loss_m, 3),
@@ -632,6 +635,7 @@ def _calculate_v1_ring_network(
     *,
     flow_kind: Literal["cold", "total"],
     water_temperature_c: float,
+    network_kind: str,
 ) -> V1HydraulicResult:
     node_ids = {node.node_id for node in nodes}
     if source_node not in node_ids:
@@ -656,7 +660,7 @@ def _calculate_v1_ring_network(
     oriented = _orient_v1_tree(node_ids, base_sections, source_node)
     base = _calculate_v1_tree_network(
         nodes, oriented, source_node, flow_kind=flow_kind,
-        water_temperature_c=water_temperature_c)
+        water_temperature_c=water_temperature_c, network_kind=network_kind)
     base_rows = {row.section_id: row for row in base.sections}
 
     q_cycle: list[float] = []
@@ -683,8 +687,7 @@ def _calculate_v1_ring_network(
         friction = _friction_factor(
             reynolds, section.roughness_mm / 1000.0, diameter_m)
         specific = friction * velocity ** 2 / (2.0 * 9.80665 * diameter_m)
-        local_factor = (0.3 if section.local_loss_factor is None
-                        else section.local_loss_factor)
+        local_factor = local_loss_factor(network_kind, section.local_loss_factor)
         loss = specific * section.length_m * (1.0 + local_factor)
         return math.copysign(loss, flow)
 
@@ -722,7 +725,8 @@ def _calculate_v1_ring_network(
             local_loss_factor=section.local_loss_factor,
             velocity_limit_mps=section.velocity_limit_mps,
             material=section.material,
-        )], water_temperature_c=water_temperature_c).sections[0]
+        )], water_temperature_c=water_temperature_c,
+            network_kind=network_kind).sections[0]
         normal_rows[section.section_id] = replace(
             calculated,
             from_node=(section.from_node if q_reference >= 0 else section.to_node),
@@ -739,7 +743,8 @@ def _calculate_v1_ring_network(
                   if section.section_id != disabled.section_id]
         outage = _calculate_v1_tree_network(
             nodes, _orient_v1_tree(node_ids, active, source_node), source_node,
-            flow_kind=flow_kind, water_temperature_c=water_temperature_c)
+            flow_kind=flow_kind, water_temperature_c=water_temperature_c,
+            network_kind=network_kind)
         dictating = next(row for row in outage.node_checks
                          if row.node_id == outage.dictating_node_id)
         outage_results.append((disabled.section_id, outage))
@@ -777,13 +782,15 @@ def calculate_v1_network(
     *,
     flow_kind: Literal["cold", "total"] = "cold",
     water_temperature_c: float = 10.0,
+    network_kind: str = "domestic",
 ) -> V1HydraulicResult:
     """Рассчитать дерево либо сеть В1 с одним кольцом."""
+    local_loss_factor(network_kind)
     node_ids = {node.node_id for node in nodes}
     if not node_ids or not sections:
         return _calculate_v1_tree_network(
             nodes, sections, source_node, flow_kind=flow_kind,
-            water_temperature_c=water_temperature_c)
+            water_temperature_c=water_temperature_c, network_kind=network_kind)
     adjacency: dict[str, set[str]] = {node_id: set() for node_id in node_ids}
     for section in sections:
         if section.from_node in adjacency and section.to_node in adjacency:
@@ -801,11 +808,11 @@ def calculate_v1_network(
     if cycle_count == 0:
         return _calculate_v1_tree_network(
             nodes, sections, source_node, flow_kind=flow_kind,
-            water_temperature_c=water_temperature_c)
+            water_temperature_c=water_temperature_c, network_kind=network_kind)
     if cycle_count == 1:
         return _calculate_v1_ring_network(
             nodes, sections, source_node, flow_kind=flow_kind,
-            water_temperature_c=water_temperature_c)
+            water_temperature_c=water_temperature_c, network_kind=network_kind)
     if cycle_count < 0:
         missing = sorted(node_ids - seen)
         raise ValueError(
@@ -848,7 +855,8 @@ def apply_v1_inlets(
                 local_loss_factor=inlet.local_loss_factor,
                 velocity_limit_mps=inlet.velocity_limit_mps,
                 material=inlet.material,
-            )], water_temperature_c=water_temperature_c).sections[0]
+            )], water_temperature_c=water_temperature_c,
+                network_kind=result.network_kind).sections[0]
 
         if inlet.inner_diameter_mm is not None:
             row = calculate_at(inlet.inner_diameter_mm)
@@ -919,6 +927,19 @@ def apply_v1_inlets(
     )
 
 
+def static_head_at_elevation(source_head_m: float, source_elevation_m: float,
+                             point_elevation_m: float) -> float:
+    """Existing hydrostatic balance; no dynamic losses or pressure clamp.
+
+    The caller must establish hydraulic connection and the source regime.
+    A negative result does not prove a filled/pressurised pipe at that point.
+    """
+    if not all(math.isfinite(v) for v in
+               (source_head_m, source_elevation_m, point_elevation_m)):
+        raise ValueError("Напор и отметки должны быть конечными числами")
+    return source_head_m - (point_elevation_m - source_elevation_m)
+
+
 def audit_v1_pressures(
     result: V1HydraulicResult,
     *,
@@ -948,7 +969,7 @@ def audit_v1_pressures(
         if abs(dynamic - node.h_pr_m) <= 0.01:
             dynamic = node.h_pr_m
         static = (None if static_source_head_m is None
-                  else static_source_head_m - node.h_geom_m)
+                  else static_head_at_elevation(static_source_head_m, 0, node.h_geom_m))
         checks.append(V1PressureCheck(
             node_id=node.node_id,
             elevation_m=node.elevation_m,

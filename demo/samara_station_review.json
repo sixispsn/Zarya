@@ -1,0 +1,3648 @@
+{
+  "payload": {
+    "answers": {
+      "object_name": {
+        "value": "Жилой дом №2. Секция 3.2",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "building_purpose": {
+        "value": "residential",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "residents": {
+        "value": 350,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "apartments": {
+        "value": 143,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "consumer_code": {
+        "value": "residential_full_bath",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "floors": {
+        "value": 16,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "building_height_m": {
+        "value": 51.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "floor_height_m": {
+        "value": 3.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "basement_kind": {
+        "value": "basement",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "basement_floor_m": {
+        "value": -3.25,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "attic_kind": {
+        "value": "technical",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "roof_type": {
+        "value": "flat_non_accessible",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "hws_type": {
+        "value": "central",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "hws_heater_in_scope": {
+        "value": "yes",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "inputs_count": {
+        "value": 2,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "fire_topology": {
+        "value": "separate",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "guaranteed_head_m": {
+        "value": 30.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "technology_presence": {
+        "value": "no",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "pressure_loss_mode": {
+        "value": "sections",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "t3_loss_mode": {
+        "value": "sections",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_city": {
+        "value": "samara",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_funnels_count": {
+        "value": 2,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_drainage": {
+        "value": "internal",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "fire_height_m": {
+        "value": 46.35,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "fire_corridor_length_m": {
+        "value": 34.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "building_area_m2": {
+        "value": 9000.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "h_geom_m": {
+        "value": 48.195,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "h_tepl_m": {
+        "value": 3.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "apartment_design_residents": {
+        "value": 3,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_roof_area_m2": {
+        "value": 650.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_walls_area_m2": {
+        "value": 0.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_selected_riser_dn_mm": {
+        "value": 100,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_risers_count": {
+        "value": 1,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_funnel_heated": {
+        "value": "yes",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_funnels_on_different_levels": {
+        "value": "no",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_mode": {
+        "value": "common",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_space": {
+        "value": "technical_storey",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_member_ids": {
+        "value": "К1-А, К1-Б, К1-В, К1-Г",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_working_diameter_mm": {
+        "value": 100,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_opening_distance_m": {
+        "value": 5.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_plastic_exposed": {
+        "value": "yes",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_uv_protected": {
+        "value": "yes",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_collector_low_m": {
+        "value": 49.5,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_collector_high_m": {
+        "value": 49.7,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_space_floor_m": {
+        "value": 48.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_roof_level_m": {
+        "value": 51.0,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_fan_source_ref": {
+        "value": "3.2.pdf, лист 5: техэтаж. Характерная группа из 4 стояков; отметки, состав и отступы условно заданы для учебного прогона.",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k1_dn_mm": {
+        "value": 150,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k1_slope": {
+        "value": 0.01,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k1_outlet_invert_m": {
+        "value": -2.4,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k1_discharge_point": {
+        "value": "КК-1 (учебный приёмник К1)",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k1_source_ref": {
+        "value": "Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед реальным выпуском.",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k2_dn_mm": {
+        "value": 150,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k2_slope": {
+        "value": 0.01,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k2_outlet_invert_m": {
+        "value": -2.3,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k2_discharge_point": {
+        "value": "ДК-1 (учебный приёмник К2)",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "section_k2_source_ref": {
+        "value": "Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед реальным выпуском.",
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "storm_max_riser_flow_lps": {
+        "value": 11.518,
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "v1_sections": {
+        "value": [
+          {
+            "section_id": "В1-Подвод",
+            "role": "input",
+            "material": "ПЭ 110x6,6 (учебный выбор)",
+            "length_m": 20.0,
+            "inner_diameter_mm": 96.8,
+            "roughness_mm": 0.01,
+            "flow_lps": null
+          },
+          {
+            "section_id": "В1-Магистраль",
+            "role": "internal",
+            "material": "Стальная 76x3,5 (учебный выбор)",
+            "length_m": 20.0,
+            "inner_diameter_mm": 69.0,
+            "roughness_mm": 0.15,
+            "flow_lps": 1.636
+          },
+          {
+            "section_id": "В1-Стояк",
+            "role": "internal",
+            "material": "Стальная 48x3,5 (учебный выбор)",
+            "length_m": 48.0,
+            "inner_diameter_mm": 41.0,
+            "roughness_mm": 0.15,
+            "flow_lps": 0.565
+          },
+          {
+            "section_id": "В1-Квартира",
+            "role": "internal",
+            "material": "PE-X 20x2 (учебный выбор)",
+            "length_m": 8.0,
+            "inner_diameter_mm": 16.0,
+            "roughness_mm": 0.01,
+            "flow_lps": 0.217
+          }
+        ],
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      },
+      "t3_sections": {
+        "value": [
+          {
+            "section_id": "В1-к-водонагревателю",
+            "length_m": 5.0,
+            "inner_diameter_mm": 69.0,
+            "roughness_mm": 0.15,
+            "flow_lps": 1.902,
+            "flow_mode": "terminal",
+            "circulation_flow_lps": null,
+            "basis": "Условный подвод В1 к ИТП; циркуляция ГВС через холодный подвод не проходит.",
+            "velocity_limit_mps": 1.5,
+            "material": "Стальная 76x3,5 (учебный выбор)"
+          },
+          {
+            "section_id": "Т3-Магистраль",
+            "length_m": 20.0,
+            "inner_diameter_mm": 69.0,
+            "roughness_mm": 0.15,
+            "flow_lps": 1.902,
+            "flow_mode": "main",
+            "circulation_flow_lps": 0.5,
+            "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+            "velocity_limit_mps": 1.5,
+            "material": "Стальная 76x3,5 (учебный выбор)"
+          },
+          {
+            "section_id": "Т3-Стояк",
+            "length_m": 48.0,
+            "inner_diameter_mm": 41.0,
+            "roughness_mm": 0.15,
+            "flow_lps": 0.633,
+            "flow_mode": "main",
+            "circulation_flow_lps": 0.06,
+            "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+            "velocity_limit_mps": 1.5,
+            "material": "Стальная 48x3,5 (учебный выбор)"
+          },
+          {
+            "section_id": "Т3-Квартира",
+            "length_m": 8.0,
+            "inner_diameter_mm": 16.0,
+            "roughness_mm": 0.01,
+            "flow_lps": 0.23,
+            "flow_mode": "terminal",
+            "circulation_flow_lps": null,
+            "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+            "velocity_limit_mps": 1.5,
+            "material": "PE-X 20x2 (учебный выбор)"
+          }
+        ],
+        "candidates_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "source": {
+          "kind": "user",
+          "evidence": []
+        }
+      }
+    },
+    "accepted_values": {
+      "residents": 350,
+      "consumer_code": "residential_full_bath",
+      "sewage_max_fixture_lps": 1.6,
+      "floors": 16,
+      "apartments": 143,
+      "floor_height_m": 3.0,
+      "basement_kind": "basement",
+      "basement_floor_m": -3.25,
+      "section_drainage": "internal",
+      "section_funnel_heated": "yes",
+      "section_fan_mode": "common",
+      "section_fan_member_ids": "К1-А, К1-Б, К1-В, К1-Г",
+      "section_fan_space": "technical_storey",
+      "section_fan_space_floor_m": 48.0,
+      "section_fan_roof_level_m": 51.0,
+      "section_fan_collector_low_m": 49.5,
+      "section_fan_collector_high_m": 49.7,
+      "section_fan_source_ref": "3.2.pdf, лист 5: техэтаж. Характерная группа из 4 стояков; отметки, состав и отступы условно заданы для учебного прогона.",
+      "section_fan_working_diameter_mm": 100,
+      "section_fan_opening_distance_m": 5.0,
+      "section_fan_plastic_exposed": "yes",
+      "section_fan_uv_protected": "yes",
+      "building_height_m": 51.0,
+      "fire_height_m": 46.35,
+      "guaranteed_head_m": 30.0,
+      "hws_type": "central",
+      "inputs_count": 2,
+      "fire_topology": "separate",
+      "fire_corridor_length_m": 34.0,
+      "h_geom_m": 48.195,
+      "pressure_loss_mode": "sections",
+      "v1_sections": [
+        {
+          "section_id": "В1-Подвод",
+          "role": "input",
+          "material": "ПЭ 110x6,6 (учебный выбор)",
+          "length_m": 20.0,
+          "inner_diameter_mm": 96.8,
+          "roughness_mm": 0.01,
+          "flow_lps": null
+        },
+        {
+          "section_id": "В1-Магистраль",
+          "role": "internal",
+          "material": "Стальная 76x3,5 (учебный выбор)",
+          "length_m": 20.0,
+          "inner_diameter_mm": 69.0,
+          "roughness_mm": 0.15,
+          "flow_lps": 1.636
+        },
+        {
+          "section_id": "В1-Стояк",
+          "role": "internal",
+          "material": "Стальная 48x3,5 (учебный выбор)",
+          "length_m": 48.0,
+          "inner_diameter_mm": 41.0,
+          "roughness_mm": 0.15,
+          "flow_lps": 0.565
+        },
+        {
+          "section_id": "В1-Квартира",
+          "role": "internal",
+          "material": "PE-X 20x2 (учебный выбор)",
+          "length_m": 8.0,
+          "inner_diameter_mm": 16.0,
+          "roughness_mm": 0.01,
+          "flow_lps": 0.217
+        }
+      ],
+      "t3_loss_mode": "sections",
+      "t3_sections": [
+        {
+          "section_id": "В1-к-водонагревателю",
+          "length_m": 5.0,
+          "inner_diameter_mm": 69.0,
+          "roughness_mm": 0.15,
+          "flow_lps": 1.902,
+          "flow_mode": "terminal",
+          "circulation_flow_lps": null,
+          "basis": "Условный подвод В1 к ИТП; циркуляция ГВС через холодный подвод не проходит.",
+          "velocity_limit_mps": 1.5,
+          "material": "Стальная 76x3,5 (учебный выбор)"
+        },
+        {
+          "section_id": "Т3-Магистраль",
+          "length_m": 20.0,
+          "inner_diameter_mm": 69.0,
+          "roughness_mm": 0.15,
+          "flow_lps": 1.902,
+          "flow_mode": "main",
+          "circulation_flow_lps": 0.5,
+          "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+          "velocity_limit_mps": 1.5,
+          "material": "Стальная 76x3,5 (учебный выбор)"
+        },
+        {
+          "section_id": "Т3-Стояк",
+          "length_m": 48.0,
+          "inner_diameter_mm": 41.0,
+          "roughness_mm": 0.15,
+          "flow_lps": 0.633,
+          "flow_mode": "main",
+          "circulation_flow_lps": 0.06,
+          "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+          "velocity_limit_mps": 1.5,
+          "material": "Стальная 48x3,5 (учебный выбор)"
+        },
+        {
+          "section_id": "Т3-Квартира",
+          "length_m": 8.0,
+          "inner_diameter_mm": 16.0,
+          "roughness_mm": 0.01,
+          "flow_lps": 0.23,
+          "flow_mode": "terminal",
+          "circulation_flow_lps": null,
+          "basis": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+          "velocity_limit_mps": 1.5,
+          "material": "PE-X 20x2 (учебный выбор)"
+        }
+      ],
+      "h_apartment_c_meter_m": 0.683,
+      "h_apartment_h_meter_m": 0.767,
+      "apartment_design_residents": 3,
+      "h_pr_m": 20.0,
+      "hws_heater_in_scope": "yes",
+      "h_tepl_m": 3.0,
+      "roof_type": "flat_non_accessible",
+      "storm_city": "samara",
+      "storm_selected_riser_dn_mm": 100,
+      "storm_funnels_count": 2,
+      "storm_risers_count": 1,
+      "storm_max_riser_flow_lps": 11.518,
+      "storm_funnels_on_different_levels": "no",
+      "storm_roof_area_m2": 650.0,
+      "storm_walls_area_m2": 0.0,
+      "object_name": "Жилой дом №2. Секция 3.2",
+      "building_purpose": "residential",
+      "building_area_m2": 9000.0,
+      "attic_kind": "technical",
+      "technology_presence": "no",
+      "section_k1_dn_mm": 150,
+      "section_k1_slope": 0.01,
+      "section_k1_outlet_invert_m": -2.4,
+      "section_k1_discharge_point": "КК-1 (учебный приёмник К1)",
+      "section_k1_source_ref": "Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед реальным выпуском.",
+      "section_k2_dn_mm": 150,
+      "section_k2_slope": 0.01,
+      "section_k2_outlet_invert_m": -2.3,
+      "section_k2_discharge_point": "ДК-1 (учебный приёмник К2)",
+      "section_k2_source_ref": "Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед реальным выпуском."
+    },
+    "request_yaml": "schema_version: 1\ndocument:\n  cipher: ЗАРЯ-3.2\n  object_name: Жилой дом №2. Секция 3.2\n  organization: ''\n  object_address: г. Самара (учебные исходные)\n  object_part: Секция 3.2\n  stage: П\nbuilding:\n  type: residential\n  floors: 16\n  floors_below: 1\n  residents: 350\n  floor_elevations_m:\n    -1: -3.25\n    1: 0.0\n    2: 3.0\n    3: 6.0\n    4: 9.0\n    5: 12.0\n    6: 15.0\n    7: 18.0\n    8: 21.0\n    9: 24.0\n    10: 27.0\n    11: 30.0\n    12: 33.0\n    13: 36.0\n    14: 39.0\n    15: 42.0\n    16: 45.0\n  apartments_by_floor:\n    1: 8\n    2: 9\n    3: 9\n    4: 9\n    5: 9\n    6: 9\n    7: 9\n    8: 9\n    9: 9\n    10: 9\n    11: 9\n    12: 9\n    13: 9\n    14: 9\n    15: 9\n    16: 9\n  height_m: 51.0\n  zones: 1\n  hws_type: central\n  total_area_m2: 9000.0\n  risers_v1: 0\n  risers_t3: 0\n  risers_t4: 0\n  apartments: 143\n  owner_groups_count: 1\nfire:\n  mode: auto\n  height_m: 46.35\n  category: residential_f13\n  corridor_length_m: 34.0\n  geometry_confirmed: true\n  q_per_stream_lps: 2.6\n  hose_length_m: 20\n  cabinet_dn: 50\n  nozzle_mm: 13\n  compact_jet_m: 12\n  topology: separate\n  topology_basis: 'Учебное решение: самостоятельный В2, без совмещения с В1.'\n  branch_electric_valves: false\ninsulation:\n  location: room_hot\n  t_room_manual: 5.0\n  humidity: 60\n  hvs_water_temp: 10.0\n  gvs_water_temp: 60.0\nstorm:\n  roof_type: flat\n  city: samara\n  roof_area_m2: 650.0\n  walls_area_m2: 0.0\n  period_years: 1\n  roof_sections: 0\n  funnels_count: 2\n  sectional_residential_single_funnel: false\n  max_funnel_spacing_m: null\n  selected_funnel_capacity_lps: null\n  max_funnel_flow_lps: null\n  risers_count: 1\n  selected_riser_dn_mm: 100\n  max_riser_flow_lps: 11.518\n  funnels_on_different_levels: false\n  design_m3_day: null\n  annual_m3: null\n  melt_m3h: null\n  melt_m3_day: null\n  melt_m3_year: null\n  treatment_volume_m3: null\n  storage_volume_m3: null\n  reuse:\n    enabled: false\n    purpose: ''\n    location: ''\n    demand_m3_day: null\n    useful_volume_m3: null\n    collection_area_m2: null\n    collection_factor: null\n    profile: ''\n    source: ''\n    technical_use: ''\n    treatment_setup: ''\n    treatment_surface: ''\n    treatment_selection_flow_lps: null\n    treatment_filter_loss_m: null\n    treatment_uv_loss_m: null\n    treatment_selection_source: ''\n    treatment_quality_basis: ''\n    pump_setup: ''\n    pump_flow_lps: null\n    pump_geometric_head_m: null\n    pump_terminal_head_m: null\n    pump_network_loss_m: null\n    pump_treatment_loss_m: null\n    pump_loss_source: ''\n    pump_min_submergence_m: null\n    pump_max_submergence_m: null\n    pump_temperature_c: null\n    pump_clean_water: ''\n    pump_pipe_inner_mm: null\n    pump_pipe_length_m: null\n    outlets_count: null\n    hose_choice: ''\n    hose_model: ''\n    hose_length_m: null\n    hose_inner_mm: null\n    hose_pn_bar: null\n    hose_loss_m: null\n    hose_sets: null\n    design_basis: ''\n    design_storage: ''\n    design_diversion: ''\n    design_quality: ''\n    design_network: ''\n    design_annual: ''\n    design_storage_days: null\n    design_annual_saving_m3: null\n    design_winter: ''\n    design_discharge: ''\n    design_review: {}\nsewage:\n  max_fixture_lps: 1.6\n  outlets_count: 0\n  risers: []\n  pipes: []\n  elements: []\n  transient_step_seconds: null\n  transient_duration_seconds: null\n  discharge_events: []\n  fixture_safety: []\n  first_manholes: []\n  internal_nodes: []\n  design_assignment_ref: 'Учебное задание 04.10.2026: секция 3.2, допущения в приложении.'\n  survey_ref: ''\n  service_life_years: null\n  overhaul_period_years: null\n  basement_floor_elevation_m: -3.25\n  first_manhole_cover_relative_elevation_m: -0.15\n  ground_relative_elevation_m: -0.15\n  frost_depth_m: 1.6\n  floor_height_m: 3.0\n  roof_kind: flat_non_accessible\n  presentation:\n    mode: representative\n    basement_kind: basement\n    drainage: internal\n    k1:\n      dn_mm: 150\n      slope: 0.01\n      outlet_invert_m: -2.4\n      discharge_point: КК-1 (учебный приёмник К1)\n      source_ref: Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед\n        реальным выпуском.\n      flow_basis: manual\n      design_flow_lps: null\n      outer_diameter_mm: null\n      wall_thickness_mm: null\n      material: ''\n      manning_n: null\n      roughness_source: ''\n    k2:\n      dn_mm: 150\n      slope: 0.01\n      outlet_invert_m: -2.3\n      discharge_point: ДК-1 (учебный приёмник К2)\n      source_ref: Учебные проектные решения, 04.10.2026; подтвердить по АР/ТУ перед\n        реальным выпуском.\n      flow_basis: manual\n      design_flow_lps: null\n      outer_diameter_mm: null\n      wall_thickness_mm: null\n      material: ''\n      manning_n: null\n      roughness_source: ''\n    fan:\n      mode: common\n      height_m: null\n      member_ids:\n      - К1-А\n      - К1-Б\n      - К1-В\n      - К1-Г\n      roof_level_m: 51.0\n      space: technical_storey\n      space_floor_m: 48.0\n      collector_low_m: 49.5\n      collector_high_m: 49.7\n      source_ref: '3.2.pdf, лист 5: техэтаж. Характерная группа из 4 стояков; отметки,\n        состав и отступы условно заданы для учебного прогона.'\n      building_attic_kind: technical\n      working_diameter_mm: 100\n      opening_distance_m: 5.0\n      no_openings_confirmed: null\n      attic_insulated: null\n      plastic_exposed: true\n      uv_protected: true\n    funnel_heated: true\n  roof_relative_elevation_m: 51.0\n  disposal_mode: centralized\n  tu_org: ''\n  tu_number: ''\n  tu_date: ''\n  discharge_standard_ref: ''\n  water_body_characteristics_note: ''\n  existing_network_type: ''\n  existing_network_material: ''\n  existing_network_standard: ''\n  existing_network_outer_diameter_mm: null\n  existing_network_wall_thickness_mm: null\n  discharge_point_k1: КК-1 (учебный приёмник К1)\n  discharge_point_k2: ДК-1 (учебный приёмник К2)\n  discharge_point_k3: ''\n  k1_min_hourly_m3h: null\n  k3_max_hourly_m3h: null\n  k3_min_hourly_m3h: null\n  quality_indicators_note: ''\n  laying_method: 'Учебное решение: стояки в шахтах; магистрали подвешены под перекрытием\n    подвала с уклоном 0,010, опуски к раздельным выпускам К1/К2.'\n  fire_barrier_note: ''\n  deformation_joint_note: ''\n  waste_handling_note: ''\n  external_network_in_scope: false\n  external_network_design_note: Наружные сети не проектируются; КК-1 и ДК-1 - условные\n    граничные приёмники для теста.\n  external_scheme_source: ''\n  site_plan_source: ''\n  pump_required: false\n  pump_location: ''\n  pump_model: ''\n  pump_q_m3h: null\n  pump_head_m: null\n  pump_power_kw: null\n  pump_reserve_note: ''\n  pump_power_category: ''\n  pump_automation_note: ''\n  pump_system: ''\n  pump_mode: not_set\n  pump_fixture_count: null\n  pump_static_head_m: null\n  pump_dynamic_loss_m: null\n  pump_curve: []\n  pump_curve_source: ''\n  pump_hydraulic_source: ''\n  pump_working_units: null\n  pump_reserve_units: null\n  pump_discharge_node: ''\n  pump_receiver_useful_volume_m3: null\n  pump_emergency_volume_m3: null\n  pump_emergency_runtime_min: null\n  pump_emergency_note: ''\n  treatment_required: false\n  treatment_location: ''\n  treatment_type: ''\n  treatment_capacity_lps: null\n  treatment_capacity_m3_day: null\n  treatment_technology: ''\ncatering:\n  type: none\n  seats: 0\n  conditional_dishes: 0\n  school_grease_by_assignment: false\ntechnology_questionnaire:\n  group_showers_answer: unknown\n  group_showers_count: 0\n  food_service_answer: unknown\n  grease_wastewater_answer: unknown\n  grease_trap_location: unknown\nmetering_detail:\n  room_number: У-01\n  room_name: Водомерная (учебное размещение)\n  inlet_dn: 100\n  bypass_dn: null\n  fire_branch_dn: null\n  meter_model: ''\n  inlet_elevation_m: -2.195\n  catalogue_revision: ''\n  catalogue_items: {}\n  design_pressure_bar: 10.0\n  water_temperature_c: 10.0\n  room_location: basement\n  room_min_temperature_c: 5.0\n  service_access_confirmed: true\n  seismic_design_basis: ''\n  permafrost_design_basis: ''\n  support_pipe_outer_diameter_mm: null\n  support_pipe_material: unknown\n  support_design_load_z_n: null\n  pipe_sections: {}\n  support_pipe_section: ''\n  connection_items: {}\n  connection_thread_items: {}\n  reducer_items: {}\n  enhancements: {}\nsource_data:\n  basis: Контрольный прогон по 3.2.pdf и разрешённым учебным исходным от 04.10.2026;\n    перечень допущений приложен.\n  design_stage: Проектная документация (П)\n  source_description: Наружный водопровод; Hгар=30 м в точке подключения. Входные\n    отметки и трасса условные, потери рассчитаны.\n  connection_point: Условная точка подключения на оси -2.195 м; не напор непосредственно\n    перед насосом\n  guaranteed_head_m: 30.0\n  maximum_head_m: 35.0\n  water_main_dn: 0\n  elev_header_m: -2.195\n  elev_fixture_m: 46.0\n  h_geom_m: 48.195\n  internal_losses_scope: cold_only\n  network_kind: domestic\n  h_pr_m: 20.0\n  h_tepl_m: 3.0\n  h_apartment_c_meter_m: 0.683\n  h_apartment_h_meter_m: 0.767\n  apartment_meter_basis: 'Предварительный расчёт квартирных водомеров: 3 чел./квартиру\n    заданы вручную. Расходы — рабочий расчётчик; потери h=S·q² — каталог водомеров.\n    Характеристики конкретной модели и диктующую квартиру необходимо подтвердить.'\n  hws_heater_in_scope: true\n  water_use_period_h: 24.0\n  meter_minimum_checks: {}\n  inputs_count: 2\nconsumers:\n- name: Жилая часть\n  code: residential_full_bath\n  count: 350\nv1_sections:\n- section_id: В1-Подвод\n  length_m: 20.0\n  inner_diameter_mm: 96.8\n  flow_lps: 3.185\n  roughness_mm: 0.01\n  role: input\n  local_loss_factor: null\n  velocity_limit_mps: 1.5\n  material: ПЭ 110x6,6 (учебный выбор)\n- section_id: В1-Магистраль\n  length_m: 20.0\n  inner_diameter_mm: 69.0\n  flow_lps: 1.636\n  roughness_mm: 0.15\n  role: internal\n  local_loss_factor: null\n  velocity_limit_mps: 1.5\n  material: Стальная 76x3,5 (учебный выбор)\n- section_id: В1-Стояк\n  length_m: 48.0\n  inner_diameter_mm: 41.0\n  flow_lps: 0.565\n  roughness_mm: 0.15\n  role: internal\n  local_loss_factor: null\n  velocity_limit_mps: 1.5\n  material: Стальная 48x3,5 (учебный выбор)\n- section_id: В1-Квартира\n  length_m: 8.0\n  inner_diameter_mm: 16.0\n  flow_lps: 0.217\n  roughness_mm: 0.01\n  role: internal\n  local_loss_factor: null\n  velocity_limit_mps: 1.5\n  material: PE-X 20x2 (учебный выбор)\nt3_sections:\n- section_id: В1-к-водонагревателю\n  length_m: 5.0\n  inner_diameter_mm: 69.0\n  roughness_mm: 0.15\n  flow_lps: 1.902\n  flow_mode: terminal\n  circulation_flow_lps: null\n  basis: Условный подвод В1 к ИТП; циркуляция ГВС через холодный подвод не проходит.\n  velocity_limit_mps: 1.5\n  material: Стальная 76x3,5 (учебный выбор)\n- section_id: Т3-Магистраль\n  length_m: 20.0\n  inner_diameter_mm: 69.0\n  roughness_mm: 0.15\n  flow_lps: 1.902\n  flow_mode: main\n  circulation_flow_lps: 0.5\n  basis: Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5\n    и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный\n    насос не выдаются как окончательные\n  velocity_limit_mps: 1.5\n  material: Стальная 76x3,5 (учебный выбор)\n- section_id: Т3-Стояк\n  length_m: 48.0\n  inner_diameter_mm: 41.0\n  roughness_mm: 0.15\n  flow_lps: 0.633\n  flow_mode: main\n  circulation_flow_lps: 0.06\n  basis: Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5\n    и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный\n    насос не выдаются как окончательные\n  velocity_limit_mps: 1.5\n  material: Стальная 48x3,5 (учебный выбор)\n- section_id: Т3-Квартира\n  length_m: 8.0\n  inner_diameter_mm: 16.0\n  roughness_mm: 0.01\n  flow_lps: 0.23\n  flow_mode: terminal\n  circulation_flow_lps: null\n  basis: Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5\n    и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный\n    насос не выдаются как окончательные\n  velocity_limit_mps: 1.5\n  material: PE-X 20x2 (учебный выбор)\nrooms:\n- name: Учебный коридор 1 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 2 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 3 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 4 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 5 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 6 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 7 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 8 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 9 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 10 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 11 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 12 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 13 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 14 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 15 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\n- name: Учебный коридор 16 этажа\n  length_m: 34.0\n  width_m: 2.5\n  height_m: 2.7\n  kind: corridor\n  placement: two_opposite_sides\nnetwork:\n  source:\n    node: В2-НУ-Выход1\n    kind: city_main\n    available_head_m: 0.0\n  source2:\n    node: В2-НУ-Выход2\n    available_head_m: 0.0\n  runs:\n  - from: В2-НУ-Выход1\n    to: В2-У1\n    length_m: 20\n    dn: 100\n    equiv_length_m: 2.0\n    A: 0.0023\n    repair_section_id: РС-1\n  - from: В2-НУ-Выход2\n    to: В2-У3\n    length_m: 20\n    dn: 100\n    equiv_length_m: 2.0\n    A: 0.0023\n    repair_section_id: РС-2\n  - from: В2-У1\n    to: В2-У2\n    length_m: 34\n    dn: 100\n    equiv_length_m: 3.4000000000000004\n    A: 0.0023\n    repair_section_id: РС-3\n  - from: В2-У2\n    to: В2-У3\n    length_m: 12\n    dn: 100\n    equiv_length_m: 1.2000000000000002\n    A: 0.0023\n    repair_section_id: РС-4\n  - from: В2-У3\n    to: В2-У4\n    length_m: 34\n    dn: 100\n    equiv_length_m: 3.4000000000000004\n    A: 0.0023\n    repair_section_id: РС-5\n  - from: В2-У4\n    to: В2-У1\n    length_m: 12\n    dn: 100\n    equiv_length_m: 1.2000000000000002\n    A: 0.0023\n    repair_section_id: РС-6\n  risers:\n  - name: СТ-В2-1\n    at: В2-У1\n    height_m: 47.0\n    cabinet_elevation_m: 46.35\n    dn: 65\n    equiv_length_m: 4.7\n    A: 0.011\n    repair_section_id: РС-3\n  - name: СТ-В2-2\n    at: В2-У3\n    height_m: 47.0\n    cabinet_elevation_m: 46.35\n    dn: 65\n    equiv_length_m: 4.7\n    A: 0.011\n    repair_section_id: РС-5\n  node_elevations:\n    В2-НУ-Выход1: -2.45\n    В2-НУ-Выход2: -2.45\n    В2-У1: -0.65\n    В2-У2: -0.65\n    В2-У3: -0.65\n    В2-У4: -0.65\n",
+    "station": {
+      "pump_axis_m": -2.45,
+      "supplies": [
+        {
+          "name": "Наружный ввод 1",
+          "source_elevation_m": -2.195,
+          "guaranteed_head_m": 30.0,
+          "maximum_head_m": 35.0,
+          "segments": [
+            {
+              "segment_id": "В2-П1",
+              "from_node": "Город-1",
+              "to_node": "Всасывающий коллектор",
+              "length_m": 20.0,
+              "A": 0.0023,
+              "equiv_length_m": 2.0,
+              "valves": [],
+              "diameter_mm": 100,
+              "inner_diameter_mm": null,
+              "repair_section_id": null
+            }
+          ]
+        },
+        {
+          "name": "Наружный ввод 2",
+          "source_elevation_m": -2.195,
+          "guaranteed_head_m": 30.0,
+          "maximum_head_m": 35.0,
+          "segments": [
+            {
+              "segment_id": "В2-П2",
+              "from_node": "Город-2",
+              "to_node": "Всасывающий коллектор",
+              "length_m": 20.0,
+              "A": 0.0023,
+              "equiv_length_m": 2.0,
+              "valves": [],
+              "diameter_mm": 100,
+              "inner_diameter_mm": null,
+              "repair_section_id": null
+            }
+          ]
+        }
+      ],
+      "basis": "Учебная компоновка 04.10.2026: два наружных ввода с отсечением и защитой от обратного потока к общему всасывающему коллектору; 1 рабочий и 1 резервный насос к общему напорному коллектору; два напорных выхода к кольцу. Гидравлические границы сети - выходы общего коллектора; точка Hгар=30 м остаётся в наружной сети. Помещение, электроснабжение, дренаж и NPSH подтвердить отдельно.",
+      "review_notes": []
+    },
+    "basis": {
+      "basis_schema_version": 1,
+      "case_id": "samara_section_3_2_2026_10_04",
+      "status": "study_inputs_not_release_ready",
+      "description": "Контрольный пример одной секции 3.2 по реальным планам с отдельно разрешёнными учебными допущениями. Не готовый ProjectRequest и не подтверждённые исходные данные для экспертизы.",
+      "source_pdf": "/Users/antonpashkevich/Downloads/3.2.pdf",
+      "user_confirmed": {
+        "scope": "Только секция 3.2, без расходов соседних секций 3.1 и 3.3",
+        "guaranteed_pressure_head_m": 30.0,
+        "head_reference_location": "Точка подключения к наружному водопроводу, не водомерный узел и не насос",
+        "assumptions_authorized": "04.10.2026: пользователь повторно разрешил самостоятельно задать все недостающие проектные исходные для учебного примера. Расчётные результаты и паспортные характеристики оборудования этим разрешением не подменяются",
+        "frost_depth_below_ground_m": 1.6,
+        "additional_burial_m": 0.5,
+        "frost_source": "Исходное число пользователя, не проверенное климатическое значение для Самары"
+      },
+      "read_from_drawings": {
+        "city": "Самара",
+        "section": "3.2",
+        "drawing_stage": "П",
+        "drawing_cipher": "228-21-00-ИОС2.3",
+        "basement_floor_relative_m": -3.25,
+        "basement_stair_landing_relative_m": -2.2,
+        "water_inlets": [
+          {
+            "id": "В1-1",
+            "outer_diameter_mm": 110.0,
+            "wall_mm": 6.6
+          },
+          {
+            "id": "В1-2",
+            "outer_diameter_mm": 110.0,
+            "wall_mm": 6.6
+          }
+        ],
+        "apartments_first_floor": 8,
+        "apartments_typical_floor": 9,
+        "riser_group_labels": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "roof_funnel_labels": [
+          "Вр-1",
+          "Вр-2"
+        ],
+        "hot_water_evidence": "На плане подвала подписаны В1 к водонагревателю, Т3 от водонагревателя и Т4 к водонагревателю; характеристики оборудования не приведены",
+        "boundary_warning": "В подвале подписаны продолжения магистралей в секции 3.1 и 3.3. Существующие насос и вводы не считаются автоматически проверенными на изолированную секцию 3.2",
+        "apartment_count_source": "Визуальный подсчёт по планам первого и типового этажей; не по числу стояков"
+      },
+      "study_assumptions": {
+        "residential_floors": 16,
+        "floor_to_floor_m": 3.0,
+        "first_floor_relative_m": 0.0,
+        "technical_floor_above_residential": true,
+        "technical_floor_to_roof_m": 3.0,
+        "roof_kind": "flat_non_accessible",
+        "residents": 350,
+        "nonresidential_consumers_in_test": false,
+        "occupancy_note": "350 жителей и отсутствие нежилых потребителей заданы для теста, а не извлечены из PDF и не назначены по нормативной заселённости",
+        "ground_at_connection_relative_m": -0.15,
+        "external_connection_pipe_outer_diameter_mm": 110.0,
+        "external_connection_pipe_note": "Для привязки напора условно принят тот же наружный диаметр 110 мм, что у вводов на плане; диаметр наружной магистрали в PDF не подтверждён",
+        "burial_reference": "Глубина 1,6 + 0,5 = 2,1 м принята до наружного низа трубы; напор 30 м относится к её оси",
+        "scope_note": "Этажность, высоты и заселённость разрешены только для этого контрольного примера, не как новые значения по умолчанию генератора"
+      },
+      "derived_for_study": {
+        "apartments_total": 143,
+        "apartments_formula": "8 + 15 * 9",
+        "top_residential_floor_relative_m": 45.0,
+        "technical_floor_relative_m": 48.0,
+        "roof_relative_m": 51.0,
+        "connection_pipe_outer_bottom_relative_m": -2.25,
+        "connection_pipe_axis_relative_m": -2.195,
+        "connection_bottom_formula": "-0.15 - 1.6 - 0.5",
+        "connection_axis_formula": "-2.25 + 0.110 / 2"
+      },
+      "study_design_inputs": {
+        "basis": "Разрешённые учебные исходные от 04.10.2026; не извлечены из чертежей и не являются реальными ТУ или паспортом оборудования",
+        "fire_technical_height_m": 46.35,
+        "fire_height_basis": "45,000 + 1,200 (условный низ открываемого окна верхнего этажа) - (-0,150, условный пожарный проезд)",
+        "fire_corridor_length_m": 34.0,
+        "fire_network_note": "Учебная раздельная сеть В2: два наружных ввода по 20 м к общей насосной на отметке оси -2,450, 1 рабочий + 1 резервный насос. От общего напорного коллектора два плеча по 20 м к противоположным точкам подвального кольца 34x12 м на отметке -0,650; два расчётных стояка DN65 к верхним ПК +46,350. Каждый наружный ввод проверяется отдельно на полный расход; это консервативная проверка, не расчёт распределения между одновременно открытыми вводами. A=0,0023 для DN100 и A=0,011 для DN65 - учебные входные сопротивления, до выпуска подтвердить сортамент. Местные потери 10% линейных учтены один раз через Lэкв=0,1L. Коридоры 34x2,5x2,7 м не доказывают покрытие фактических квартир",
+        "fire_station": {
+          "pump_axis_m": -2.45,
+          "supply_count": 2,
+          "supply_length_m": 20.0,
+          "supply_dn": 100,
+          "supply_A": 0.0023,
+          "basis": "Учебная компоновка 04.10.2026: два наружных ввода с отсечением и защитой от обратного потока к общему всасывающему коллектору; 1 рабочий и 1 резервный насос к общему напорному коллектору; два напорных выхода к кольцу. Гидравлические границы сети - выходы общего коллектора; точка Hгар=30 м остаётся в наружной сети. Помещение, электроснабжение, дренаж и NPSH подтвердить отдельно."
+        },
+        "building_area_m2": 9000.0,
+        "fixture_outlet_relative_m": 46.0,
+        "water_entry_axis_at_building_relative_m": -2.195,
+        "maximum_external_head_m": 35.0,
+        "roof_catchment_area_m2": 650.0,
+        "adjacent_walls_area_m2": 0.0,
+        "k2_actual_risers": 1,
+        "k2_riser_dn_mm": 100,
+        "k2_roof_note": "Две воронки с исходного плана приняты на одном уровне; вся водосборная площадь подключена к одному стояку. Геометрия водосбора условная",
+        "k1_main_dn_mm": 150,
+        "k1_main_slope": 0.01,
+        "k2_main_dn_mm": 150,
+        "k2_main_slope": 0.01,
+        "sewer_k1_outlet_invert_relative_m": -2.4,
+        "sewer_k2_outlet_invert_relative_m": -2.3,
+        "k1_receiver": "КК-1 (учебный приёмник К1)",
+        "k2_receiver": "ДК-1 (учебный приёмник К2)",
+        "sewer_receiver_cover_relative_m": -0.15,
+        "heater_design_pressure_loss_m": 3.0,
+        "heater_loss_basis": "Заданное для теста требование к будущему подбору теплообменника: не более 3 м при расчётном расходе. Не расчёт и не паспорт выбранного аппарата",
+        "design_apartment_residents": 3,
+        "design_riser_residents": 48,
+        "path_note": "Один консервативный условный путь: наружный подвод 20 м, внутренняя магистраль 20 м, стояк 48 м, квартирная ветвь 8 м. Расходы каждого масштаба получаются из действующего calcBlock; длины не сняты с условного разреза и не составляют обмерную спецификацию",
+        "water_path": [
+          {
+            "id": "Подвод",
+            "length_m": 20.0,
+            "outer_mm": 110.0,
+            "wall_mm": 6.6,
+            "roughness_mm": 0.01,
+            "material": "ПЭ 110x6,6 (учебный выбор)"
+          },
+          {
+            "id": "Магистраль",
+            "length_m": 20.0,
+            "outer_mm": 76.0,
+            "wall_mm": 3.5,
+            "roughness_mm": 0.15,
+            "material": "Стальная 76x3,5 (учебный выбор)"
+          },
+          {
+            "id": "Стояк",
+            "length_m": 48.0,
+            "outer_mm": 48.0,
+            "wall_mm": 3.5,
+            "roughness_mm": 0.15,
+            "material": "Стальная 48x3,5 (учебный выбор)"
+          },
+          {
+            "id": "Квартира",
+            "length_m": 8.0,
+            "outer_mm": 20.0,
+            "wall_mm": 2.0,
+            "roughness_mm": 0.01,
+            "material": "PE-X 20x2 (учебный выбор)"
+          }
+        ],
+        "hot_feed_to_heater_length_m": 5.0,
+        "t3_main_circulation_input_lps": 0.5,
+        "t3_riser_circulation_input_lps": 0.06,
+        "t3_velocity_limit_mps": 1.5,
+        "circulation_note": "Для проверки ветви Т3 заданы гипотетические входные расходы циркуляции 0,5 и 0,06 л/с; не результаты расчёта Т4. Балансировка колец, Kv и циркуляционный насос не выдаются как окончательные",
+        "representative_fan_members": [
+          "К1-А",
+          "К1-Б",
+          "К1-В",
+          "К1-Г"
+        ],
+        "fan_group_note": "Показанная характерная группа из четырёх стояков DN100; это не расшифровка всех девяти групп исходного плана",
+        "fan_collector_low_relative_m": 49.5,
+        "fan_collector_high_relative_m": 49.7,
+        "fan_opening_distance_m": 5.0
+      },
+      "evidence_required_before_real_release": {
+        "funnel_passport_capacity_l_s": "Проверить по паспорту фактически выбранной воронки; выдуманный паспорт не создаётся",
+        "meter_passport_minimums": "Подтвердить паспортами конкретных исполнений",
+        "architecture_and_tu": "Заменить учебные высоты, площади, трассы, отметки и приёмники реальными АР/ТУ",
+        "heater_and_circulation": "Подтвердить теплообменник и циркуляцию расчётом и подбором"
+      },
+      "constraints": [
+        "Этажные отметки вычисляются как (номер этажа - 1) * 3.0; это допущение, а не отметки с чертежей.",
+        "Пожарно-техническая высота не равна автоматически отметке кровли либо этажности, умноженной на высоту этажа.",
+        "30 м не переносятся из наружной сети непосредственно к насосу: геодезическая разность и потери на вводе должны учитываться отдельно.",
+        "Колодцы, лотки выпусков и наружная трасса в этом прогоне условно заданы в study_design_inputs. Отметка выпуска не подменяет отметку пола подвала.",
+        "Насос, диаметры, расход пожаротушения и параметры водомеров исходного проекта не копируются как результаты нового расчёта.",
+        "Количество символов на представительной принципиальной схеме не заменяет фактические количества в спецификации."
+      ]
+    },
+    "parity": {
+      "working_legacy_sha256": "00a14a5b5ec9a195894db4da92e2439b6453f4e71e34e89a48c5b622e68068e4",
+      "demand_parity": true,
+      "k1_parity": true,
+      "meter_parity": true,
+      "rain_parity": true,
+      "branch_parity": true,
+      "rain": {
+        "city": {
+          "code": "samara",
+          "name": "Самара",
+          "q20": 70,
+          "n": 0.67,
+          "region": "Низовье Волги и Дона, Южный Крым"
+        },
+        "period_years": 1,
+        "f_calculated_m2": 650.0,
+        "q20_base": 70,
+        "gamma": 1.0,
+        "q20_adjusted": 70.0,
+        "n": 0.67,
+        "q5": 177.21,
+        "q_total_l_per_s": 11.518
+      },
+      "meters": {
+        "hws_type": "central",
+        "meters": [
+          {
+            "label": "Счётчик ХВС (холодная вода)",
+            "meter": {
+              "d_mm": 32,
+              "q_min": 0.1,
+              "q_expl": 4,
+              "q_max": 10,
+              "q_threshold": 0.05,
+              "s": 1.3,
+              "type": "wing"
+            },
+            "h_normal": 3.479,
+            "h_limit_normal": 5.0,
+            "pass_normal": true,
+            "h_fire": null,
+            "h_limit_fire": null,
+            "pass_fire": null,
+            "need_bypass": false,
+            "pass_sensitivity": null,
+            "need_combo": false,
+            "q_hr_m3_per_h": 3.806,
+            "has_fire_check": false,
+            "minimum_flow_evidence": null,
+            "minimum_flow_note": "Нужны данные: паспорт выбранного DN32; минимальный расчётный часовой расход и его основание; минимальный паспортный расход, модель/класс и ссылка на паспорт",
+            "q_average_m3h": 1.6041666666666667,
+            "pass_average": true
+          },
+          {
+            "label": "Счётчик ГВС (горячая вода, п. 12.12 — обводная не требуется)",
+            "meter": {
+              "d_mm": 32,
+              "q_min": 0.1,
+              "q_expl": 4,
+              "q_max": 10,
+              "q_threshold": 0.05,
+              "s": 1.3,
+              "type": "wing"
+            },
+            "h_normal": 4.703,
+            "h_limit_normal": 5.0,
+            "pass_normal": true,
+            "h_fire": null,
+            "h_limit_fire": null,
+            "pass_fire": null,
+            "need_bypass": false,
+            "pass_sensitivity": null,
+            "need_combo": false,
+            "q_hr_m3_per_h": 4.527,
+            "has_fire_check": false,
+            "minimum_flow_evidence": null,
+            "minimum_flow_note": "Нужны данные: паспорт выбранного DN32; минимальный расчётный часовой расход и его основание; минимальный паспортный расход, модель/класс и ссылка на паспорт",
+            "q_average_m3h": 1.0208333333333333,
+            "pass_average": true
+          }
+        ],
+        "notes": [],
+        "inputs_count": 2,
+        "fire_flow_through_meter": false
+      },
+      "studio_preview_available": true
+    },
+    "result": {
+      "method": "L06 with explicitly adopted preliminary station pipework",
+      "input_basis_sha256": "56e07b1bacfc834446f0ae92ea9da466074bb7f180d3c6cd7e5de027b89a234a",
+      "pipework": {
+        "basis": "Разрешение пользователя 04.10.2026: расчётная обвязка на усмотрение проектировщика. Один активный путь: два коллектора DN100 по 1 м, две ветви DN65 по 0,5 м. Трубы ВГП 114×4,5 / 75,5×4,0; A - учебные значения, не подтверждённая заводская геометрия. Проценты местных потерь поверх явных сопротивлений не добавляются.",
+        "evidence": "designer_assumption_authorized_2026-10-04",
+        "q_m3h": 18.978962148583953,
+        "losses_m": {
+          "suction": 0.8970056796484125,
+          "discharge": 2.365715177048545
+        },
+        "total_loss_m": 3.2627208566969577,
+        "resistances_m_per_lps2": {
+          "suction": 0.03227418433453923,
+          "discharge": 0.08511822103178694
+        },
+        "elements": [
+          {
+            "id": "suction-pipe-100",
+            "name": "Всасывание: труба DN100",
+            "side": "suction",
+            "dn": 100,
+            "quantity_on_active_path": 1,
+            "method": "A_L",
+            "value": 0.0023,
+            "basis": "L принята проектировщиком; A сохранено из учебной базы секции 3.2",
+            "length_m": 1.0,
+            "inner_mm": 105.0,
+            "resistance_m_per_lps2": 0.0023,
+            "loss_m": 0.06392456093718978
+          },
+          {
+            "id": "suction-pipe-65",
+            "name": "Всасывание: труба DN65",
+            "side": "suction",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "A_L",
+            "value": 0.011,
+            "basis": "L принята проектировщиком; A сохранено из учебной базы секции 3.2",
+            "length_m": 0.5,
+            "inner_mm": 67.5,
+            "resistance_m_per_lps2": 0.0055,
+            "loss_m": 0.15286308050197556
+          },
+          {
+            "id": "suction-valve-100",
+            "name": "Всасывание: общая запорная арматура",
+            "side": "suction",
+            "dn": 100,
+            "quantity_on_active_path": 1,
+            "method": "Kv",
+            "value": 200.0,
+            "basis": "Требование к выбору: Kv не ниже 200 м³/ч; не паспорт PFFS",
+            "length_m": 0.0,
+            "inner_mm": null,
+            "resistance_m_per_lps2": 0.003302752293577982,
+            "loss_m": 0.09179434358750828
+          },
+          {
+            "id": "suction-valve-65",
+            "name": "Всасывание: арматура рабочей ветви",
+            "side": "suction",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "Kv",
+            "value": 100.0,
+            "basis": "Требование к выбору: Kv не ниже 100 м³/ч; не паспорт PFFS",
+            "length_m": 0.0,
+            "inner_mm": null,
+            "resistance_m_per_lps2": 0.013211009174311929,
+            "loss_m": 0.3671773743500331
+          },
+          {
+            "id": "suction-fittings",
+            "name": "Всасывание: сборка фасонных частей",
+            "side": "suction",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "zeta",
+            "value": 2.0,
+            "basis": "Суммарное ζ=2 принято для предварительной сборки; не норма СП",
+            "length_m": 0.0,
+            "inner_mm": 67.5,
+            "resistance_m_per_lps2": 0.007960422866649315,
+            "loss_m": 0.22124632027170568
+          },
+          {
+            "id": "discharge-pipe-100",
+            "name": "Напор: труба DN100",
+            "side": "discharge",
+            "dn": 100,
+            "quantity_on_active_path": 1,
+            "method": "A_L",
+            "value": 0.0023,
+            "basis": "L принята проектировщиком; A сохранено из учебной базы секции 3.2",
+            "length_m": 1.0,
+            "inner_mm": 105.0,
+            "resistance_m_per_lps2": 0.0023,
+            "loss_m": 0.06392456093718978
+          },
+          {
+            "id": "discharge-pipe-65",
+            "name": "Напор: труба DN65",
+            "side": "discharge",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "A_L",
+            "value": 0.011,
+            "basis": "L принята проектировщиком; A сохранено из учебной базы секции 3.2",
+            "length_m": 0.5,
+            "inner_mm": 67.5,
+            "resistance_m_per_lps2": 0.0055,
+            "loss_m": 0.15286308050197556
+          },
+          {
+            "id": "discharge-valve-100",
+            "name": "Напор: общая запорная арматура",
+            "side": "discharge",
+            "dn": 100,
+            "quantity_on_active_path": 1,
+            "method": "Kv",
+            "value": 200.0,
+            "basis": "Требование к выбору: Kv не ниже 200 м³/ч; не паспорт PFFS",
+            "length_m": 0.0,
+            "inner_mm": null,
+            "resistance_m_per_lps2": 0.003302752293577982,
+            "loss_m": 0.09179434358750828
+          },
+          {
+            "id": "discharge-valve-65",
+            "name": "Напор: арматура рабочей ветви",
+            "side": "discharge",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "Kv",
+            "value": 100.0,
+            "basis": "Требование к выбору: Kv не ниже 100 м³/ч; не паспорт PFFS",
+            "length_m": 0.0,
+            "inner_mm": null,
+            "resistance_m_per_lps2": 0.013211009174311929,
+            "loss_m": 0.3671773743500331
+          },
+          {
+            "id": "discharge-fittings",
+            "name": "Напор: сборка фасонных частей",
+            "side": "discharge",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "zeta",
+            "value": 2.0,
+            "basis": "Суммарное ζ=2 принято для предварительной сборки; не норма СП",
+            "length_m": 0.0,
+            "inner_mm": 67.5,
+            "resistance_m_per_lps2": 0.007960422866649315,
+            "loss_m": 0.22124632027170568
+          },
+          {
+            "id": "discharge-check",
+            "name": "Обратный клапан рабочей ветви",
+            "side": "discharge",
+            "dn": 65,
+            "quantity_on_active_path": 1,
+            "method": "Kv",
+            "value": 50.0,
+            "basis": "Требуемая эквивалентная Kv не ниже 50 в диапазоне рабочих расходов; проверяется полная Δp(Q), включая открытие пружины; не паспорт конкретного клапана",
+            "length_m": 0.0,
+            "inner_mm": null,
+            "resistance_m_per_lps2": 0.052844036697247715,
+            "loss_m": 1.4687094974001325
+          }
+        ],
+        "manufacturer_confirmed": false,
+        "reserve_in_flow_sum": false,
+        "geometry_is_preliminary": true,
+        "zero_flow_loss_m": 0.0
+      },
+      "pump": {
+        "id": "cnp-cdm32-3",
+        "pump_model": "CNP CDM32-3",
+        "station_model": "PFFS 2 CDM32-3 D",
+        "power_per_pump_kw": 5.5,
+        "station_connection_dn": 100,
+        "curve": [
+          [
+            0,
+            57
+          ],
+          [
+            16,
+            54
+          ],
+          [
+            20,
+            51
+          ],
+          [
+            24,
+            48
+          ],
+          [
+            28,
+            44
+          ],
+          [
+            32,
+            40
+          ],
+          [
+            36,
+            35
+          ],
+          [
+            40,
+            27
+          ]
+        ],
+        "curve_pdf_page": 33,
+        "station_pdf_page": 40,
+        "station_printed_page": 40,
+        "curve_source": "Каталог CDM, CDMF.pdf",
+        "curve_sha256": "abc39dac7beba67fe392c27a427f3f52c629474244901d8cc20deb7b6fccfac0",
+        "station_source": "Каталог PFFS.pdf",
+        "station_sha256": "fab7ea4dc4c37bf0d7c865f8398165139e6d0a77cc0689b039cc7dafc683dc39",
+        "evidence": "user_supplied_manufacturer_catalog_2025",
+        "selection_confirmed": false,
+        "unresolved": [
+          "PFFS_internal_losses_and_guaranteed_station_curve",
+          "curve_tolerances_and_maximum_shutoff_head",
+          "NPSH_and_manufacturer_operating_range",
+          "complete_fire_configuration_and_automation",
+          "actual_cabinet_and_regulator_characteristics"
+        ]
+      },
+      "duty_pumps": 1,
+      "reserve_pumps": 1,
+      "reserve_in_flow_sum": false,
+      "station_product_confirmed": false,
+      "automation": {
+        "status": "project_requirement",
+        "manufacturer_confirmed": false,
+        "duty_pumps": 1,
+        "reserve_pumps": 1,
+        "reserve_in_flow_sum": false,
+        "reserve_installed": true,
+        "awaiting_manufacturer_response": false,
+        "reference": "СП 10.13130.2020, п.12.3 с изменением 1; ГОСТ Р21.619-2023, пп.5.1.8, 5.1.14",
+        "requirements": [
+          "Предусмотреть один рабочий и один установленный резервный пожарный насос одинаковой производительности.",
+          "Резерв автоматически включается при невыходе рабочего на расчётный режим, его аварийном отключении или несрабатывании.",
+          "Резервный насос не участвует в суммировании расчётной подачи. При его замещении рабочая характеристика сохраняется.",
+          "Реализовать предусмотренные проектом автоматический, дистанционный и местный пуск; источники команд согласовать с разделом пожарной автоматики.",
+          "Для резервного пожарного насоса не предусматривать автоматическую защиту и отключение по перегрузке по току, температуре и сухому ходу согласно п.12.3 с изменением 1.",
+          "Передавать на диспетчеризацию состояния готовности, работы и аварии каждого насоса, режим управления, состояние электропитания и положения контролируемой арматуры.",
+          "Датчики давления до и после насосов, критерий выхода на режим, уставки и временные задержки увязать с гидравликой и смежным разделом; численные уставки данным расчётом не назначаются.",
+          "Алгоритмы остановки, электроснабжение, АВР, силовые защиты и контроль линий выполнить в профильных разделах по действующим требованиям; данное задание не является электрической схемой."
+        ],
+        "equipment_acceptance": "При выборе шкафа обеспечить выполнение задания; соответствие конкретного изделия проверяется по документации. Переписка с изготовителем не является условием выпуска задания."
+      },
+      "required_q_m3h": 18.978962148583953,
+      "required_net_station_boost_m": 45.661160711445476,
+      "required_bare_pump_head_m": 48.923881568142434,
+      "catalog_pump_head_at_required_q_m": 51.76577838856203,
+      "head_margin_at_required_q_m": 2.8418968204196,
+      "nominal_apertures_mm": {
+        "1": 13.5,
+        "2": 13.5,
+        "3": 13.5,
+        "4": 14.0,
+        "5": 14.0,
+        "6": 14.0,
+        "7": 15.0,
+        "8": 15.0,
+        "9": 15.0,
+        "10": 16.5,
+        "11": 16.5,
+        "12": 16.5,
+        "13": 19.5,
+        "14": 19.5,
+        "15": 21.0
+      },
+      "previous_apertures_mm": {
+        "1": 13.5,
+        "2": 13.5,
+        "3": 13.5,
+        "4": 14.0,
+        "5": 14.0,
+        "6": 14.0,
+        "7": 15.0,
+        "8": 15.0,
+        "9": 15.0,
+        "10": 16.0,
+        "11": 16.0,
+        "12": 16.0,
+        "13": 18.5,
+        "14": 18.5,
+        "15": 18.5
+      },
+      "previous_layout_check": {
+        "layout": "previous_layout_with_pipework",
+        "loss_scale": 1.0,
+        "axis_offset_px": 0.0,
+        "summary": {
+          "meets_minimum": 481,
+          "insufficient_at_cabinet": 31
+        },
+        "scenario_count": 512,
+        "complete": true,
+        "all_minima_met": false,
+        "all_dynamic_limits_met": true,
+        "pressure_range_mpa": [
+          0.20245207282378333,
+          0.27686211535655997
+        ],
+        "flow_range_m3h": [
+          18.94098285926758,
+          21.604066501587234
+        ]
+      },
+      "chart_samples": [
+        {
+          "q_m3h": 0,
+          "single_pump_head_m": 57,
+          "station_net_boost_m": 57.0
+        },
+        {
+          "q_m3h": 0.5,
+          "single_pump_head_m": 56.90625,
+          "station_net_boost_m": 56.90398548600759
+        },
+        {
+          "q_m3h": 1.0,
+          "single_pump_head_m": 56.8125,
+          "station_net_boost_m": 56.803441944030375
+        },
+        {
+          "q_m3h": 1.5,
+          "single_pump_head_m": 56.71875,
+          "station_net_boost_m": 56.69836937406835
+        },
+        {
+          "q_m3h": 2.0,
+          "single_pump_head_m": 56.625,
+          "station_net_boost_m": 56.58876777612151
+        },
+        {
+          "q_m3h": 2.5,
+          "single_pump_head_m": 56.53125,
+          "station_net_boost_m": 56.47463715018985
+        },
+        {
+          "q_m3h": 3.0,
+          "single_pump_head_m": 56.4375,
+          "station_net_boost_m": 56.35597749627338
+        },
+        {
+          "q_m3h": 3.5,
+          "single_pump_head_m": 56.34375,
+          "station_net_boost_m": 56.23278881437211
+        },
+        {
+          "q_m3h": 4.0,
+          "single_pump_head_m": 56.25,
+          "station_net_boost_m": 56.105071104486015
+        },
+        {
+          "q_m3h": 4.5,
+          "single_pump_head_m": 56.15625,
+          "station_net_boost_m": 55.972824366615114
+        },
+        {
+          "q_m3h": 5.0,
+          "single_pump_head_m": 56.0625,
+          "station_net_boost_m": 55.836048600759405
+        },
+        {
+          "q_m3h": 5.5,
+          "single_pump_head_m": 55.96875,
+          "station_net_boost_m": 55.69474380691888
+        },
+        {
+          "q_m3h": 6.0,
+          "single_pump_head_m": 55.875,
+          "station_net_boost_m": 55.54890998509354
+        },
+        {
+          "q_m3h": 6.5,
+          "single_pump_head_m": 55.78125,
+          "station_net_boost_m": 55.39854713528339
+        },
+        {
+          "q_m3h": 7.0,
+          "single_pump_head_m": 55.6875,
+          "station_net_boost_m": 55.24365525748843
+        },
+        {
+          "q_m3h": 7.5,
+          "single_pump_head_m": 55.59375,
+          "station_net_boost_m": 55.08423435170865
+        },
+        {
+          "q_m3h": 8.0,
+          "single_pump_head_m": 55.5,
+          "station_net_boost_m": 54.92028441794407
+        },
+        {
+          "q_m3h": 8.5,
+          "single_pump_head_m": 55.40625,
+          "station_net_boost_m": 54.751805456194674
+        },
+        {
+          "q_m3h": 9.0,
+          "single_pump_head_m": 55.3125,
+          "station_net_boost_m": 54.578797466460465
+        },
+        {
+          "q_m3h": 9.5,
+          "single_pump_head_m": 55.21875,
+          "station_net_boost_m": 54.40126044874144
+        },
+        {
+          "q_m3h": 10.0,
+          "single_pump_head_m": 55.125,
+          "station_net_boost_m": 54.219194403037605
+        },
+        {
+          "q_m3h": 10.5,
+          "single_pump_head_m": 55.03125,
+          "station_net_boost_m": 54.03259932934896
+        },
+        {
+          "q_m3h": 11.0,
+          "single_pump_head_m": 54.9375,
+          "station_net_boost_m": 53.8414752276755
+        },
+        {
+          "q_m3h": 11.5,
+          "single_pump_head_m": 54.84375,
+          "station_net_boost_m": 53.645822098017234
+        },
+        {
+          "q_m3h": 12.0,
+          "single_pump_head_m": 54.75,
+          "station_net_boost_m": 53.44563994037416
+        },
+        {
+          "q_m3h": 12.5,
+          "single_pump_head_m": 54.65625,
+          "station_net_boost_m": 53.240928754746264
+        },
+        {
+          "q_m3h": 13.0,
+          "single_pump_head_m": 54.5625,
+          "station_net_boost_m": 53.031688541133555
+        },
+        {
+          "q_m3h": 13.5,
+          "single_pump_head_m": 54.46875,
+          "station_net_boost_m": 52.81791929953604
+        },
+        {
+          "q_m3h": 14.0,
+          "single_pump_head_m": 54.375,
+          "station_net_boost_m": 52.59962102995371
+        },
+        {
+          "q_m3h": 14.5,
+          "single_pump_head_m": 54.28125,
+          "station_net_boost_m": 52.37679373238657
+        },
+        {
+          "q_m3h": 15.0,
+          "single_pump_head_m": 54.1875,
+          "station_net_boost_m": 52.149437406834615
+        },
+        {
+          "q_m3h": 15.5,
+          "single_pump_head_m": 54.09375,
+          "station_net_boost_m": 51.917552053297854
+        },
+        {
+          "q_m3h": 16,
+          "single_pump_head_m": 54,
+          "station_net_boost_m": 51.68113767177627
+        },
+        {
+          "q_m3h": 16.5,
+          "single_pump_head_m": 53.625,
+          "station_net_boost_m": 51.158944262269884
+        },
+        {
+          "q_m3h": 17.0,
+          "single_pump_head_m": 53.25,
+          "station_net_boost_m": 50.63222182477868
+        },
+        {
+          "q_m3h": 17.5,
+          "single_pump_head_m": 52.875,
+          "station_net_boost_m": 50.10097035930267
+        },
+        {
+          "q_m3h": 18.0,
+          "single_pump_head_m": 52.5,
+          "station_net_boost_m": 49.565189865841845
+        },
+        {
+          "q_m3h": 18.5,
+          "single_pump_head_m": 52.125,
+          "station_net_boost_m": 49.02488034439621
+        },
+        {
+          "q_m3h": 19.0,
+          "single_pump_head_m": 51.75,
+          "station_net_boost_m": 48.48004179496576
+        },
+        {
+          "q_m3h": 19.5,
+          "single_pump_head_m": 51.375,
+          "station_net_boost_m": 47.9306742175505
+        },
+        {
+          "q_m3h": 20,
+          "single_pump_head_m": 51,
+          "station_net_boost_m": 47.37677761215043
+        },
+        {
+          "q_m3h": 20.5,
+          "single_pump_head_m": 50.625,
+          "station_net_boost_m": 46.81835197876554
+        },
+        {
+          "q_m3h": 21.0,
+          "single_pump_head_m": 50.25,
+          "station_net_boost_m": 46.25539731739585
+        },
+        {
+          "q_m3h": 21.5,
+          "single_pump_head_m": 49.875,
+          "station_net_boost_m": 45.687913628041336
+        },
+        {
+          "q_m3h": 22.0,
+          "single_pump_head_m": 49.5,
+          "station_net_boost_m": 45.11590091070202
+        },
+        {
+          "q_m3h": 22.5,
+          "single_pump_head_m": 49.125,
+          "station_net_boost_m": 44.53935916537788
+        },
+        {
+          "q_m3h": 23.0,
+          "single_pump_head_m": 48.75,
+          "station_net_boost_m": 43.95828839206894
+        },
+        {
+          "q_m3h": 23.5,
+          "single_pump_head_m": 48.375,
+          "station_net_boost_m": 43.372688590775184
+        },
+        {
+          "q_m3h": 24,
+          "single_pump_head_m": 48,
+          "station_net_boost_m": 42.782559761496614
+        },
+        {
+          "q_m3h": 24.5,
+          "single_pump_head_m": 47.5,
+          "station_net_boost_m": 42.062901904233236
+        },
+        {
+          "q_m3h": 25.0,
+          "single_pump_head_m": 47.0,
+          "station_net_boost_m": 41.33871501898504
+        },
+        {
+          "q_m3h": 25.5,
+          "single_pump_head_m": 46.5,
+          "station_net_boost_m": 40.60999910575204
+        },
+        {
+          "q_m3h": 26.0,
+          "single_pump_head_m": 46.0,
+          "station_net_boost_m": 39.87675416453422
+        },
+        {
+          "q_m3h": 26.5,
+          "single_pump_head_m": 45.5,
+          "station_net_boost_m": 39.1389801953316
+        },
+        {
+          "q_m3h": 27.0,
+          "single_pump_head_m": 45.0,
+          "station_net_boost_m": 38.396677198144154
+        },
+        {
+          "q_m3h": 27.5,
+          "single_pump_head_m": 44.5,
+          "station_net_boost_m": 37.6498451729719
+        },
+        {
+          "q_m3h": 28,
+          "single_pump_head_m": 44,
+          "station_net_boost_m": 36.89848411981484
+        },
+        {
+          "q_m3h": 28.5,
+          "single_pump_head_m": 43.5,
+          "station_net_boost_m": 36.14259403867296
+        },
+        {
+          "q_m3h": 29.0,
+          "single_pump_head_m": 43.0,
+          "station_net_boost_m": 35.382174929546274
+        },
+        {
+          "q_m3h": 29.5,
+          "single_pump_head_m": 42.5,
+          "station_net_boost_m": 34.61722679243477
+        },
+        {
+          "q_m3h": 30.0,
+          "single_pump_head_m": 42.0,
+          "station_net_boost_m": 33.84774962733846
+        },
+        {
+          "q_m3h": 30.5,
+          "single_pump_head_m": 41.5,
+          "station_net_boost_m": 33.07374343425734
+        },
+        {
+          "q_m3h": 31.0,
+          "single_pump_head_m": 41.0,
+          "station_net_boost_m": 32.2952082131914
+        },
+        {
+          "q_m3h": 31.5,
+          "single_pump_head_m": 40.5,
+          "station_net_boost_m": 31.512143964140655
+        },
+        {
+          "q_m3h": 32,
+          "single_pump_head_m": 40,
+          "station_net_boost_m": 30.724550687105094
+        },
+        {
+          "q_m3h": 32.5,
+          "single_pump_head_m": 39.375,
+          "station_net_boost_m": 29.807428382084723
+        },
+        {
+          "q_m3h": 33.0,
+          "single_pump_head_m": 38.75,
+          "station_net_boost_m": 28.885777049079536
+        },
+        {
+          "q_m3h": 33.5,
+          "single_pump_head_m": 38.125,
+          "station_net_boost_m": 27.95959668808954
+        },
+        {
+          "q_m3h": 34.0,
+          "single_pump_head_m": 37.5,
+          "station_net_boost_m": 27.028887299114736
+        },
+        {
+          "q_m3h": 34.5,
+          "single_pump_head_m": 36.875,
+          "station_net_boost_m": 26.093648882155115
+        },
+        {
+          "q_m3h": 35.0,
+          "single_pump_head_m": 36.25,
+          "station_net_boost_m": 25.153881437210686
+        },
+        {
+          "q_m3h": 35.5,
+          "single_pump_head_m": 35.625,
+          "station_net_boost_m": 24.20958496428144
+        },
+        {
+          "q_m3h": 36,
+          "single_pump_head_m": 35,
+          "station_net_boost_m": 23.260759463367386
+        },
+        {
+          "q_m3h": 36.5,
+          "single_pump_head_m": 34.0,
+          "station_net_boost_m": 21.932404934468515
+        },
+        {
+          "q_m3h": 37.0,
+          "single_pump_head_m": 33.0,
+          "station_net_boost_m": 20.59952137758484
+        },
+        {
+          "q_m3h": 37.5,
+          "single_pump_head_m": 32.0,
+          "station_net_boost_m": 19.262108792716347
+        },
+        {
+          "q_m3h": 38.0,
+          "single_pump_head_m": 31.0,
+          "station_net_boost_m": 17.920167179863043
+        },
+        {
+          "q_m3h": 38.5,
+          "single_pump_head_m": 30.0,
+          "station_net_boost_m": 16.573696539024926
+        },
+        {
+          "q_m3h": 39.0,
+          "single_pump_head_m": 29.0,
+          "station_net_boost_m": 15.222696870201997
+        },
+        {
+          "q_m3h": 39.5,
+          "single_pump_head_m": 28.0,
+          "station_net_boost_m": 13.867168173394262
+        },
+        {
+          "q_m3h": 40,
+          "single_pump_head_m": 27,
+          "station_net_boost_m": 12.507110448601708
+        }
+      ],
+      "representative_operating_point": {
+        "floors": [
+          16,
+          16
+        ],
+        "boundary": "one_supply_guaranteed",
+        "result": {
+          "status": "meets_minimum",
+          "operating": {
+            "header_head_m": 76.46521812204753,
+            "total_flow_lps": 5.468742654869525,
+            "cabinets": [
+              {
+                "cabinet_id": "СТ-В2-1-PK",
+                "flow_lps": 2.7343711936076867,
+                "inlet_head_m": 23.03484194006557,
+                "outlet_head_m": 23.03484194006557,
+                "control_drop_m": 0,
+                "minimum_flow_lps": 2.6,
+                "minimum_head_m": 21.406727828746174,
+                "meets_minimum": true,
+                "within_characteristic_range": null,
+                "within_device_range": null
+              },
+              {
+                "cabinet_id": "СТ-В2-2-PK",
+                "flow_lps": 2.734371461261838,
+                "inlet_head_m": 23.034846475487093,
+                "outlet_head_m": 23.034846475487093,
+                "control_drop_m": 0,
+                "minimum_flow_lps": 2.6,
+                "minimum_head_m": 21.406727828746174,
+                "meets_minimum": true,
+                "within_characteristic_range": null,
+                "within_device_range": null
+              }
+            ],
+            "iterations": 3,
+            "flow_residual_lps": 6.021651262066996e-07,
+            "energy_residual_m": 1.0751246053305746e-05,
+            "supply_balance_residual_lps": 0.0,
+            "ideal_controls": false,
+            "product_verified": false,
+            "fixed_controls": false
+          },
+          "pump_flow_m3h": 19.68747615814209,
+          "pump_head_m": 51.23439288139343,
+          "suction_head_m": 27.776468996011925,
+          "boundary_residual_lps": -7.223921665300281e-07,
+          "reason": "Расчёт характеристики; паспорта, NPSH, статика и покрытие помещений проверяются отдельно"
+        }
+      },
+      "variants": [
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 0.0,
+          "axis_offset_px": 0.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.23194704854695603,
+            0.3140888607904888
+          ],
+          "flow_range_m3h": [
+            20.05172041630533,
+            23.006591977773535
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 0.0,
+          "axis_offset_px": -2.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.22889924222010838,
+            0.31308083643437806
+          ],
+          "flow_range_m3h": [
+            19.925339380176798,
+            22.9615003712325
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 0.0,
+          "axis_offset_px": 2.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.23500631191351998,
+            0.31507047480626316
+          ],
+          "flow_range_m3h": [
+            20.177580202018348,
+            23.05077655045345
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 1.0,
+          "axis_offset_px": 0.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.22035716643688524,
+            0.28999759964426697
+          ],
+          "flow_range_m3h": [
+            19.60728219713518,
+            22.060048801277873
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 1.0,
+          "axis_offset_px": -2.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.21868669427563955,
+            0.28930158222117336
+          ],
+          "flow_range_m3h": [
+            19.490028080328397,
+            22.02176992836242
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 1.0,
+          "axis_offset_px": 2.0,
+          "summary": {
+            "meets_minimum": 512
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": true,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.21998712014995644,
+            0.2906675583768485
+          ],
+          "flow_range_m3h": [
+            19.68747615814209,
+            22.097527433207595
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 2.0,
+          "axis_offset_px": 0.0,
+          "summary": {
+            "meets_minimum": 436,
+            "insufficient_at_cabinet": 76
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": false,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.1998333038839087,
+            0.2687433718187856
+          ],
+          "flow_range_m3h": [
+            18.880777359008782,
+            21.247138469037978
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 2.0,
+          "axis_offset_px": -2.0,
+          "summary": {
+            "meets_minimum": 422,
+            "insufficient_at_cabinet": 90
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": false,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.20025097012925008,
+            0.2682848949105137
+          ],
+          "flow_range_m3h": [
+            18.880777359008782,
+            21.190593557200177
+          ]
+        },
+        {
+          "layout": "adopted_layout",
+          "loss_scale": 2.0,
+          "axis_offset_px": 2.0,
+          "summary": {
+            "meets_minimum": 442,
+            "insufficient_at_cabinet": 70
+          },
+          "scenario_count": 512,
+          "complete": true,
+          "all_minima_met": false,
+          "all_dynamic_limits_met": true,
+          "pressure_range_mpa": [
+            0.19942077201378086,
+            0.26983212521374667
+          ],
+          "flow_range_m3h": [
+            18.880777359008782,
+            21.318983107672725
+          ]
+        }
+      ],
+      "adopted_assumptions_pass": true,
+      "double_loss_sensitivity_pass": false,
+      "nominal_static_lowest_pc_mpa": 0.8677435499999999,
+      "maximum_allowed_pump_shutoff_m": 60.288119266055055,
+      "source_maximum_is_assumption": true,
+      "release_ready": false,
+      "external_request_sent": false,
+      "external_reply_required_for_assignment": false,
+      "normative_composition": {
+        "standard": "ГОСТ Р21.619-2023",
+        "clauses": [
+          "5.1.8",
+          "5.1.14"
+        ],
+        "scope": "Расчётное приложение и текст для включения в ПЗ; не полный комплект ИОС2",
+        "balance_unchanged": true,
+        "full_package_verified": false
+      },
+      "retained_limits": [
+        "cabinet_products_and_diaphragm_tolerances",
+        "ring_failure_modes",
+        "fire_coverage_on_plans",
+        "actual_utility_bounds",
+        "NPSH",
+        "room_drainage_power_and_fire_automation_interfaces"
+      ],
+      "design_inputs_sha256": "8cc913a98ba846f4ad7bf8734bb9835e4cb8626f2b46951e50880262ec4c5019",
+      "pz_text": [
+        "Для самостоятельной системы В2 рассматривается насосная установка на базе двух CNP CDM32-3: один рабочий и один установленный резервный насос. Мощность каждого двигателя 5,5 кВт; это номинальная мощность двигателя, не подтверждённая потребляемая мощность в рабочей точке. Расчётная подача резервного насоса не суммируется с подачей рабочего.",
+        "Минимальная расчётная подача 18,979 м³/ч. Требуемая добавка напора на границах станции 45,661 м. Предварительные потери обвязки при этой подаче 3,263 м; требуемый напор одиночного насоса 48,924 м. Каталожный напор при той же подаче 51,766 м.",
+        "Обвязка принята проектировщиком предварительно: коллекторы DN100, рабочие ветви DN65, длины и сопротивления приведены в расчётном приложении. Это не подтверждённая характеристика заводской PFFS; выбранная комплектация должна обеспечить принятые гидравлические параметры либо потребовать повторного расчёта.",
+        "Повторная совместная проверка по принятым допущениям пройдена.",
+        "Для двух верхних ПК при гарантированном напоре 30 м рабочая точка одиночного насоса составляет Q=19,687 м³/ч, H=51,234 м. Это результат совместного расчёта, а не маркер введённого задания.",
+        "Предусмотреть один рабочий и один установленный резервный пожарный насос одинаковой производительности.",
+        "Резерв автоматически включается при невыходе рабочего на расчётный режим, его аварийном отключении или несрабатывании.",
+        "Резервный насос не участвует в суммировании расчётной подачи. При его замещении рабочая характеристика сохраняется.",
+        "Решения по автоматизации передаются заданием смежному разделу. При выборе шкафа обеспечить выполнение задания; соответствие конкретного изделия проверяется по документации. Переписка с изготовителем не является условием выпуска задания."
+      ],
+      "repair_review": {
+        "method": "L06 explicit single isolation; steady-state repair extension",
+        "baseline_snapshot": "28a56387b48f45a4e6ba4f61e67b88a1e555c1950a3f18ec993af5dfe1b18190",
+        "pump": {
+          "id": "cnp-cdm32-3",
+          "pump_model": "CNP CDM32-3",
+          "station_model": "PFFS 2 CDM32-3 D",
+          "power_per_pump_kw": 5.5,
+          "station_connection_dn": 100,
+          "curve": [
+            [
+              0,
+              57
+            ],
+            [
+              16,
+              54
+            ],
+            [
+              20,
+              51
+            ],
+            [
+              24,
+              48
+            ],
+            [
+              28,
+              44
+            ],
+            [
+              32,
+              40
+            ],
+            [
+              36,
+              35
+            ],
+            [
+              40,
+              27
+            ]
+          ],
+          "curve_pdf_page": 33,
+          "station_pdf_page": 40,
+          "station_printed_page": 40,
+          "curve_source": "Каталог CDM, CDMF.pdf",
+          "curve_sha256": "abc39dac7beba67fe392c27a427f3f52c629474244901d8cc20deb7b6fccfac0",
+          "station_source": "Каталог PFFS.pdf",
+          "station_sha256": "fab7ea4dc4c37bf0d7c865f8398165139e6d0a77cc0689b039cc7dafc683dc39",
+          "evidence": "user_supplied_manufacturer_catalog_2025",
+          "selection_confirmed": false,
+          "unresolved": [
+            "PFFS_internal_losses_and_guaranteed_station_curve",
+            "curve_tolerances_and_maximum_shutoff_head",
+            "NPSH_and_manufacturer_operating_range",
+            "complete_fire_configuration_and_automation",
+            "actual_cabinet_and_regulator_characteristics"
+          ]
+        },
+        "apertures_mm": {
+          "1": 13.5,
+          "2": 13.5,
+          "3": 13.5,
+          "4": 14.0,
+          "5": 14.0,
+          "6": 14.0,
+          "7": 15.0,
+          "8": 15.0,
+          "9": 15.0,
+          "10": 16.5,
+          "11": 16.5,
+          "12": 16.5,
+          "13": 19.5,
+          "14": 19.5,
+          "15": 21.0
+        },
+        "project_input_sha256": "9b49c9be05f7b0cabe4017c94033660ee85cdb4944f875696dc6853b4e9106d2",
+        "baseline_apertures_mm": {
+          "1": 13.5,
+          "2": 13.5,
+          "3": 13.5,
+          "4": 14.0,
+          "5": 14.0,
+          "6": 14.0,
+          "7": 15.0,
+          "8": 15.0,
+          "9": 15.0,
+          "10": 16.5,
+          "11": 16.5,
+          "12": 16.5,
+          "13": 19.5,
+          "14": 19.5,
+          "15": 19.5
+        },
+        "pipework_resistances": {
+          "suction": 0.03227418433453923,
+          "discharge": 0.08511822103178694
+        },
+        "duty_pumps": 1,
+        "reserve_pumps": 1,
+        "reserve_in_flow_sum": false,
+        "supplies": [
+          {
+            "name": "Наружный ввод 1",
+            "static_min": 30.255,
+            "static_max": 35.255,
+            "resistance": 0.0506
+          },
+          {
+            "name": "Наружный ввод 2",
+            "static_min": 30.255,
+            "static_max": 35.255,
+            "resistance": 0.0506
+          }
+        ],
+        "cases": [
+          {
+            "id": "intact",
+            "label": "Кольцо целое, оба выхода НУ",
+            "kind": "intact",
+            "closed_segments": [],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.22035716643688524,
+                  0.28999759964426697
+                ],
+                "flow_range_m3h": [
+                  19.60728219713518,
+                  22.060048801277873
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.7001870001804624,
+                    "inlet_head_m": 22.462504223943448,
+                    "outlet_head_m": 22.462504223943448,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.206711043686447,
+                  "pump_head_m": 50.84496671723517
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868669427563955,
+                  0.28930158222117336
+                ],
+                "flow_range_m3h": [
+                  19.490028080328397,
+                  22.02176992836242
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689932810768161,
+                    "inlet_head_m": 55.21774499716873,
+                    "outlet_head_m": 22.29222163869924,
+                    "control_drop_m": 32.92552335846949,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13261412384034,
+                  "pump_head_m": 50.900539407119744
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21998712014995644,
+                  0.2906675583768485
+                ],
+                "flow_range_m3h": [
+                  19.68747615814209,
+                  22.097527433207595
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6979188324447367,
+                    "inlet_head_m": 22.424782889903817,
+                    "outlet_head_m": 22.424782889903817,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24073997302243,
+                  "pump_head_m": 50.819445020233175
+                }
+              }
+            ]
+          },
+          {
+            "id": "external-1",
+            "label": "Наружный ввод 1 отключён",
+            "kind": "external_inlet",
+            "closed_segments": [],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_single_supply",
+                35.255,
+                0.0506
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.22035716643688524,
+                  0.28050865876194764
+                ],
+                "flow_range_m3h": [
+                  19.60728219713518,
+                  21.68690550353387
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.7001870001804624,
+                    "inlet_head_m": 22.462504223943448,
+                    "outlet_head_m": 22.462504223943448,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.206711043686447,
+                  "pump_head_m": 50.84496671723517
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868669427563955,
+                  0.27992150795238946
+                ],
+                "flow_range_m3h": [
+                  19.490028080328397,
+                  21.650887305005895
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689932810768161,
+                    "inlet_head_m": 55.21774499716873,
+                    "outlet_head_m": 22.29222163869924,
+                    "control_drop_m": 32.92552335846949,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13261412384034,
+                  "pump_head_m": 50.900539407119744
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21998712014995644,
+                  0.2810718101062463
+                ],
+                "flow_range_m3h": [
+                  19.68747615814209,
+                  21.722160796135544
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6979188324447367,
+                    "inlet_head_m": 22.424782889903817,
+                    "outlet_head_m": 22.424782889903817,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24073997302243,
+                  "pump_head_m": 50.819445020233175
+                }
+              }
+            ]
+          },
+          {
+            "id": "external-2",
+            "label": "Наружный ввод 2 отключён",
+            "kind": "external_inlet",
+            "closed_segments": [],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_single_supply",
+                35.255,
+                0.0506
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.22035716643688524,
+                  0.28050865876194764
+                ],
+                "flow_range_m3h": [
+                  19.60728219713518,
+                  21.68690550353387
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.7001870001804624,
+                    "inlet_head_m": 22.462504223943448,
+                    "outlet_head_m": 22.462504223943448,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.206711043686447,
+                  "pump_head_m": 50.84496671723517
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868669427563955,
+                  0.27992150795238946
+                ],
+                "flow_range_m3h": [
+                  19.490028080328397,
+                  21.650887305005895
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689932810768161,
+                    "inlet_head_m": 55.21774499716873,
+                    "outlet_head_m": 22.29222163869924,
+                    "control_drop_m": 32.92552335846949,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13261412384034,
+                  "pump_head_m": 50.900539407119744
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21998712014995644,
+                  0.2810718101062463
+                ],
+                "flow_range_m3h": [
+                  19.68747615814209,
+                  21.722160796135544
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6979188324447367,
+                    "inlet_head_m": 22.424782889903817,
+                    "outlet_head_m": 22.424782889903817,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24073997302243,
+                  "pump_head_m": 50.819445020233175
+                }
+              }
+            ]
+          },
+          {
+            "id": "header-1",
+            "label": "Выход НУ 1 в кольцо отключён",
+            "kind": "header_port",
+            "closed_segments": [],
+            "closed_ports": [
+              "В2-НУ-Выход1"
+            ],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21199246131078142,
+                  0.2829476165910346
+                ],
+                "flow_range_m3h": [
+                  19.38936494091495,
+                  21.752014384178832
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6484419672315154,
+                    "inlet_head_m": 21.6098329572662,
+                    "outlet_head_m": 21.6098329572662,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.93355145451556,
+                  "pump_head_m": 51.04983640911333
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21238040869472596,
+                  0.28233159040914274
+                ],
+                "flow_range_m3h": [
+                  19.342098527684385,
+                  21.71560847938567
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6508641913645374,
+                    "inlet_head_m": 21.649379071837508,
+                    "outlet_head_m": 21.649379071837508,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.90034194874668,
+                  "pump_head_m": 51.07474353843999
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21160916258225793,
+                  0.28353951321661874
+                ],
+                "flow_range_m3h": [
+                  19.38936494091495,
+                  21.787650905808146
+                ],
+                "worst": {
+                  "floors": [
+                    16,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.6460465902370647,
+                    "inlet_head_m": 21.570760711749024,
+                    "outlet_head_m": 21.570760711749024,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.966337353966683,
+                  "pump_head_m": 51.02524698452499
+                }
+              }
+            ]
+          },
+          {
+            "id": "header-2",
+            "label": "Выход НУ 2 в кольцо отключён",
+            "kind": "header_port",
+            "closed_segments": [],
+            "closed_ports": [
+              "В2-НУ-Выход2"
+            ],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21199246131078142,
+                  0.2829476165910346
+                ],
+                "flow_range_m3h": [
+                  19.38936494091495,
+                  21.752014384178832
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6484419672315154,
+                    "inlet_head_m": 21.6098329572662,
+                    "outlet_head_m": 21.6098329572662,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.93355145451556,
+                  "pump_head_m": 51.04983640911333
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21238040869472596,
+                  0.28233159040914274
+                ],
+                "flow_range_m3h": [
+                  19.342098527684385,
+                  21.71560847938567
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6508641913645374,
+                    "inlet_head_m": 21.649379071837508,
+                    "outlet_head_m": 21.649379071837508,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.90034194874668,
+                  "pump_head_m": 51.07474353843999
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21160916258225793,
+                  0.28353951321661874
+                ],
+                "flow_range_m3h": [
+                  19.38936494091495,
+                  21.787650905808146
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6460465902370647,
+                    "inlet_head_m": 21.570760711749024,
+                    "outlet_head_m": 21.570760711749024,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 19.966337353966683,
+                  "pump_head_m": 51.02524698452499
+                }
+              }
+            ]
+          },
+          {
+            "id": "М3",
+            "label": "В2-У1 - В2-У2",
+            "kind": "ring_segment",
+            "section_id": "РС-3",
+            "closed_segments": [
+              "М3"
+            ],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.2203607594190871,
+                  0.2899923350944276
+                ],
+                "flow_range_m3h": [
+                  19.607282197129827,
+                  22.060048801266817
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.700209013711424,
+                    "inlet_head_m": 22.462870481048633,
+                    "outlet_head_m": 22.462870481048633,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.20673651449297,
+                  "pump_head_m": 50.84494761413027
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868829952919885,
+                  0.28929583120843216
+                ],
+                "flow_range_m3h": [
+                  19.49002808032314,
+                  22.02176992835142
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689942683360173,
+                    "inlet_head_m": 55.218217451308796,
+                    "outlet_head_m": 22.292385273108955,
+                    "control_drop_m": 32.92583217819984,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13260162334364,
+                  "pump_head_m": 50.90054878249227
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21999119022452276,
+                  0.2906627833727765
+                ],
+                "flow_range_m3h": [
+                  19.68747187374985,
+                  22.097527433196465
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6979437899793117,
+                    "inlet_head_m": 22.42519778027755,
+                    "outlet_head_m": 22.42519778027755,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24076856021625,
+                  "pump_head_m": 50.81942357983781
+                }
+              }
+            ]
+          },
+          {
+            "id": "М4",
+            "label": "В2-У2 - В2-У3",
+            "kind": "ring_segment",
+            "section_id": "РС-4",
+            "closed_segments": [
+              "М4"
+            ],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.2203607594190871,
+                  0.2899923350944276
+                ],
+                "flow_range_m3h": [
+                  19.607282197129827,
+                  22.060048801266817
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.700209013711424,
+                    "inlet_head_m": 22.462870481048633,
+                    "outlet_head_m": 22.462870481048633,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.20673651449297,
+                  "pump_head_m": 50.84494761413027
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868829952919885,
+                  0.28929583120843216
+                ],
+                "flow_range_m3h": [
+                  19.49002808032314,
+                  22.02176992835142
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689942683360173,
+                    "inlet_head_m": 55.218217451308796,
+                    "outlet_head_m": 22.292385273108955,
+                    "control_drop_m": 32.92583217819984,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13260162334364,
+                  "pump_head_m": 50.90054878249227
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21999119022452276,
+                  0.2906627833727765
+                ],
+                "flow_range_m3h": [
+                  19.68747187374985,
+                  22.097527433196465
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6979437899793117,
+                    "inlet_head_m": 22.42519778027755,
+                    "outlet_head_m": 22.42519778027755,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24076856021625,
+                  "pump_head_m": 50.81942357983781
+                }
+              }
+            ]
+          },
+          {
+            "id": "М5",
+            "label": "В2-У3 - В2-У4",
+            "kind": "ring_segment",
+            "section_id": "РС-5",
+            "closed_segments": [
+              "М5"
+            ],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.2203607594190871,
+                  0.2899923350944276
+                ],
+                "flow_range_m3h": [
+                  19.607282197129827,
+                  22.060048801266817
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.700209013711424,
+                    "inlet_head_m": 22.462870481048633,
+                    "outlet_head_m": 22.462870481048633,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.20673651449297,
+                  "pump_head_m": 50.84494761413027
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868829952919885,
+                  0.28929583120843216
+                ],
+                "flow_range_m3h": [
+                  19.49002808032314,
+                  22.02176992835142
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689942683360173,
+                    "inlet_head_m": 55.218217451308796,
+                    "outlet_head_m": 22.292385273108955,
+                    "control_drop_m": 32.92583217819984,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13260162334364,
+                  "pump_head_m": 50.90054878249227
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21999119022452276,
+                  0.2906627833727765
+                ],
+                "flow_range_m3h": [
+                  19.68747187374985,
+                  22.097527433196465
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6979437899793117,
+                    "inlet_head_m": 22.42519778027755,
+                    "outlet_head_m": 22.42519778027755,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24076856021625,
+                  "pump_head_m": 50.81942357983781
+                }
+              }
+            ]
+          },
+          {
+            "id": "М6",
+            "label": "В2-У4 - В2-У1",
+            "kind": "ring_segment",
+            "section_id": "РС-6",
+            "closed_segments": [
+              "М6"
+            ],
+            "closed_ports": [],
+            "boundaries": [
+              [
+                "guaranteed_single_supply_bound",
+                30.255,
+                0.0506
+              ],
+              [
+                "maximum_no_supply_loss_bound",
+                35.255,
+                0.0
+              ]
+            ],
+            "variants": [
+              {
+                "axis_offset_px": 0.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.2203607594190871,
+                  0.2899923350944276
+                ],
+                "flow_range_m3h": [
+                  19.607282197129827,
+                  22.060048801266817
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.700209013711424,
+                    "inlet_head_m": 22.462870481048633,
+                    "outlet_head_m": 22.462870481048633,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.20673651449297,
+                  "pump_head_m": 50.84494761413027
+                }
+              },
+              {
+                "axis_offset_px": -2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21868829952919885,
+                  0.28929583120843216
+                ],
+                "flow_range_m3h": [
+                  19.49002808032314,
+                  22.02176992835142
+                ],
+                "worst": {
+                  "floors": [
+                    6,
+                    10
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-1-PK",
+                    "flow_lps": 2.689942683360173,
+                    "inlet_head_m": 55.218217451308796,
+                    "outlet_head_m": 22.292385273108955,
+                    "control_drop_m": 32.92583217819984,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": true
+                  },
+                  "pump_flow_m3h": 20.13260162334364,
+                  "pump_head_m": 50.90054878249227
+                }
+              },
+              {
+                "axis_offset_px": 2.0,
+                "scenario_count": 512,
+                "summary": {
+                  "meets_minimum": 512
+                },
+                "all_minima_met": true,
+                "complete": true,
+                "all_dynamic_limits_met": true,
+                "pressure_range_mpa": [
+                  0.21999119022452276,
+                  0.2906627833727765
+                ],
+                "flow_range_m3h": [
+                  19.68747187374985,
+                  22.097527433196465
+                ],
+                "worst": {
+                  "floors": [
+                    10,
+                    16
+                  ],
+                  "boundary": "guaranteed_single_supply_bound",
+                  "cabinet": {
+                    "cabinet_id": "СТ-В2-2-PK",
+                    "flow_lps": 2.6979437899793117,
+                    "inlet_head_m": 22.42519778027755,
+                    "outlet_head_m": 22.42519778027755,
+                    "control_drop_m": 0.0,
+                    "minimum_flow_lps": 2.6,
+                    "minimum_head_m": 21.406727828746174,
+                    "meets_minimum": true,
+                    "within_characteristic_range": null,
+                    "within_device_range": null
+                  },
+                  "pump_flow_m3h": 20.24076856021625,
+                  "pump_head_m": 50.81942357983781
+                }
+              }
+            ]
+          }
+        ],
+        "comparison": {
+          "floors": [
+            16,
+            10
+          ],
+          "cases": [
+            {
+              "kind": "intact",
+              "result": {
+                "status": "meets_minimum",
+                "operating": {
+                  "header_head_m": 75.80728340023359,
+                  "total_flow_lps": 5.612975289912902,
+                  "cabinets": [
+                    {
+                      "cabinet_id": "СТ-В2-1-PK",
+                      "flow_lps": 2.7001870001804624,
+                      "inlet_head_m": 22.462504223943448,
+                      "outlet_head_m": 22.462504223943448,
+                      "control_drop_m": 0.0,
+                      "minimum_flow_lps": 2.6,
+                      "minimum_head_m": 21.406727828746174,
+                      "meets_minimum": true,
+                      "within_characteristic_range": null,
+                      "within_device_range": null
+                    },
+                    {
+                      "cabinet_id": "СТ-В2-2-PK",
+                      "flow_lps": 2.9127882897324398,
+                      "inlet_head_m": 41.631422942698926,
+                      "outlet_head_m": 26.138961277886942,
+                      "control_drop_m": 15.492461664811982,
+                      "minimum_flow_lps": 2.6,
+                      "minimum_head_m": 21.406727828746174,
+                      "meets_minimum": true,
+                      "within_characteristic_range": null,
+                      "within_device_range": true
+                    }
+                  ],
+                  "iterations": 4,
+                  "flow_residual_lps": 0.0,
+                  "energy_residual_m": 1.2326413134644554e-07,
+                  "supply_balance_residual_lps": 0.0,
+                  "ideal_controls": false,
+                  "product_verified": false,
+                  "fixed_controls": true
+                },
+                "pump_flow_m3h": 20.206711043686447,
+                "pump_head_m": 50.84496671723517,
+                "suction_head_m": 27.644008081162628,
+                "boundary_residual_lps": 0.0,
+                "reason": "Graphical SP10 study; explicit station Rs/Rd applied; raster accuracy, real products, factory station curve and release checks remain unverified"
+              },
+              "external_loss_m": 1.594177875221745,
+              "station_suction_loss_m": 1.016814043615626,
+              "station_discharge_loss_m": 2.681691398164209
+            },
+            {
+              "kind": "header_1_closed",
+              "result": {
+                "status": "meets_minimum",
+                "operating": {
+                  "header_head_m": 76.15428163579688,
+                  "total_flow_lps": 5.5370976262543214,
+                  "cabinets": [
+                    {
+                      "cabinet_id": "СТ-В2-1-PK",
+                      "flow_lps": 2.6484419672315154,
+                      "inlet_head_m": 21.6098329572662,
+                      "outlet_head_m": 21.6098329572662,
+                      "control_drop_m": 0.0,
+                      "minimum_flow_lps": 2.6,
+                      "minimum_head_m": 21.406727828746174,
+                      "meets_minimum": true,
+                      "within_characteristic_range": null,
+                      "within_device_range": null
+                    },
+                    {
+                      "cabinet_id": "СТ-В2-2-PK",
+                      "flow_lps": 2.888655659022806,
+                      "inlet_head_m": 40.874887530483385,
+                      "outlet_head_m": 25.707629741894927,
+                      "control_drop_m": 15.16725778858846,
+                      "minimum_flow_lps": 2.6,
+                      "minimum_head_m": 21.406727828746174,
+                      "meets_minimum": true,
+                      "within_characteristic_range": null,
+                      "within_device_range": true
+                    }
+                  ],
+                  "iterations": 4,
+                  "flow_residual_lps": 0.0,
+                  "energy_residual_m": 8.01649147064154e-08,
+                  "supply_balance_residual_lps": 0.0,
+                  "ideal_controls": false,
+                  "product_verified": false,
+                  "fixed_controls": true
+                },
+                "pump_flow_m3h": 19.93355145451556,
+                "pump_head_m": 51.04983640911333,
+                "suction_head_m": 27.71412307893813,
+                "boundary_residual_lps": 0.0,
+                "reason": "L06 isolated-network study; unchanged apertures and one active pump; no coverage or release approval"
+              },
+              "external_loss_m": 1.5513681762071647,
+              "station_suction_loss_m": 0.989508744854703,
+              "station_discharge_loss_m": 2.609677852254578
+            }
+          ],
+          "repair_network": {
+            "cabinet_heads_m": {
+              "СТ-В2-1-PK": 21.6098329572662,
+              "СТ-В2-2-PK": 40.874887530483385
+            },
+            "segment_flows_lps": {
+              "М1": -0.0,
+              "М2": 5.5370976262543214,
+              "М3": -1.3242209834543202,
+              "М4": -1.3242209834543202,
+              "М5": 1.3242209837771952,
+              "М6": 1.3242209837771952,
+              "СТ-В2-1_seg": 2.6484419672315154,
+              "СТ-В2-2_seg": 2.888655659022806
+            },
+            "port_flows_lps": {
+              "В2-НУ-Выход2": 5.5370976262543214
+            },
+            "energy_residual_m": 9.95096713363175e-11,
+            "balance_residual_lps": 0.0
+          }
+        },
+        "all_model_minima_met": true,
+        "all_model_dynamic_limits_met": true,
+        "nominal_static_lowest_pc_mpa": 0.8677435499999999,
+        "normative_sectioning_confirmed": false,
+        "room_coverage_confirmed": false,
+        "release_ready": false,
+        "retained_limits": [
+          "После изоляции: без расхода утечки, гидроудара и переходного процесса включения резерва.",
+          "Отключение трубного сегмента не подтверждает границы реальной ремонтной секции и размещение задвижек.",
+          "Два представительных стояка, не проверка всех ПК и покрытия помещений здания.",
+          "Для повреждения кольца минимум оценён при полном расходе одного наружного ввода; максимум - без потерь наружных подводов.",
+          "Hmax=35 м и обвязка - прежние учебные допущения; +/-2 px - чувствительность номограммы, не допуски изделия.",
+          "Изменены только явно указанные отверстия; насос, обвязка, трубы, каталог и legacy сохранены."
+        ],
+        "engine_sha256": {
+          "app/calc/fire_repair_flow.py": "841ef602f00617096b4f6c09e1438ed884d33aba2b97687daddb6c9b2de0ce05",
+          "scripts/build_samara_repair_review.py": "322be9635b86def5d953b9799ef77083bc06bfef50d57557148346715a1ce9c6"
+        },
+        "correction": {
+          "changed_floors": [
+            15
+          ],
+          "old_mm": 19.5,
+          "new_mm": 21.0,
+          "trials": [
+            {
+              "scope": "group",
+              "diameter_mm": 20.0,
+              "all_minima_met": false,
+              "all_dynamic_limits_met": true,
+              "passed": 13752,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.2064203783027555,
+              "maximum_pressure_mpa": 0.29554176551043804
+            },
+            {
+              "scope": "group",
+              "diameter_mm": 20.5,
+              "all_minima_met": false,
+              "all_dynamic_limits_met": true,
+              "passed": 13818,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.2089631367080375,
+              "maximum_pressure_mpa": 0.3007081594736174
+            },
+            {
+              "scope": "group",
+              "diameter_mm": 21.0,
+              "all_minima_met": true,
+              "all_dynamic_limits_met": true,
+              "passed": 13824,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.2102006985945148,
+              "maximum_pressure_mpa": 0.3053214414893305
+            },
+            {
+              "scope": "floor15",
+              "diameter_mm": 20.0,
+              "all_minima_met": false,
+              "all_dynamic_limits_met": true,
+              "passed": 13754,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.20676459706793118,
+              "maximum_pressure_mpa": 0.2906675583768485
+            },
+            {
+              "scope": "floor15",
+              "diameter_mm": 20.5,
+              "all_minima_met": true,
+              "all_dynamic_limits_met": true,
+              "passed": 13824,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.21000686198767848,
+              "maximum_pressure_mpa": 0.2906675583768485
+            },
+            {
+              "scope": "floor15",
+              "diameter_mm": 21.0,
+              "all_minima_met": true,
+              "all_dynamic_limits_met": true,
+              "passed": 13824,
+              "total": 13824,
+              "minimum_pressure_mpa": 0.21160916258225793,
+              "maximum_pressure_mpa": 0.2906675583768485
+            }
+          ],
+          "decision": "21 мм только на этаже 15; 20,5 мм формально проходит, но запас модели почти нулевой. Это проектный выбор среди проверенных размеров, не нормативный коэффициент запаса.",
+          "product_tolerances_verified": false,
+          "full_building_quantity_confirmed": false
+        }
+      },
+      "project_input_sha256": "9b49c9be05f7b0cabe4017c94033660ee85cdb4944f875696dc6853b4e9106d2",
+      "content_sha256": "a1f12f5d224175527fbb604ae8122dcec6889e2b49d794e77d65ae7e71b94403"
+    }
+  },
+  "payload_sha256": "f46eb7c827594306aa7555fa53dfc252f4d5ef521b25dc281eb39ab44de977d7",
+  "engine_sha256": "d50fa841ef8f8ce228656f04f857c146aff86a308f37b3d24f901084223e123e"
+}

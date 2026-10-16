@@ -1,0 +1,29 @@
+{% set site_pilot_user = request.state.pilot_user|default(none) if request is defined and request.state is defined else none %}
+<a class="site-skip" href="#main-content">К содержимому</a>
+<header class="site-header">
+  <a class="site-brand" href="/studio" aria-label="ЗАРЯ — главная">
+    <svg viewBox="0 0 1492 275" aria-hidden="true">{% include 'site_logo.html' %}</svg>
+    {% include 'site_version.html' %}
+  </a>
+  <nav class="site-nav" aria-label="Основная навигация">
+    <a href="/studio?view=project" data-site-page="studio">Проект</a>
+    <a href="/studio/projects" data-site-page="projects">Мои проекты</a>
+    <details class="site-tools">
+      <summary>Справка <span aria-hidden="true">⌄</span></summary>
+      <div class="site-tools-panel">
+        <a href="/wizard/normatives" data-site-page="normatives" data-site-radar><strong><i class="site-radar" data-state="gray" aria-hidden="true"></i>Нормативная база</strong><small>Редакции и изменения СП и ГОСТ</small></a>
+        {% if site_pilot_user and site_pilot_user.role == 'admin' %}
+        <a href="/access/admin"><strong>Участники пилота</strong><small>Приглашения, доступ и объекты</small></a>
+        <a href="/access/feedback"><strong>Замечания альфы</strong><small>Закрытый список для владельца</small></a>
+        {% endif %}
+      </div>
+    </details>
+    {% if site_pilot_user %}
+    <button type="button" class="site-feedback-open" data-feedback-open>Сообщить о проблеме</button>
+    <form method="post" action="/access/logout" class="site-logout">
+      <button type="submit" title="Выйти: {{ site_pilot_user.name }}">Выйти</button>
+    </form>
+    {% endif %}
+  </nav>
+</header>
+{% if site_pilot_user %}{% include 'pilot_feedback_dialog.html' %}{% endif %}

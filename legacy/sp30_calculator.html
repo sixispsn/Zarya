@@ -32,6 +32,11 @@ select,input[type=number]{background:#f5f5f5;border:1px solid #ccc;border-radius
 </style>
 </head>
 <body>
+<aside style="padding:12px;border:1px solid #d6bb79;background:#fff9eb;margin:12px">
+<b>Рабочий legacy · 15.10.2026</b> — исправлены L01–L05, L07 (чистая циркуляция), L08 (нет подстановки NPSHa=8 м), DN65 и проверка минимума водомера.
+Это автономный расчётник, не полный актуальный нормативный контур ЗАРИ.
+В2 и остальные непроверенные ветви требуют проверки в приложении; учебные исходные не являются данными ТУ.
+<a href="archive/sp30_calculator.pre-2026-09-21.html">Неизменённый архив</a>.</aside>
 <h1>Расчёт расходов воды — СП 30.13330.2020</h1>
 
 <div class="card">
@@ -178,94 +183,600 @@ const TBL = [
 // Пары: [NP, alpha]
 // ============================================================
 const B2 = [
-  [0.015,0.200],[0.016,0.205],[0.017,0.207],[0.018,0.210],[0.019,0.212],
-  [0.020,0.215],[0.021,0.217],[0.022,0.219],[0.023,0.222],[0.024,0.224],
-  [0.025,0.226],[0.026,0.228],[0.027,0.230],[0.028,0.233],[0.029,0.235],
-  [0.030,0.237],[0.031,0.239],[0.032,0.241],[0.033,0.243],[0.034,0.245],
-  [0.035,0.247],[0.036,0.249],[0.037,0.250],[0.038,0.252],[0.039,0.254],
-  [0.040,0.256],[0.041,0.258],[0.042,0.259],[0.043,0.261],[0.044,0.263],
-  [0.045,0.265],[0.046,0.266],[0.047,0.268],[0.048,0.270],[0.049,0.271],
-  [0.050,0.273],[0.052,0.276],[0.054,0.280],[0.056,0.283],[0.058,0.286],
-  [0.060,0.289],[0.062,0.292],[0.064,0.295],[0.065,0.298],[0.068,0.301],
-  [0.070,0.304],[0.072,0.307],[0.074,0.309],[0.076,0.312],[0.078,0.315],
-  [0.080,0.318],[0.082,0.320],[0.084,0.323],[0.086,0.326],[0.088,0.328],
-  [0.090,0.331],[0.092,0.333],[0.094,0.336],[0.096,0.338],[0.098,0.341],
-  [0.100,0.343],[0.105,0.349],[0.110,0.355],[0.115,0.361],[0.120,0.367],
-  [0.125,0.373],[0.130,0.378],[0.135,0.384],[0.140,0.389],[0.145,0.394],
-  [0.150,0.399],[0.155,0.405],[0.160,0.410],[0.165,0.415],[0.170,0.420],
-  [0.175,0.425],[0.180,0.430],[0.185,0.435],[0.190,0.439],[0.195,0.444],
-  [0.200,0.449],[0.210,0.458],[0.220,0.467],[0.230,0.476],[0.240,0.485],
-  [0.250,0.493],[0.260,0.502],[0.270,0.510],[0.280,0.518],[0.290,0.526],
-  [0.300,0.534],[0.310,0.542],[0.320,0.550],[0.330,0.558],[0.340,0.565],
-  [0.350,0.573],[0.360,0.580],[0.370,0.588],[0.380,0.595],[0.390,0.602],
-  [0.400,0.610],[0.410,0.617],[0.420,0.624],[0.430,0.631],[0.440,0.638],
-  [0.450,0.645],[0.460,0.652],[0.470,0.658],[0.480,0.665],[0.490,0.672],
-  [0.500,0.678],[0.520,0.692],[0.540,0.704],[0.560,0.717],[0.580,0.730],
-  [0.600,0.742],[0.620,0.755],[0.640,0.767],[0.660,0.779],[0.680,0.791],
-  [0.700,0.803],[0.720,0.815],[0.740,0.826],[0.760,0.838],[0.780,0.849],
-  [0.800,0.860],[0.820,0.872],[0.840,0.883],[0.860,0.894],[0.880,0.905],
-  [0.900,0.916],[0.920,0.927],[0.940,0.937],[0.960,0.948],[0.980,0.959],
-  [1.000,0.969],[1.050,0.995],[1.100,1.021],[1.150,1.046],[1.200,1.071],
-  [1.250,1.096],[1.300,1.120],[1.350,1.144],[1.400,1.168],[1.450,1.191],
-  [1.500,1.215],[1.550,1.238],[1.600,1.261],[1.650,1.283],[1.700,1.306],
-  [1.750,1.328],[1.800,1.350],[1.850,1.372],[1.900,1.394],[1.950,1.416],
-  [2.000,1.437],[2.100,1.479],[2.200,1.521],[2.300,1.563],[2.400,1.604],
-  [2.500,1.644],[2.600,1.684],[2.700,1.724],[2.800,1.763],[2.900,1.802],
-  [3.000,1.840],[3.100,1.879],[3.200,1.917],[3.300,1.954],[3.400,1.991],
-  [3.500,2.029],[3.600,2.065],[3.700,2.102],[3.800,2.138],[3.900,2.174],
-  [4.000,2.210],[4.100,2.246],[4.200,2.281],[4.300,2.317],[4.400,2.352],
-  [4.500,2.386],[4.600,2.421],[4.700,2.456],[4.800,2.490],[4.900,2.524],
-  [5.000,2.558],[5.100,2.592],[5.200,2.626],[5.300,2.660],[5.400,2.693],
-  [5.500,2.726],[5.600,2.760],[5.700,2.793],[5.800,2.826],[5.900,2.858],
-  [6.000,2.891],[6.100,2.924],[6.200,2.956],[6.300,2.989],[6.400,3.021],
-  [6.500,3.053],[6.600,3.085],[6.700,3.117],[6.800,3.149],[6.900,3.181],
-  [7.000,3.213],[7.100,3.244],[7.200,3.276],[7.300,3.307],[7.400,3.339],
-  [7.500,3.370],[7.600,3.401],[7.700,3.432],[7.800,3.463],[7.900,3.494],
-  [8.000,3.525],[8.100,3.556],[8.200,3.586],[8.300,3.617],[8.400,3.647],
-  [8.500,3.678],[8.600,3.708],[8.700,3.738],[8.800,3.768],[8.900,3.798],
-  [9.000,3.828],[9.100,3.858],[9.200,3.888],[9.300,3.918],[9.400,3.948],
-  [9.500,3.978],[9.600,4.008],[9.700,4.037],[9.800,4.067],[9.900,4.097],
-  [10.0,4.126],[10.2,4.185],[10.4,4.244],[10.6,4.302],[10.8,4.361],
-  [11.0,4.419],[11.2,4.477],[11.4,4.534],[11.6,4.592],[11.8,4.649],
-  [12.0,4.706],[12.2,4.763],[12.4,4.820],[12.6,4.877],[12.8,4.933],
-  [13.0,4.990],[13.2,5.046],[13.4,5.102],[13.6,5.158],[13.8,5.214],
-  [14.0,5.270],[14.2,5.326],[14.4,5.382],[14.6,5.437],[14.8,5.492],
-  [15.0,5.547],[15.2,5.602],[15.4,5.657],[15.6,5.712],[15.8,5.767],
-  [16.0,5.821],[16.2,5.876],[16.4,5.930],[16.6,5.984],[16.8,6.039],
-  [17.0,6.093],[17.2,6.147],[17.4,6.201],[17.6,6.254],[17.8,6.308],
-  [18.0,6.362],[18.2,6.415],[18.4,6.469],[18.6,6.522],[18.8,6.575],
-  [19.0,6.629],[20.0,6.897],[21.0,7.163],[22.0,7.428],[23.0,7.691],
-  [24.0,7.954],[25.0,8.215],[26.0,8.459],[27.0,8.701],[27.5,8.828],
-  [28.0,8.955],[28.5,9.081],[29.0,9.207],[29.5,9.332],[30.0,9.457],
-  [30.5,9.583],[31.0,9.707],[31.5,9.832],[32.0,9.957],[32.5,10.08],
-  [33.0,10.20],[33.5,10.33],[34.0,10.45],[34.5,10.58],[35.0,10.70],
-  [35.5,10.82],[36.0,10.94],[36.5,11.07],[37.5,11.31],[38.0,11.44],
-  [38.5,11.56],[39.0,11.69],[39.5,11.81],[40.0,11.94],[41.0,12.18],
-  [42.0,12.43],[43.0,12.67],[44.0,12.91],[45.0,13.16],[45.5,13.27],
-  [46.0,13.38],[46.5,13.49],[47.0,13.61],[47.5,13.73],[48.0,13.85],
-  [48.5,13.97],[49.0,14.09],[49.5,14.20],[50.0,14.32],[51.0,14.56],
-  [52.0,14.80],[53.0,15.04],[54.0,15.27],[55.0,15.51],[56.0,15.74],
-  [57.0,15.98],[58.0,16.22],[59.0,16.45],[60.0,16.69],[61.0,16.92],
-  [62.0,17.15],[63.0,17.39],
+  [0.015, 0.202],
+  [0.016, 0.205],
+  [0.017, 0.207],
+  [0.018, 0.210],
+  [0.019, 0.212],
+  [0.020, 0.215],
+  [0.021, 0.217],
+  [0.022, 0.219],
+  [0.023, 0.222],
+  [0.024, 0.224],
+  [0.025, 0.226],
+  [0.026, 0.228],
+  [0.027, 0.230],
+  [0.028, 0.233],
+  [0.029, 0.235],
+  [0.030, 0.237],
+  [0.031, 0.239],
+  [0.032, 0.241],
+  [0.033, 0.243],
+  [0.034, 0.245],
+  [0.035, 0.247],
+  [0.036, 0.249],
+  [0.037, 0.250],
+  [0.038, 0.252],
+  [0.039, 0.254],
+  [0.040, 0.256],
+  [0.041, 0.258],
+  [0.042, 0.259],
+  [0.043, 0.261],
+  [0.044, 0.263],
+  [0.045, 0.265],
+  [0.046, 0.266],
+  [0.047, 0.268],
+  [0.048, 0.270],
+  [0.049, 0.271],
+  [0.050, 0.273],
+  [0.052, 0.276],
+  [0.054, 0.280],
+  [0.056, 0.283],
+  [0.058, 0.286],
+  [0.060, 0.289],
+  [0.062, 0.292],
+  [0.064, 0.295],
+  [0.065, 0.298],
+  [0.068, 0.301],
+  [0.070, 0.304],
+  [0.072, 0.307],
+  [0.074, 0.309],
+  [0.076, 0.312],
+  [0.078, 0.315],
+  [0.080, 0.318],
+  [0.082, 0.320],
+  [0.084, 0.323],
+  [0.086, 0.326],
+  [0.088, 0.328],
+  [0.090, 0.331],
+  [0.092, 0.333],
+  [0.094, 0.336],
+  [0.096, 0.338],
+  [0.098, 0.341],
+  [0.100, 0.343],
+  [0.105, 0.349],
+  [0.110, 0.355],
+  [0.115, 0.361],
+  [0.120, 0.367],
+  [0.125, 0.373],
+  [0.130, 0.378],
+  [0.135, 0.384],
+  [0.140, 0.389],
+  [0.145, 0.394],
+  [0.150, 0.399],
+  [0.155, 0.405],
+  [0.160, 0.410],
+  [0.165, 0.415],
+  [0.170, 0.420],
+  [0.175, 0.425],
+  [0.180, 0.430],
+  [0.185, 0.435],
+  [0.190, 0.439],
+  [0.195, 0.444],
+  [0.20, 0.449],
+  [0.21, 0.458],
+  [0.22, 0.467],
+  [0.23, 0.476],
+  [0.24, 0.485],
+  [0.25, 0.493],
+  [0.26, 0.502],
+  [0.27, 0.510],
+  [0.28, 0.518],
+  [0.29, 0.526],
+  [0.30, 0.534],
+  [0.31, 0.542],
+  [0.32, 0.550],
+  [0.33, 0.558],
+  [0.34, 0.565],
+  [0.35, 0.573],
+  [0.36, 0.580],
+  [0.37, 0.588],
+  [0.38, 0.595],
+  [0.39, 0.602],
+  [0.40, 0.610],
+  [0.41, 0.617],
+  [0.42, 0.624],
+  [0.43, 0.631],
+  [0.44, 0.638],
+  [0.45, 0.645],
+  [0.46, 0.652],
+  [0.47, 0.658],
+  [0.48, 0.665],
+  [0.49, 0.672],
+  [0.50, 0.678],
+  [0.52, 0.692],
+  [0.54, 0.704],
+  [0.56, 0.717],
+  [0.58, 0.730],
+  [0.60, 0.742],
+  [0.62, 0.755],
+  [0.64, 0.767],
+  [0.66, 0.779],
+  [0.68, 0.791],
+  [0.70, 0.803],
+  [0.72, 0.815],
+  [0.74, 0.826],
+  [0.76, 0.838],
+  [0.78, 0.849],
+  [0.80, 0.860],
+  [0.82, 0.872],
+  [0.84, 0.883],
+  [0.86, 0.894],
+  [0.88, 0.905],
+  [0.90, 0.916],
+  [0.92, 0.927],
+  [0.94, 0.937],
+  [0.96, 0.948],
+  [0.98, 0.959],
+  [1.00, 0.969],
+  [1.05, 0.995],
+  [1.10, 1.021],
+  [1.15, 1.046],
+  [1.20, 1.071],
+  [1.25, 1.096],
+  [1.30, 1.120],
+  [1.35, 1.144],
+  [1.40, 1.168],
+  [1.45, 1.191],
+  [1.50, 1.215],
+  [1.55, 1.238],
+  [1.60, 1.261],
+  [1.65, 1.283],
+  [1.70, 1.306],
+  [1.75, 1.328],
+  [1.80, 1.350],
+  [1.85, 1.372],
+  [1.90, 1.394],
+  [1.95, 1.416],
+  [2.00, 1.437],
+  [2.1, 1.479],
+  [2.2, 1.521],
+  [2.3, 1.563],
+  [2.4, 1.604],
+  [2.5, 1.644],
+  [2.6, 1.684],
+  [2.7, 1.724],
+  [2.8, 1.763],
+  [2.9, 1.802],
+  [3.0, 1.840],
+  [3.1, 1.879],
+  [3.2, 1.917],
+  [3.3, 1.954],
+  [3.4, 1.991],
+  [3.5, 2.029],
+  [3.6, 2.065],
+  [3.7, 2.102],
+  [3.8, 2.138],
+  [3.9, 2.174],
+  [4.0, 2.210],
+  [4.1, 2.246],
+  [4.2, 2.281],
+  [4.3, 2.317],
+  [4.4, 2.352],
+  [4.5, 2.386],
+  [4.6, 2.421],
+  [4.7, 2.456],
+  [4.8, 2.490],
+  [4.9, 2.524],
+  [5.0, 2.558],
+  [5.1, 2.592],
+  [5.2, 2.626],
+  [5.3, 2.660],
+  [5.4, 2.693],
+  [5.5, 2.726],
+  [5.6, 2.760],
+  [5.7, 2.793],
+  [5.8, 2.826],
+  [5.9, 2.858],
+  [6.0, 2.891],
+  [6.1, 2.924],
+  [6.2, 2.956],
+  [6.3, 2.989],
+  [6.4, 3.021],
+  [6.5, 3.053],
+  [6.6, 3.085],
+  [6.7, 3.117],
+  [6.8, 3.149],
+  [6.9, 3.181],
+  [7.0, 3.212],
+  [7.1, 3.244],
+  [7.2, 3.275],
+  [7.3, 3.307],
+  [7.4, 3.338],
+  [7.5, 3.369],
+  [7.6, 3.400],
+  [7.7, 3.431],
+  [7.8, 3.462],
+  [7.9, 3.493],
+  [8.0, 3.524],
+  [8.1, 3.555],
+  [8.2, 3.585],
+  [8.3, 3.616],
+  [8.4, 3.646],
+  [8.5, 3.677],
+  [8.6, 3.707],
+  [8.7, 3.738],
+  [8.8, 3.768],
+  [8.9, 3.798],
+  [9.0, 3.828],
+  [9.1, 3.858],
+  [9.2, 3.888],
+  [9.3, 3.918],
+  [9.4, 3.948],
+  [9.5, 3.978],
+  [9.6, 4.008],
+  [9.7, 4.037],
+  [9.8, 4.067],
+  [9.9, 4.097],
+  [10.0, 4.126],
+  [10.2, 4.185],
+  [10.4, 4.244],
+  [10.6, 4.302],
+  [10.8, 4.361],
+  [11.0, 4.419],
+  [11.2, 4.477],
+  [11.4, 4.534],
+  [11.6, 4.592],
+  [11.8, 4.649],
+  [12.0, 4.707],
+  [12.2, 4.764],
+  [12.4, 4.820],
+  [12.6, 4.877],
+  [12.8, 4.934],
+  [13.0, 4.990],
+  [13.2, 5.047],
+  [13.4, 5.103],
+  [13.6, 5.159],
+  [13.8, 5.215],
+  [14.0, 5.270],
+  [14.2, 5.326],
+  [14.4, 5.382],
+  [14.6, 5.437],
+  [14.8, 5.492],
+  [15.0, 5.547],
+  [15.2, 5.602],
+  [15.4, 5.657],
+  [15.6, 5.712],
+  [15.8, 5.767],
+  [16.0, 5.821],
+  [16.2, 5.876],
+  [16.4, 5.930],
+  [16.6, 5.984],
+  [16.8, 6.039],
+  [17.0, 6.093],
+  [17.2, 6.147],
+  [17.4, 6.201],
+  [17.6, 6.254],
+  [17.8, 6.308],
+  [18.0, 6.362],
+  [18.2, 6.415],
+  [18.4, 6.469],
+  [18.6, 6.522],
+  [18.8, 6.575],
+  [19.0, 6.629],
+  [19.2, 6.682],
+  [19.4, 6.734],
+  [19.6, 6.788],
+  [19.8, 6.840],
+  [20.0, 6.893],
+  [21.0, 7.156],
+  [21.5, 7.287],
+  [22.0, 7.417],
+  [22.5, 7.547],
+  [23.0, 7.677],
+  [23.5, 7.806],
+  [24.0, 7.935],
+  [24.5, 8.064],
+  [25.0, 8.192],
+  [25.5, 8.320],
+  [26.0, 8.447],
+  [26.5, 8.575],
+  [27.0, 8.701],
+  [27.5, 8.828],
+  [28.0, 8.955],
+  [28.5, 9.081],
+  [29.0, 9.207],
+  [29.5, 9.332],
+  [30.0, 9.457],
+  [30.5, 9.583],
+  [31.0, 9.707],
+  [31.5, 9.832],
+  [32.0, 9.957],
+  [32.5, 10.08],
+  [33.0, 10.20],
+  [33.5, 10.33],
+  [34.0, 10.45],
+  [34.5, 10.58],
+  [35.0, 10.70],
+  [35.5, 10.82],
+  [36.0, 10.94],
+  [36.5, 11.07],
+  [37.5, 11.31],
+  [38.0, 11.43],
+  [38.5, 11.56],
+  [39.0, 11.68],
+  [39.5, 11.80],
+  [40.0, 11.92],
+  [40.5, 12.04],
+  [41.0, 12.16],
+  [41.5, 12.28],
+  [42.0, 12.41],
+  [42.5, 12.53],
+  [43.0, 12.65],
+  [43.5, 12.77],
+  [44.0, 12.89],
+  [44.5, 13.01],
+  [45.0, 13.13],
+  [45.5, 13.25],
+  [46.0, 13.37],
+  [46.5, 13.49],
+  [47.0, 13.61],
+  [47.5, 13.73],
+  [48.0, 13.85],
+  [48.5, 13.97],
+  [49.0, 14.09],
+  [49.5, 14.20],
+  [50, 14.32],
+  [51, 14.56],
+  [52, 14.80],
+  [53, 15.04],
+  [54, 15.27],
+  [55, 15.51],
+  [56, 15.74],
+  [57, 15.98],
+  [58, 16.22],
+  [59, 16.45],
+  [60, 16.69],
+  [61, 16.92],
+  [62, 17.15],
+  [63, 17.39],
+  [64, 17.62],
+  [65, 17.85],
+  [66, 18.09],
+  [67, 18.32],
+  [68, 18.55],
+  [69, 18.79],
+  [70, 19.02],
+  [71, 19.25],
+  [72, 19.48],
+  [73, 19.71],
+  [74, 19.94],
+  [75, 20.18],
+  [76, 20.41],
+  [77, 20.64],
+  [78, 20.87],
+  [79, 21.10],
+  [80, 21.33],
+  [81, 21.56],
+  [82, 21.69],
+  [83, 22.02],
+  [85, 22.48],
+  [86, 22.71],
+  [87, 22.94],
+  [88, 23.17],
+  [89, 23.39],
+  [90, 23.62],
+  [91, 23.85],
+  [92, 24.08],
+  [93, 24.31],
+  [94, 24.54],
+  [95, 24.77],
+  [96, 24.99],
+  [97, 25.22],
+  [98, 25.45],
+  [99, 25.68],
+  [100, 25.91],
+  [102, 26.36],
+  [104, 26.82],
+  [106, 27.27],
+  [108, 27.72],
+  [110, 28.18],
+  [112, 28.63],
+  [114, 29.09],
+  [116, 29.54],
+  [118, 29.89],
+  [120, 30.44],
+  [122, 30.90],
+  [124, 31.35],
+  [126, 31.80],
+  [128, 32.25],
+  [130, 32.70],
+  [132, 33.15],
+  [134, 33.60],
+  [136, 34.06],
+  [138, 34.51],
+  [140, 34.96],
+  [142, 35.41],
+  [144, 35.86],
+  [146, 36.31],
+  [148, 36.76],
+  [150, 37.21],
+  [152, 37.66],
+  [154, 38.11],
+  [158, 39.01],
+  [160, 39.46],
+  [162, 39.91],
+  [164, 40.35],
+  [166, 40.80],
+  [168, 41.25],
+  [170, 41.70],
+  [172, 42.15],
+  [174, 42.60],
+  [176, 43.05],
+  [178, 43.50],
+  [180, 43.95],
+  [182, 44.40],
+  [184, 44.84],
+  [186, 45.29],
+  [188, 45.74],
+  [190, 46.19],
+  [192, 46.64],
+  [194, 47.09],
+  [196, 47.54],
+  [198, 47.99],
+  [200, 48.43],
+  [205, 49.49],
+  [210, 50.59],
+  [215, 51.70],
+  [220, 52.80],
+  [225, 53.90],
+  [230, 55.00],
+  [235, 56.10],
+  [240, 57.19],
+  [245, 58.29],
+  [250, 59.38],
+  [255, 60.48],
+  [260, 61.57],
+  [265, 62.66],
+  [270, 63.75],
+  [275, 64.85],
+  [280, 65.94],
+  [285, 67.03],
+  [290, 68.12],
+  [295, 69.20],
+  [300, 70.29],
+  [305, 71.38],
+  [315, 73.55],
+  [320, 74.63],
+  [325, 75.72],
+  [330, 76.80],
+  [335, 77.88],
+  [340, 78.96],
+  [345, 80.04],
+  [350, 81.12],
+  [355, 82.20],
+  [360, 83.28],
+  [365, 84.36],
+  [370, 85.44],
+  [375, 86.52],
+  [380, 87.60],
+  [385, 88.67],
+  [390, 89.75],
+  [395, 90.82],
+  [400, 91.90],
+  [405, 92.97],
+  [410, 94.05],
+  [415, 95.12],
+  [420, 96.20],
+  [425, 97.27],
+  [430, 98.34],
+  [435, 99.41],
+  [440, 100.49],
+  [445, 101.56],
+  [450, 102.63],
+  [455, 103.70],
+  [460, 104.77],
+  [465, 105.84],
+  [470, 106.91],
+  [475, 107.98],
+  [480, 109.05],
+  [485, 110.11],
+  [490, 111.18],
+  [495, 112.25],
+  [500, 113.32],
+  [505, 114.38],
+  [510, 115.45],
+  [515, 116.52],
+  [520, 117.58],
+  [525, 118.65],
+  [535, 120.78],
+  [540, 121.84],
+  [545, 122.91],
+  [550, 123.97],
+  [555, 125.04],
+  [560, 126.10],
+  [565, 127.16],
+  [570, 128.22],
+  [575, 129.29],
+  [580, 130.35],
+  [585, 131.41],
+  [590, 132.47],
+  [595, 133.54],
+  [600, 134.60],
+  [605, 135.66],
+  [610, 136.72],
+  [615, 137.78],
+  [620, 138.84],
+  [625, 139.90],
+  [630, 140.96],
+  [635, 142.02],
+  [640, 143.08],
+  [645, 144.14],
+  [650, 145.20],
+  [655, 146.25],
+  [660, 147.31],
+  [665, 148.37],
+  [670, 149.43],
+  [675, 150.49],
+  [685, 152.60],
+  [690, 153.66],
+  [695, 154.72],
+  [700, 155.77],
+  [705, 156.83],
+  [710, 157.89],
+  [715, 158.94],
+  [720, 160.00],
+  [725, 161.06],
+  [730, 162.11],
+  [735, 163.17],
+  [740, 164.22],
+  [745, 165.28],
+  [755, 167.39],
+  [760, 168.44],
+  [765, 169.50],
+  [770, 170.55],
+  [775, 171.60],
+  [780, 172.66],
+  [785, 173.71],
+  [790, 174.76],
+  [795, 175.82],
+  [800, 176.87],
+  [810, 178.98],
+  [820, 181.08],
+  [830, 183.19],
+  [840, 185.29],
+  [850, 187.39],
+  [860, 189.49],
+  [870, 191.60],
+  [880, 193.70],
+  [890, 195.70],
+  [900, 197.90],
+  [910, 200.00],
+  [920, 202.10],
+  [930, 204.20],
+  [940, 206.30],
+  [950, 208.39],
+  [960, 210.49],
+  [970, 212.59],
+  [980, 214.68],
+  [990, 216.78],
+  [1000, 218.87],
+  [1250, 271.14],
+  [1600, 343.90],
+  [2000, 426.80],
 ];
 
 // ============================================================
 // ИНТЕРПОЛЯЦИЯ α по таблице Б.2
 // ============================================================
-function getAlpha(NP) {
-  if (NP <= 0) return 0.200;
-  if (NP < 0.015) return 0.200;
-  if (NP >= B2[B2.length-1][0]) {
-    // За пределами таблицы — аппроксимация по формуле
-    return 1.72 * Math.pow(NP, 0.49) - 0.5;
-  }
-  for (let i = 0; i < B2.length - 1; i++) {
-    if (NP >= B2[i][0] && NP <= B2[i+1][0]) {
-      const k = (NP - B2[i][0]) / (B2[i+1][0] - B2[i][0]);
-      return B2[i][1] + k * (B2[i+1][1] - B2[i][1]);
-    }
-  }
-  return 0.200;
+function getAlpha(np) {
+  if (!Number.isFinite(np)) throw new RangeError('NP должен быть конечным числом');
+  if (np < B2[0][0]) return 0.2;
+  if (np > B2[B2.length - 1][0]) throw new RangeError('NP выходит за таблицу Б.2; экстраполяция запрещена');
+  const right = B2.findIndex(p => p[0] >= np);
+  if (B2[right][0] === np) return B2[right][1];
+  const [x0, y0] = B2[right - 1], [x1, y1] = B2[right];
+  return y0 + (np - x0) / (x1 - x0) * (y1 - y0);
 }
 
 // ============================================================
@@ -357,6 +868,15 @@ function calcBlock(groups, qhr_fn, q0_fn, q0hr_fn, label, log) {
 }
 
 function calculate() {
+  document.getElementById('meters_result').innerHTML = '';
+  try { return calculateApproved(); }
+  catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    document.getElementById('err').textContent = error.message;
+    document.getElementById('results').style.display = 'none';
+  }
+}
+function calculateApproved() {
   document.getElementById('err').textContent = '';
   document.getElementById('results').style.display = 'none';
   const rows = [...document.getElementById('groups').children];
@@ -366,9 +886,9 @@ function calculate() {
     .map(r => ({c: TBL[+r.querySelector('select').value], U: Math.round((+r.querySelector('input').value||0) * k06)}))
     .filter(g => g.U > 0);
   if (!groups.length) { document.getElementById('err').textContent = 'Укажите количество потребителей'; return; }
+  const log = [];
   if (k06 < 1) log.push('<b>⚠ Применён коэффициент 0,6 (бытовой корпус, примечание 7 СП 30)</b>');
 
-  const log = [];
   log.push('<b>═══ 1. СЕКУНДНЫЙ И ЧАСОВОЙ РАСХОДЫ ═══</b>');
   const tot = calcBlock(groups, c=>c.q_hr_tot,          c=>c.q0_tot, c=>c.q0hr_tot, 'Общий (tot)', log);
   const hot = calcBlock(groups, c=>c.q_hr_h,            c=>c.q0_h,   c=>c.q0hr_h,   'Горячий (h)', log);
@@ -783,7 +1303,31 @@ function calcStorm() {
     </div>
   </div>
 
-  <div id="meters_result" style="display:none"></div>
+  <details style="margin:1rem 0"><summary>Паспортная проверка минимальных расходов (п. 12.16в)</summary>
+<p>Заполняется для окончательно выбранного DN. Без подтверждения — только кандидат, не готовый подбор.</p>
+<fieldset><legend>Общий ввод</legend>
+<label style="display:block">DN паспорта <input id="minimum_total_dn" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный расчётный расход, м³/ч <input id="minimum_total_flow" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный паспортный расход, м³/ч <input id="minimum_total_passport" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Модель и ссылка на паспорт <input id="minimum_total_source" type="text" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Основание расчётного минимума <input id="minimum_total_basis" type="text" step="any" oninput="calcMeters()"></label>
+</fieldset>
+<fieldset><legend>ХВС</legend>
+<label style="display:block">DN паспорта <input id="minimum_cold_dn" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный расчётный расход, м³/ч <input id="minimum_cold_flow" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный паспортный расход, м³/ч <input id="minimum_cold_passport" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Модель и ссылка на паспорт <input id="minimum_cold_source" type="text" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Основание расчётного минимума <input id="minimum_cold_basis" type="text" step="any" oninput="calcMeters()"></label>
+</fieldset>
+<fieldset><legend>ГВС</legend>
+<label style="display:block">DN паспорта <input id="minimum_hot_dn" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный расчётный расход, м³/ч <input id="minimum_hot_flow" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Минимальный паспортный расход, м³/ч <input id="minimum_hot_passport" type="number" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Модель и ссылка на паспорт <input id="minimum_hot_source" type="text" step="any" oninput="calcMeters()"></label>
+<label style="display:block">Основание расчётного минимума <input id="minimum_hot_basis" type="text" step="any" oninput="calcMeters()"></label>
+</fieldset>
+</details>
+<div id="meters_result" style="display:none"></div>
 </div>
 
 <script>
@@ -818,7 +1362,7 @@ METERS[6].S  = 81   * 1e-5 * 1e4 / 1e4;  // = 0.0081  д65
 METERS[7].S  = 264  * 1e-5 * 1e4 / 1e4;  // = 0.00264 д80 — нет
 // Из расчёта бассейна: h=264×10⁻⁵×21.46²=1.22 м.вст — здесь q в л/с
 // Значит S=264×10⁻⁵ = 0.00264 м/(л/с)²
-METERS[6].S  = 81   * 1e-5;   // 0.00081
+METERS[6].S  = 810  * 1e-5;   // 0.0081 — approved DN65 correction
 METERS[7].S  = 264  * 1e-5;   // 0.00264
 METERS[8].S  = 76.6 * 1e-5;   // 0.000766
 METERS[9].S  = 13   * 1e-5;   // 0.00013
@@ -826,11 +1370,21 @@ METERS[10].S = 3.5  * 1e-5;   // 0.000035
 METERS[11].S = 1.8  * 1e-5;   // 0.000018
 
 function pickMeter(q_sr_hr) {
-  // Выбираем наименьший счётчик у которого qexpl >= q_sr_hr
-  for (const m of METERS) {
-    if (m.qexpl >= q_sr_hr) return m;
-  }
-  return METERS[METERS.length-1];
+  if (!Number.isFinite(q_sr_hr) || q_sr_hr < 0) throw new RangeError('Недопустимый средний расход');
+  for (const m of METERS) if (m.qexpl >= q_sr_hr) return m;
+  throw new RangeError('Нет подходящего водомера: Qсред=' + q_sr_hr +
+    ' м³/ч превышает Qэкспл=' + METERS[METERS.length - 1].qexpl +
+    ' м³/ч. Максимальный DN не принимается автоматически.');
+}
+
+function meterMinimum(dn, label) {
+  const key = /вводе/.test(label) ? 'total' : /ГВС|нагревателем/.test(label) ? 'hot' : 'cold';
+  const raw = name => String(document.getElementById('minimum_' + key + '_' + name)?.value || '').trim();
+  const d = Number(raw('dn')), actual = Number(raw('flow')), passport = Number(raw('passport'));
+  if (!raw('dn') || !raw('flow') || !raw('passport') || !raw('source') || !raw('basis') ||
+      d !== dn || !Number.isInteger(d) || !Number.isFinite(actual) || actual < 0 ||
+      !Number.isFinite(passport) || passport <= 0) return null;
+  return passport <= actual;
 }
 
 function checkMeter(m, q_sec, q_fire, q_hr, label, individual) {
@@ -852,7 +1406,7 @@ function checkMeter(m, q_sec, q_fire, q_hr, label, individual) {
   }
 
   // Проверка в)
-  const ok_v = m.qthr <= q_hr;
+  const ok_v = meterMinimum(m.d, label);
 
   let result = {m, ok_a, ok_b, ok_v, h_a, h_b, need_bypass, type_label, h_limit_a, h_limit_b, label, individual};
 
@@ -866,7 +1420,7 @@ function checkMeter(m, q_sec, q_fire, q_hr, label, individual) {
 
   // Если не прошла в) — рекомендуем меньший (но только если прошла а))
   // Конфликт а и в → комбинированный
-  result.need_combo = ok_a && !ok_v && m.d > 15;
+  result.need_combo = ok_a && ok_v === false && m.d > 15;
 
   return result;
 }
@@ -876,13 +1430,13 @@ function renderMeter(r) {
   let html = `<div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:.75rem">`;
   html += `<div style="font-size:13px;font-weight:600;margin-bottom:.5rem">${r.label}</div>`;
   html += `<div style="font-size:13px;margin-bottom:.25rem">`;
-  html += `Принят: <b>∅${r.m.d} мм</b> (${r.type_label}) &nbsp;|&nbsp; S = ${r.m.S} м/(л/с)² &nbsp;|&nbsp; Q<sub>экспл</sub> = ${r.m.qexpl} м³/ч</div>`;
+  html += `${r.ok_a && r.ok_v === true ? "Подобран по выполненным проверкам" : "Кандидат; проверка не завершена"}: <b>∅${r.m.d} мм</b> (${r.type_label}) &nbsp;|&nbsp; S = ${r.m.S} м/(л/с)² &nbsp;|&nbsp; Q<sub>экспл</sub> = ${r.m.qexpl} м³/ч</div>`;
 
   // Проверка а
   const col_a = r.ok_a ? ok_color : err_color;
   html += `<div style="font-size:12px;color:${col_a}">`;
   html += `✦ Проверка а): h = ${r.m.S} × ${r.h_a ? (Math.sqrt(r.h_a/r.m.S)).toFixed(3) : '?'}² = <b>${r.h_a ? r.h_a.toFixed(3) : '?'} м</b> `;
-  html += r.ok_a ? `≤ ${r.h_limit_a} м ✓` : `> ${r.h_limit_a} м ✗ → принят больший диаметр`;
+  html += r.ok_a ? `≤ ${r.h_limit_a} м ✓` : `> ${r.h_limit_a} м ✗ → водомер не подходит по потерям`;
   html += `</div>`;
 
   // Проверка б
@@ -901,8 +1455,10 @@ function renderMeter(r) {
   // Проверка в
   const col_v = r.ok_v ? ok_color : warn_color;
   html += `<div style="font-size:12px;color:${col_v}">`;
-  html += `✦ Проверка в): q<sub>min</sub> счётчика = ${r.m.qthr} м³/ч `;
-  if (r.ok_v) {
+  html += `✦ Проверка в): паспортный минимум ≤ минимального расчётного часового расхода: `;
+  if (r.ok_v === null) {
+    html += 'Нужны паспорт выбранного DN и обоснование минимального расхода. Максимальный расход не заменяет минимум.';
+  } else if (r.ok_v) {
     html += `✓ (измеряет минимальные расходы)`;
   } else {
     html += `— не измеряет малые расходы`;
@@ -915,8 +1471,19 @@ function renderMeter(r) {
 }
 
 function calcMeters() {
+  const box = document.getElementById('meters_result');
+  box.innerHTML = '';
+  try { return calculateMetersApproved(); }
+  catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    box.textContent = error.message;
+    box.style.display = 'block';
+  }
+}
+function calculateMetersApproved() {
   const gvs_type  = document.getElementById('m_gvs_type').value;
-  const T         = +document.getElementById('m_T').value || 24;
+  const T = Number(document.getElementById('m_T').value);
+  if (!Number.isFinite(T) || T <= 0) throw new RangeError('Нужен положительный период водопотребления T');
   const q_fire    = +document.getElementById('m_qfire').value || 0;
   const vvods     = +document.getElementById('m_vvods').value || 1;
   const individual = document.getElementById('m_bldg').value === 'individual';
@@ -1607,7 +2174,7 @@ function calcInsulation() {
   const lambda_hvs = 0.040; // вспен. полиэтилен/пенокаучук, λ при 20°С
 
   // ГВС
-  document.querySelectorAll('#gvs_rows > div').forEach(row => {
+  document.querySelectorAll('#gvs_rows > div[id^="gvs_"]').forEach(row => {
     const dn = +row.querySelector('.dn-sel').value;
     const t = +row.querySelector('.t-inp').value;
     const res = calcGvs(dn, t, t_room, lambda_gvs);
@@ -1640,7 +2207,7 @@ function calcInsulation() {
   });
 
   // ХВС
-  document.querySelectorAll('#hvs_rows > div').forEach(row => {
+  document.querySelectorAll('#hvs_rows > div[id^="hvs_"]').forEach(row => {
     const dn = +row.querySelector('.dn-sel').value;
     const t = +row.querySelector('.t-inp').value;
     const res = calcHvs(dn, t, t_room, humidity, lambda_hvs);
@@ -1689,17 +2256,43 @@ addHvsRow(25, 10);
 
 <!-- БЛОК РАСЧЁТА НАПОРА И ПОДБОРА НАСОСА -->
 <div class="card" style="margin-top:1rem">
-  <div class="card-title">Подбор насоса по рабочей точке (СП 30.13330, методика Grundfos)</div>
+  <div class="card-title">Предварительный подбор насоса: повысительный режим / циркуляция</div>
 
   <!-- Параметры системы -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
 
     <!-- Левая колонка - напор -->
     <div style="background:#f9f9f9;border-radius:6px;padding:.875rem">
-      <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.75rem">
+      <div id="boost_formula" style="font-size:12px;font-weight:600;color:#444;margin-bottom:.75rem">
         Hp = H_geom + ΣH_l + H_пр - H_гар
       </div>
 
+<details style="margin:0 0 1rem" oninput="renderNpshaBalance()">
+  <summary>Отдельный расчёт NPSHa · CNP</summary>
+  <p style="font-size:12px">Каталог CDM/CDMF 24.11.2025, с. 18. NPSHa = 10,2·Pb(abs) + zист − zнас − Hf − Hv.
+    Это проверка заданного режима, не автоматическое подтверждение насоса. Результат не переносится в подбор молча.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;font-size:12px">
+    <label>Вид давления<select data-npsha-field="pressure_kind" data-label="вид давления"><option value="">Выберите</option><option value="absolute">Абсолютное</option><option value="gauge">Избыточное</option></select></label>
+    <label>Давление в исходном сечении, бар<input type="number" step="any" data-npsha-field="pressure_bar" data-label="давление, бар"></label>
+    <label id="npsha_atmospheric_label" hidden>Атмосферное давление, бар<input type="number" step="any" data-npsha-field="atmospheric_pressure_bar" data-label="атмосферное давление, бар"></label>
+    <label>Отметка исходного сечения / уровня, м<input type="number" step="any" data-npsha-field="source_elevation_m" data-label="отметка исходного сечения"></label>
+    <label>Отметка оси всасывания насоса, м<input type="number" step="any" data-npsha-field="pump_elevation_m" data-label="отметка оси насоса"></label>
+    <label>Все потери до насоса Hf, м<input type="number" step="any" min="0" data-npsha-field="suction_losses_m" data-label="потери всасывания Hf"></label>
+    <label>Максимальная рабочая подача одного насоса, м³/ч<input type="number" step="any" data-npsha-field="max_flow_m3h" data-label="максимальная рабочая подача"></label>
+    <label>Расчётная температура воды, °C<input type="number" step="any" data-npsha-field="temperature_c" data-label="температура воды"></label>
+    <label>Давление паров Hv при этой температуре, м<input type="number" step="any" min="0" data-npsha-field="vapor_head_m" data-label="давление паров Hv"></label>
+    <label>NPSHr при той же максимальной подаче, м<input type="number" step="any" min="0" data-npsha-field="npshr_m" data-label="NPSHr"></label>
+    <label>Запас Hs (минимум CNP 0,5 м), м<input type="number" step="any" min="0.5" value="0.5" data-npsha-field="safety_margin_m" data-label="запас Hs"></label>
+    <label>Модель / кривая / расход для NPSHr<input type="text" data-npsha-field="npshr_basis" data-label="источник NPSHr" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></label>
+  </div>
+  <label style="display:block;margin-top:10px;font-size:12px">Основание давления, отметок, режима, потерь и Hv
+    <textarea data-npsha-field="basis" data-label="основание исходных данных" rows="3" style="width:100%;box-sizing:border-box;padding:5px 8px;font-family:inherit;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5"></textarea>
+  </label>
+  <p style="font-size:12px">Hf включает ВУ, фильтры, общие участки и обвязку до насоса при максимальном рабочем режиме, без повторного учёта. Резервный насос не удваивает подачу. Отметки задаются в одной системе. Hv по температуре автоматически не определяется.</p>
+  <div id="npsha_balance_result" role="status" style="font-size:12px;margin-top:10px">Введите исходные данные. Нулевые отметки и нулевые потери требуют явного ввода.</div>
+</details>
+
+<div id="boost_head_inputs">
       <!-- H_geom - два режима -->
       <div style="margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -1736,7 +2329,7 @@ addHvsRow(25, 10);
       <!-- Потери -->
       <div style="margin-bottom:8px">
         <div style="font-size:11px;color:#888;margin-bottom:2px">ΣH_l — потери напора в сети, м (ввод вручную)</div>
-        <input type="number" id="h_losses" value="5" step="0.5" min="0" oninput="calcPumpHead()"
+        <input type="number" id="h_losses" value="" placeholder="Введите рассчитанные потери" step="0.5" min="0" oninput="calcPumpHead()"
           style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
         <div style="font-size:11px;color:#aaa;margin-top:2px">Включая счётчик, арматуру, трубопроводы</div>
       </div>
@@ -1755,6 +2348,24 @@ addHvsRow(25, 10);
         </div>
       </div>
 
+</div>
+<section id="circ_inputs" style="display:none">
+  <h4>Т4 · замкнутый контур принудительной циркуляции</h4>
+  <p style="font-size:12px;line-height:1.5">СП 30, пп. 10.8–10.13: отдельные тепловой и гидравлический расчёты.
+    Hgeom, Hпр и Hгар не добавляются. Рекомендуемые 2–5 м по п. 10.14 не заменяют расчёт.
+    Циркуляционно-повысительный режим п. 13.12 и естественная циркуляция здесь не рассчитываются.</p>
+  <label style="display:block;margin:8px 0">Циркуляционный расход по тепловому расчёту, м³/ч
+    <input id="circ_q" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">Требуемый напор по циркуляционному кольцу, м
+    <input id="circ_head" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">Основание Q/H (теплопотери, температурный режим, кольцо и оборудование)
+    <input id="circ_basis" type="text" oninput="calcPumpHead()" style="width:100%"></label>
+  <label style="display:block;margin:8px 0">NPSHa по схеме и температуре воды, м (если известен)
+    <input id="circ_npsh" type="number" step="any" min="0" oninput="calcPumpHead()" style="width:100%"></label>
+  <p style="font-size:12px">Без схемы кольца — только предварительный кандидат по явно заданным Q/H,
+    не окончательная рабочая точка. Материалы и допустимые условия применения насоса требуют подтверждения.</p>
+</section>
+
       <div style="background:#fff;border-radius:6px;padding:.6rem .875rem;border:2px solid #90c8f0">
         <div style="font-size:11px;color:#666">Требуемый напор насоса:</div>
         <div style="font-size:22px;font-weight:700;color:#1a6aaa" id="hp_result">—</div>
@@ -1766,7 +2377,7 @@ addHvsRow(25, 10);
     <div style="background:#f9f9f9;border-radius:6px;padding:.875rem">
       <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.75rem">Параметры подбора</div>
 
-      <div style="margin-bottom:8px">
+      <div id="boost_q_inputs" style="margin-bottom:8px">
         <div style="font-size:11px;color:#888;margin-bottom:2px">Расчётный расход Q, м³/ч</div>
         <input type="number" id="q_design" value="5" step="0.1" min="0.1" oninput="calcPumpHead()"
           style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#fff;font-weight:600">
@@ -1784,7 +2395,7 @@ addHvsRow(25, 10);
       </div>
 
       <div style="margin-bottom:8px">
-        <div style="font-size:11px;color:#888;margin-bottom:2px">Количество насосов в установке</div>
+        <div style="font-size:11px;color:#888;margin-bottom:2px">Одновременно работающие насосы (резерв не суммируется)</div>
         <select id="pump_count_sel" onchange="calcPumpHead()"
           style="width:100%;font-size:13px;padding:5px 8px;border:1px solid #ccc;border-radius:6px;background:#fff">
           <option value="1">1 насос</option>
@@ -1793,9 +2404,9 @@ addHvsRow(25, 10);
         </select>
       </div>
 
-      <div style="margin-bottom:6px">
+      <div id="boost_npsh_inputs" style="margin-bottom:6px">
         <div style="font-size:11px;color:#888;margin-bottom:2px">NPSH_a — кавитац. запас системы, м</div>
-        <input type="number" id="npsh_a" value="8" step="0.5" min="0" oninput="calcPumpHead()"
+        <input type="number" id="npsh_a" value="" placeholder="Не задан — проверка не завершена" step="0.5" min="0" oninput="calcPumpHead()"
           style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;background:#fff">
         <div style="font-size:11px;color:#aaa;margin-top:2px">Для насосов в здании из сети ≥ 8м</div>
       </div>
@@ -1804,15 +2415,15 @@ addHvsRow(25, 10);
 
   <!-- SVG ГРАФИК -->
   <div style="margin-bottom:1rem">
-    <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">График Q-H: кривая насоса и характеристика системы</div>
+    <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">График Q-H</div>
     <div style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:.5rem;overflow:hidden">
       <svg id="pump_chart" width="100%" viewBox="0 0 600 320" style="display:block"></svg>
     </div>
     <div style="font-size:11px;color:#888;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap">
-      <span><span style="color:#1a6aaa">●</span> Кривая насоса</span>
+      <span id="boost_chart_legend"><span><span style="color:#1a6aaa">●</span> Кривая насоса</span>
       <span><span style="color:#c0392b">●</span> Характеристика системы</span>
       <span><span style="color:#27ae60">★</span> Рабочая точка</span>
-      <span><span style="color:#f39c12">■</span> Зона BEP (0.7-1.1×Q_opt)</span>
+      <span><span style="color:#f39c12">■</span> Зона BEP (0.7-1.1×Q_opt)</span></span><span id="circ_chart_legend" style="display:none">Синяя линия — каталог; квадрат — требуемая пара Q/H, не рабочая точка</span>
     </div>
   </div>
 
@@ -1877,31 +2488,47 @@ const PUMP_CURVES = [
 
 // Линейная интерполяция по кривой насоса
 function interpH(curve, q) {
-  if (q <= curve[0].q) return curve[0].h;
-  if (q >= curve[curve.length-1].q) return 0;
-  for (let i = 0; i < curve.length-1; i++) {
-    if (q >= curve[i].q && q <= curve[i+1].q) {
-      const k = (q - curve[i].q) / (curve[i+1].q - curve[i].q);
-      return curve[i].h + k * (curve[i+1].h - curve[i].h);
-    }
+  if (!Number.isFinite(q) || q < curve[0].q || q > curve[curve.length - 1].q) return null;
+  for (let i = 0; i < curve.length - 1; i++) {
+    const a = curve[i], b = curve[i + 1];
+    if (q >= a.q && q <= b.q) return a.h + (b.h - a.h) * (q - a.q) / (b.q - a.q);
   }
-  return 0;
+  return null;
 }
 
 // Найти рабочую точку - пересечение кривой насоса и кривой системы
-function findWorkingPoint(curve, H_stat, k_sys, pump_mode) {
-  const Q_max = curve[curve.length-1].q;
-  const steps = 200;
-  let best = null, best_diff = Infinity;
-  for (let i = 0; i <= steps; i++) {
-    const q = Q_max * i / steps;
-    let h_pump = interpH(curve, q);
-    // Учёт режима (параллельный - кривая растянута по Q)
-    const h_sys = H_stat + k_sys * q * q;
-    const diff = Math.abs(h_pump - h_sys);
-    if (diff < best_diff) { best_diff = diff; best = {q, h: h_pump, h_sys}; }
+function findWorkingPoint(curve, H_stat, k_sys) {
+  if (!Number.isFinite(H_stat) || !Number.isFinite(k_sys) || k_sys < 0) return null;
+  const roots = [];
+  let coincident = false;
+  function add(q, a, b) {
+    if (!Number.isFinite(q) || q < a.q - 1e-10 || q > b.q + 1e-10) return;
+    q = Math.max(a.q, Math.min(b.q, q));
+    const h = interpH(curve, q), h_sys = Math.max(0, H_stat + k_sys * q * q);
+    if (h === null || Math.abs(h - h_sys) > 1e-8 || roots.some(p => Math.abs(p.q - q) < 1e-9)) return;
+    roots.push({q, h, h_sys});
   }
-  return best;
+  for (let i = 0; i < curve.length - 1; i++) {
+    const a = curve[i], b = curve[i + 1], m = (b.h - a.h) / (b.q - a.q), c = a.h - m * a.q;
+    add(a.q, a, b); add(b.q, a, b);
+    if (m === 0 && ((k_sys === 0 && a.h === Math.max(0, H_stat)) ||
+        (a.h === 0 && H_stat + k_sys * a.q * a.q < 0))) coincident = true;
+    if (m !== 0) add(-c / m, a, b);
+    if (k_sys === 0) {
+      if (m !== 0) add((H_stat - c) / m, a, b);
+    } else {
+      const d = m * m - 4 * k_sys * (H_stat - c);
+      if (d >= 0) {
+        // Stable quadratic roots; do not lose a near-zero intersection.
+        const numerator = (m + (m >= 0 ? 1 : -1) * Math.sqrt(d)) / 2;
+        if (numerator !== 0) {
+          add(numerator / k_sys, a, b);
+          add((H_stat - c) / numerator, a, b);
+        } else add(0, a, b);
+      }
+    }
+  }
+  return !coincident && roots.length === 1 ? roots[0] : null;
 }
 
 // Построить кривую насоса с учётом режима
@@ -1934,17 +2561,217 @@ function getHgeom() {
   return (n - 1) * hf + 1;
 }
 
+// CNP CDM/CDMF catalogue, 24.11.2025, p. 18. Separate explicit-input method.
+function calculateNpsha(data) {
+  const d = {...data};
+  const numbers = ['pressure_bar','atmospheric_pressure_bar','source_elevation_m',
+    'pump_elevation_m','suction_losses_m','vapor_head_m','max_flow_m3h',
+    'temperature_c','npshr_m','safety_margin_m'];
+  if (d.safety_margin_m === undefined) d.safety_margin_m = 0.5;
+  for (const key of numbers) {
+    if (d[key] === undefined) d[key] = null;
+    if (d[key] !== null && (typeof d[key] !== 'number' || !Number.isFinite(d[key])))
+      throw new RangeError(key + ': требуется конечное число');
+  }
+  if (!['absolute','gauge',null,undefined].includes(d.pressure_kind))
+    throw new RangeError('Укажите вид давления: absolute или gauge');
+  for (const key of ['suction_losses_m','vapor_head_m','npshr_m'])
+    if (d[key] !== null && d[key] < 0) throw new RangeError(key + ': значение не может быть отрицательным');
+  for (const key of ['atmospheric_pressure_bar','max_flow_m3h'])
+    if (d[key] !== null && d[key] <= 0) throw new RangeError(key + ': требуется положительное значение');
+  if (d.safety_margin_m === null || d.safety_margin_m < 0.5)
+    throw new RangeError('Запас Hs по CNP должен быть не менее 0,5 м');
+  if (d.pressure_kind === 'absolute' && d.atmospheric_pressure_bar !== null)
+    throw new RangeError('К абсолютному давлению атмосферное повторно не прибавляется');
+  let pressure = d.pressure_bar;
+  if (d.pressure_kind === 'gauge') pressure = pressure !== null && d.atmospheric_pressure_bar !== null
+    ? pressure + d.atmospheric_pressure_bar : null;
+  if (d.pressure_kind && pressure !== null && pressure <= 0)
+    throw new RangeError('Абсолютное давление должно быть положительным');
+  const required = ['pressure_kind','pressure_bar','source_elevation_m','pump_elevation_m',
+    'suction_losses_m','vapor_head_m','max_flow_m3h','temperature_c'];
+  if (d.pressure_kind === 'gauge') required.push('atmospheric_pressure_bar');
+  const missing = required.filter(key => d[key] === null || d[key] === undefined);
+  if (!(d.basis || '').trim()) missing.push('basis');
+  const result = {status:'needs_data',available_m:null,required_m:null,margin_m:null,
+    check_ok:null,absolute_pressure_bar:null,elevation_difference_m:null,missing,
+    method:'cnp_cdm_cdmf_p18',formula:'NPSHa = 10.2·Pb(abs) + z_source - z_pump - Hf - Hv',
+    source:'CNP CDM/CDMF, каталог 24.11.2025, с. 18'};
+  if (missing.length) return result;
+  const delta = d.source_elevation_m - d.pump_elevation_m;
+  const available = 10.2 * pressure + delta - d.suction_losses_m - d.vapor_head_m;
+  if (!Number.isFinite(available)) throw new RangeError('Переполнение расчёта NPSHa: проверьте исходные данные');
+  Object.assign(result, {status:'available_only',available_m:available,
+    absolute_pressure_bar:pressure,elevation_difference_m:delta});
+  if (d.npshr_m === null) missing.push('npshr_m');
+  if (!(d.npshr_basis || '').trim()) missing.push('npshr_basis');
+  if (!missing.length) {
+    result.required_m = d.npshr_m + d.safety_margin_m;
+    result.margin_m = available - result.required_m;
+    if (!Number.isFinite(result.required_m) || !Number.isFinite(result.margin_m))
+      throw new RangeError('Переполнение сравнения NPSH: проверьте исходные данные');
+    result.check_ok = available >= result.required_m;
+    result.status = result.check_ok ? 'margin_satisfied' : 'insufficient_margin';
+  }
+  return result;
+}
+
+function renderNpshaBalance() {
+  const box = document.getElementById('npsha_balance_result');
+  box.textContent = ''; // No stale success on deleted/invalid inputs.
+  const data = {}, names = {};
+  for (const input of document.querySelectorAll('[data-npsha-field]')) {
+    const key = input.dataset.npshaField;
+    names[key] = input.dataset.label;
+    data[key] = input.type === 'number'
+      ? (input.value.trim() === '' ? null : Number(input.value)) : input.value;
+    if (key === 'pressure_kind' && !input.value) data[key] = null;
+  }
+  const gauge = data.pressure_kind === 'gauge';
+  document.getElementById('npsha_atmospheric_label').hidden = !gauge;
+  if (!gauge) data.atmospheric_pressure_bar = null;
+  try {
+    const result = calculateNpsha(data);
+    if (result.available_m === null) {
+      box.textContent = 'Нужны данные: ' + result.missing.map(key => names[key] || key).join('; ');
+      return;
+    }
+    box.textContent = 'NPSHa = ' + result.available_m.toFixed(3) + ' м. ';
+    if (result.check_ok === null) box.textContent += 'Проверка не завершена: ' + result.missing.map(key => names[key] || key).join('; ');
+    else box.textContent += (result.check_ok ? 'Условие NPSHa ≥ NPSHr + Hs выполнено' : 'Недостаточный запас NPSHa') +
+      '; разность ' + result.margin_m.toFixed(3) + ' м. Только заданный режим; не разрешение пуска.';
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    box.textContent = error.message;
+  }
+}
+
+// L07: чистая циркуляция — отдельная пара Q/H, без повысительного баланса.
+function circulationCandidates(q, head, basis, mode = '1', npsh = null) {
+  if (!Number.isFinite(q) || q <= 0 || !Number.isFinite(head) || head <= 0 ||
+      typeof basis !== 'string' || !basis.trim())
+    throw new RangeError('Т4: задайте положительные Q циркуляции, напор по кольцу и основание расчёта.');
+  if (!['1', '2p', '2s'].includes(mode)) throw new RangeError('Неизвестный режим насосов');
+  if (npsh !== null && (!Number.isFinite(npsh) || npsh < 0))
+    throw new RangeError('Недопустимый NPSHa циркуляционного насоса');
+  const candidates = PUMP_CURVES.filter(p => p.type === 'circ').map(pump => {
+    const curve = buildEffectiveCurve(pump.curve, mode);
+    if (curve.length < 2 || curve.some((p, i) => !Number.isFinite(p.q) ||
+        !Number.isFinite(p.h) || p.q < 0 || p.h < 0 || (i && curve[i - 1].q >= p.q))) return null;
+    const h = interpH(curve, q);
+    if (h === null || h < head - 1e-9) return null;
+    const ratio = q / (pump.Q_opt * (mode === '2p' ? 2 : 1));
+    const excess = (h - head) / head * 100;
+    let score = 100;
+    if (ratio >= .7 && ratio <= 1.1) score += 30;
+    else if (ratio >= .6 && ratio <= 1.2) score += 15;
+    else score -= 20;
+    if (excess >= 5 && excess <= 20) score += 20;
+    else if (excess >= 0 && excess <= 35) score += 5;
+    else if (excess > 35) score -= 15;
+    else score -= 30;
+    score += 20; // тот же legacy-рейтинг при Q = Qрасч, не найденное пересечение
+    const npsh_ok = npsh === null || pump.NPSHr == null ? null : npsh >= pump.NPSHr + .5;
+    if (npsh_ok === false) score -= 50;
+    return {pump, eff_curve: curve, q, head_at_design: h, score, npsh_ok};
+  }).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
+  return {q_design: q, h_required: head, h_geom: null, h_stat: null, k_sys: null,
+    curve_kind: 'duty_only', basis: basis.trim(), candidates};
+}
+
+function calcCirculationHead() {
+  const box = document.getElementById('pump_rec_result');
+  box.replaceChildren();
+  document.getElementById('hp_result').textContent = 'Нужны данные Т4';
+  document.getElementById('hp_formula').textContent = '';
+  drawChart(null, null, null, null, null);
+  const value = id => document.getElementById(id).value.trim();
+  try {
+    const result = circulationCandidates(
+      value('circ_q') ? Number(value('circ_q')) : NaN,
+      value('circ_head') ? Number(value('circ_head')) : NaN,
+      value('circ_basis'), value('pump_count_sel'),
+      value('circ_npsh') ? Number(value('circ_npsh')) : null,
+    );
+    document.getElementById('hp_result').textContent = result.h_required.toFixed(2) + ' м';
+    document.getElementById('hp_formula').textContent = 'Напор по циркуляционному кольцу, не по этажности';
+    const paragraph = text => {
+      const p = document.createElement('p'); p.textContent = text; box.append(p);
+    };
+    paragraph('Предварительно по паре Q/H. Кривая системы и фактическая рабочая точка не определены. ' +
+      'Пригодность материалов для питьевой горячей воды, температуру, статическое давление и регулирование проверить отдельно.');
+    paragraph('Основание: ' + result.basis);
+    if (!result.candidates.length) paragraph('Нет подходящего кандидата. Требуемые Q/H не уменьшаются под каталог.');
+    result.candidates.forEach(r => {
+      paragraph(r.pump.brand + ' ' + r.pump.model + ': Qрасч = ' + r.q.toFixed(3) +
+        ' м³/ч; Hкат(Qрасч) = ' + r.head_at_design.toFixed(3) + ' м ≥ Hтреб = ' +
+        result.h_required.toFixed(3) + ' м. NPSH: ' + (r.npsh_ok === null ? 'нет данных' :
+        r.npsh_ok ? 'по введённому NPSHa и справочному NPSHr' : 'условие не выполнено') + '.');
+    });
+    if (result.candidates.length) drawCirculationChart(result);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    box.textContent = error.message;
+  }
+}
+
+function drawCirculationChart(result) {
+  const curve = result.candidates[0].eff_curve;
+  const qmax = curve.at(-1).q * 1.1;
+  const hmax = Math.max(...curve.map(p => p.h), result.h_required) * 1.15;
+  const sx = q => 55 + q / qmax * 520, sy = h => 270 - h / hmax * 245;
+  let svg = '<rect x="55" y="25" width="520" height="245" fill="#fafafa" stroke="#999"/>';
+  for (let i = 0; i <= 5; i++) {
+    const q = qmax * i / 5, h = hmax * i / 5;
+    svg += `<line x1="55" y1="${sy(h)}" x2="575" y2="${sy(h)}" stroke="#ddd"/>`;
+    svg += `<text x="48" y="${sy(h) + 4}" text-anchor="end" font-size="11">${h.toFixed(1)}</text>`;
+    svg += `<text x="${sx(q)}" y="290" text-anchor="middle" font-size="11">${q.toFixed(1)}</text>`;
+  }
+  svg += '<text x="15" y="20" font-size="12">H, м</text><text x="480" y="313" font-size="12">Q, м³/ч</text>';
+  svg += `<polyline points="${curve.map(p => `${sx(p.q)},${sy(p.h)}`).join(' ')}" fill="none" stroke="#1a6aaa" stroke-width="2"/>`;
+  svg += `<rect data-role="required-duty" x="${sx(result.q_design) - 4}" y="${sy(result.h_required) - 4}" width="8" height="8" fill="#b05b00"/>`;
+  document.getElementById('pump_chart').innerHTML = svg;
+}
+
 function calcPumpHead() {
+  const circ = document.getElementById('pump_sel_type').value === 'circ';
+  for (const id of ['boost_head_inputs', 'boost_formula', 'boost_q_inputs', 'boost_npsh_inputs', 'boost_chart_legend'])
+    document.getElementById(id).style.display = circ ? 'none' : '';
+  for (const id of ['circ_inputs', 'circ_chart_legend'])
+    document.getElementById(id).style.display = circ ? '' : 'none';
+  if (circ) return calcCirculationHead();
+  const required = ['h_losses', 'h_pr', 'h_gar', 'q_design'];
+  if (document.querySelector('input[name="hgeom_mode"]:checked').value === 'manual') required.push('h_geom_manual');
+  const bad = required.some(id => {
+    const value = document.getElementById(id).value;
+    return String(value).trim() === '' || !Number.isFinite(Number(value)) ||
+      (id !== 'h_geom_manual' && Number(value) < 0) || (id === 'q_design' && Number(value) <= 0);
+  });
+  if (bad) {
+    document.getElementById('hp_result').textContent = 'Нужны данные';
+    document.getElementById('hp_formula').textContent = '';
+    document.getElementById('pump_rec_result').textContent = 'Задайте геометрию, потери, свободный и гарантированный напор и положительный расчётный расход.';
+    drawChart(null, null, null, null, null);
+    return;
+  }
   const H_geom = getHgeom();
   document.getElementById('hgeom_val').textContent = H_geom.toFixed(1);
 
   const H_l   = +document.getElementById('h_losses').value || 0;
-  const H_pr  = +document.getElementById('h_pr').value     || 20;
+  const H_pr = Number(document.getElementById('h_pr').value);
   const H_gar = +document.getElementById('h_gar').value    || 0;
   const Q_des = +document.getElementById('q_design').value || 1;
   const type  = document.getElementById('pump_sel_type').value;
   const mode  = document.getElementById('pump_count_sel').value;
-  const npsh_a = +document.getElementById('npsh_a').value || 8;
+  const npshRaw = document.getElementById('npsh_a').value.trim();
+  const npsh_a = npshRaw === '' ? null : Number(npshRaw);
+  if (npsh_a !== null && (!Number.isFinite(npsh_a) || npsh_a < 0)) {
+    document.getElementById('hp_result').textContent = 'Ошибка исходных данных';
+    document.getElementById('hp_formula').textContent = '';
+    document.getElementById('pump_rec_result').textContent = 'NPSHa должен быть конечным неотрицательным числом или оставаться пустым.';
+    drawChart(null, null, null, null, null);
+    return;
+  }
 
   const Hp = H_geom + H_l + H_pr - H_gar;
   const Hp_display = Hp > 0 ? Hp : 0;
@@ -1953,11 +2780,14 @@ function calcPumpHead() {
   document.getElementById('hp_formula').textContent =
     `${H_geom.toFixed(1)} + ${H_l} + ${H_pr} - ${H_gar} = ${Hp_display.toFixed(1)} м`;
 
-  // Кривая системы: H_сист = H_стат + k×Q²
-  const H_stat = H_gar > 0 ? H_gar : 0;
-  const k_sys  = Hp_display > H_stat && Q_des > 0
-    ? (Hp_display - H_stat) / (Q_des * Q_des)
-    : 0.1;
+  // L02: оценочная кривая, согласованная с балансом напора.
+  const H_stat = H_geom + H_pr - H_gar;
+  const k_sys = H_l / Q_des / Q_des;
+  if (Hp <= 0) {
+    document.getElementById('pump_rec_result').textContent = 'Гарантированного напора достаточно; повысительный насос не требуется.';
+    drawChart(null, null, null, null, null);
+    return;
+  }
 
   // Подбор насосов
   const candidates = PUMP_CURVES.filter(p => p.type === type);
@@ -1979,8 +2809,8 @@ function calcPumpHead() {
     const H_excess = (wp.h - Hp_display) / Hp_display * 100;
 
     // Насос должен перекрывать требуемый расход и напор
-    if (wp.q < Q_des * 0.85) return null;
-    if (interpH(eff_curve, 0) < Hp_display * 0.9) return null;
+    const atDuty = interpH(eff_curve, Q_des);
+    if (atDuty === null || atDuty < Hp_display - 1e-9) return null;
 
     // Scoring
     let score = 100;
@@ -1998,8 +2828,8 @@ function calcPumpHead() {
     if (Q_err < 0.1) score += 20;
     else if (Q_err < 0.2) score += 10;
     // NPSH
-    const npsh_ok = npsh_a >= pump.NPSHr + 0.5;
-    if (!npsh_ok) score -= 50;
+    const npsh_ok = npsh_a === null ? null : npsh_a >= pump.NPSHr + 0.5;
+    if (npsh_ok === false) score -= 50;
 
     // Объяснение
     const reasons = [];
@@ -2017,7 +2847,8 @@ function calcPumpHead() {
       reasons.push(`✓ напора хватает (запас +${H_excess.toFixed(0)}%)`);
     else
       reasons.push('✗ напора недостаточно для данной системы');
-    if (!npsh_ok)
+    if (npsh_ok === null) reasons.push('⚠ NPSHa не задан; проверка кавитационного запаса не завершена');
+    else if (npsh_ok === false)
       reasons.push(`✗ КАВИТАЦИЯ: NPSHa=${npsh_a}м < NPSHr+0.5=${(pump.NPSHr+0.5).toFixed(1)}м`);
     else
       reasons.push(`✓ кавитации нет: NPSHa=${npsh_a}м > NPSHr+0.5=${(pump.NPSHr+0.5).toFixed(1)}м`);
@@ -2029,7 +2860,7 @@ function calcPumpHead() {
 
   if (!results.length) {
     document.getElementById('pump_rec_result').innerHTML =
-      '<div style="color:#c00;font-size:13px;padding:.5rem">Ни один насос из тестовой базы не подходит для заданных параметров. Скорректируйте параметры или добавьте насосы через импорт CSV.</div>';
+      '<div style="color:#c00;font-size:13px;padding:.5rem">Ни один насос из тестовой базы не подходит для заданных параметров. Не уменьшайте потребность под каталог; нужен подтверждённый подходящий насос.</div>';
     drawChart(null, null, null, null, null);
     return;
   }
@@ -2045,7 +2876,7 @@ function calcPumpHead() {
 function renderTop3(results, Hp, Q_des) {
   const medals = ['🥇', '🥈', '🥉'];
   const borders = ['#f0b800','#aaa','#c07028'];
-  let html = '<div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">Рекомендации — Top-3</div>';
+  let html = '<div style="font-size:12px;font-weight:600;color:#444;margin-bottom:.5rem">Предварительные кандидаты — Top-3 (оценочная кривая)</div>';
   html += '<div style="display:grid;gap:8px">';
 
   results.forEach((r, i) => {
@@ -2148,7 +2979,7 @@ function drawChart(curve, H_stat, k_sys, wp, pump) {
   const sys_pts = [];
   for (let i = 0; i <= 40; i++) {
     const q = Q_max * i / 40;
-    const h = H_stat + k_sys * q * q;
+    const h = Math.max(0, H_stat + k_sys * q * q);
     if (h <= H_max_val * 1.05) sys_pts.push(`${sx(q).toFixed(1)},${sy(h).toFixed(1)}`);
   }
   out += `<polyline points="${sys_pts.join(' ')}" fill="none" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,3"/>`;

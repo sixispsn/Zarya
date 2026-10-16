@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru" data-theme="light" data-ui="white">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ЗАРЯ — новый проект</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/studio.css?v=39-diagnostic-review">
+  <script src="/static/studio_motion.js?v=1" defer></script>
+  <script src="/static/studio_questions.js?v=1" defer></script>
+  <script src="/static/studio_transport.js?v=3" defer></script>
+  <script src="/static/studio_input_recovery.js?v=1" defer></script>
+  <script src="/static/studio_input_issues.js?v=8" defer></script>
+  <script src="/static/studio_configurator.js?v=27-risers" defer></script>
+  <script src="/static/studio_sewer_pipes.js?v=7" defer></script>
+  <script src="/static/studio_fans.js?v=2" defer></script>
+<script src="/static/studio_fire_station.js?v=4" defer></script>
+  <link rel="stylesheet" href="/static/studio_location.css?v=1">
+  <script src="/static/studio_location.js?v=1" defer></script>
+  {% if request.state.pilot_user %}<link rel="stylesheet" href="/static/pilot_objects.css?v=1"><script src="/static/pilot_objects.js?v=1" defer></script>{% endif %}
+  <script src="/static/studio_spec_review.js?v=4-service-assemblies" defer></script>
+<script src="/static/studio_suction.js?v=2" defer></script>
+  <link rel="stylesheet" href="/static/studio_suction.css?v=1">
+  <script src="/static/studio_finding_inputs.js?v=2" defer></script>
+  <script src="/static/studio_riser_review.js?v=2" defer></script>
+  <script src="/static/studio_diagnostic_review.js?v=2" defer></script>
+  <script src="/static/studio.js?v=72-preview-lifecycle" defer></script>
+{% include 'site_assets.html' %}
+</head>
+<body>
+<div id="studio" class="studio{% if view == 'project' %} compact{% endif %}" data-view="{{ view }}">
+{% include 'site_header.html' %}
+  <div class="brand" aria-label="ЗАРЯ">
+    <svg viewBox="0 0 1492 275" role="img" aria-labelledby="brand-title">
+      <title id="brand-title">ЗАРЯ</title>
+      <defs><clipPath id="horizon"><rect width="1492" height="268"/></clipPath></defs>
+      <g clip-path="url(#horizon)">{% include 'site_logo.html' %}</g>
+      <path d="M0 269H1492" fill="none" stroke="currentColor" stroke-width="3"/>
+    </svg>
+    {% include 'site_version.html' %}
+  </div>
+
+  <main id="main-content" tabindex="-1">
+    <div id="error" class="error-banner" role="alert" tabindex="-1" hidden></div>
+    <section id="entry" class="entry" aria-labelledby="entry-title"{% if view == 'project' %} hidden{% endif %}>
+      <div id="resume-project" class="resume-widget" hidden>
+        <span id="resume-title">Ваш проект сохранён</span>
+        <button type="button" class="text-button" data-action="resume">Продолжить →</button>
+      </div>
+      <div id="drop-zone" class="upload-widget">
+        <div class="upload-symbol" aria-hidden="true">↑<small>PDF</small></div>
+        <h1 id="entry-title">Добавьте исходные документы</h1>
+        <p>Перетащите сюда ТЗ, ТУ или планы.<br>Можно несколько файлов.</p>
+        <button type="button" class="soft-button" data-action="choose">Выбрать файлы</button>
+        <div class="upload-footer"><button type="button" class="text-button" data-action="manual">Начать без документов <span aria-hidden="true">→</span></button></div>
+      </div>
+      <p id="entry-context" class="privacy-note">PDF сохраняются на сервере проекта.<br>Без отправки во внешние ИИ-сервисы.</p>
+      <button type="button" class="text-button" data-action="examples">Попробовать на примере →</button>
+      <details class="upload-details"><summary>Какие документы можно добавить?</summary><p>Жилой дом с одной группой потребителей. Из текстовых PDF извлекаются явно подписанные числа со страницей-источником. Сканы и планы сохраняются для просмотра; OCR и распознавание планировки пока не подключены. До 10 файлов, 10 МБ каждый, 100 страниц; всего до 40 МБ.</p></details>
+    </section>
+
+    <section id="workspace" class="workspace" hidden aria-labelledby="project-title">
+      <div class="workspace-heading"><div><h1 id="project-title" tabindex="-1">Ваш проект</h1><p>Начните с главного. Детали — когда понадобятся.</p></div><button type="button" class="text-button" data-action="choose">+ Документы</button></div>
+      <div id="documents" class="documents" aria-label="Документы проекта"></div>
+      <div id="study-banner"></div>
+      <div id="widgets" class="setup-container"></div>
+      <div id="next-step"></div>
+      <section id="calculation" class="calculation" hidden aria-labelledby="calculation-title"></section>
+      {% if request.state.pilot_user %}<div id="pilot-archive-actions" class="pilot-archive-link"><button type="button" class="text-button" data-action="pilot-snapshot">Сохранить версию для пилота →</button><a class="text-button" href="/studio/pilot-objects">Объекты пилота</a></div>{% endif %}
+      {% if request.state.pilot_user %}<p id="pilot-auto-state" role="status"></p>{% endif %}
+      <p class="workspace-note">Черновик сохраняется на сервере{% if request.state.pilot_user %} в вашей учётной записи{% else %} и доступен из этого браузера{% endif %}. Перед выпуском проверяется весь комплект.</p>
+    </section>
+    <dialog id="suction-dialog" aria-labelledby="suction-title"></dialog>
+    <dialog id="delete-document-dialog" aria-labelledby="delete-document-title">
+      <h2 id="delete-document-title">Удалить документ из проекта?</h2>
+      <p id="delete-document-name"></p>
+      <p>Исходный PDF будет удалён. Значения, подтверждённые только им, потребуется задать заново. Расчёт и текущие PDF нужно будет пересобрать. Ручной ввод сохранится.</p>
+      <p class="field-help">Ранее созданные PDF, скачанные копии и резервные копии этим действием не удаляются.</p>
+      <div class="document-delete-actions"><button type="button" class="soft-button" data-action="cancel-delete-document" autofocus>Оставить</button><button type="button" class="soft-button document-delete-confirm" data-action="confirm-delete-document">Удалить документ</button></div>
+    </dialog>
+    <dialog id="clarification-dialog" aria-labelledby="next-title" aria-describedby="next-description">
+      <button type="button" class="clarification-close" data-action="close-questions" aria-label="Закрыть уточнение">×</button>
+      <div id="clarification-body"></div>
+    </dialog>
+    {% include 'studio_location.html' %}
+    {% if request.state.pilot_user %}{% include 'pilot_snapshot_dialog.html' %}{% endif %}
+    <dialog id="example-picker" aria-labelledby="example-title">
+      <div class="example-heading"><h2 id="example-title">Посмотреть, как работает ЗАРЯ</h2><button type="button" class="text-button" data-action="close-examples" aria-label="Закрыть">×</button></div>
+      <p>Согласованные учебные компоновки. Ваш проект останется на месте.</p>
+      <div class="example-options">
+        <button type="button" data-action="study" data-kind="two"><strong>2 этажа · 8 квартир</strong><span>Подвал · неэксплуатируемая кровля<br>К1 и К2 на одном листе</span></button>
+        <button type="button" data-action="study" data-kind="three"><strong>3 этажа · 12 квартир</strong><span>Техподполье · эксплуатируемая кровля<br>Общий фановый вывод над кровлей</span></button>
+        <button type="button" data-action="study" data-kind="samara"><strong>Самара · 16 этажей</strong><span>Контрольный комплект ИОС2 + ИОС3<br>Водоснабжение и канализация · PDF</span></button>
+      </div>
+      <p class="field-help">Разводка предложена для обучения, не извлечена из ваших документов. Это не готовый проект для выпуска.</p>
+    </dialog>
+    <section id="busy" class="busy" aria-live="polite"{% if view != 'project' %} hidden{% endif %}><span class="busy-mark" aria-hidden="true"></span><h2 id="busy-title">Открываем проект</h2><p id="busy-description">Загружаем сохранённые исходные данные.</p></section>
+    <noscript><p class="error-banner">Для работы с проектом включите JavaScript в браузере.</p></noscript>
+  </main>
+  <input id="file-input" type="file" accept=".pdf,application/pdf" multiple hidden aria-label="Выбрать исходные PDF">
+  <p id="announcement" class="sr-only" aria-live="polite"></p>
+</div>
+</body>
+</html>

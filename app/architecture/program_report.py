@@ -1,25 +1,46 @@
-"""Visual control report for a saved typological building programme.
+"""Control report of a saved typological model, not AR or an engineering scheme.
 
-The report makes programme relations reviewable before any engineering route is
-generated.  It shows only registered levels, rooms, fixtures, service ports and
-handoff blockers.  It never draws pipes or substitutes missing AR geometry.
+Only presentation and pagination live here. Aggregation and handoff use the
+existing model; no pipe geometry, hydraulic result or project stage is inferred.
 """
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from html import escape
+from io import BytesIO
+import os
 from pathlib import Path
 import tempfile
-from textwrap import wrap
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import (
+    BaseDocTemplate, Frame, PageBreak, PageTemplate, Paragraph, Spacer, Table,
+    TableStyle,
+)
+from reportlab.platypus.doctemplate import LayoutError
 
 from app.architecture.engineering_handoff import build_engineering_handoff
 from app.architecture.program_store import BuildingProgramDraft
+from app.pz.drafting_font import DRAFTING_FONT_PATH
 
 
 PAGE_WIDTH_MM = 420.0
 PAGE_HEIGHT_MM = 297.0
 _ROWS_PER_REGISTER_PAGE = 18
+_FONT = "BuildingProgramReport"
+_WIDTH = 384 * mm
+
+
+class ProgramReportLayoutError(ValueError):
+    """A complete readable report cannot be laid out; old output is retained."""
 
 
 @dataclass(frozen=True)
@@ -29,104 +50,6 @@ class _SourceGroup:
     service_ports: tuple[str, ...]
     level_ids: tuple[str, ...]
     count: int
-
-
-def _text(
-    value: str,
-    *,
-    x: float,
-    y: float,
-    size: float = 3.4,
-    weight: int = 400,
-    fill: str = "#111625",
-    anchor: str = "start",
-) -> str:
-    return (
-        f'<text x="{x:g}" y="{y:g}" font-size="{size:g}" '
-        f'font-weight="{weight}" fill="{fill}" text-anchor="{anchor}">'
-        f"{escape(value)}</text>"
-    )
-
-
-def _multiline(
-    value: str,
-    *,
-    x: float,
-    y: float,
-    width_chars: int,
-    size: float = 3.2,
-    line_height: float = 4.4,
-    weight: int = 400,
-    fill: str = "#111625",
-    max_lines: int = 3,
-) -> str:
-    lines = wrap(value, width=max(8, width_chars)) or [value]
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] = lines[-1].rstrip(" .") + "..."
-    return "".join(
-        _text(
-            row,
-            x=x,
-            y=y + index * line_height,
-            size=size,
-            weight=weight,
-            fill=fill,
-        )
-        for index, row in enumerate(lines)
-    )
-
-
-def _page_shell(body: str, *, page_number: int, title: str) -> str:
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{PAGE_WIDTH_MM:g}mm" height="{PAGE_HEIGHT_MM:g}mm" '
-        f'viewBox="0 0 {PAGE_WIDTH_MM:g} {PAGE_HEIGHT_MM:g}">'
-        '<rect width="420" height="297" fill="#f7f8fb"/>'
-        '<rect x="8" y="8" width="404" height="281" rx="3" fill="#ffffff" '
-        'stroke="#a8afbd" stroke-width="0.35"/>'
-        '<rect x="8" y="8" width="404" height="25" rx="3" fill="#111625"/>'
-        '<rect x="8" y="29" width="404" height="4" fill="#111625"/>'
-        '<rect x="8" y="29" width="34" height="4" fill="#ff6b35"/>'
-        '<g font-family="DejaVu Sans, Arial, sans-serif">'
-        + _text(
-            title,
-            x=18,
-            y=23,
-            size=6.4,
-            weight=700,
-            fill="#ffffff",
-        )
-        + _text(
-            "ZARYA / BUILDING PROGRAM",
-            x=402,
-            y=22.5,
-            size=3.0,
-            weight=700,
-            fill="#ff9a75",
-            anchor="end",
-        )
-        + body
-        + '<line x1="18" y1="278" x2="402" y2="278" '
-        'stroke="#d7dbe3" stroke-width="0.3"/>'
-        + _text(
-            "Контроль типологической основы. Не является планом АР или схемой инженерных сетей.",
-            x=18,
-            y=284,
-            size=2.75,
-            fill="#6b7280",
-        )
-        + _text(
-            f"Лист {page_number}",
-            x=402,
-            y=284,
-            size=2.75,
-            weight=700,
-            fill="#6b7280",
-            anchor="end",
-        )
-        + "</g></svg>"
-    )
 
 
 def _level_label(level_id: str, floor_number: int | None, role: str) -> str:
@@ -190,189 +113,6 @@ def _source_groups(draft: BuildingProgramDraft) -> tuple[_SourceGroup, ...]:
     )
 
 
-def _status_badge(draft: BuildingProgramDraft) -> str:
-    ready = draft.basis_confirmed
-    fill = "#dff8f3" if ready else "#fff0e8"
-    stroke = "#00a88f" if ready else "#ff6b35"
-    label = "ОСНОВА ПОДТВЕРЖДЕНА" if ready else "ТРЕБУЕТ ПОДТВЕРЖДЕНИЯ"
-    return (
-        f'<rect x="315" y="42" width="87" height="11" rx="5.5" '
-        f'fill="{fill}" stroke="{stroke}" stroke-width="0.35"/>'
-        + _text(
-            label,
-            x=358.5,
-            y=49.1,
-            size=2.65,
-            weight=700,
-            fill=stroke,
-            anchor="middle",
-        )
-    )
-
-
-def _overview_page(draft: BuildingProgramDraft) -> str:
-    topology = draft.topology
-    handoff = build_engineering_handoff(
-        topology,
-        basis_confirmed=draft.basis_confirmed,
-    )
-    groups = _source_groups(draft)
-    body = (
-        _text(draft.title, x=18, y=48, size=5.5, weight=700)
-        + _text(
-            f"ID {draft.model_id} / topology {draft.topology_sha256[:16]}...",
-            x=18,
-            y=54,
-            size=2.8,
-            fill="#6b7280",
-        )
-        + _status_badge(draft)
-    )
-
-    metrics = (
-        ("УРОВНЕЙ", len(topology.levels)),
-        ("КВАРТИР", len(topology.apartments)),
-        ("ПОМЕЩЕНИЙ", len(topology.rooms)),
-        ("ПРИБОРОВ", len(topology.fixtures)),
-        ("ШАХТ", len(topology.sanitary_shafts)),
-    )
-    for index, (label, value) in enumerate(metrics):
-        x = 18 + index * 51.5
-        body += (
-            f'<rect x="{x:g}" y="62" width="47" height="20" rx="2" '
-            'fill="#f1f3f7" stroke="#d7dbe3" stroke-width="0.25"/>'
-            + _text(str(value), x=x + 4, y=73.5, size=6.2, weight=700)
-            + _text(label, x=x + 4, y=78.3, size=2.35, weight=700, fill="#687083")
-        )
-
-    body += (
-        _text("ФУНКЦИОНАЛЬНЫЕ СВЯЗИ", x=18, y=94, size=3.15, weight=700, fill="#ff6b35")
-        + _text(
-            "Каждая строка взята из реестра модели; линии труб здесь намеренно отсутствуют.",
-            x=18,
-            y=100,
-            size=2.85,
-            fill="#687083",
-        )
-        + '<rect x="18" y="105" width="262" height="10" fill="#2c3241"/>'
-        + _text("ПОМЕЩЕНИЕ -> ПРИБОР", x=22, y=111.7, size=2.7, weight=700, fill="#ffffff")
-        + _text("УРОВНИ", x=149, y=111.7, size=2.7, weight=700, fill="#ffffff")
-        + _text("КОЛ.", x=225, y=111.7, size=2.7, weight=700, fill="#ffffff")
-        + _text("ПОРТЫ", x=246, y=111.7, size=2.7, weight=700, fill="#ffffff")
-    )
-    visible_groups = groups[:8]
-    for index, group in enumerate(visible_groups):
-        y = 115 + index * 12
-        fill = "#ffffff" if index % 2 == 0 else "#f7f8fb"
-        body += (
-            f'<rect x="18" y="{y:g}" width="262" height="12" fill="{fill}" '
-            'stroke="#d7dbe3" stroke-width="0.18"/>'
-            + _multiline(
-                f"{group.room_label} -> {group.fixture_label}",
-                x=22,
-                y=y + 4.8,
-                width_chars=50,
-                size=2.75,
-                line_height=3.4,
-                max_lines=2,
-            )
-            + _multiline(
-                _level_span(draft, group.level_ids),
-                x=149,
-                y=y + 4.8,
-                width_chars=27,
-                size=2.65,
-                line_height=3.4,
-                fill="#4b5563",
-                max_lines=2,
-            )
-            + _text(str(group.count), x=232, y=y + 7.2, size=3.0, weight=700, anchor="middle")
-            + _text(", ".join(group.service_ports), x=246, y=y + 7.2, size=2.8, weight=700)
-        )
-    if len(groups) > len(visible_groups):
-        body += _text(
-            f"Ещё типов связей: {len(groups) - len(visible_groups)} - см. реестр уровней.",
-            x=18,
-            y=216,
-            size=2.7,
-            fill="#687083",
-        )
-
-    body += _text("ВОРОТА ПЕРЕДАЧИ", x=292, y=94, size=3.15, weight=700, fill="#ff6b35")
-    for index, status in enumerate(handoff.systems):
-        y = 103 + index * 25
-        ready = status.quantities_ready
-        accent = "#00a88f" if ready else "#ff6b35"
-        fill = "#eefbf8" if ready else "#fff7f2"
-        body += (
-            f'<rect x="292" y="{y:g}" width="110" height="21" rx="2" '
-            f'fill="{fill}" stroke="{accent}" stroke-width="0.35"/>'
-            + _text(status.system, x=298, y=y + 8, size=4.4, weight=700, fill=accent)
-            + _text(
-                f"источников: {status.fixture_source_count}",
-                x=318,
-                y=y + 7.2,
-                size=2.7,
-                weight=700,
-            )
-            + _text(
-                "состав готов" if ready else f"блокировок: {len(status.quantity_blockers)}",
-                x=318,
-                y=y + 12.6,
-                size=2.7,
-                fill=accent,
-            )
-            + _text(
-                "схема: ждёт геометрию АР",
-                x=318,
-                y=y + 17.5,
-                size=2.45,
-                fill="#687083",
-            )
-        )
-
-    question_y = max(222.0, 119.0 + len(visible_groups) * 12)
-    body += (
-        _text("НЕЗАКРЫТЫЕ ВОПРОСЫ", x=18, y=question_y, size=3.15, weight=700, fill="#ff6b35")
-    )
-    questions = topology.questions[:4]
-    if not questions:
-        body += _text(
-            "Типологические вопросы закрыты. Геометрия АР по-прежнему обязательна для схем.",
-            x=18,
-            y=question_y + 7,
-            size=2.9,
-            weight=700,
-            fill="#008a76",
-        )
-    else:
-        for index, question in enumerate(questions):
-            body += (
-                f'<circle cx="20" cy="{question_y + 7 + index * 9:g}" r="1.4" fill="#ff6b35"/>'
-                + _multiline(
-                    question.prompt,
-                    x=25,
-                    y=question_y + 8 + index * 9,
-                    width_chars=105,
-                    size=2.75,
-                    line_height=3.6,
-                    max_lines=2,
-                )
-            )
-    body += _text(
-        f"Основание данных: {topology.source_ref}",
-        x=18,
-        y=271,
-        size=2.65,
-        fill="#687083",
-    )
-    return _page_shell(
-        body,
-        page_number=1,
-        title="КОНТРОЛЬНЫЙ ЛИСТ ТИПОЛОГИЧЕСКОЙ МОДЕЛИ",
-    )
-
-
 def _role_label(role: str) -> str:
     return {
         "roof": "кровля",
@@ -381,7 +121,8 @@ def _role_label(role: str) -> str:
     }.get(role, role)
 
 
-def _register_pages(draft: BuildingProgramDraft) -> list[str]:
+
+def _register_rows(draft: BuildingProgramDraft) -> list[list[str]]:
     topology = draft.topology
     rooms_by_level = Counter(row.level_id for row in topology.rooms)
     apartments_by_floor = Counter(row.floor_number for row in topology.apartments)
@@ -400,113 +141,156 @@ def _register_pages(draft: BuildingProgramDraft) -> list[str]:
     for shaft in topology.sanitary_shafts:
         shafts_by_floor.update(shaft.served_floors)
 
-    levels = list(topology.levels)
-    pages: list[str] = []
-    for offset in range(0, len(levels), _ROWS_PER_REGISTER_PAGE):
-        chunk = levels[offset : offset + _ROWS_PER_REGISTER_PAGE]
-        page_number = 2 + len(pages)
-        body = (
-            _text(draft.title, x=18, y=47, size=5.2, weight=700)
-            + _text(
-                f"Реестр уровней {offset + 1}-{offset + len(chunk)} из {len(levels)}",
-                x=18,
-                y=54,
-                size=2.9,
-                fill="#687083",
-            )
-            + '<rect x="18" y="63" width="384" height="11" fill="#2c3241"/>'
-        )
-        columns = (
-            ("УРОВЕНЬ", 22),
-            ("НАЗНАЧЕНИЕ", 76),
-            ("КВ.", 139),
-            ("ПОМ.", 160),
-            ("ПРИБ.", 186),
-            ("ШАХТ", 215),
-            ("В1", 251),
-            ("Т3", 279),
-            ("К1", 307),
-            ("К2", 335),
-            ("К3", 363),
-        )
-        for label, x in columns:
-            body += _text(label, x=x, y=70.2, size=2.55, weight=700, fill="#ffffff")
-        for index, level in enumerate(chunk):
-            y = 74 + index * 10.4
-            fill = "#ffffff" if index % 2 == 0 else "#f4f6f9"
-            systems = system_by_level.get(level.level_id, Counter())
-            apartment_count = (
-                apartments_by_floor[level.floor_number]
-                if level.floor_number is not None
-                else 0
-            )
-            shaft_count = (
-                shafts_by_floor[level.floor_number]
-                if level.floor_number is not None
-                else 0
-            )
-            body += (
-                f'<rect x="18" y="{y:g}" width="384" height="10.4" fill="{fill}" '
-                'stroke="#d7dbe3" stroke-width="0.18"/>'
-                + _text(
-                    _level_label(level.level_id, level.floor_number, level.role),
-                    x=22,
-                    y=y + 6.7,
-                    size=2.75,
-                    weight=700,
-                )
-                + _text(_role_label(level.role), x=76, y=y + 6.7, size=2.7, fill="#4b5563")
-                + _text(str(apartment_count), x=143, y=y + 6.7, size=2.8, anchor="middle")
-                + _text(str(rooms_by_level[level.level_id]), x=166, y=y + 6.7, size=2.8, anchor="middle")
-                + _text(str(fixtures_by_level[level.level_id]), x=194, y=y + 6.7, size=2.8, anchor="middle")
-                + _text(str(shaft_count), x=223, y=y + 6.7, size=2.8, anchor="middle")
-            )
-            for system, x in (("V1", 255), ("T3", 283), ("K1", 311), ("K2", 339), ("K3", 367)):
-                body += _text(str(systems[system]), x=x, y=y + 6.7, size=2.8, anchor="middle")
-        body += (
-            _text(
-                "Числа в колонках систем - количество приборов с соответствующим сервисным портом, а не расход и не число труб.",
-                x=18,
-                y=268,
-                size=2.75,
-                fill="#687083",
-            )
-        )
-        pages.append(_page_shell(
-            body,
-            page_number=page_number,
-            title="РЕЕСТР УРОВНЕЙ И ИНЖЕНЕРНЫХ ИСТОЧНИКОВ",
-        ))
-    return pages
+
+    rows = []
+    for level in topology.levels:
+        systems = system_by_level.get(level.level_id, Counter())
+        rows.append([
+            _level_label(level.level_id, level.floor_number, level.role),
+            _role_label(level.role),
+            str(apartments_by_floor[level.floor_number] if level.floor_number is not None else 0),
+            str(rooms_by_level[level.level_id]),
+            str(fixtures_by_level[level.level_id]),
+            str(shafts_by_floor[level.floor_number] if level.floor_number is not None else 0),
+            *(str(systems[system]) for system in ("V1", "T3", "K1", "K2", "K3")),
+        ])
+    return rows
+
+
+def _paragraph(value: object, *, size: float = 11, heading: bool = False) -> Paragraph:
+    return Paragraph(escape(str(value)), ParagraphStyle(
+        "program", fontName=_FONT, fontSize=size, leading=size * 1.3,
+        spaceAfter=3 * mm if heading else 1.2 * mm,
+        keepWithNext=heading, splitLongWords=True,
+    ))
+
+
+def _table(headers: Sequence[object], rows: Sequence[Sequence[object]], widths: Sequence[float]) -> Table:
+    data = [[_paragraph(value) for value in row] for row in [headers, *rows]]
+    result = Table(data, colWidths=[width * mm for width in widths],
+                   repeatRows=1, hAlign="LEFT", splitByRow=1, splitInRow=0)
+    result.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), .5, colors.HexColor("#7b8591")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf0f3")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.4 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.4 * mm),
+    ]))
+    return result
+
+
+class _NumberedCanvas(Canvas):
+    """Add total page count without rebuilding or recalculating the model."""
+
+    # ReportLab's page-state reset exists at runtime but is absent from its stubs.
+    _startPage: Callable[[], None]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._pages: list[dict[str, Any]] = []
+
+    def showPage(self) -> None:
+        self._pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self) -> None:
+        total = len(self._pages)
+        for state in self._pages:
+            self.__dict__.update(state)
+            self.setFont(_FONT, 10)
+            self.drawString(18 * mm, 12 * mm,
+                            "Контроль типологической основы. Не является планом АР или схемой инженерных сетей.")
+            self.drawRightString(402 * mm, 12 * mm, f"Лист {self.getPageNumber()} из {total}")
+            super().showPage()
+        super().save()
 
 
 def generate_building_program_report_pdf(
     draft: BuildingProgramDraft,
     output_path: str | Path,
 ) -> str:
-    """Write a paginated, vector PDF for visual programme verification."""
-    import cairosvg
-    from pypdf import PdfReader, PdfWriter
-
+    """Render all groups/questions and register rows; publish atomically."""
+    if _FONT not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(_FONT, str(DRAFTING_FONT_PATH)))
+    topology = draft.topology
+    handoff = build_engineering_handoff(topology, basis_confirmed=draft.basis_confirmed)
+    story = [
+        _paragraph("КОНТРОЛЬНЫЙ ЛИСТ ТИПОЛОГИЧЕСКОЙ МОДЕЛИ", size=18, heading=True),
+        _paragraph(draft.title, size=15),
+        _paragraph(f"ID {draft.model_id} / topology {draft.topology_sha256}"),
+        _paragraph("ОСНОВА ПОДТВЕРЖДЕНА" if draft.basis_confirmed else "ТРЕБУЕТ ПОДТВЕРЖДЕНИЯ"),
+        _paragraph(f"Основание данных: {topology.source_ref}"),
+        _table(["УРОВНЕЙ", "КВАРТИР", "ПОМЕЩЕНИЙ", "ПРИБОРОВ", "ШАХТ"], [[
+            len(topology.levels), len(topology.apartments), len(topology.rooms),
+            len(topology.fixtures), len(topology.sanitary_shafts),
+        ]], [76.8] * 5),
+        Spacer(1, 3 * mm),
+        _paragraph("ФУНКЦИОНАЛЬНЫЕ СВЯЗИ", size=14, heading=True),
+        _paragraph("Каждая строка взята из реестра модели; линии труб здесь намеренно отсутствуют."),
+    ]
+    groups = _source_groups(draft)
+    if groups:
+        story.append(_table(["ПОМЕЩЕНИЕ -> ПРИБОР", "УРОВНИ", "КОЛ.", "ПОРТЫ"], [
+            [f"{group.room_label} -> {group.fixture_label}", _level_span(draft, group.level_ids),
+             group.count, ", ".join(group.service_ports)] for group in groups
+        ], [190, 100, 24, 70]))
+    else:
+        story.append(_paragraph("Зарегистрированные связи помещений и приборов отсутствуют."))
+    story.extend([Spacer(1, 3 * mm), _paragraph("ВОРОТА ПЕРЕДАЧИ", size=14, heading=True)])
+    for status in handoff.systems:
+        state = "состав готов" if status.quantities_ready else f"блокировок: {len(status.quantity_blockers)}"
+        story.append(_paragraph(
+            f"{status.system}: источников: {status.fixture_source_count}; {state}; схема: ждёт геометрию АР"
+        ))
+    story.extend([Spacer(1, 3 * mm), _paragraph("НЕЗАКРЫТЫЕ ВОПРОСЫ", size=14, heading=True)])
+    for index, question in enumerate(topology.questions, 1):
+        story.append(_paragraph(f"{index}. {question.prompt}"))
+    if not topology.questions:
+        story.append(_paragraph(
+            "Типологические вопросы закрыты. Геометрия АР по-прежнему обязательна для схем."
+        ))
+    rows = _register_rows(draft)
+    for offset in range(0, len(rows), _ROWS_PER_REGISTER_PAGE):
+        chunk = rows[offset:offset + _ROWS_PER_REGISTER_PAGE]
+        story.extend([
+            PageBreak(),
+            _paragraph("РЕЕСТР УРОВНЕЙ И ИНЖЕНЕРНЫХ ИСТОЧНИКОВ", size=18, heading=True),
+            _paragraph(draft.title, size=15),
+            _paragraph(f"Реестр уровней {offset + 1}-{offset + len(chunk)} из {len(rows)}"),
+            _table(["УРОВЕНЬ", "НАЗНАЧЕНИЕ", "КВ.", "ПОМ.", "ПРИБ.", "ШАХТ",
+                    "В1", "Т3", "К1", "К2", "К3"], chunk, [64, 68] + [28] * 9),
+            Spacer(1, 3 * mm),
+            _paragraph("Числа в колонках систем - количество приборов с соответствующим сервисным портом, а не расход и не число труб."),
+        ])
+    output = BytesIO()
+    document = BaseDocTemplate(output, pagesize=(PAGE_WIDTH_MM * mm, PAGE_HEIGHT_MM * mm),
+                               title="Контроль типологической модели", author="ЗАРЯ")
+    frame = Frame(18 * mm, 22 * mm, _WIDTH, 260 * mm,
+                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    document.addPageTemplates(PageTemplate(id="report", frames=[frame]))
+    try:
+        document.build(story, canvasmaker=_NumberedCanvas)
+    except LayoutError as exc:
+        raise ProgramReportLayoutError(
+            "Контрольный отчёт: строка таблицы не помещается целиком на листе. "
+            "Проверьте длину полей; прежний PDF сохранён."
+        ) from exc
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    pages = [_overview_page(draft), *_register_pages(draft)]
-    writer = PdfWriter()
-    with tempfile.TemporaryDirectory(prefix="zarya-building-report-") as tmp_dir:
-        for index, svg in enumerate(pages, start=1):
-            page_path = Path(tmp_dir) / f"page-{index}.pdf"
-            cairosvg.svg2pdf(
-                bytestring=svg.encode("utf-8"),
-                write_to=str(page_path),
-            )
-            writer.append(PdfReader(page_path))
-        with path.open("wb") as stream:
-            writer.write(stream)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".building-report-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(output.getvalue())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)
 
 
-__all__ = [
-    "PAGE_HEIGHT_MM",
-    "PAGE_WIDTH_MM",
-    "generate_building_program_report_pdf",
-]
+__all__ = ["PAGE_HEIGHT_MM", "PAGE_WIDTH_MM", "ProgramReportLayoutError",
+           "generate_building_program_report_pdf"]

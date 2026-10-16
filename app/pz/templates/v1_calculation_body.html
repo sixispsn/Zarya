@@ -84,8 +84,13 @@
 </p>
 {% endif %}
 
+{% if t3_hydraulics %}
+<p class="subhead">3.1. Поучастковый расчёт пути Т3</p>
+{% include "t3_hydraulic_table.html" %}
+{% endif %}
+
 <p class="subhead">4. Подбор и проверка водомерных узлов</p>
-{% if meters.rows %}
+{% if meters.rows or meters.selection_error %}
 {% include "meter_table.html" %}
 {% else %}
 <p class="subitem">Расчёт водомерных узлов не выполнен: исходных данных недостаточно.</p>
@@ -117,8 +122,11 @@
 <p class="subhead">6. Итог по повысительной установке В1</p>
 {% if pumps.required %}
 <table class="data calc-table pump-summary">
-  <tr><th>Расчётный расход</th><td>{{ (pumps.wp_q or pumps.q_design_m3h or pumps.q_m3h)|num(2) }} м³/ч</td></tr>
-  <tr><th>Расчётный напор</th><td>{{ (pumps.wp_h or pumps.h_design_m or pumps.head_m)|num(2) }} м</td></tr>
+  <tr><th>Расчётный расход Qрасч</th><td>{{ pumps.q_design_m3h|num(3) ~ ' м³/ч' if pumps.q_design_m3h > 0 else 'не задан' }}</td></tr>
+  <tr><th>Требуемый напор насоса Hтреб</th><td>{{ pumps.h_design_m|num(2) ~ ' м' if pumps.h_design_m > 0 else 'не задан' }}</td></tr>
+  {% if pumps.wp_q > 0 and pumps.wp_h > 0 %}
+  <tr><th>Оценочное пересечение кривых Q/H, не уставка ПЧ</th><td>{{ pumps.wp_q|num(2) }} м³/ч / {{ pumps.wp_h|num(2) }} м</td></tr>
+  {% endif %}
   <tr><th>Принятая модель</th><td>{{ pumps.model or 'подбор требует подтверждения каталожными данными' }}</td></tr>
   <tr><th>Количество</th><td>{{ pumps.count_note or '—' }}</td></tr>
 </table>

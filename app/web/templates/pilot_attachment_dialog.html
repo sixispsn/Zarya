@@ -1,0 +1,16 @@
+<dialog id="pilot-attachment" class="pilot-dialog" aria-labelledby="pilot-attachment-title" data-object-id="{{ object.id }}" data-version="{{ version.number }}">
+  <div class="pilot-dialog-heading"><h2 id="pilot-attachment-title">Комплект после экспертизы</h2><button type="button" data-bundle-close aria-label="Закрыть загрузку комплекта">×</button></div>
+  <p>{{ object.title }} · версия {{ version.number }}. Добавим PDF отдельно, не заменяя прежние файлы и расчёт.</p>
+  <p data-bundle-error role="alert" hidden></p>
+  <form id="pilot-attachment-form">
+    <label class="pilot-file-picker">ПЗ, схемы и заключение<input type="file" name="files" accept=".pdf,application/pdf" multiple required><span>До 10 PDF · 20 МБ на файл · 40 МБ всего</span></label>
+    <ul data-bundle-files aria-live="polite"></ul>
+    <label>Номер и дата заключения <span class="pilot-optional">Необязательно</span><input name="expertise_ref" maxlength="200" autocomplete="off" placeholder="Если хотите приложить реквизиты"></label>
+    <label>Что изменилось? <span class="pilot-optional">Необязательно</span><textarea name="note" maxlength="2000" rows="3" placeholder="Например, уточнили диаметры и состав насосной группы"></textarea></label>
+    <label class="pilot-consent"><input type="checkbox" name="expertise_declared" required><span>По моим сведениям, эти файлы относятся к варианту проекта, прошедшему экспертизу. Понимаю, что ЗАРЯ не подтверждает этот статус.</span></label>
+    <label class="pilot-consent"><input type="checkbox" name="consent" required><span>Имею право передать выбранные PDF, их имена и пояснения владельцу ЗАРИ для закрытого анализа пилота и развития продукта. Разрешаю их хранение; публикацию и передачу третьим лицам не разрешаю.</span></label>
+    <p class="pilot-bundle-privacy">Проверьте содержание и при необходимости обезличьте файлы до загрузки. Доступ будет у вас и владельца. Эти копии сохранятся отдельно от рабочего проекта; для удаления обратитесь к владельцу.</p>
+    <button type="submit" class="pilot-primary">Сохранить комплект</button>
+    <p data-bundle-progress role="status" hidden>Загружаем и проверяем PDF… Не закрывайте страницу.</p>
+  </form>
+</dialog>

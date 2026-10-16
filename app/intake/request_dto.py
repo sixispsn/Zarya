@@ -21,7 +21,21 @@ DTO описывает объект в терминах ПРОЕКТИРОВЩИ
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import List, Optional
+from app.pz.wastewater_presentation import RepresentativeSectionInput
+from app.pz.wastewater_service import WastewaterServiceInput
+
+from app.calc.water_local_losses import LOCAL_LOSS_FACTORS
+from app.calc.rainwater_reuse import RainwaterReuseInput
+from app.calc.hws_stage_p import HwsStagePInput
+from app.calc.t3_hydraulics import T3SectionInput, validate_t3_section
+
+from app.pz.wastewater_ventilation import FanVentilationInput
+from app.pz.wastewater_fan_geometry import FanGeometryInput
+from app.pz.metering_detail_data import MeteringDetailData
+from app.pz.apartment_water_units import ApartmentWaterUnits
+from app.pz.water_service_assemblies import WaterServiceLayout
 
 
 # ── справочники значений (строки — то, что придёт из формы/YAML/API) ────────
@@ -43,6 +57,9 @@ WASTEWATER_ROOF_KINDS = (
     "flat_non_accessible",
     "flat_accessible",
     "pitched",
+    "single_slope",
+    "gable",
+    "complex",
     "collecting_vent_shaft",
 )
 CATERING_TYPES = ("none", "semi_finished", "raw", "school")
@@ -108,20 +125,29 @@ class SourceDataRequest:
     # Это исходные/расчётные величины проектировщика; Builder их не придумывает.
     elev_header_m: Optional[float] = None   # отметка оси ввода/напорного коллектора
     elev_fixture_m: Optional[float] = None  # отметка излива диктующего прибора
+    lowest_fixture_elevation_m: Optional[float] = None
+    lowest_fixture_basis: str = ""
     h_geom_m: Optional[float] = None        # Hgeom напрямую, если отметок нет
     il_dict_m: Optional[float] = None       # i*l внутренней сети до учёта местных потерь
     h_il_m: Optional[float] = None          # готовая сумма потерь внутренней сети
-    network_kind: str = "domestic"         # domestic / combined / fire
+    internal_losses_scope: str = "shared"  # shared (прежний ввод) / cold_only (трасса В1)
+    h_il_hot_m: Optional[float] = None      # отдельные готовые потери труб трассы Т3
+    network_kind: str = "domestic"         # тип сети по СП 30, п. 8.28
     h_pr_m: float = 20.0                    # свободный напор перед прибором
     h_tepl_m: float = 0.0                   # потери в теплообменнике/ИТП
     h_apartment_c_meter_m: Optional[float] = None
     h_apartment_h_meter_m: Optional[float] = None
+    apartment_meter_basis: str = ""        # непусто: предварительный квартирный расчёт Studio
     hws_heater_in_scope: bool = False
-    il_vvod_m: Optional[float] = None       # i*L ввода до коэффициента 1,1
+    il_vvod_m: Optional[float] = None       # i*L ввода до учёта k_l по типу сети
     h_vvod_m: Optional[float] = None        # готовые потери на вводе
     water_use_period_h: float = 24.0        # период водопотребления для водомера
+    meter_minimum_checks: dict = field(default_factory=dict)  # total/cold/hot: минимум и паспорт
     inputs_count: int = 1                   # число вводов водопровода
     npsh_available_m: Optional[float] = None  # располагаемый кавитационный запас
+    station_room_number: str = ""
+    station_floor_elevation_m: Optional[float] = None
+    station_suction_elevation_m: Optional[float] = None
 
 @dataclass
 class RoomRequest:
@@ -268,6 +294,76 @@ class SewageRiserRequest:
     air_valve_source: str = ""
 
 
+def validate_sewage_risers(risers: List[SewageRiserRequest], *, input_issues=None) -> List[str]:
+    """Existing canonical checks, shared with explicit Studio input."""
+    p = []
+    seen_sewage_risers = set()
+    for i, riser in enumerate(risers):
+        if not riser.riser_id or riser.riser_id in seen_sewage_risers:
+            p.append(
+                f"sewage_risers[{i}]: марка пустая или повторяется"
+            )
+            if input_issues is not None and riser.riser_id:
+                input_issues.append(dict(code="duplicate_riser_id", registry="sewage_risers",
+                    row_index=i, field="riser_id",
+                    message=f"Расчётный стояк, строка {i + 1}: обозначение «{riser.riser_id}» повторяется. Укажите уникальное обозначение."))
+        seen_sewage_risers.add(riser.riser_id)
+        if riser.design_flow_lps <= 0:
+            p.append(
+                f"sewage_risers[{i}].design_flow_lps должен быть > 0"
+            )
+        if min(riser.riser_dn_mm, riser.branch_dn_mm) <= 0:
+            p.append(f"sewage_risers[{i}]: диаметры должны быть > 0")
+        if riser.material not in SEWAGE_MATERIALS:
+            p.append(
+                f"sewage_risers[{i}].material должен быть одним из "
+                f"{SEWAGE_MATERIALS}"
+            )
+        if riser.ventilation not in SEWAGE_VENTILATION:
+            p.append(
+                f"sewage_risers[{i}].ventilation должен быть одним из "
+                f"{SEWAGE_VENTILATION}"
+            )
+        if riser.branch_angle_deg not in (45.0, 60.0, 87.5):
+            p.append(
+                f"sewage_risers[{i}].branch_angle_deg должен быть "
+                "45, 60 или 87,5"
+            )
+        if riser.working_height_m is not None and riser.working_height_m <= 0:
+            p.append(
+                f"sewage_risers[{i}].working_height_m должен быть > 0"
+            )
+        for field_name, value in (
+            ("inner_diameter_mm", riser.inner_diameter_mm),
+            ("branch_inner_diameter_mm", riser.branch_inner_diameter_mm),
+            ("minimum_trap_seal_mm", riser.minimum_trap_seal_mm),
+            ("air_valve_free_area_mm2", riser.air_valve_free_area_mm2),
+        ):
+            if value is not None and value <= 0:
+                p.append(f"sewage_risers[{i}].{field_name} должен быть > 0")
+        if (
+            riser.branch_inner_diameter_mm is not None
+            and riser.inner_diameter_mm is not None
+            and riser.branch_inner_diameter_mm > riser.inner_diameter_mm
+        ):
+            p.append(
+                f"sewage_risers[{i}]: внутренний диаметр отвода "
+                "не может быть больше внутреннего диаметра стояка"
+            )
+        if riser.air_valve_free_area_mm2 is not None:
+            if riser.ventilation != "vacuum_valve":
+                p.append(
+                    f"sewage_risers[{i}].air_valve_free_area_mm2 допустима "
+                    "только для стояка с воздушным клапаном"
+                )
+            if not riser.air_valve_source.strip():
+                p.append(
+                    f"sewage_risers[{i}].air_valve_source обязателен "
+                    "для площади клапана"
+                )
+    return p
+
+
 @dataclass
 class SewerPipeRequest:
     """Явно посчитанная труба К1/К2 для спецификации стадии П.
@@ -306,10 +402,144 @@ class SewerPipeRequest:
     # Признак и класс давления задаются явно, а не выводятся из названия ГОСТ.
     pressure_rated: Optional[bool] = None
     pressure_class_bar: Optional[float] = None
+    catalog_series_id: str = ""
+
+    q_hour_max_m3h: Optional[float] = None
+    fixtures_count: Optional[int] = None
+    receiving_length_m: Optional[float] = None
+    fixture_max_lps: Optional[float] = None
+    flow_source: str = ""
 
     @property
     def inner_diameter_mm(self) -> float:
         return self.outer_diameter_mm - 2.0 * self.wall_thickness_mm
+
+
+def validate_sewer_pipes(pipes: List[SewerPipeRequest], *, input_issues=None) -> List[str]:
+    """Shared existing registry checks; no solver or alternative methodology."""
+    p = []
+    seen_sewer_sections = set()
+    for i, pipe in enumerate(pipes):
+        from app.calc.sewage_horizontal import positive
+        for key in ("q_hour_max_m3h", "receiving_length_m", "fixture_max_lps"):
+            if getattr(pipe, key) is not None:
+                try:
+                    positive(getattr(pipe, key), key)
+                except ValueError as exc:
+                    p.append(f"sewer_pipes[{i}]: {exc}")
+        if pipe.fixtures_count is not None and (type(pipe.fixtures_count) is not int or pipe.fixtures_count <= 0):
+            p.append(f"sewer_pipes[{i}].fixtures_count: положительное целое N")
+        if not isinstance(pipe.flow_source, str) or len(pipe.flow_source) > 200:
+            p.append(f"sewer_pipes[{i}].flow_source: текст до 200 символов")
+        if pipe.catalog_series_id:
+            from app.data.sewer_pipe_catalog import catalog_pipe_fields
+            try:
+                catalog_pipe_fields(vars(pipe))
+            except ValueError as exc:
+                p.append(f"sewer_pipes[{i}]: {exc}")
+        if pipe.system not in ("K1", "K2", "K3"):
+            p.append(f"sewer_pipes[{i}].system должен быть K1, K2 или K3")
+        if not pipe.section_id or pipe.section_id in seen_sewer_sections:
+            p.append(
+                f"sewer_pipes[{i}]: обозначение пустое или повторяется"
+            )
+        seen_sewer_sections.add(pipe.section_id)
+        if min(
+            pipe.outer_diameter_mm,
+            pipe.wall_thickness_mm,
+            pipe.length_m,
+        ) <= 0:
+            p.append(
+                f"sewer_pipes[{i}]: наружный диаметр, стенка и длина "
+                "должны быть > 0"
+            )
+        if pipe.inner_diameter_mm <= 0:
+            p.append(
+                f"sewer_pipes[{i}]: толщина стенки исключает проходное "
+                "сечение"
+            )
+            if input_issues is not None:
+                input_issues.append(dict(code="blocked_pipe_section", registry="sewer_pipes",
+                    row_index=i, field="wall_thickness_mm",
+                    message=f"Труба «{pipe.section_id}», строка {i + 1}: толщина стенки исключает проходное сечение. Проверьте толщину стенки и наружный диаметр."))
+        if (
+            pipe.nominal_diameter_mm is not None
+            and pipe.nominal_diameter_mm <= 0
+        ):
+            p.append(
+                f"sewer_pipes[{i}].nominal_diameter_mm должен быть > 0"
+            )
+        if pipe.design_flow_lps is not None and pipe.design_flow_lps <= 0:
+            p.append(
+                f"sewer_pipes[{i}].design_flow_lps должен быть > 0"
+            )
+        if (
+            pipe.calculation_length_m is not None
+            and pipe.calculation_length_m <= 0
+        ):
+            p.append(
+                f"sewer_pipes[{i}].calculation_length_m должен быть > 0"
+            )
+        if pipe.manning_n is not None and pipe.manning_n <= 0:
+            p.append(f"sewer_pipes[{i}].manning_n должен быть > 0")
+        if pipe.manning_n is not None and not pipe.hydraulic_source.strip():
+            p.append(
+                f"sewer_pipes[{i}].hydraulic_source обязателен при manning_n"
+            )
+        if (
+            pipe.critical_velocity_mps is not None
+            and pipe.critical_velocity_mps <= 0
+        ):
+            p.append(
+                f"sewer_pipes[{i}].critical_velocity_mps должен быть > 0"
+            )
+        if (
+            pipe.critical_velocity_mps is not None
+            and not pipe.critical_velocity_source.strip()
+        ):
+            p.append(
+                f"sewer_pipes[{i}].critical_velocity_source обязателен"
+            )
+        if (
+            pipe.critical_fill_ratio is not None
+            and not 0 < pipe.critical_fill_ratio <= 1
+        ):
+            p.append(
+                f"sewer_pipes[{i}].critical_fill_ratio должен быть в (0; 1]"
+            )
+        if not pipe.material.strip() or not pipe.standard.strip():
+            p.append(
+                f"sewer_pipes[{i}]: материал и стандарт/ТУ обязательны "
+                "для точной спецификации"
+            )
+        if pipe.slope_per_mille is not None and pipe.slope_per_mille < 0:
+            p.append(f"sewer_pipes[{i}].slope_per_mille не может быть отрицательным")
+        if pipe.fill_ratio is not None and not 0 <= pipe.fill_ratio <= 1:
+            p.append(f"sewer_pipes[{i}].fill_ratio должен быть от 0 до 1")
+        if (
+            pipe.pressure_class_bar is not None
+            and pipe.pressure_class_bar <= 0
+        ):
+            p.append(
+                f"sewer_pipes[{i}].pressure_class_bar должен быть > 0"
+            )
+        if pipe.pressure_class_bar is not None and pipe.pressure_rated is not True:
+            p.append(
+                f"sewer_pipes[{i}].pressure_class_bar допустим только "
+                "для явно напорной трубы"
+            )
+        if ((pipe.elevation_start_m is None)
+                != (pipe.elevation_end_m is None)):
+            p.append(
+                f"sewer_pipes[{i}]: начальная и конечная отметки задаются парой"
+            )
+        if ((pipe.absolute_elevation_start_m is None)
+                != (pipe.absolute_elevation_end_m is None)):
+            p.append(
+                f"sewer_pipes[{i}]: абсолютные начальная и конечная "
+                "отметки задаются парой"
+            )
+    return p
 
 
 @dataclass
@@ -346,6 +576,145 @@ class SewerElementRequest:
     service_fitting: str = ""
     accessible: bool = True
     service_chainage_m: Optional[float] = None
+
+
+def validate_sewer_elements(
+    elements: List[SewerElementRequest], pipes: List[SewerPipeRequest],
+    *, input_issues: Optional[List[dict]] = None,
+) -> List[str]:
+    """Shared existing registry checks; not a topology or service approval."""
+    p = []
+
+    def address(index, field, code, message):
+        if input_issues is not None:
+            input_issues.append(dict(code=code, registry="sewer_elements", row_index=index,
+                                     field=field, message=f"Элемент К1/К2, строка {index + 1}: {message}"))
+
+    seen_sewer_sections = {pipe.section_id for pipe in pipes}
+    seen_sewer_elements = set()
+    sewer_nodes = {
+        node
+        for pipe in pipes
+        for node in (pipe.from_node, pipe.to_node)
+        if node
+    }
+    for i, element in enumerate(elements):
+        if not element.element_id or element.element_id in seen_sewer_elements:
+            p.append(
+                f"sewer_elements[{i}]: обозначение пустое или повторяется"
+            )
+            if element.element_id:
+                address(i, "element_id", "duplicate_element_id", "обозначение повторяется; задайте уникальное обозначение.")
+        seen_sewer_elements.add(element.element_id)
+        if element.system not in ("K1", "K2", "K3"):
+            p.append(f"sewer_elements[{i}].system должен быть K1, K2 или K3")
+            address(i, "system", "element_system_choice", "система должна быть К1, К2 или К3.")
+        if element.kind not in SEWER_ELEMENT_KINDS:
+            p.append(
+                f"sewer_elements[{i}].kind должен быть одним из "
+                f"{SEWER_ELEMENT_KINDS}"
+            )
+            address(i, "kind", "element_kind_choice", "вид элемента не поддерживается; выберите значение из списка.")
+        if not element.name.strip():
+            p.append(f"sewer_elements[{i}].name не может быть пустым")
+        if element.quantity <= 0:
+            p.append(f"sewer_elements[{i}].quantity должен быть > 0")
+            address(i, "quantity", "element_quantity_positive", "общее количество должно быть больше нуля.")
+        if (
+            element.typical_quantity is not None
+            and element.typical_quantity <= 0
+        ):
+            p.append(
+                f"sewer_elements[{i}].typical_quantity должен быть > 0"
+            )
+            address(i, "typical_quantity", "element_typical_quantity_positive", "количество на типовом этаже должно быть больше нуля.")
+        if element.floor_to is not None and element.floor_to < element.floor_from:
+            p.append(
+                f"sewer_elements[{i}].floor_to не может быть ниже floor_from"
+            )
+            address(i, "floor_to", "element_floor_order", "конечный этаж не может быть ниже начального; проверьте оба этажа.")
+        if element.dn_mm is not None and element.dn_mm <= 0:
+            p.append(f"sewer_elements[{i}].dn_mm должен быть > 0")
+            address(i, "dn_mm", "element_dn_positive", "DN должен быть больше нуля.")
+        if (
+            element.slope_per_mille is not None
+            and element.slope_per_mille < 0
+        ):
+            p.append(
+                f"sewer_elements[{i}].slope_per_mille не может быть отрицательным"
+            )
+            address(i, "slope_per_mille", "element_slope_nonnegative", "уклон не может быть отрицательным.")
+        if element.layout_column < 0:
+            p.append(f"sewer_elements[{i}].layout_column не может быть < 0")
+            address(i, "layout_column", "element_layout_nonnegative", "колонка условной раскладки не может быть отрицательной.")
+        if element.service_direction not in (
+            "", "downstream", "upstream", "both",
+        ):
+            p.append(
+                f"sewer_elements[{i}].service_direction должен быть "
+                "downstream, upstream или both"
+            )
+            address(i, "service_direction", "element_direction_choice", "направление обслуживания не поддерживается; выберите значение из списка или оставьте незаданным.")
+        if element.service_fitting not in (
+            "", "wye_45", "revision_opening",
+        ):
+            p.append(
+                f"sewer_elements[{i}].service_fitting должен быть "
+                "wye_45 или revision_opening"
+            )
+            address(i, "service_fitting", "element_fitting_choice", "исполнение доступа не поддерживается; выберите значение из списка или оставьте незаданным.")
+        if (
+            element.service_chainage_m is not None
+            and element.service_chainage_m < 0
+        ):
+            p.append(
+                f"sewer_elements[{i}].service_chainage_m не может быть < 0"
+            )
+            address(i, "service_chainage_m", "element_chainage_nonnegative", "расстояние точки обслуживания от начала участка не может быть отрицательным.")
+        if element.include_in_spec and not element.unit.strip():
+            p.append(
+                f"sewer_elements[{i}].unit обязателен для спецификации"
+            )
+            address(i, "unit", "element_spec_unit_required", "укажите единицу измерения для элемента, включённого в спецификацию.")
+        if element.section_id and element.section_id not in seen_sewer_sections:
+            p.append(
+                f"sewer_elements[{i}].section_id ссылается на неизвестный "
+                f"участок '{element.section_id}'"
+            )
+            if input_issues is not None:
+                input_issues.append(dict(code="unknown_element_section", registry="sewer_elements",
+                    row_index=i, field="section_id",
+                    message=f"Элемент К1/К2, строка {i + 1}: участок «{element.section_id}» отсутствует в реестре труб."))
+    sewer_section_systems = {
+        pipe.section_id: pipe.system
+        for pipe in pipes
+        if pipe.section_id
+    }
+    valid_connections = seen_sewer_elements | sewer_nodes | seen_sewer_sections
+    for i, element in enumerate(elements):
+        if (
+            element.section_id
+            and element.section_id in sewer_section_systems
+            and sewer_section_systems[element.section_id] != element.system
+        ):
+            p.append(
+                f"sewer_elements[{i}]: система {element.system} не совпадает "
+                f"с системой участка {element.section_id}"
+            )
+            if input_issues is not None:
+                input_issues.append(dict(code="element_section_system", registry="sewer_elements",
+                    row_index=i, field="section_id",
+                    message=f"Элемент К1/К2, строка {i + 1}: система элемента не совпадает с системой участка «{element.section_id}». Проверьте связь и систему."))
+        if element.connects_to and element.connects_to not in valid_connections:
+            p.append(
+                f"sewer_elements[{i}].connects_to ссылается на неизвестный "
+                f"элемент или узел '{element.connects_to}'"
+            )
+            if input_issues is not None:
+                input_issues.append(dict(code="unknown_element_connection", registry="sewer_elements",
+                    row_index=i, field="connects_to",
+                    message=f"Элемент К1/К2, строка {i + 1}: связь «{element.connects_to}» не найдена среди элементов, узлов и участков."))
+    return p
 
 
 @dataclass
@@ -412,11 +781,21 @@ class IOS2Request:
     building_type: str                            # BUILDING_TYPES
     floors: int
     building_height_m: float
+    floors_below: int = field(default=0, kw_only=True)
+    residents: int = field(default=0, kw_only=True)  # не выбор нормы расхода/ГВС
+    seismicity: int = field(default=0, kw_only=True)
+    permafrost: bool = field(default=False, kw_only=True)
+    basement_clear_height_m: Optional[float] = field(default=None, kw_only=True)
+    floor_elevations_m: dict[int, float] = field(default_factory=dict, kw_only=True)
+    apartments_by_floor: dict[int, int] = field(default_factory=dict, kw_only=True)
     total_area_m2: float = 0.0
     hws_type: str = "central"                    # central / local / none
     risers_v1: int = 0
     risers_t3: int = 0
     risers_t4: int = 0
+    v1_sectional_valves_count: Optional[int] = field(default=None, kw_only=True)
+    v1_sectional_valves_basis: str = field(default="", kw_only=True)
+    water_service_layout: WaterServiceLayout = field(default_factory=WaterServiceLayout, kw_only=True)
     insulation_location: str = "room_hot"
     insulation_t_room_manual: float = 5.0
     insulation_humidity: int = 60
@@ -428,6 +807,7 @@ class IOS2Request:
     fire_category: str = ""                        # строка табл. 7.1 СП 10, Изм. № 1
     fire_hall_seats: Optional[int] = None           # для Ф2.1
     fire_area_m2: Optional[float] = None            # площадь расчётной части
+    fire_corridor_length_m: Optional[float] = field(default=None, kw_only=True)
     fire_geometry_confirmed: bool = True            # геометрия явно введена/импортирована
     streams: Optional[int] = None                  # только ручной override
     q_per_stream_lps: float = 2.6
@@ -440,14 +820,21 @@ class IOS2Request:
     fire_branch_electric_valves: bool = False
     rooms: List[RoomRequest] = field(default_factory=list)
     network: Optional[NetworkRequest] = None
+    fire_station_model: dict | None = field(default=None, kw_only=True)
+    suction_check: dict | None = field(default=None, kw_only=True)
     # прочее
     zones: int = 1
     needs_booster_pumps: bool = True
     source_data: Optional[SourceDataRequest] = None
+    metering_detail: "MeteringDetailData | None" = field(default=None, kw_only=True)
+    apartment_water_units: ApartmentWaterUnits = field(default_factory=ApartmentWaterUnits, kw_only=True)
+    hws_stage_p: HwsStagePInput = field(default_factory=HwsStagePInput, kw_only=True)
     consumers: List[ConsumerGroupRequest] = field(default_factory=list)
     v1_sections: List[V1SectionRequest] = field(default_factory=list)
+    t3_sections: List[T3SectionInput] = field(default_factory=list)
     v1_network: Optional[V1NetworkRequest] = None
     sewage_max_fixture_lps: float = 1.6  # q_0s по таблице А.1 СП 30, л/с
+    wastewater_presentation: RepresentativeSectionInput | None = field(default=None, kw_only=True)
     sewage_risers: List[SewageRiserRequest] = field(default_factory=list)
     sewer_pipes: List[SewerPipeRequest] = field(default_factory=list)
     sewer_elements: List[SewerElementRequest] = field(default_factory=list)
@@ -459,11 +846,22 @@ class IOS2Request:
     sewer_transient_duration_seconds: Optional[float] = None
     sewage_outlets_count: int = 0
     wastewater_basement_floor_elevation_m: Optional[float] = None
+    wastewater_outlet_plan_side: str = field(default="unknown", kw_only=True)
+    wastewater_first_manhole_cover_relative_elevation_m: Optional[float] = field(
+        default=None, kw_only=True,
+    )
+    wastewater_ground_relative_elevation_m: Optional[float] = field(default=None, kw_only=True)
+    # Положительная глубина от земли, не отрицательная относительная отметка.
+    wastewater_frost_depth_m: Optional[float] = field(default=None, kw_only=True)
+    wastewater_pipe_series_id: str = field(default="", kw_only=True)
     # Точные входы графического генератора. Высота этажа не выводится из
     # общей высоты здания, а вид кровли не подменяется общим roof_type:
     # оба значения влияют на отметки и высоту вентиляционной части стояка.
     wastewater_floor_height_m: Optional[float] = None
     wastewater_roof_kind: str = "unknown"
+    wastewater_fan_ventilation: FanVentilationInput | None = field(default=None, kw_only=True)
+    wastewater_fan_geometry: FanGeometryInput | None = field(default=None, kw_only=True)
+    wastewater_roof_relative_elevation_m: Optional[float] = field(default=None, kw_only=True)
     wastewater_design_assignment_ref: str = ""
     wastewater_survey_ref: str = ""
     wastewater_service_life_years: Optional[int] = None
@@ -548,6 +946,8 @@ class IOS2Request:
     storm_melt_m3_year: Optional[float] = None
     storm_treatment_volume_m3: Optional[float] = None
     storm_storage_volume_m3: Optional[float] = None
+    rainwater_reuse: RainwaterReuseInput = field(default_factory=RainwaterReuseInput)
+    wastewater_service: WastewaterServiceInput = field(default_factory=WastewaterServiceInput, kw_only=True)
     catering_type: str = "none"
     catering_seats: int = 0
     catering_conditional_dishes: int = 0
@@ -564,6 +964,24 @@ class IOS2Request:
         """Первичная валидация намерения (типы/диапазоны/обязательность).
         Возвращает список проблем; пустой = вход пригоден для Builder."""
         p: List[str] = []
+        if self.suction_check is not None:
+            from app.schemas.pump_suction import ProjectSuctionInput
+            try:
+                ProjectSuctionInput.model_validate(self.suction_check)
+            except ValueError as exc:
+                p.append('suction_check: ' + str(exc))
+        from app.intake.studio_fire_station import request_issues
+        p.extend(request_issues(self))
+        p.extend(self.rainwater_reuse.validate())
+        p.extend(self.wastewater_service.validate())
+        p.extend(self.hws_stage_p.validate())
+        p.extend(self.apartment_water_units.validate())
+        if self.metering_detail is not None:
+            p.extend(self.metering_detail.validate())
+        if type(self.seismicity) is not int or not 0 <= self.seismicity <= 12:
+            p.append("seismicity: требуется целая балльность от 0 до 12")
+        if type(self.permafrost) is not bool:
+            p.append("permafrost: требуется true/false")
         if self.fire_topology not in ("auto", "combined", "separate", "pre_meter_branch"):
             p.append("fire_topology должен быть auto, combined, separate или pre_meter_branch")
         if self.hws_type not in ("central", "local", "none"):
@@ -572,12 +990,43 @@ class IOS2Request:
             p.append(f"building_type '{self.building_type}' не из {BUILDING_TYPES}")
         if self.floors <= 0:
             p.append("floors должно быть > 0")
+        if self.floors_below < 0 or self.residents < 0:
+            p.append("floors_below и residents не могут быть отрицательными")
+        if self.basement_clear_height_m is not None and (
+            not isfinite(self.basement_clear_height_m) or self.basement_clear_height_m <= 0
+        ):
+            p.append("basement_clear_height_m должна быть конечным числом > 0")
+        for floor, elevation in self.floor_elevations_m.items():
+            if floor == 0 or not -self.floors_below <= floor <= self.floors:
+                p.append(f"floor_elevations_m: неизвестный этаж {floor}")
+            if not isfinite(elevation):
+                p.append("floor_elevations_m: отметка должна быть конечным числом")
+        ordered_elevations = [v for _, v in sorted(self.floor_elevations_m.items())]
+        if any(a >= b for a, b in zip(ordered_elevations, ordered_elevations[1:])):
+            p.append("floor_elevations_m: отметки должны возрастать с номером этажа")
+        if self.apartments_by_floor and (
+            set(self.apartments_by_floor) != set(range(1, self.floors + 1))
+            or any(n < 0 for n in self.apartments_by_floor.values())
+            or sum(self.apartments_by_floor.values()) != self.apartments
+        ):
+            p.append("apartments_by_floor: распределение не соответствует этажности/числу квартир")
         if self.building_height_m <= 0:
             p.append("building_height_m должно быть > 0 (нужно для Rk п. 7.15)")
         if self.total_area_m2 < 0:
             p.append("total_area_m2 не может быть отрицательной")
-        if min(self.risers_v1, self.risers_t3, self.risers_t4) < 0:
-            p.append("число стояков В1/Т3/Т4 не может быть отрицательным")
+        for key in ('risers_v1', 'risers_t3', 'risers_t4'):
+            value = getattr(self, key)
+            if type(value) is not int or not 0 <= value <= 1_000_000:
+                p.append(f"{key}: число стояков должно быть целым от 0 до 1 000 000; 0 означает неизвестное количество")
+        count = self.v1_sectional_valves_count
+        if not isinstance(self.water_service_layout, WaterServiceLayout):
+            p.append("water_service_layout: требуется компоновка узлов обслуживания")
+        else:
+            p.extend(self.water_service_layout.validate())
+        if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000):
+            p.append("v1_sectional_valves_count: требуется целое число от 0 до 1 000 000 либо отсутствие значения")
+        if not isinstance(self.v1_sectional_valves_basis, str) or len(self.v1_sectional_valves_basis) > 200:
+            p.append("v1_sectional_valves_basis: основание должно быть строкой не длиннее 200 символов")
         if self.insulation_location not in ("room_hot", "room_cold", "parking"):
             p.append("insulation_location должен быть room_hot, room_cold или parking")
         if self.insulation_humidity not in (40, 50, 60, 70, 80, 90):
@@ -635,6 +1084,12 @@ class IOS2Request:
             p.append("fire_hall_seats должен быть > 0")
         if self.fire_area_m2 is not None and self.fire_area_m2 <= 0:
             p.append("fire_area_m2 должен быть > 0")
+        if self.fire_corridor_length_m is not None and (
+            isinstance(self.fire_corridor_length_m, bool)
+            or not isfinite(self.fire_corridor_length_m)
+            or self.fire_corridor_length_m < 0
+        ):
+            p.append("fire_corridor_length_m должна быть конечным числом >= 0")
         if (self.rooms or self.network is not None) and not self.fire_geometry_confirmed:
             p.append(
                 "геометрия В2 должна быть явно подтверждена как введённая "
@@ -652,6 +1107,25 @@ class IOS2Request:
             p.append("sewage_max_fixture_lps не может быть отрицательным")
         if self.sewage_outlets_count < 0:
             p.append("sewage_outlets_count не может быть отрицательным")
+        if self.wastewater_outlet_plan_side not in ("unknown", "top", "bottom", "left", "right"):
+            p.append("wastewater_outlet_plan_side: нужна сторона плана top/bottom/left/right")
+        cover = self.wastewater_first_manhole_cover_relative_elevation_m
+        if cover is not None and not isfinite(cover):
+            p.append("отметка крышки колодца должна быть конечным числом")
+        ground = self.wastewater_ground_relative_elevation_m
+        if ground is not None and not isfinite(ground):
+            p.append("отметка земли должна быть конечным числом")
+        frost = self.wastewater_frost_depth_m
+        if frost is not None and (not isfinite(frost) or frost < 0):
+            p.append("глубина промерзания задаётся конечным неотрицательным числом от земли")
+        basement = self.wastewater_basement_floor_elevation_m
+        if basement is not None and -1 in self.floor_elevations_m:
+            if basement != self.floor_elevations_m[-1]:
+                p.append("отметки пола подвала в building и sewage должны совпадать")
+        if self.wastewater_pipe_series_id:
+            from app.data.sewer_pipe_catalog import SEWER_PIPE_SERIES
+            if self.wastewater_pipe_series_id not in SEWER_PIPE_SERIES:
+                p.append("wastewater_pipe_series_id: неизвестная серия труб")
         if (
             self.wastewater_floor_height_m is not None
             and self.wastewater_floor_height_m <= 0
@@ -662,263 +1136,23 @@ class IOS2Request:
                 "wastewater_roof_kind должен быть одним из "
                 f"{WASTEWATER_ROOF_KINDS}"
             )
-        seen_sewage_risers = set()
-        for i, riser in enumerate(self.sewage_risers):
-            if not riser.riser_id or riser.riser_id in seen_sewage_risers:
-                p.append(
-                    f"sewage_risers[{i}]: марка пустая или повторяется"
-                )
-            seen_sewage_risers.add(riser.riser_id)
-            if riser.design_flow_lps <= 0:
-                p.append(
-                    f"sewage_risers[{i}].design_flow_lps должен быть > 0"
-                )
-            if min(riser.riser_dn_mm, riser.branch_dn_mm) <= 0:
-                p.append(f"sewage_risers[{i}]: диаметры должны быть > 0")
-            if riser.material not in SEWAGE_MATERIALS:
-                p.append(
-                    f"sewage_risers[{i}].material должен быть одним из "
-                    f"{SEWAGE_MATERIALS}"
-                )
-            if riser.ventilation not in SEWAGE_VENTILATION:
-                p.append(
-                    f"sewage_risers[{i}].ventilation должен быть одним из "
-                    f"{SEWAGE_VENTILATION}"
-                )
-            if riser.branch_angle_deg not in (45.0, 60.0, 87.5):
-                p.append(
-                    f"sewage_risers[{i}].branch_angle_deg должен быть "
-                    "45, 60 или 87,5"
-                )
-            if riser.working_height_m is not None and riser.working_height_m <= 0:
-                p.append(
-                    f"sewage_risers[{i}].working_height_m должен быть > 0"
-                )
-            for field_name, value in (
-                ("inner_diameter_mm", riser.inner_diameter_mm),
-                ("branch_inner_diameter_mm", riser.branch_inner_diameter_mm),
-                ("minimum_trap_seal_mm", riser.minimum_trap_seal_mm),
-                ("air_valve_free_area_mm2", riser.air_valve_free_area_mm2),
-            ):
-                if value is not None and value <= 0:
-                    p.append(f"sewage_risers[{i}].{field_name} должен быть > 0")
-            if (
-                riser.branch_inner_diameter_mm is not None
-                and riser.inner_diameter_mm is not None
-                and riser.branch_inner_diameter_mm > riser.inner_diameter_mm
-            ):
-                p.append(
-                    f"sewage_risers[{i}]: внутренний диаметр отвода "
-                    "не может быть больше внутреннего диаметра стояка"
-                )
-            if riser.air_valve_free_area_mm2 is not None:
-                if riser.ventilation != "vacuum_valve":
-                    p.append(
-                        f"sewage_risers[{i}].air_valve_free_area_mm2 допустима "
-                        "только для стояка с воздушным клапаном"
-                    )
-                if not riser.air_valve_source.strip():
-                    p.append(
-                        f"sewage_risers[{i}].air_valve_source обязателен "
-                        "для площади клапана"
-                    )
-        seen_sewer_sections = set()
-        for i, pipe in enumerate(self.sewer_pipes):
-            if pipe.system not in ("K1", "K2", "K3"):
-                p.append(f"sewer_pipes[{i}].system должен быть K1, K2 или K3")
-            if not pipe.section_id or pipe.section_id in seen_sewer_sections:
-                p.append(
-                    f"sewer_pipes[{i}]: обозначение пустое или повторяется"
-                )
-            seen_sewer_sections.add(pipe.section_id)
-            if min(
-                pipe.outer_diameter_mm,
-                pipe.wall_thickness_mm,
-                pipe.length_m,
-            ) <= 0:
-                p.append(
-                    f"sewer_pipes[{i}]: наружный диаметр, стенка и длина "
-                    "должны быть > 0"
-                )
-            if pipe.inner_diameter_mm <= 0:
-                p.append(
-                    f"sewer_pipes[{i}]: толщина стенки исключает проходное "
-                    "сечение"
-                )
-            if (
-                pipe.nominal_diameter_mm is not None
-                and pipe.nominal_diameter_mm <= 0
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].nominal_diameter_mm должен быть > 0"
-                )
-            if pipe.design_flow_lps is not None and pipe.design_flow_lps <= 0:
-                p.append(
-                    f"sewer_pipes[{i}].design_flow_lps должен быть > 0"
-                )
-            if (
-                pipe.calculation_length_m is not None
-                and pipe.calculation_length_m <= 0
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].calculation_length_m должен быть > 0"
-                )
-            if pipe.manning_n is not None and pipe.manning_n <= 0:
-                p.append(f"sewer_pipes[{i}].manning_n должен быть > 0")
-            if pipe.manning_n is not None and not pipe.hydraulic_source.strip():
-                p.append(
-                    f"sewer_pipes[{i}].hydraulic_source обязателен при manning_n"
-                )
-            if (
-                pipe.critical_velocity_mps is not None
-                and pipe.critical_velocity_mps <= 0
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].critical_velocity_mps должен быть > 0"
-                )
-            if (
-                pipe.critical_velocity_mps is not None
-                and not pipe.critical_velocity_source.strip()
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].critical_velocity_source обязателен"
-                )
-            if (
-                pipe.critical_fill_ratio is not None
-                and not 0 < pipe.critical_fill_ratio <= 1
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].critical_fill_ratio должен быть в (0; 1]"
-                )
-            if not pipe.material.strip() or not pipe.standard.strip():
-                p.append(
-                    f"sewer_pipes[{i}]: материал и стандарт/ТУ обязательны "
-                    "для точной спецификации"
-                )
-            if pipe.slope_per_mille is not None and pipe.slope_per_mille < 0:
-                p.append(f"sewer_pipes[{i}].slope_per_mille не может быть отрицательным")
-            if pipe.fill_ratio is not None and not 0 <= pipe.fill_ratio <= 1:
-                p.append(f"sewer_pipes[{i}].fill_ratio должен быть от 0 до 1")
-            if (
-                pipe.pressure_class_bar is not None
-                and pipe.pressure_class_bar <= 0
-            ):
-                p.append(
-                    f"sewer_pipes[{i}].pressure_class_bar должен быть > 0"
-                )
-            if pipe.pressure_class_bar is not None and pipe.pressure_rated is not True:
-                p.append(
-                    f"sewer_pipes[{i}].pressure_class_bar допустим только "
-                    "для явно напорной трубы"
-                )
-            if ((pipe.elevation_start_m is None)
-                    != (pipe.elevation_end_m is None)):
-                p.append(
-                    f"sewer_pipes[{i}]: начальная и конечная отметки задаются парой"
-                )
-            if ((pipe.absolute_elevation_start_m is None)
-                    != (pipe.absolute_elevation_end_m is None)):
-                p.append(
-                    f"sewer_pipes[{i}]: абсолютные начальная и конечная "
-                    "отметки задаются парой"
-                )
-        seen_sewer_elements = set()
-        sewer_nodes = {
-            node
-            for pipe in self.sewer_pipes
-            for node in (pipe.from_node, pipe.to_node)
-            if node
-        }
-        for i, element in enumerate(self.sewer_elements):
-            if not element.element_id or element.element_id in seen_sewer_elements:
-                p.append(
-                    f"sewer_elements[{i}]: обозначение пустое или повторяется"
-                )
-            seen_sewer_elements.add(element.element_id)
-            if element.system not in ("K1", "K2", "K3"):
-                p.append(f"sewer_elements[{i}].system должен быть K1, K2 или K3")
-            if element.kind not in SEWER_ELEMENT_KINDS:
-                p.append(
-                    f"sewer_elements[{i}].kind должен быть одним из "
-                    f"{SEWER_ELEMENT_KINDS}"
-                )
-            if not element.name.strip():
-                p.append(f"sewer_elements[{i}].name не может быть пустым")
-            if element.quantity <= 0:
-                p.append(f"sewer_elements[{i}].quantity должен быть > 0")
-            if (
-                element.typical_quantity is not None
-                and element.typical_quantity <= 0
-            ):
-                p.append(
-                    f"sewer_elements[{i}].typical_quantity должен быть > 0"
-                )
-            if element.floor_to is not None and element.floor_to < element.floor_from:
-                p.append(
-                    f"sewer_elements[{i}].floor_to не может быть ниже floor_from"
-                )
-            if element.dn_mm is not None and element.dn_mm <= 0:
-                p.append(f"sewer_elements[{i}].dn_mm должен быть > 0")
-            if (
-                element.slope_per_mille is not None
-                and element.slope_per_mille < 0
-            ):
-                p.append(
-                    f"sewer_elements[{i}].slope_per_mille не может быть отрицательным"
-                )
-            if element.layout_column < 0:
-                p.append(f"sewer_elements[{i}].layout_column не может быть < 0")
-            if element.service_direction not in (
-                "", "downstream", "upstream", "both",
-            ):
-                p.append(
-                    f"sewer_elements[{i}].service_direction должен быть "
-                    "downstream, upstream или both"
-                )
-            if element.service_fitting not in (
-                "", "wye_45", "revision_opening",
-            ):
-                p.append(
-                    f"sewer_elements[{i}].service_fitting должен быть "
-                    "wye_45 или revision_opening"
-                )
-            if (
-                element.service_chainage_m is not None
-                and element.service_chainage_m < 0
-            ):
-                p.append(
-                    f"sewer_elements[{i}].service_chainage_m не может быть < 0"
-                )
-            if element.include_in_spec and not element.unit.strip():
-                p.append(
-                    f"sewer_elements[{i}].unit обязателен для спецификации"
-                )
-            if element.section_id and element.section_id not in seen_sewer_sections:
-                p.append(
-                    f"sewer_elements[{i}].section_id ссылается на неизвестный "
-                    f"участок '{element.section_id}'"
-                )
-        sewer_section_systems = {
-            pipe.section_id: pipe.system
-            for pipe in self.sewer_pipes
-            if pipe.section_id
-        }
-        valid_connections = seen_sewer_elements | sewer_nodes | seen_sewer_sections
-        for i, element in enumerate(self.sewer_elements):
-            if (
-                element.section_id
-                and element.section_id in sewer_section_systems
-                and sewer_section_systems[element.section_id] != element.system
-            ):
-                p.append(
-                    f"sewer_elements[{i}]: система {element.system} не совпадает "
-                    f"с системой участка {element.section_id}"
-                )
-            if element.connects_to and element.connects_to not in valid_connections:
-                p.append(
-                    f"sewer_elements[{i}].connects_to ссылается на неизвестный "
-                    f"элемент или узел '{element.connects_to}'"
-                )
+        if self.wastewater_fan_ventilation is not None and not isinstance(
+            self.wastewater_fan_ventilation, FanVentilationInput
+        ):
+            p.append("wastewater_fan_ventilation должен быть FanVentilationInput")
+        if self.wastewater_fan_geometry is not None and not isinstance(
+            self.wastewater_fan_geometry, FanGeometryInput
+        ):
+            p.append("wastewater_fan_geometry должен быть FanGeometryInput")
+        roof = self.wastewater_roof_relative_elevation_m
+        if roof is not None:
+            if not isfinite(roof):
+                p.append("отметка кровли должна быть конечным числом")
+            elif self.floor_elevations_m and roof <= max(self.floor_elevations_m.values()):
+                p.append("отметка кровли должна быть выше верхнего этажа")
+        p.extend(validate_sewage_risers(self.sewage_risers))
+        p.extend(validate_sewer_pipes(self.sewer_pipes))
+        p.extend(validate_sewer_elements(self.sewer_elements, self.sewer_pipes))
         if (
             self.sewer_transient_step_seconds is not None
             and self.sewer_transient_step_seconds <= 0
@@ -1403,6 +1637,17 @@ class IOS2Request:
                 p.append(f"v1_sections[{i}]: шероховатость и k_l не могут быть отрицательными")
             if s.role not in ("internal", "input"):
                 p.append(f"v1_sections[{i}].role должен быть internal или input")
+        seen_t3 = set()
+        for i, section in enumerate(self.t3_sections):
+            try:
+                validate_t3_section(section)
+                if section.section_id.strip() in seen_t3:
+                    raise ValueError("обозначение участка повторяется")
+                seen_t3.add(section.section_id.strip())
+            except ValueError as exc:
+                p.append(f"t3_sections[{i}]: {exc}")
+        if self.t3_sections and self.hws_type == "none":
+            p.append("t3_sections: нельзя задавать Т3 для здания без ГВС")
         vn = self.v1_network
         if vn is not None:
             node_ids = [n.node_id for n in vn.nodes]
@@ -1480,21 +1725,37 @@ class IOS2Request:
                     p.append(f"v1_network.inlets[{i}]: шероховатость и k_l не могут быть отрицательными")
         sd = self.source_data
         if sd is not None:
+            import math
+            for key in ('station_floor_elevation_m', 'station_suction_elevation_m'):
+                value = getattr(sd, key)
+                if value is not None and (type(value) not in (int, float) or
+                        not math.isfinite(value) or abs(value) > 1000):
+                    p.append(f'source_data.{key}: нужна конечная относительная отметка ±1000 м')
+            if not isinstance(sd.station_room_number, str) or len(sd.station_room_number) > 40:
+                p.append('source_data.station_room_number: номер помещения до 40 символов')
             if (sd.elev_header_m is None) != (sd.elev_fixture_m is None):
                 p.append("source_data: отметки elev_header_m и elev_fixture_m задаются парой")
             if (sd.elev_header_m is not None and sd.elev_fixture_m is not None
                     and sd.elev_fixture_m < sd.elev_header_m):
                 p.append("source_data: отметка диктующего прибора ниже отметки ввода")
-            if sd.network_kind not in ("domestic", "combined", "fire"):
-                p.append("source_data.network_kind должен быть domestic, combined или fire")
+            if sd.network_kind not in LOCAL_LOSS_FACTORS:
+                p.append("source_data.network_kind должен быть " + ", ".join(LOCAL_LOSS_FACTORS))
+            if sd.internal_losses_scope not in {"shared", "cold_only"}:
+                p.append("source_data.internal_losses_scope должен быть shared или cold_only")
             if sd.water_use_period_h <= 0:
                 p.append("source_data.water_use_period_h должно быть > 0")
+            from app.calc.meter_verification import validate_meter_minimum_checks
+            try:
+                validate_meter_minimum_checks(sd.meter_minimum_checks)
+            except ValueError as exc:
+                p.append(str(exc))
             if sd.inputs_count <= 0:
                 p.append("source_data.inputs_count должно быть > 0")
             nonnegative = {
                 "h_geom_m": sd.h_geom_m, "il_dict_m": sd.il_dict_m,
                 "h_il_m": sd.h_il_m, "h_pr_m": sd.h_pr_m,
                 "h_tepl_m": sd.h_tepl_m, "il_vvod_m": sd.il_vvod_m,
+                "h_il_hot_m": sd.h_il_hot_m,
                 "h_apartment_c_meter_m": sd.h_apartment_c_meter_m,
                 "h_apartment_h_meter_m": sd.h_apartment_h_meter_m,
                 "h_vvod_m": sd.h_vvod_m, "npsh_available_m": sd.npsh_available_m,

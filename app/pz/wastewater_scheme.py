@@ -120,7 +120,10 @@ def build_wastewater_scheme(
     *,
     focus_section_id: Optional[str] = None,
     diagnostics: bool = False,
+    sheet_no: int = 1,
+    sheet_total: int = 1,
 ) -> WastewaterSchemeResult:
+    ensure_drafting_font_registered()
     doc = project.document
     elements = list(project.sewage.elements or [])
     topology = build_wastewater_topology(project)
@@ -2014,7 +2017,7 @@ def build_wastewater_scheme(
         info_rows = [
             f"Граф самотёка: {'проверен' if topology.ready else 'требует данных'}; "
             f"стояки / ветви / магистрали: {len(topology.risers)} / {len(topology.branches)} / {len(topology.mains)}",
-            f"К1: Q={q_k1}; сброс в {project.sewage.discharge_point_k1 or 'не задан'}",
+            f"К1 по ф.(5): {q_k1}, не расход выпуска; сброс в {project.sewage.discharge_point_k1 or 'не задан'}",
             f"К2: Q={q_k2}; сброс в {project.sewage.discharge_point_k2 or 'не задан'}",
             "Путь: прибор - ветвь - стояк - магистраль - выпуск; без тупиков и подъёмов.",
             "Унитаз - последний прибор у стояка; проходки - по узлам КР.",
@@ -2049,7 +2052,18 @@ def build_wastewater_scheme(
     if full_scope:
         slab_y, slab_h = 1696.0, 34.0
     else:
-        slab_y, slab_h = basement_y, 74.0
+        slab_y = basement_y
+        # This is a schematic hatch band, not a structural thickness. Keep
+        # its upper edge and every engineering coordinate unchanged. Reserve
+        # 5 paper mm to the form-3 stamp, including both stroke half-widths
+        # and one 0.1-unit SVG rounding step.
+        stamp_top_mm = 594 - 60
+        slab_h = min(
+            74.0, (stamp_top_mm - 5 - .25) * H / 594 - slab_y - .75 - .1,
+        )
+        if slab_h <= 0:
+            raise ValueError("Нет места для условной плиты над основной надписью")
+    G.append('<g data-basement-slab="true" data-schematic-thickness="true">')
     rect(building_x1, slab_y, building_x2 - building_x1, slab_h, sw=1.5, fill="white")
     step = 26.0
     x = building_x1 - slab_h
@@ -2057,65 +2071,23 @@ def build_wastewater_scheme(
         line(max(building_x1, x), slab_y + slab_h,
              min(building_x2, x + slab_h), slab_y, 0.85, color=GRAY)
         x += step
+    G.append('</g>')
 
-    # Рамка и основная надпись формы 3.
-    fx0, fy0, fx1, fy1 = 20 * PXMM, 5 * PXMM, W - 5 * PXMM, H - 5 * PXMM
-    rect(fx0, fy0, fx1 - fx0, fy1 - fy0, sw=2.0)
+    # Keep the original body coordinates; the frame itself is measured in mm.
+    from app.pz.graphic_document_frame import drawing_frame_svg
 
-    def mmx(value):
-        return fx1 - (185 - value) * PXMM
-
-    def mmy(value):
-        return fy1 - (55 - value) * PXMM
-
-    rect(mmx(0), mmy(0), 185 * PXMM, 55 * PXMM, fill="white", sw=2.0)
-    line(mmx(65), mmy(0), mmx(65), mmy(55), 1.6)
-    for cx in (7, 17, 25, 37, 53):
-        line(mmx(cx), mmy(0), mmx(cx), mmy(25), 1.0)
-    for cx in (17, 37, 53):
-        line(mmx(cx), mmy(25), mmx(cx), mmy(55), 1.0)
-    line(mmx(135), mmy(25), mmx(135), mmy(55), 1.3)
-    for cx in (150, 165):
-        line(mmx(cx), mmy(25), mmx(cx), mmy(40), 1.0)
-    for yy in range(5, 55, 5):
-        line(mmx(0), mmy(yy), mmx(65), mmy(yy), 1.0)
-    line(mmx(65), mmy(10), mmx(185), mmy(10), 1.0)
-    line(mmx(65), mmy(25), mmx(185), mmy(25), 1.0)
-    line(mmx(135), mmy(30), mmx(185), mmy(30), 1.0)
-    line(mmx(65), mmy(40), mmx(185), mmy(40), 1.0)
-    for label, c0, c1 in (
-        ("Изм.", 0, 7), ("Кол.уч.", 7, 17), ("Лист", 17, 25),
-        ("№ док.", 25, 37), ("Подп.", 37, 53), ("Дата", 53, 65),
-    ):
-        text(mmx((c0 + c1) / 2), mmy(25) - 4, label, 8, "middle")
-    signers = (
-        ("Разраб.", doc.developer_name, 30),
-        ("Проверил", doc.inspector_name, 35),
-        ("Нач. отдела", doc.dept_head_name, 40),
-        ("ГИП", doc.gip_name, 45),
-        ("Н. контр.", doc.norm_control_name, 55),
-    )
-    for label, name, row in signers:
-        text(mmx(1) + 2, mmy(row) - 4.5, label, 8.5)
-        if name:
-            text(mmx(27), mmy(row) - 4.5, _short(name, 18), 8.5, "middle")
-    text(mmx(125), mmy(8), _short(doc.cipher or "", 34), 14, "middle")
-    text(mmx(125), mmy(19), _short(doc.object_name or "", 68), 9, "middle")
-    text(mmx(100), mmy(34.5), _short(doc.object_part or "", 38), 11, "middle")
-    text(mmx(142.5), mmy(30) - 4, "Стадия", 7.5, "middle")
-    text(mmx(157.5), mmy(30) - 4, "Лист", 7.5, "middle")
-    text(mmx(175), mmy(30) - 4, "Листов", 7.5, "middle")
-    text(mmx(142.5), mmy(37), doc.stage_label or "П", 11, "middle")
-    text(mmx(157.5), mmy(37), doc.sheet_no or "1", 11, "middle")
-    text(mmx(175), mmy(37), doc.sheet_total or "2", 11, "middle")
     shown_present = [_system_mark(row) for row in present] if full_scope else ["К1"]
-    text(mmx(100), mmy(47), "Принципиальная схема внутренних систем", 10, "middle")
-    text(mmx(100), mmy(53), ", ".join(shown_present) or "К1", 12, "middle", "bold")
-    text(mmx(160), mmy(49), _short(doc.organization or "", 30), 9, "middle")
+    frame = drawing_frame_svg(
+        doc, width_mm=841, height_mm=594,
+        title="Принципиальная схема внутренних систем",
+        system_label=", ".join(shown_present) or "К1",
+        sheet_no=sheet_no, sheet_total=sheet_total,
+    )
+    G.append(f'<g transform="scale({W / 841:.12f} {H / 594:.12f})">{frame}</g>')
 
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="white"/>'
+        f'preserveAspectRatio="none" viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="white"/>'
         + "".join(G)
         + "</svg>"
     )

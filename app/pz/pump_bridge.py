@@ -11,9 +11,20 @@ app/pz/pump_bridge.py — мост подбора насоса в модель �
 """
 from __future__ import annotations
 
-from app.calc.pumps import PumpInput, calculate_pump, interpolate_pump_head
+from app.calc.pumps import (
+    PumpInput, calculate_pump, calculate_pump_at_duty, interpolate_pump_head,
+)
 from app.pz.project import PumpComplianceCheck, PumpSystem
 from app.pz.rules import HeadCalc
+
+
+def project_booster_flow_m3h(project) -> float:
+    """Тот же полный секундный расход, что передаётся в подбор В1/Т3."""
+    hws = getattr(project.building.hws_type, "value", project.building.hws_type)
+    q_sec = (project.flows.q_sec_tot
+             if hws == "local" or project.source.hws_heater_in_scope
+             else project.flows.q_sec_c)
+    return q_sec * 3.6
 
 
 def compute_pump(
@@ -21,7 +32,7 @@ def compute_pump(
     q_design_m3h: float,
     floors: int,
     floor_height_m: float = 3.0,
-    h_losses_m: float = 8.0,
+    h_losses_m: float | None = None,
     h_pr_m: float = 20.0,
     h_gar_m: float | None = None,
     npsh_a_m: float | None = None,
@@ -44,30 +55,8 @@ def compute_pump(
         h_pr=h_pr_m, h_gar=h_gar_m, npsh_a=npsh_a_m,
         include_current_catalog=True))
 
-    ps = PumpSystem(
-        required=True, purpose=purpose,
-        h_stat=round(res.h_stat, 2), k_sys=round(res.k_sys, 5))
-
-    if not res.candidates:
-        ps.count_note = "подбор не дал результата — подобрать вручную"
-        return ps, round(res.h_required, 2)
-
-    best = res.candidates[0]
-    pump = best.pump
-    wp = best.working_point
-    ps.model = f"{pump.brand} {pump.model}"
-    ps.q_m3h = round(wp.q, 2)
-    ps.head_m = round(wp.h, 2)
-    ps.power_kw = pump.p_kw
-    ps.wp_q = round(wp.q, 2)
-    ps.wp_h = round(wp.h, 2)
-    ps.q_opt = pump.q_opt
-    ps.curve = [(pt.q, pt.h) for pt in pump.curve]   # формат графика: (q, h)
-    ps.count_note = "1 рабочий + 1 резервный"
-    ps.top3 = [f"{c.pump.brand} {c.pump.model} "
-               f"(Q={c.working_point.q:.1f} м³/ч, H={c.working_point.h:.1f} м)"
-               for c in res.candidates[:3]]
-    return ps, round(res.h_required, 2)
+    from app.pz.flows_bridge import pump_from_calc
+    return pump_from_calc(res, purpose=purpose, scheme_note="1 рабочий + 1 резервный"), res.h_required
 
 
 def compute_pump_from_head(
@@ -122,9 +111,9 @@ def compute_fire_pump_from_duty(
     """Подобрать пожарную установку по рабочей точке основного режима В2.
 
     ``pump_duty`` формирует гидравлика В2: расход всего расчётного сценария и
-    напор, который должен создать насос. Характеристика системы строится тем же
-    legacy-алгоритмом ``H=kQ²`` при Hст=0. Резервный агрегат не складывается с
-    рабочим: подбор выполняется по кривой одного рабочего насоса.
+    напор, который должен создать насос. Из одной Q/H-точки характеристика
+    системы не восстанавливается: проверяется каталог при полном Qрасч.
+    Резервный агрегат не складывается с рабочим.
     """
     if pump_duty is None:
         return PumpSystem(required=False)
@@ -133,26 +122,21 @@ def compute_fire_pump_from_duty(
     if q_lps <= 0 or head_m <= 0:
         return PumpSystem(required=False)
 
-    res = calculate_pump(PumpInput(
+    res = calculate_pump_at_duty(PumpInput(
         q_design_m3h=q_lps * 3.6,
         pump_type="fire",
         mode="1",
-        h_geom_manual=head_m,
-        h_losses=0.0,
-        h_pr=0.0,
-        h_gar=0.0,
         npsh_a=npsh_a_m,
         include_current_catalog=True,
-    ))
+    ), required_head_m=head_m)
 
     # СП 10, п. 12.1 требует обеспечить именно максимальные расчётные Q/H.
-    # Legacy-скоринг допускает отклонение рабочей точки до 15%; для В2 это
-    # недостаточно, поэтому нормативный слой оставляет только кривые, которые
-    # фактически дают Hрасч при полном Qрасч.
+    # После L03 это проверяет и общее ядро; нормативный слой В2 сохраняет
+    # независимую защиту полной Q/H. Отсутствие данных L04 не равно H=0.
     res.candidates = [
         candidate for candidate in res.candidates
-        if interpolate_pump_head(candidate.eff_curve, res.q_design)
-        >= res.h_required - 1e-9
+        if (catalog_head := interpolate_pump_head(candidate.eff_curve, res.q_design)) is not None
+        and catalog_head >= res.h_required - 1e-9
     ]
     from app.pz.flows_bridge import pump_from_calc
     ps = pump_from_calc(
@@ -168,6 +152,7 @@ def compute_fire_pump_from_duty(
     if res.candidates:
         curve_check = interpolate_pump_head(
             res.candidates[0].eff_curve, res.q_design)
+        assert curve_check is not None  # candidate passed the published-range check
         ps.pump_head_at_design_m = round(curve_check, 1)
 
         shutoff_head_m = max(point.h for point in res.candidates[0].eff_curve)
@@ -358,7 +343,7 @@ def head_components(
     q_design_m3h: float,
     floors: int,
     floor_height_m: float = 3.0,
-    h_losses_m: float = 8.0,
+    h_losses_m: float | None = None,
     h_pr_m: float = 20.0,
     h_gar_m: float | None = None,
 ) -> dict:

@@ -46,9 +46,9 @@
 <table class="data calc-table systems-table">
   <thead><tr><th>Источник стоков</th><th>Марка и наименование системы</th><th>Гидравлический режим</th><th>Точка сброса по графической части</th></tr></thead>
   <tbody>
-    <tr><td>Санитарные приборы и оборудование объекта</td><td>К1 — бытовая канализация</td><td>самотечный{% if sewage.pump_required %}; напорный после КНС{% endif %}</td><td>{{ sewage.discharge_point_k1 or "" }}</td></tr>
+    <tr><td>Санитарные приборы и оборудование объекта</td><td>К1 — бытовая канализация</td><td>самотечный{% if sewage.pump_required %}; напорный после КНС{% endif %}</td><td>{{ section.k1.discharge_point if section else sewage.discharge_point_k1 or "" }}</td></tr>
     {% if grease_trap.preparation_type != "none" %}<tr><td>Технологическое оборудование предприятия питания</td><td>К3 — производственная канализация</td><td>раздельный сбор; предварительная очистка при необходимости</td><td>{{ sewage.discharge_point_k3 or "" }}</td></tr>{% endif %}
-    {% if storm.system_kind == "internal" %}<tr><td>Кровля здания</td><td>К2 — внутренние водостоки</td><td>самотечный / напорный режим выпуска по расчёту</td><td>{{ sewage.discharge_point_k2 or "" }}</td></tr>{% endif %}
+    {% if (section and section.drainage == "internal") or (not section and storm.system_kind == "internal") %}<tr><td>Кровля здания</td><td>К2 — внутренние водостоки</td><td>самотечный / напорный режим выпуска по расчёту</td><td>{{ section.k2.discharge_point if section else sewage.discharge_point_k2 or "" }}</td></tr>{% endif %}
   </tbody>
 </table>
 <p class="subitem">Расчётные расходы бытовых и поверхностных сточных вод приведены
@@ -60,14 +60,19 @@
   <tbody>
     <tr><td>К1</td><td>хозяйственно-бытовые; {{ sewage.quality_indicators_note }}</td><td>по режиму работы потребителей</td><td>{% if flows.q_hr_tot %}{{ flows.q_hr_tot|num(3) }}{% endif %}</td><td>{% if sewage.k1_min_hourly_m3h is not none %}{{ sewage.k1_min_hourly_m3h|num(3) }}{% endif %}</td><td>{% if sewage_day_m3 is not none %}{{ sewage_day_m3|num(3) }}{% endif %}</td></tr>
     {% if grease_trap.preparation_type != "none" %}<tr><td>К3</td><td>производственные стоки предприятия питания; {{ sewage.quality_indicators_note }}</td><td>по режиму работы технологического оборудования</td><td>{% if sewage.k3_max_hourly_m3h is not none %}{{ sewage.k3_max_hourly_m3h|num(3) }}{% endif %}</td><td>{% if sewage.k3_min_hourly_m3h is not none %}{{ sewage.k3_min_hourly_m3h|num(3) }}{% endif %}</td><td></td></tr>{% endif %}
-    {% if storm.system_kind == "internal" %}<tr><td>К2</td><td>поверхностные воды с кровли</td><td>расчётный дождь</td><td>{% if storm.result %}{{ (storm.result.q_total_l_per_s * 3.6)|num(3) }}{% endif %}</td><td>0,000</td><td></td></tr>{% endif %}
+    {% if (section and section.drainage == "internal") or (not section and storm.system_kind == "internal") %}<tr><td>К2</td><td>поверхностные воды с кровли</td><td>расчётный дождь</td><td>{% if storm.result %}{{ (storm.result.q_total_l_per_s * 3.6)|num(3) }}{% endif %}</td><td>0,000</td><td></td></tr>{% endif %}
   </tbody>
 </table>
 <p class="subitem">
-  {% if sewage.result %}Расход К1 определён по формуле (5) СП 30.13330.2020:
-  q<sub>s</sub> = {{ sewage.result.total.q_water_total_lps|num(3) }} +
-  {{ sewage.result.total.q_fixture_max_lps|num(3) }} =
-  <b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b>.{% else %}
+  {% if sewage.result %}Справочное значение для заданных потребителей по формуле (5) для стояков СП 30.13330.2020:
+  q<sub>s</sub> = q<sub>tot</sub> + q<sub>0s</sub>.
+  Результат: <b>{{ sewage.result.total.q_sewage_lps|num(3) }} л/с</b>.
+  Справочно, округлённые значения: q<sub>tot</sub> = {{ sewage.result.total.q_water_total_lps|num(3) }} л/с;
+  q<sub>0s</sub> = {{ sewage.result.total.q_fixture_max_lps|num(3) }} л/с.
+  Сложение выполняется до округления; итог не пересчитывается из округлённых слагаемых.
+  Значение не назначается каждому стояку и не применяется для горизонтального выпуска.
+  Горизонтальные участки: q<sub>sL</sub> = q<sub>hr</sub><sup>tot</sup>/3,6 + K<sub>s</sub>·q<sub>0s</sub>
+  по п. 5.7, формуле (7), таблице 5.1; необходимы часовой расход участка, число приборов и длина L по примечанию к таблице.{% else %}
   Расход К1 не определён: группы потребителей не заданы.{% endif %}
   Численные концентрации загрязнений без задания ТХ и условий подключения не
   подставляются.
@@ -75,6 +80,52 @@
 {% if grease_trap.preparation_type != "none" %}<p class="subitem">{{ grease_trap.decision_note }}</p>{% endif %}
 
 <p class="subhead">4. Трубопроводы, прокладка и пересечения конструкций (пп. 5.1.4.1, 5.1.6.1)</p>
+{% if section %}
+<p class="subitem">Параметры магистралей и выпусков характерного разреза приведены ниже из тех же исходных данных,
+что использованы на схеме. Это заданные проектировщиком значения, а не результат подбора по условной геометрии.</p>
+<table class="data calc-table" data-section-mains="true">
+  <thead><tr><th>Система</th><th>DN</th><th>Уклон, ‰</th><th>Относительная отметка лотка выпуска, м</th><th>Приёмник</th></tr></thead>
+  <tbody>{% for system, main in section.mains %}<tr>
+    <td>{{ system }}</td><td>{{ main.dn_mm if main.dn_mm is not none else "не задан" }}</td>
+    <td>{{ (main.slope * 1000)|num(3) if main.slope is not none else "не задан" }}</td>
+    <td>{{ level_text(main.outlet_invert_m) if main.outlet_invert_m is not none else "не задана" }}</td>
+    <td>{{ main.discharge_point or "не задан" }}</td>
+  </tr><tr data-section-main-source="{{ system }}"><td colspan="5"><b>Основание {{ system }}:</b> {{ main.source_ref or "не задано" }}</td></tr>{% endfor %}</tbody>
+</table>
+<p class="subitem">{{ section.boundary_notice }}</p>
+{% for check in section.main_checks %}
+<p class="subitem" data-section-main-check="{{ check.system }}"><b>{{ check.short }}.</b> {{ check.note }}</p>
+{% if check.result %}{% set r = check.result %}
+<table class="data calc-table" data-section-main-hydraulics="{{ check.system }}">
+  <thead><tr><th>Q, л/с</th><th>dвн, мм</th><th>Уклон, ‰</th><th>n</th><th>V, м/с</th><th>h/d</th></tr></thead>
+  <tbody><tr><td>{{ r.design_flow_lps|num(3) }}</td><td>{{ r.inner_diameter_mm|num(2) }}</td>
+    <td>{{ r.slope_per_mille|num(3) }}</td><td>{{ r.manning_n|num(4) }}</td>
+    <td>{{ r.velocity_mps|num(3) if r.velocity_mps is not none else "расход не пропускается" }}</td>
+    <td>{{ r.fill_ratio|num(2) if r.fill_ratio is not none else "не определено" }}</td></tr></tbody>
+</table>
+<p class="subitem">Выбранная труба: {{ section.k1.material_label }}, наружный диаметр {{ section.k1.outer_diameter_mm|num(2) }} мм,
+стенка {{ section.k1.wall_thickness_mm|num(2) }} мм. Источник n: {{ r.roughness_source }}.
+Основание выбора трубы: {{ section.k1.source_ref }}. Расчёт не подтверждает отметки и обслуживание всей сети.</p>
+{% endif %}{% endfor %}
+<p class="subitem"><b>Вентиляция К1:</b> {{ section.fan_notice }} Характерный разрез не подтверждает
+число фактических стояков, трассу объединения или проверку всех вытяжных частей дома.</p>
+<p class="subitem" data-section-fan-diameter="true">{{ section.fan_plan.diameter_notice }}</p>
+{% if section.drainage == "internal" %}
+<p class="subitem" data-section-storm-quantity="true">{{ section.storm.quantity_notice }}</p>
+<p class="subitem" data-section-storm-riser="true">{{ section.storm.notice }}</p>{% endif %}
+{% if section.fan_plan.kind == "common" %}
+<p class="subitem">В показанную группу включены заданные стояки: {{ section.fan.member_ids|join(', ') }}.
+Основание: {{ section.fan.source_ref }}. Пол технического пространства {{ level_text(section.fan.space_floor_m) }};
+кровля {{ level_text(section.fan.roof_level_m) }}; концы сборного вентиляционного трубопровода
+{{ level_text(section.fan.collector_high_m) }} → {{ level_text(section.fan.collector_low_m) }}.
+Трубопровод расположен в {% if section.fan.space == "cold_attic" %}холодном чердаке; {% if section.fan.attic_insulated is sameas true %}теплоизоляция предусмотрена, материал и толщина уточняются по проекту{% else %}теплоизоляция требует решения{% endif %}{% elif section.fan.space == "warm_attic" %}тёплом чердаке{% else %}техническом этаже{% endif %}.
+Длины и связь с вентиляцией всей сети требуют подтверждения.
+Схематические расстояния на листе не используются для расчёта уклонов, гидравлики и объёмов материалов.</p>
+{% endif %}
+{% if section.fan_plan.checks %}<ul>{% for check in section.fan_plan.checks if check.status != "verified" %}
+<li>{{ check.message }} ({{ check.reference }}): {{ "не соответствует" if check.status == "fail" else "нужны данные" }}.</li>
+{% endfor %}</ul>{% endif %}
+{% endif %}
 {% if sewage.pipes %}
 <table class="data calc-table pipe-calc gost-pipes">
   <thead><tr><th>Система / участок</th><th>Помещение; откуда — куда</th><th>Материал, стандарт</th><th>DN; Øнар×s; Øвн, мм</th><th>L спец. / расч., м</th><th>Уклон, ‰</th><th>h/d; V, м/с</th><th>Отметки начала / конца, м</th></tr></thead>
@@ -114,9 +165,12 @@
 {% endif %}
 {% endif %}
 {% else %}
-<p class="stage-note">Трубопроводы не заданы. Поля материала, стандарта,
+<p class="stage-note">{% if section %}Поучастковая сеть не задана. Параметры характерного разреза приведены выше;
+материал, точный сортамент, длины, наполнение и поучастковые отметки требуют дополнения.
+Заданный DN магистрали перенесён в спецификацию без вымышленного количества труб и фасонных частей.
+{% else %}Трубопроводы не заданы. Поля материала, стандарта,
 наружного диаметра, толщины стенки, длины, уклона, наполнения и отметок оставлены
-незаполненными; условные значения не подставляются.</p>
+незаполненными; условные значения не подставляются.{% endif %}</p>
 {% endif %}
 <table class="data calc-table compact-calc">
   <tr><th>Способ прокладки</th><td>{{ sewage.laying_method or "" }}</td></tr>
@@ -127,6 +181,8 @@
   <tr><th>Защита от замерзания</th><td>{% if building.unheated_zones %}Есть неотапливаемые зоны: требуются теплоизоляция и/или электрообогрев по температурному расчёту и трассе.{% else %}Неотапливаемые внутренние зоны исходными данными не заявлены; глубина наружной сети проверяется только при включении наружных сетей в границы проекта.{% endif %}</td></tr>
 </table>
 {% if sewage.external_network_in_scope %}<p class="subitem"><b>Наружные сети:</b> {{ sewage.external_network_design_note }}</p>{% endif %}
+
+{% with service=wastewater_service.meter %}{% include "wastewater_service_requirements.html" %}{% endwith %}
 
 <p class="subhead">5. Канализационное насосное оборудование (п. 5.1.4.2)</p>
 {% if sewage.pump_required %}
@@ -142,7 +198,8 @@
   <tr><th>Аварийный режим</th><td>{{ sewage.pump_emergency_note }}{% if sewage.pump_mode == 'internal_station' %}; полезный объём {{ sewage.pump_receiver_useful_volume_m3|num(2) }} м³; аварийный объём {{ sewage.pump_emergency_volume_m3|num(2) }} м³; время реагирования {{ sewage.pump_emergency_runtime_min|num(0) }} мин{% endif %}</td></tr>
 </table>
 {% else %}
-<p class="subitem">Канализационное насосное оборудование в границах проектирования не предусмотрено.</p>
+{% if wastewater_service.sump.enabled %}<p class="subitem">Насосы для бытовых и производственных стоков исходными данными не заявлены. Требования к дренажному приямку приведены отдельно в разделе 8; его насосы ещё не подобраны.</p>
+{% else %}<p class="subitem">Канализационное насосное оборудование в границах проектирования не предусмотрено.</p>{% endif %}
 {% endif %}
 
 <p class="subhead">6. Локальные очистные сооружения (п. 5.1.4.3)</p>
@@ -162,7 +219,14 @@
 <p class="subitem">{% if sewage.treatment_required or sewage.disposal_mode == "local" or grease_trap.preparation_type != "none" %}{{ sewage.waste_handling_note or "" }}{% else %}В проектируемых внутренних системах образование отходов очистки не предусмотрено; локальные очистные сооружения и реагентное хозяйство отсутствуют.{% endif %}</p>
 
 <p class="subhead">8. Дождевая и дренажная канализация (пп. 5.1.6.2-5.1.6.3)</p>
-<p class="subitem">{{ storm.system_note }}</p>
+<p class="subitem">{% if section %}{% if section.drainage == "internal" %}
+В характерном разрезе принят внутренний водосток К2 с отдельным выпуском; соединение с К1 не предусмотрено.
+{% if section.funnel_heated is sameas true %}Водосточные воронки с электрообогревом; мощность и питание подлежат уточнению по паспорту выбранного изделия.
+{% elif section.funnel_heated is sameas false %}Водосточные воронки без электрообогрева.
+{% else %}Необходимость электрообогрева воронок не задана.{% endif %}
+{% else %}В характерном разрезе принят наружный водосток; система К2 внутри здания не показана.{% endif %}
+Решение привязывается к плану кровли. {% if not storm.result %}Расчёт дождевого расхода требует исходных данных.{% endif %}
+{% else %}{{ storm.system_note }}{% endif %}</p>
 {% if storm.result %}
 <table class="data calc-table compact-calc">
   <tr><th>Район; q<sub>20</sub>; n</th><td>{{ storm.result.city.name }}; {{ storm.result.q20_base|num(1) }} л/(с·га); {{ storm.result.n|num(2) }}</td></tr>
@@ -173,7 +237,8 @@
   <tr><th>Объём на очистку / аккумулирование</th><td>{{ storm.treatment_volume_m3|num(3) }} / {{ storm.storage_volume_m3|num(3) }} м³</td></tr>
 </table>
 {% endif %}
-<p class="subitem">Система сбора дренажных вод в исходных данных не задана.
+{% with service=wastewater_service.sump %}{% include "wastewater_service_requirements.html" %}{% endwith %}
+<p class="subitem">Система сбора подземных вод (грунтовый дренаж) в исходных данных не задана.
 При её включении в границы проекта сведения об уровне и составе подземных вод,
 типе дренажа, обсыпке, водопритоках и прочности труб должны быть заполнены по
 п. 5.1.6.3 ГОСТ Р 21.620-2023.</p>
@@ -182,7 +247,11 @@
 <table class="data calc-table">
   <thead><tr><th>Документ</th><th>Статус / источник</th><th>Нормативное основание</th></tr></thead>
   <tbody>
-    <tr><td>Принципиальная схема внутренних систем К1/К2/К3</td><td>сформирована в комплекте; незаданные обязательные параметры отмечены на листе</td><td>п. 5.2.2</td></tr>
+    {% for graphic in graphic_exports if graphic.applicable %}<tr><td>{{ graphic.title }}</td><td>
+    {% if not graphic.available %}Не сформирована: {{ graphic.reasons|join("; ") }}
+    {% elif graphic.presentation == "representative" %}Предварительный характерный разрез. Проверки полной сети не подтверждены.
+    {% elif graphic.ready %}Готова к формированию в комплекте.
+    {% else %}Требует дополнения: {{ graphic.reasons|join("; ") }}{% endif %}</td><td>п. 5.2.2</td></tr>{% endfor %}
     <tr><td>Принципиальная схема наружных сетей</td><td>{% if sewage.external_network_in_scope %}{{ sewage.external_scheme_source or "" }}{% else %}не входит в заданные границы проектирования{% endif %}</td><td>п. 5.2.3</td></tr>
     <tr><td>План наружных сетей на опорном плане</td><td>{% if sewage.external_network_in_scope %}{{ sewage.site_plan_source or "" }}{% else %}не входит в заданные границы проектирования{% endif %}</td><td>п. 5.2.4</td></tr>
   </tbody>

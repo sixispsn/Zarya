@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+import os
+import tempfile
 from xml.etree import ElementTree
 
 from app.pz.drafting_font import ensure_drafting_font_registered
@@ -323,7 +325,7 @@ def build_wastewater_basement_assembly(
 
 
 def _elevation(value: float | None) -> str:
-    return "________" if value is None else f"{value:+.3f}".replace(".", ",")
+    return "не задана" if value is None else f"{value:+.3f}".replace(".", ",")
 
 
 def _slope_value(per_mille: float | None) -> str:
@@ -333,7 +335,7 @@ def _slope_value(per_mille: float | None) -> str:
 
 
 def _outlet_id(value: str) -> str:
-    return value if value else "________"
+    return value if value else "(марка не задана)"
 
 
 def _diameter_transition_svg(
@@ -391,6 +393,65 @@ def audit_basement_pipe_labels(
     return tuple(errors)
 
 
+_BASEMENT_CONTROL_NOTICE = "Контроль монтажной логики. Не проектная документация. Не для выпуска."
+_BASEMENT_CONTROL_NOTES = (
+    "1. Непрерывный самотечный путь: стояк - нижний поворот - лежак - гильза - выпуск.",
+    "2. Нижний поворот использует отвод 45° и косой тройник 45° с доступным заглушённым концом.",
+    "3. Выпуск проходит сквозь гильзу и заканчивается снаружи; колодец и наружная сеть не выдуманы.",
+    "4. Пустые отметки и уклон должны быть заполнены исходными данными проекта до включения листа в ПД.",
+)
+
+
+def _basement_control_notes_svg(notes, *, x=80, y=1004, width=1640, bottom=1150):
+    """Complete notes measured in OpenGOST, without clipping or font shrinking."""
+    from app.pz.leader_layout import _text_width
+
+    body = []
+    for note in notes:
+        remaining = " ".join(note.split())
+        while remaining:
+            end = 0
+            for index in range(1, len(remaining) + 1):
+                if _text_width(remaining[:index], 18) > width:
+                    break
+                end = index
+            if not end or y > bottom:
+                raise ValueError("Пояснения подвала не помещаются; PDF не изменён")
+            if end < len(remaining):
+                space = remaining.rfind(" ", 0, end + 1)
+                if space > 0:
+                    end = space
+            body.append(f'<text x="{x:g}" y="{y:g}" font-family="{FONT}" '
+                        f'font-size="18">{escape(remaining[:end])}</text>')
+            remaining = remaining[end:].lstrip()
+            y += 25
+        y += 5
+    return "".join(body)
+
+
+def _validate_basement_control_svg(svg):
+    """Guard fixed text fields; not a universal engineering collision audit."""
+    from app.pz.leader_layout import _text_width
+
+    root = ElementTree.fromstring(svg)
+    if root.get("data-release-ready") != "false":
+        raise ValueError("Контрольный подвал не является проектным выпуском")
+
+    def visit(element, transformed=False):
+        transformed = transformed or bool(element.get("transform"))
+        if element.tag.endswith("text") and not transformed:
+            size = float(element.get("font-size"))
+            width = _text_width("".join(element.itertext()), size)
+            x, y = float(element.get("x")), float(element.get("y"))
+            anchor = element.get("text-anchor", "start")
+            left = x - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+            if left < 45 or left + width > 1755 or y - size < 45 or y > 1228:
+                raise ValueError("Подпись подвала выходит за поле; PDF не изменён")
+        for child in element:
+            visit(child, transformed)
+    visit(root)
+
+
 def build_wastewater_basement_control_svg(
     basement: WastewaterBasementAssembly,
     *,
@@ -401,11 +462,16 @@ def build_wastewater_basement_control_svg(
     continuation_from_sheet: int | None = None,
     title_font_size: float = 30.0,
     subtitle_font_size: float = 16.0,
+    sheet_no: int = 1,
+    sheet_count: int = 1,
+    notice_font_size: float = 16.0,
 ) -> str:
     """Render an isolated A3 basement control sheet for topology approval."""
     errors = basement.validate()
     if errors:
         raise ValueError("cannot render invalid wastewater basement: " + "; ".join(errors))
+    if not 1 <= sheet_no <= sheet_count:
+        raise ValueError("invalid basement control sheet numbering")
 
     width, height = 1800, 1273
     margin = 45
@@ -454,18 +520,18 @@ def build_wastewater_basement_control_svg(
     body: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{page_width_mm}mm" height="{page_height_mm}mm" '
-        f'viewBox="0 0 {width} {height}">',
+        f'viewBox="0 0 {width} {height}" data-release-ready="false">',
         '<defs><pattern id="basement-hatch" width="18" height="18" '
         'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
         '<line x1="0" y1="0" x2="0" y2="18" stroke="#777" stroke-width="2"/>'
         '</pattern></defs>',
         f'<rect width="{width}" height="{height}" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="3"/>',
         f'<text x="{margin+34}" y="{margin+48}" font-family="{FONT}" '
         f'font-size="{title_font_size:g}" font-weight="bold">{escape(sheet_title)}</text>',
         f'<text x="{margin+34}" y="{margin+82}" font-family="{FONT}" '
         f'font-size="{subtitle_font_size:g}" fill="{GRAY}">{escape(subtitle)}</text>',
+        f'<text x="{margin+34}" y="151" font-family="{FONT}" '
+        f'font-size="{notice_font_size:g}">{_BASEMENT_CONTROL_NOTICE}</text>',
         # First-floor slab and basement slab are architectural context only.
         f'<line data-level="first-floor" x1="{margin+55}" y1="{first_floor_y:.1f}" '
         f'x2="{wall_inner_x:.1f}" y2="{first_floor_y:.1f}" stroke="{BLACK}" stroke-width="2"/>',
@@ -536,12 +602,13 @@ def build_wastewater_basement_control_svg(
             font_size=14.0,
         ),
         f'<g data-basement-slope="collector" data-placement="above" '
+        f'data-sign-shape="acute-angle" data-lower-leg-horizontal="true" '
         f'data-slope-status="{slope_status}" data-label-underline="false">'
         f'<path data-slope-angle="true" d="M{slope_arm_x:.1f},{slope_sign_y-6:.1f} '
         f'L{slope_apex_x:.1f},{slope_sign_y:.1f} '
-        f'L{slope_arm_x:.1f},{slope_sign_y+6:.1f}" fill="none" '
+        f'L{slope_arm_x:.1f},{slope_sign_y:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="1.3"/>'
-        f'<text x="{slope_arm_x-5:.1f}" y="{slope_sign_y+3.5:.1f}" '
+        f'<text x="{slope_arm_x-5:.1f}" y="{slope_sign_y-2:.1f}" '
         f'text-anchor="end" font-family="{FONT}" font-size="12">'
         f'{escape(_slope_value(basement.collector_slope_per_mille))}</text></g>',
         f'<g data-basement-revision="first-floor" '
@@ -627,21 +694,14 @@ def build_wastewater_basement_control_svg(
     notes_y = 970.0
     body.extend(
         (
-            f'<line x1="{margin+35}" y1="{notes_y-35:.1f}" x2="{width-margin-35}" '
-            f'y2="{notes_y-35:.1f}" stroke="{BLACK}" stroke-width="1.4"/>',
             f'<text x="{margin+35}" y="{notes_y:.1f}" font-family="{FONT}" '
             'font-size="18" font-weight="bold">Что проверяет модуль</text>',
-            f'<text x="{margin+35}" y="{notes_y+34:.1f}" font-family="{FONT}" font-size="14">'
-            '1. Непрерывный самотечный путь: стояк - нижний поворот - лежак - гильза - выпуск.</text>',
-            f'<text x="{margin+35}" y="{notes_y+64:.1f}" font-family="{FONT}" font-size="14">'
-            '2. Нижний поворот использует отвод 45° и косой тройник 45° с доступным заглушённым концом.</text>',
-            f'<text x="{margin+35}" y="{notes_y+94:.1f}" font-family="{FONT}" font-size="14">'
-            '3. Выпуск проходит сквозь гильзу и заканчивается снаружи; колодец и наружная сеть не выдуманы.</text>',
-            f'<text x="{margin+35}" y="{notes_y+124:.1f}" font-family="{FONT}" font-size="14">'
-            '4. Пустые отметки и уклон должны быть заполнены исходными данными проекта до включения листа в ПД.</text>',
+            _basement_control_notes_svg(_BASEMENT_CONTROL_NOTES),
             f'<text x="{margin+35}" y="{height-margin-24:.1f}" font-family="{FONT}" '
             f'font-size="12" fill="{GRAY}">Контрольный лист генератора; графический язык - приложение В '
             'ГОСТ Р 21.620-2023. Не входит в комплект ПД.</text>',
+            f'<text x="1720" y="1198" text-anchor="end" font-family="{FONT}" '
+            f'font-size="{notice_font_size:g}">Лист {sheet_no} из {sheet_count}</text>',
             '</svg>',
         )
     )
@@ -651,6 +711,7 @@ def build_wastewater_basement_control_svg(
         raise ValueError(
             "invalid basement pipe labeling: " + "; ".join(label_errors)
         )
+    _validate_basement_control_svg(svg)
     return svg
 
 
@@ -681,7 +742,18 @@ def generate_wastewater_basement_control_pdf(
         outlet_dn_mm=outlet_dn_mm,
     )
     svg = build_wastewater_basement_control_svg(basement)
+    _validate_basement_control_svg(svg)
+    pdf = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=str(path))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".basement-control-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)

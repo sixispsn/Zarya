@@ -16,6 +16,7 @@ from typing import Optional
 
 from app.pz.project import BuildingPurpose, Project
 from app.pz.rules import decide_fire_network, project_governing_head
+from app.pz.pump_validation import check_project_booster
 from app.normative.baseline import get_active_baseline
 
 
@@ -133,11 +134,14 @@ def _project_fingerprint(project: Project) -> str:
             "zones": project.building.zones,
         },
         "consumers": list(project.consumer_groups),
+        "t3_sections": [vars(row) for row in project.t3_sections],
         "source": {
             "guaranteed_head_m": source.guaranteed_head_m,
             "maximum_head_m": source.maximum_head_m,
             "h_geom_m": source.h_geom_m,
             "h_il_m": source.h_il_m,
+            "h_il_hot_m": source.h_il_hot_m,
+            "internal_losses_scope": source.internal_losses_scope,
             "h_pr_m": source.h_pr_m,
             "h_vod_m": source.h_vod_m,
             "h_tepl_m": source.h_tepl_m,
@@ -196,7 +200,10 @@ def _project_fingerprint(project: Project) -> str:
                 vars(row) for row in project.sewage.internal_nodes
             ],
             "gost_inputs": {
-                key: value for key, value in vars(project.sewage).items()
+                key: (value.to_mapping() if key in {
+                    "presentation", "fan_ventilation", "fan_geometry",
+                } and value is not None else value)
+                for key, value in vars(project.sewage).items()
                 if key not in {
                     "result", "hydraulic_assessment", "transient_assessment",
                     "risers", "pipes", "elements", "discharge_events",
@@ -212,6 +219,7 @@ def _project_fingerprint(project: Project) -> str:
             "school_assignment": project.grease_trap.school_by_assignment,
         },
         "owner_groups": project.meters.owner_groups_count,
+        "meter_minimum_checks": project.source.meter_minimum_checks,
     }
     encoded = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
@@ -280,6 +288,8 @@ def build_commission_report(
     head_paths_complete = (
         project.head_paths is None or project.head_paths.complete
     )
+    from app.pz.fire_calculation_evidence import fire_calculation_evidence
+    fire_evidence = fire_calculation_evidence(project)
     from app.normative.audit_matrix import build_project_gost_matrices
 
     gost_matrices = build_project_gost_matrices(
@@ -431,17 +441,9 @@ def build_commission_report(
                 f"hпт={_ru(project.building.fire_height_m, 1, ' м')}; "
                 f"струй={project.fire.streams}"
             ),
-            (
-                f"В2 требуется; q={_ru(project.fire.q_total, 1, ' л/с')}; "
-                f"Hтр={_ru(project.fire.required_head_m, 1, ' м')}"
-                if project.fire.required else
-                f"В2 не требуется: {project.fire.normative_note}"
-            ),
+            fire_evidence["result"],
             "ПЗ; схема; гидравлический расчёт; подбор насосов",
-            (
-                "verified" if not project.fire.required or project.fire.required_head_m is not None
-                else "missing"
-            ),
+            fire_evidence["status"],
         ),
     ]
 
@@ -568,7 +570,7 @@ def build_commission_report(
         "СП 30.13330.2020, приложение А",
         blocking=not flow_ok,
     )
-    head_ok = head.h_required_m is not None and head.h_guaranteed_m is not None
+    head_ok = head.h_required_m is not None and head.h_guaranteed_m is not None and head_paths_complete
     add(
         "CALC-02", "Требуемый и гарантированный напоры сопоставлены",
         "verified" if head_ok else "missing",
@@ -580,49 +582,109 @@ def build_commission_report(
         "СП 30.13330.2020, п. 8.27",
         blocking=not head_ok,
     )
-    meters_ok = bool(project.meters.rows)
+    if project.t3_sections:
+        t3 = project.t3_hydraulic_result
+        t3_ok = bool(t3 and t3.total_loss_m is not None and t3.all_velocities_ok)
+        add(
+            "CALC-T3", "Заданный путь Т3 и скорости проверены",
+            "verified" if t3_ok else "missing",
+            (f"ΣHil={_ru(t3.total_loss_m, 3, ' м')}; отдельное расширение ядра"
+             if t3_ok else "; ".join(t3.missing) if t3 and t3.missing
+             else "Расчёт отсутствует либо превышен заданный предел скорости"),
+            "Нет действий" if t3_ok else "Уточнить путь, учёт циркуляции и сечения Т3",
+            "СП 30.13330.2020, пп. 10.9, 10.11, 8.26; приложение Г",
+            blocking=not t3_ok,
+        )
+    from app.pz.meter_validation import check_meter_average
+    average_checks = [check_meter_average(row, project.flows, project.source)
+                      for row in project.meters.rows]
+    from app.pz.meter_products import evaluate_meter_product
+    product_checks = [evaluate_meter_product(project, row) for row in project.meters.rows]
+    product_errors = [e for c in product_checks for e in c.errors]
+    meters_ok = (not project.meters.selection_error and bool(project.meters.rows)
+                 and not product_errors and all(ok is True for ok, _ in average_checks)) and all(
+        row.ok_a and (row.ok_b or row.need_bypass) and
+        (check.minimum_ok if (check.product or check.automatic or check.errors) else row.ok_v) is True
+        for row, check in zip(project.meters.rows, product_checks)
+    )
     add(
         "CALC-03", "Водомерные узлы подобраны по расчётным расходам",
-        "verified" if meters_ok else "missing",
-        f"расчётных узлов: {len(project.meters.rows or [])}",
-        "Нет действий" if meters_ok else "Выполнить расчёт расходов и подбор водомеров",
+        "verified" if meters_ok else "fail" if project.meters.selection_error
+        or product_errors or any(ok is False for ok, _ in average_checks) else "missing",
+        (f"расчётных узлов: {len(project.meters.rows or [])}; "
+         + (project.meters.selection_error + "; " if project.meters.selection_error else "")
+         + "; ".join(note for ok, note in average_checks if ok is not True)
+         + "; ".join(
+            f"{r.label}: {c.minimum_note if (c.product or c.automatic or c.errors) else r.minimum_flow_note or 'проверка минимального расхода не подтверждена'}"
+            for r, c in zip(project.meters.rows, product_checks)
+            if c.errors or (c.minimum_ok if (c.product or c.automatic) else r.ok_v) is not True
+        )),
+        "Нет действий" if meters_ok else "Проверить Qсред ≤ Qэкспл и потери; подтвердить минимальный часовой расход и паспорт выбранного счётчика",
         "СП 30.13330.2020, раздел 12",
         blocking=not meters_ok,
     )
-    pump_blocking = bool(head.pump_needed and not project.pumps.model)
+    # Composition is independent of legacy hydraulics. A known incompatible
+    # device/location must not become releasable merely because Q and H pass.
+    from app.pz.metering_detail import drawing_state as metering_state
+    from app.pz.metering_rules import evaluate_metering_rules, special_layout_pending
+    ms = metering_state(project)
+    vu_rules = evaluate_metering_rules(project, ms.meter,
+                                       inputs_count=ms.inputs_count, bypass=ms.bypass)
+    vu_errors = [r for r in vu_rules if r.status == "error"]
+    vu_special = special_layout_pending(project)
+    # Pending passport/installation information remains visible in the rule
+    # sheets and bundle warnings; this gate rejects known contradictions and
+    # an unimplemented special physical layout, not unspecified mounting mm.
+    vu_result = "; ".join(f"{r.code}: {r.message}" for r in vu_errors)
+    if vu_special:
+        vu_result += "; Специальная компоновка ввода не сформирована"
+    add("VU-COMPOSITION", "Водомерный узел: противоречия и особые условия",
+        "fail" if vu_errors else "missing" if vu_special else "specified",
+        vu_result.lstrip("; ") or "Явных противоречий не обнаружено; незакрытые условия см. на листах компоновки",
+        "Исправить решение и подтвердить привязку; расчётные Q/H автоматически не меняются",
+        "СП 30.13330.2020, разделы 12, 15.2, 15.4",
+        blocking=bool(vu_errors or vu_special))
+    from app.pz.metering_hot_node import hot_meter_view
+    hot_view = hot_meter_view(project)
+    if hot_view is not None:
+        from app.pz.metering_detail import drawing_state
+        from app.pz.metering_product_selection import resolve_metering_products
+        hot_state = drawing_state(hot_view)
+        hot_selection = resolve_metering_products(hot_view, hot_state.meter,
+                                                  bypass=False, electric_bypass=False)
+        hot_errors = list(hot_selection.errors)
+        if hot_state.meter is None:
+            hot_errors.extend(hot_state.missing)
+        add("VU-HOT-COMPOSITION", "Горячий узел учёта: независимость и комплектация",
+            "fail" if hot_errors else "specified",
+            "; ".join(dict.fromkeys(hot_errors)) or
+            "Отдельный узел и спецификация; монтажная привязка и условия применения требуют подтверждения",
+            "Проверить исходные горячего узла; обвязка холодного ввода не переносится",
+            "СП 30.13330.2020, пп. 12.8–12.13; ГОСТ Р 21.619-2023, п. 5.2.2.6",
+            blocking=bool(hot_errors))
+    pump_status, pump_result = check_project_booster(project, head)
+    pump_blocking = pump_status in {"missing", "fail"}
     add(
-        "CALC-04", "Насос В1 подобран по рабочей точке",
-        (
-            "verified" if project.pumps.model
-            else "missing" if head.pump_needed
-            else "not_applicable"
-        ),
-        (
-            f"{project.pumps.model}; Q={_ru(project.pumps.wp_q, 2, ' м³/ч')}; "
-            f"H={_ru(project.pumps.wp_h, 1, ' м')}"
-            if project.pumps.model else
-            "насос требуется, модель не подобрана" if head.pump_needed else
-            "гарантированный напор достаточен"
-        ),
-        "Подтвердить актуальную каталоговую кривую" if project.pumps.model
-        else "Расширить/уточнить каталог насосов" if head.pump_needed
+        "CALC-04", "Насос В1 обеспечивает полную расчётную пару Q/H",
+        pump_status, pump_result,
+        "Пересчитать подбор по актуальным исходным и каталожной кривой" if pump_blocking
+        else "Подтвердить остальные условия установки" if pump_status == "verified"
         else "Нет действий",
-        "СП 30.13330.2020, раздел 13",
+        "СП 30.13330.2020, пп. 13.9, 13.11; без регулирующей ёмкости",
         blocking=pump_blocking,
     )
-    fire_ok = not project.fire.required or project.fire.required_head_m is not None
     add(
-        "FIRE-01", "Необходимость и параметры В2 подтверждены",
-        "verified" if fire_ok else "missing",
-        (
-            project.fire.normative_note if not project.fire.required else
-            f"q={_ru(project.fire.q_total, 1, ' л/с')}; "
-            f"Hтр={_ru(project.fire.required_head_m, 1, ' м')}"
-        ),
-        "Нет действий" if fire_ok else "Задать расчётную схему В2 и выполнить гидравлику",
+        "FIRE-01", "Применимость и расчётные параметры В2",
+        fire_evidence["status"], fire_evidence["result"], fire_evidence["action"],
         "СП 10.13130.2020",
-        blocking=not fire_ok,
+        blocking=fire_evidence["status"] in {"missing", "fail"},
     )
+    if fire_evidence["preliminary"]:
+        add("FIRE-L06", "Проектная применимость предварительного варианта В2",
+            "missing", "Расчётная матрица проверена; паспортные ограничения и NPSH, покрытие помещений "
+            "и соответствие модели реальным ремонтным секциям не подтверждены.",
+            "Подтвердить оборудование и увязку модели с планами; не повторять уже выполненный расчёт",
+            "СП 10.13130.2020; ГОСТ Р 21.619-2023, пп. 5.1.8, 5.2.2", blocking=True)
     if project.normative.apartment_hose_tap_required:
         apartment_ok = project.building.apartments > 0
         add(
@@ -771,14 +833,28 @@ def build_commission_report(
             "missing" if assessment and assessment.status == "fail"
             else assessment.status if assessment else "stage_r"
         )
+        assessment_detail = "; ".join(assessment.notes) if assessment else ""
+        if not assessment_detail:
+            missing = []
+            for field_name, label in (
+                ("funnels_count", "количество воронок по плану кровли"),
+                ("selected_funnel_capacity_lps", "паспортная пропускная способность воронки"),
+                ("max_funnel_flow_lps", "нагрузка на диктующую воронку"),
+                ("risers_count", "количество стояков К2"),
+                ("selected_riser_dn_mm", "DN стояка К2"),
+                ("max_riser_flow_lps", "нагрузка на диктующий стояк"),
+            ):
+                if not assessment or not getattr(assessment, field_name):
+                    missing.append(label)
+            assessment_detail = (
+                ("Расход кровли рассчитан. " if storm_ok else "Расход кровли не рассчитан. ")
+                + ("Для проверки элементов не заданы: " + "; ".join(missing) + "."
+                   if missing else "Подробности проверки элементов К2 не представлены.")
+            )
         add(
             "K2-02", "Воронки и стояки К2 проверены по плану кровли",
             assessment_status,
-            (
-                "; ".join(assessment.notes)
-                if assessment else
-                "точная геометрия и нагрузки элементов не заданы"
-            ),
+            assessment_detail,
             (
                 "Исправить несоответствие исходных данных"
                 if assessment and assessment.status == "fail"
@@ -814,14 +890,8 @@ def build_commission_report(
         "Правила расчётного ядра Zarya; СП 30.13330.2020",
     )
     if artifacts is not None:
-        core_names = (
-            "Пояснительная записка",
-            "Расчёты В1",
-            "Баланс ВиВ",
-            "Подбор насосов",
-            "Спецификация",
-            "Принципиальная схема",
-        )
+        from app.pz.artifact_readiness import COMMISSION_DOCUMENT_ARTIFACTS
+        core_names = COMMISSION_DOCUMENT_ARTIFACTS["DOC-01"]
         missing_documents = [name for name in core_names if not artifacts.get(name)]
         add(
             "DOC-01", "Основные документы комплекта сформированы",
@@ -835,14 +905,7 @@ def build_commission_report(
             "ПП РФ № 87; ГОСТ Р 21.619-2023",
             blocking=bool(missing_documents),
         )
-        wastewater_names = (
-            "Пояснительная записка К1/К2",
-            "Расчёты К1/К2",
-            "Баланс ИОС3 по ГОСТ Р 21.620",
-            "Принципиальная схема К1/К2",
-            "Спецификация ИОС3",
-            "Комплект ИОС3",
-        )
+        wastewater_names = COMMISSION_DOCUMENT_ARTIFACTS["DOC-03"]
         missing_wastewater = [
             name for name in wastewater_names if not artifacts.get(name)
         ]
@@ -923,6 +986,31 @@ def build_commission_report(
             blocking=project.fire.required and not hydraulic_exists,
         )
 
+    if project.rainwater_reuse.enabled:
+        from app.calc.rainwater_reuse import assess as assess_rainwater
+        from app.calc.rainwater_treatment import project_context
+        rain = assess_rainwater(project.rainwater_reuse, **project_context(project))
+        add(
+            "RAIN-01", "Использование дождевой воды обосновано",
+            "verified" if rain["design"]["confirmed"] else "missing",
+            ("Решение подтверждено проектировщиком: " + rain["design"]["review"]["reviewer"]
+             if rain["design"]["confirmed"] else
+             "Паспорт дождевой системы: " + ("; ".join(rain["design"]["missing"])
+             or "требуется актуальное подтверждение проектировщика")),
+            "Хранить указанные расчёты и листы в комплекте. " + rain["design"]["notice"],
+            "СП 30, пп. 4.10, 14.18, 23.5; ГОСТ Р 21.619-2023, п. 5.1.22",
+            blocking=not rain["design"]["confirmed"],
+        )
+    if project.metering_detail.russian_equipment_only:
+        from app.pz.equipment_origin import review_equipment_origin
+        origin_review = review_equipment_origin(project)
+        missing = [r["name"] for r in origin_review["rows"] if not r["ready"]]
+        add("EQUIP-RU", "Оборудование российского производства",
+            "verified" if origin_review["ready"] else "missing",
+            "Происхождение подтверждено" if origin_review["ready"] else
+            f"Не подтверждено позиций: {len(missing)}. " + "; ".join(missing[:6]),
+            "Назначить изделия с подтверждённой страной производства. " + origin_review["notice"],
+            "Требование заказчика к оборудованию", blocking=not origin_review["ready"])
     return CommissionReport(
         passport=passport,
         trace_rows=trace_rows,

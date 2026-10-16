@@ -1,0 +1,10 @@
+/* A3 graphic sheet: form 3 on every page, actual numbering after pagination. */
+@page {
+  margin: 10mm 10mm 65mm 25mm;
+  background-image: none;
+  @bottom-right { content: none; }
+}
+.stamp3 { display: none; }
+main { padding: 0; }
+.form2 thead { display: table-header-group; }
+.form2 tr { break-inside: avoid; }

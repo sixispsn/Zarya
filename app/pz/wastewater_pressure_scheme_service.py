@@ -2,20 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from html import escape
-from pathlib import Path
-from textwrap import wrap
-
-from app.pz.drafting_font import ensure_drafting_font_registered
+from app.pz.wastewater_status_document import generate_status_pdf
 from app.pz.project import Project
-from app.pz.wastewater_building_drafting import (
-    _FRAME_BOTTOM,
-    _FRAME_LEFT,
-    _FRAME_RIGHT,
-    _FRAME_TOP,
-    _title_block_svg,
-)
-from app.pz.wastewater_drafting import BLACK, FONT
 from app.pz.wastewater_pressure_drafting import (
     generate_wastewater_pressure_pdf_from_project,
 )
@@ -77,62 +65,8 @@ def _release_project(project: Project) -> Project:
     )
 
 
-def _status_svg(project: Project, reasons: tuple[str, ...]) -> str:
-    lines: list[str] = []
-    for index, reason in enumerate(reasons[:18], start=1):
-        parts = wrap(reason, width=118) or [reason]
-        lines.append(f"{index}. {parts[0]}")
-        lines.extend(f"   {part}" for part in parts[1:])
-    if len(reasons) > 18:
-        lines.append(f"… ещё замечаний: {len(reasons) - 18}")
-    rows = "".join(
-        f'<text x="190" y="{530 + index * 40}" font-family="{FONT}" '
-        f'font-size="18">{escape(line)}</text>'
-        for index, line in enumerate(lines)
-    )
-    return "".join((
-        '<svg xmlns="http://www.w3.org/2000/svg" width="841mm" height="594mm" '
-        'viewBox="0 0 2800 1980">',
-        '<rect width="2800" height="1980" fill="white"/>',
-        f'<rect x="{_FRAME_LEFT:.1f}" y="{_FRAME_TOP:.1f}" '
-        f'width="{_FRAME_RIGHT-_FRAME_LEFT:.1f}" '
-        f'height="{_FRAME_BOTTOM-_FRAME_TOP:.1f}" fill="none" '
-        f'stroke="{BLACK}" stroke-width="3"/>',
-        f'<text x="190" y="190" font-family="{FONT}" font-size="21" '
-        'font-weight="bold">ИОС3 · НАПОРНАЯ КАНАЛИЗАЦИЯ · КОНТРОЛЬ ДАННЫХ</text>',
-        f'<text x="190" y="300" font-family="{FONT}" font-size="43" '
-        'font-weight="bold">СХЕМА НЕ СФОРМИРОВАНА</text>',
-        f'<text x="190" y="365" font-family="{FONT}" font-size="21">'
-        'Генератор не подбирает условный насос и не достраивает напорную сеть.</text>',
-        f'<text x="190" y="420" font-family="{FONT}" font-size="17">'
-        f'{escape(project.document.object_name or "Объект не указан")}</text>',
-        rows,
-        f'<text x="190" y="1690" font-family="{FONT}" font-size="17">'
-        'После заполнения реестра будут выпущены схема и лист рабочей точки.</text>',
-        f'<text x="190" y="1730" font-family="{FONT}" font-size="15">'
-        'СП 30.13330.2020, пп. 18.31–18.32 · ГОСТ Р 21.620-2023</text>',
-        _title_block_svg(
-            project.document,
-            sheet_no=1,
-            sheet_total=1,
-            title="Контроль данных напорной канализации",
-            system_label="К1н / К3н",
-        ),
-        '</svg>',
-    ))
-
-
 def _generate_status_pdf(project: Project, output_path: str, reasons: tuple[str, ...]) -> str:
-    ensure_drafting_font_registered()
-    import cairosvg
-
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(
-        bytestring=_status_svg(project, reasons).encode("utf-8"),
-        write_to=str(path),
-    )
-    return str(path)
+    return generate_status_pdf(project.document, reasons, output_path, kind="pressure")
 
 
 def generate_wastewater_pressure_scheme(

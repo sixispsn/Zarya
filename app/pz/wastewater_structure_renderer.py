@@ -43,6 +43,7 @@ def build_wastewater_structure_svg(
     sheet_total: int = 1,
 ) -> str:
     """Отрисовать один из проверочных этапов принципиальной схемы."""
+    ensure_drafting_font_registered()
     audit = audit_wastewater_layout(project, layout)
     if not audit.ready:
         raise ValueError("каркас схемы не прошёл проверку: " + "; ".join(
@@ -75,6 +76,8 @@ def build_wastewater_structure_svg(
             wastewater_project,
             WastewaterSchemeScope.BASEMENT_K1_MAIN,
             focus_section_id=focus,
+            sheet_no=sheet_no,
+            sheet_total=sheet_total,
         ).svg
 
     width, height = layout.sheet_width_mm, layout.sheet_height_mm
@@ -113,8 +116,6 @@ def build_wastewater_structure_svg(
             f'font-weight="{weight}" fill="{BLACK}">{escape(str(value))}</text>'
         )
 
-    frame = layout.drawing_frame
-    rect(frame.x, frame.y, frame.width, frame.height, sw=0.7)
     floor_groups = sorted(layout.floor_groups, key=lambda row: row.y_mm)
     if not floor_groups:
         raise ValueError("в каркасе нет этажных уровней")
@@ -410,34 +411,19 @@ def build_wastewater_structure_svg(
             ).replace(".", ",")
             text(mid_x, mid_y - 5.0, f"{pipe.section_id} {diameter}{slope}", 2.5, "middle")
 
-    # Упрощённая основная надпись для контрольного листа этапа компоновки.
-    stamp_x, stamp_y, stamp_w, stamp_h = 651.0, 534.0, 185.0, 55.0
-    rect(stamp_x, stamp_y, stamp_w, stamp_h, 0.7, "white")
-    line(stamp_x, stamp_y + 25, stamp_x + stamp_w, stamp_y + 25, 0.4)
-    line(stamp_x, stamp_y + 40, stamp_x + stamp_w, stamp_y + 40, 0.4)
-    line(stamp_x + 135, stamp_y + 25, stamp_x + 135, stamp_y + stamp_h, 0.4)
-    line(stamp_x + 152, stamp_y + 25, stamp_x + 152, stamp_y + stamp_h, 0.3)
-    line(stamp_x + 169, stamp_y + 25, stamp_x + 169, stamp_y + stamp_h, 0.3)
-    cipher = project.document.cipher or ""
-    text(stamp_x + 92.5, stamp_y + 10, cipher, 3.5, "middle")
-    text(stamp_x + 92.5, stamp_y + 20, project.document.object_name or "", 2.5, "middle")
-    text(stamp_x + 67.5, stamp_y + 34, "Принципиальная схема К1/К2", 2.5, "middle")
-    text(stamp_x + 143.5, stamp_y + 31, "Стадия", 1.8, "middle")
-    text(stamp_x + 160.5, stamp_y + 31, "Лист", 1.8, "middle")
-    text(stamp_x + 177, stamp_y + 31, "Листов", 1.8, "middle")
-    text(stamp_x + 143.5, stamp_y + 37.5, project.document.stage_label or "П", 2.5, "middle")
-    text(stamp_x + 160.5, stamp_y + 37.5, str(sheet_no), 2.5, "middle")
-    text(stamp_x + 177, stamp_y + 37.5, str(sheet_total), 2.5, "middle")
+    # Full paper-size frame; the layout and engineering body remain untouched.
+    from app.pz.graphic_document_frame import drawing_frame_svg
+
     stage_name = (
-        "Подвальная магистраль К1"
-        if scope == WastewaterStructureScope.BASEMENT_K1_MAIN
-        else (
-            "По подтверждённой архитектуре"
-            if scope == WastewaterStructureScope.FULL_FLOOR_STACK
-            else "Начало схемы: плита подвала"
-        )
+        "По подтверждённой архитектуре"
+        if scope == WastewaterStructureScope.FULL_FLOOR_STACK
+        else "Начало схемы: плита подвала"
     )
-    text(stamp_x + 92.5, stamp_y + 49, stage_name, 2.5, "middle")
+    G.append(drawing_frame_svg(
+        project.document, width_mm=width, height_mm=height,
+        title="Принципиальная схема К1/К2. " + stage_name,
+        system_label="", sheet_no=sheet_no, sheet_total=sheet_total,
+    ))
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:g}mm" '

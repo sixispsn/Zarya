@@ -454,9 +454,10 @@ def apply_residential_paper_style(content: str, *, fragment_scale: float = 0.5) 
             )
             nested_scale = 1.0
             for parent in ancestors:
-                match = re.search(r"scale\(([\d.]+)", parent.get("transform", ""))
+                match = re.search(r"scale\(([+-]?[\d.]+)", parent.get("transform", ""))
                 if match:
-                    nested_scale *= float(match.group(1))
+                    # Reflection changes handedness, not physical line weight.
+                    nested_scale *= abs(float(match.group(1)))
                 matrix = re.search(r"matrix\(([^)]+)\)", parent.get("transform", ""))
                 if matrix:
                     a, b, c, d, _, _ = map(

@@ -763,7 +763,7 @@ def solve_fire_hydraulics_scenario(
         return ScenarioResult(
             None, 0.0, net.source.available_head_m, None, None,
             warnings=["сеть содержит цикл, но не соответствует топологии v3 "
-                      "(одно кольцо, источник на кольце, ПК на тупиковых ветвях). "
+                      "(одно кольцо, независимые вводы без отборов, ПК на тупиковых ветвях). "
                       "Многокольцевые сети — future scope."])
 
     candidates = [c for c in net.cabinets if c.is_design_candidate]
@@ -953,7 +953,7 @@ def _try_ring_scenario(net, required_jets, backend, scenario_filter, mode):
             required_head_at_cabinet_m=pk.cabinet_head_m,
             flow_lps=flows_final.get(pk.cabinet_id, 0.0),
             geodesic_lift_m=pk.geodesic_lift_m,
-            path_head_loss_m=pk.ring_loss_m + pk.branch_loss_m,
+            path_head_loss_m=pk.inlet_loss_m + pk.ring_loss_m + pk.branch_loss_m,
             required_head_at_source_m=pk.required_head_at_source_m,
             path=[]))
     scen = HydraulicScenario(
@@ -977,11 +977,13 @@ def _try_ring_scenario(net, required_jets, backend, scenario_filter, mode):
 def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode):
     """Двухвводная ветка солвера: перебор сочетаний ПК, для каждого —
     двухвводная увязка с клапанами, диктующий = минимальный запас напора.
-    Упаковка в единый ScenarioResult. None → не двухвводная v3-топология.
+    Упаковка в единый ScenarioResult. None → не одно кольцо с двумя источниками;
+    неподдержанный подвод возвращает явный отказ, не одновводный fallback.
 
     Семантика полей результата в двухвводной постановке:
-      required_head_at_source_m — фактически требуемый напор ввода 1, чтобы
-        диктующий ПК получил своё (= H1 − margin диктующего);
+      required_head_at_source_m — эквивалентный H1 − margin диктующего при
+        одинаковой добавке к ОБОИМ источникам (разность напоров сохраняется).
+        Это не рабочая точка одной насосной и не пересчёт только первого ввода;
       available_head_m — заданный напор ввода 1;
       needs_pump — True, если запаса нет (margin < 0).
     """
@@ -997,6 +999,7 @@ def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode)
 
     worst = None
     worst_combo = None
+    failures = []
     for combo in combinations(candidates, n):
         if scenario_filter is not None and not scenario_filter(combo):
             continue
@@ -1012,6 +1015,7 @@ def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode)
             continue
         outcome = solve_two_source_scenario(net, list(combo), flows, heads, mode)
         if outcome is None or not outcome.per_pk:
+            failures.extend(outcome.warnings if outcome else ["нужны напоры обоих вводов"])
             continue
         margin = min(c.margin_m for c in outcome.per_pk)
         if worst is None or margin < worst[0]:
@@ -1019,7 +1023,10 @@ def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode)
             worst_combo = combo
 
     if worst is None:
-        return None
+        # Недопустимо молча исключать второй ввод и выдавать одновводный расчёт.
+        return ScenarioResult(None, 0.0, net.source.available_head_m, None, None,
+                              warnings=["двухвводный кольцевой сценарий не рассчитан"]
+                                       + list(dict.fromkeys(failures)))
     margin, outcome = worst
 
     h1 = net.source.available_head_m
@@ -1034,7 +1041,7 @@ def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode)
             required_head_at_cabinet_m=c.required_head_at_pk_m,
             flow_lps=flows_final.get(c.cabinet_id, 0.0),
             geodesic_lift_m=c.geodesic_lift_m,
-            path_head_loss_m=c.branch_loss_m,
+            path_head_loss_m=h1 - c.margin_m - c.required_head_at_pk_m - c.geodesic_lift_m,
             required_head_at_source_m=h1 - c.margin_m,
             path=[]))
 
@@ -1057,4 +1064,6 @@ def _try_two_source_scenario(net, required_jets, backend, scenario_filter, mode)
         evaluated_scenarios=1,
         warnings=["расчёт по кольцевой сети с ДВУМЯ вводами: двухконтурная "
                   "увязка Хантера-Кросса, обратные клапаны на вводах",
-                  supplies] + outcome.warnings)
+                  supplies,
+                  "Hтреб двухвводного режима эквивалентен одинаковой добавке напора "
+                  "к обоим источникам; рабочая точка насосной автоматически не назначается"] + outcome.warnings)

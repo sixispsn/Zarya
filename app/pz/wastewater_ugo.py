@@ -115,6 +115,9 @@ UGO_CONNECTION_ANCHORS: Dict[str, Tuple[float, float]] = {
     "toilet": (0.0, 20.0),
     "floor_drain": (0.0, 10.0),
 }
+# Centre of the access opening, distinct from the origin of the complete UGO.
+# Dimension lines must reference this point after applying symbol transforms.
+REVISION_CENTRE_ANCHOR: Tuple[float, float] = (6.0, 0.0)
 # Способ образования гидравлического затвора у санитарного прибора. Для
 # приборов с отдельным сифоном генератор обязан поставить нормативное УГО
 # по ГОСТ 21.205-2016, табл. 4, поз. 4 непосредственно в присоединение.
@@ -171,6 +174,15 @@ def legend_definitions(
 
 def project_legend_definitions(project: Project) -> List[UGOSymbolDefinition]:
     """Обозначения, реально применённые в проекте, включая марки систем."""
+    from app.pz.wastewater_graphic_exports import representative_document_model
+    from app.pz.residential_concept_section import FIXTURES
+    section = representative_document_model(project)
+    if section is not None:
+        kinds = set(FIXTURES[section.consumer_code])
+        kinds.update(('system_k1', 'trap', 'revision', 'cleanout', 'transition'))
+        if section.drainage == 'internal':
+            kinds.update(('system_k2', 'roof_funnel_heated' if section.funnel_heated else 'roof_funnel'))
+        return legend_definitions(kinds)
     elements = list(project.sewage.elements or [])
     keys = {
         row.kind if row.kind in UGO_CATALOG else "other"
@@ -339,7 +351,8 @@ def _shape(kind: str) -> str:
         return (
             f'<path d="M-25,0 H25 M-22,-11 Q-8,0 -22,11" fill="none" '
             f'stroke="{s}" stroke-width="{sw}"/>'
-            f'<circle cx="6" cy="0" r="4" fill="white" stroke="{s}" '
+            f'<circle cx="{REVISION_CENTRE_ANCHOR[0]:g}" '
+            f'cy="{REVISION_CENTRE_ANCHOR[1]:g}" r="4" fill="white" stroke="{s}" '
             f'stroke-width="{sw}"/>'
         )
     if kind == "cleanout":
@@ -531,7 +544,7 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
     table_x = left + 22
     table_w = right - left - 44
     table_top = top + 92
-    row_h = 55
+    row_h = min(55, (bottom - 55 * pxmm - 20 - table_top - 34) / max(1, len(definitions)))
     table_h = 34 + len(definitions) * row_h
     rect(table_x, table_top, table_w, table_h, 1.4)
     symbol_edge = table_x + 120
@@ -546,7 +559,8 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
         y0 = table_top + 34 + index * row_h
         if index:
             line(table_x, y0, table_x + table_w, y0, 0.9, "#777")
-        body.append(render_ugo(definition.key, table_x + 60, y0 + row_h / 2, scale=0.82))
+        symbol_scale = 0.60 if definition.key == 'roof_funnel_heated' else 0.82
+        body.append(render_ugo(definition.key, table_x + 60, y0 + row_h / 2, scale=symbol_scale))
         name_lines = _wrap(definition.label, 42)[:2]
         for line_index, value in enumerate(name_lines):
             text(symbol_edge + 12, y0 + 23 + line_index * 14, value, 10, weight="bold")
@@ -555,34 +569,12 @@ def build_wastewater_ugo_sheet(project: Project) -> str:
             text(name_edge + 12, y0 + 19 + line_index * 13, value, 8.5)
         text(name_edge + 12, y0 + 48, definition.status_label, 7.5, color=GRAY)
 
-    # Основная надпись: компактная форма 3 для самостоятельного листа А3.
-    stamp_w, stamp_h = 185 * pxmm, 55 * pxmm
-    sx, sy = right - stamp_w, bottom - stamp_h
-    rect(sx, sy, stamp_w, stamp_h, 2.0, "white")
-    label_w = 65 * pxmm
-    line(sx + label_w, sy, sx + label_w, sy + stamp_h, 1.5)
-    line(sx + label_w, sy + 33 * pxmm, right, sy + 33 * pxmm)
-    line(sx + label_w, sy + 45 * pxmm, right, sy + 45 * pxmm)
-    info_x = sx + label_w
-    stage_x = right - 50 * pxmm
-    sheet_x = right - 35 * pxmm
-    total_x = right - 20 * pxmm
-    for x in (stage_x, sheet_x, total_x):
-        line(x, sy + 33 * pxmm, x, sy + stamp_h)
-    text(sx + 8, sy + 24, "Разраб.", 8)
-    text(sx + 8, sy + 48, _wrap(doc.developer_name or "", 22)[0], 8)
-    text(info_x + (stage_x - info_x) / 2, sy + 24, _wrap(doc.cipher or "", 42)[0], 12, "middle", "bold")
-    text(info_x + (stage_x - info_x) / 2, sy + 55, _wrap(doc.object_name or "", 48)[0], 8.5, "middle")
-    text(info_x + (stage_x - info_x) / 2, sy + 91, f"Ведомость УГО систем {systems_title}", 9.5, "middle", "bold")
-    for x0, x1, label in (
-        (stage_x, sheet_x, "Стадия"),
-        (sheet_x, total_x, "Лист"),
-        (total_x, right, "Листов"),
-    ):
-        text((x0 + x1) / 2, sy + 126, label, 7, "middle")
-    text((stage_x + sheet_x) / 2, sy + 162, doc.stage_label or "П", 11, "middle")
-    text((sheet_x + total_x) / 2, sy + 162, doc.sheet_no or "2", 11, "middle")
-    text((total_x + right) / 2, sy + 162, doc.sheet_total or "2", 11, "middle")
+    # The same paper-space frame as the principle drawing, not a second
+    # abbreviated stamp with different columns.
+    from app.pz.wastewater_building_drafting import drawing_frame_svg
+    frame = drawing_frame_svg(doc, width_mm=420, height_mm=297,
+        title=f"Ведомость УГО систем {systems_title}", system_label=systems_title)
+    body.append(f'<g transform="scale({pxmm})">{frame}</g>')
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" '

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 from app.pz.project import Project, SewerElementSpec, SewerPipeSpec
+from app.pz.wastewater_ventilation import FanVentilationAudit, audit_project_fan_ventilation
 
 
 @dataclass
@@ -19,6 +20,7 @@ class WastewaterSP30Audit:
     warnings: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
     revision_floors: Dict[str, List[int]] = field(default_factory=dict)
+    fan_ventilation: FanVentilationAudit | None = None
 
     @property
     def ready(self) -> bool:
@@ -115,6 +117,12 @@ def audit_wastewater_sp30(project: Project) -> WastewaterSP30Audit:
       выполняется напорными трубами (кроме зданий высотой до 10 м).
     """
     result = WastewaterSP30Audit()
+    result.fan_ventilation = audit_project_fan_ventilation(project)
+    for check in result.fan_ventilation.checks:
+        if check.status == "verified":
+            continue
+        message = f"{check.target}: {check.message} ({check.reference})"
+        (result.errors if check.status == "fail" else result.warnings).append(message)
     elements = list(project.sewage.elements or [])
     pipes = list(project.sewage.pipes or [])
     floors = max(1, int(project.building.floors_above or 1))

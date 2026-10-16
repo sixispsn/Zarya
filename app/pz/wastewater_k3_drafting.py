@@ -213,7 +213,9 @@ def _branch_svg(
             f'<text x="{equipment_x:.1f}" y="{equipment_y-31:.1f}" '
             f'text-anchor="middle" font-family="{FONT}" font-size="10" '
             f'font-weight="bold">{escape(_short(equipment.name, 32))}</text>',
-            f'<text x="{equipment_x:.1f}" y="{equipment_y+42:.1f}" '
+            # Keep the type/capacity beside the name, above the symbol:
+            # the former +42 baseline crossed the architectural floor line.
+            f'<text x="{equipment_x:.1f}" y="{equipment_y-18:.1f}" '
             f'text-anchor="middle" font-family="{FONT}" font-size="9">'
             f'{escape(_short(equipment.type_mark or "тип по проекту", 28))}</text>',
             '</g>',
@@ -416,8 +418,6 @@ def build_wastewater_k3_floor_fragment_svg(
         )
 
     body.extend((
-        f'<line x1="{margin+30}" y1="1692" x2="{_FRAME_RIGHT-650:.1f}" '
-        'y2="1692" stroke="#777"/>',
         f'<text x="{margin+38}" y="1730" font-family="{FONT}" font-size="12">'
         'К3 показана самостоятельной системой; подключение к бытовой канализации автоматически не выполняется.</text>',
         f'<text x="{margin+38}" y="1760" font-family="{FONT}" font-size="11" '
@@ -713,8 +713,6 @@ def build_wastewater_k3_basement_fragment_svg(
         else "Локальная очистка показана только зарегистрированным оборудованием."
     )
     body.extend((
-        '<rect x="88" y="1665" width="1910" height="210" fill="white" '
-        'stroke="#777" stroke-width="1"/>',
         f'<text x="112" y="1700" font-family="{FONT}" font-size="13" '
         'font-weight="bold">Данные К3</text>',
         f'<text x="112" y="1730" font-family="{FONT}" font-size="11">'

@@ -1,0 +1,18 @@
+/* PZ and explicitly connected A4 annex generators. The measured vector
+   frame is applied after pagination; SVG/ReportLab drawing paths are separate. */
+@page {
+  margin: 15mm 10mm 25mm 25mm;
+  background-image: none;
+  @bottom-center { content: none; }
+  @bottom-right { content: none; }
+  @top-right { content: none; border: none; }
+}
+@page:first {
+  margin-bottom: 65mm;
+  background-image: none;
+  @bottom-center { content: none; }
+  @bottom-right { content: none; }
+}
+.stamp3, .stamp6 { display: none; }
+.calculation-body { padding: 0; }
+h1, h2 { break-after: avoid; }

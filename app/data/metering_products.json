@@ -1,0 +1,294 @@
+{
+  "revision": "2026-09-30.5",
+  "hydraulic_review_revision": "2026-10-05.1",
+  "units": {"dimensions": "mm", "pressure": "bar", "temperature": "degC", "flow": "m3/h"},
+  "sources": {
+    "vt386-0625": {
+      "url": "https://valtec.ru/document/technical/VT.386-0625.pdf",
+      "title": "VALTEC VT.386, ПС-47335-3, паспорт и руководство по эксплуатации",
+      "pages": "1: параметры; 2: раздел 4 (A — осевая длина, B — полный габарит); 2–3: п. 6.1 и рисунки монтажа",
+      "checked_on": "2026-10-14",
+      "sha256": "427e9a91b2a8bae33c8a4331d53e8af764774b147adda39d7dac9d0bd3a925b3",
+      "note": "DN15/20/25: A=56/58/84 мм. Не переносить старую длину 53 мм из альбома 2010. Подтверждены горизонтальная установка пробкой вниз и восходящий поток; нисходящая установка в данной базе не разрешена."
+    },
+    "proaqua-ppr-2026": {
+      "url": "https://www.proaqua.pro/upload/iblock/261/1o44s6t2cc17pvczla3aed26ygk36xug/PRO%20AQUA%20PP-R%202026.pdf",
+      "title": "PRO AQUA PP-R, технический каталог 2026", "pages": "42: труба PA10018; 50: муфта PA22524P",
+      "checked_on": "2026-09-30", "sha256": "fe90a661010f194d189375ccbcf6d772520e18693e353d4b238f1abac948acbc",
+      "note": "PA10018: 63×10,5, внутренний диаметр 42 мм. PA22524P: 63×2 ВР, L=77 мм. Это не DN63 и не монтажная длина соединения."
+    },
+    "proaqua-fittings-passport": {
+      "url": "https://www.proaqua.pro/upload/exchange/files/042707.pdf",
+      "title": "PRO AQUA, паспорт соединительных деталей PP-R", "pages": "2: пп. 1.2–1.3; 8: PA22524P",
+      "checked_on": "2026-09-30", "sha256": "a8d5ecdcc6ac1dbef171e83e16092e57915fb37e01c0d70542f2336e44d0b349",
+      "note": "Внутренняя резьба цилиндрическая по ГОСТ 6357, наружная коническая по ГОСТ 6211. Буква G в общей размерной таблице не разрешает считать наружную резьбу цилиндрической."
+    },
+    "vtr-1025": {
+      "url": "https://valtec.ru/document/technical/VTr-1025.pdf",
+      "title": "VALTEC VTr, ПС 47639-4", "pages": "2: резьба, P/T; 8: VTr.580.N.0907; 9: VTr.582.N.0009",
+      "checked_on": "2026-09-30", "sha256": "44e8069b8d2e0660acd4e1ca60a2e4f9b42c047db86bf31bafc22ca1a76be6f6",
+      "note": "VTr.582.N.0009: G2 НР/НР, A=44 мм. VTr.580.N.0907: G2×G1¼ НР/НР, A=41 мм. Наружная резьба не предназначена для накидной гайки с плоской прокладкой."
+    },
+    "vtr580-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VTr.580.N/VTr.580.N.pdf",
+      "title": "VALTEC VTr.580.N, габаритный чертёж", "pages": "1: VTr.580.N.0907",
+      "checked_on": "2026-09-30", "sha256": "0e85fe1c895808359d59831e34bf1cb57ba326b77ae2f4282479ef65c0d25df2",
+      "note": "Для .0907 резьбы G2×G1¼ и осевой габарит 41 мм совпадают с паспортом. Поперечный размер 65,5 мм отличается от S=61 мм паспорта: в базу не внесён. Проверка L не подтверждает полный внешний контур."
+    },
+    "vtr582-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VTr.582.N/VTr.582.N.pdf",
+      "title": "VALTEC VTr.582.N, габаритный чертёж", "pages": "1: VTr.582.N.0009",
+      "checked_on": "2026-09-30", "sha256": "6cb16b748d0662f19967df590570dd8707ff6e4eb97a49bb5bf4cd0e80e43e33",
+      "note": "Для .0009 длина 44 мм совпадает с паспортом. Поперечные размеры и другие типоразмеры этим не подтверждены."
+    },
+    "itap-europa-100": {
+      "url": "https://www.itap.it/cat_files/pdf/EUROPA_CHECK_AND_FOOT_VALVES_en.pdf",
+      "title": "ITAP EUROPA 100, резьба ISO 228 (не NPT)",
+      "pages": "3: характеристики и артикулы; 4: размеры; 6: монтаж",
+      "checked_on": "2026-09-30", "sha256": "1d012d78cebbf2ae410cc6fb5832a5bfe11a9ccea27fdd8d2c30e7df374aced6",
+      "note": "A — осевая длина корпуса. Не длина установленного узла. От изгиба/циркуляционного насоса паспорт требует 10 диаметров трубы."
+    },
+    "vtp-0626": {
+      "url": "https://valtec.ru/document/technical/VTp.700-fitingi-0626.pdf",
+      "title": "VALTEC, ПС 47543-6, полипропиленовые фитинги",
+      "pages": "1–2: характеристики; 4: VTp.707; 10: VTp.761; 13: монтаж",
+      "checked_on": "2026-09-30", "sha256": "cd94f41c6e92266c49c9d2f15255fccc96be8707b504777c8ce66a72bc1d9a10",
+      "note": "A — полный осевой габарит; B — геометрическая глубина раструба, не заданная монтажная посадка. Для выбранных 63×2 габариты расходятся с отдельными чертежами."
+    },
+    "vtp707-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VTp.707.0/VTp.707.0.pdf",
+      "title": "VALTEC VTp.707.0, габаритный чертёж", "pages": "1",
+      "checked_on": "2026-09-30", "sha256": "ae2aca88b9745f9b1ddfef21f16d01a13607952ff16fd0f7e8397d466ec8de6a",
+      "note": "63×2: длина 124,5 мм, в паспорте 102 мм. Карантин до уточнения исполнения."
+    },
+    "vtp761-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VTp.761.0/VTp.761.0.pdf",
+      "title": "VALTEC VTp.761.0, габаритный чертёж", "pages": "1",
+      "checked_on": "2026-09-30", "sha256": "99d62394c7a9bc22deba5e8a81cbbbaef69226cb072fce947b72d70bb5a4b3c3",
+      "note": "63×2: длина 94,3 мм, в паспорте 85 мм. Карантин до уточнения исполнения."
+    },
+    "decast-106": {
+      "url": "https://decast.com/upload/documentation/site-doc/Образцы-паспортов/Образец_паспорта_ВСКМ90.pdf",
+      "title": "ДЕКАСТ ВСКМ 90. ДКСТ.407221.001ПС, ред. 1.06",
+      "pages": "1: таблицы 1, 2, 7, рисунок 1; 2: таблица 6, раздел 5",
+      "checked_on": "2026-09-30", "sha256": "9ecb8319ea73f0de884a73c79073d70a0bf3028452a04728141dfceb2cfc307e",
+      "note": "ДГ — отдельное импульсное исполнение. Цену импульса подтвердить по конкретному прибору: таблица 2 содержит примечание о положении геркона. L1 и состав комплекта уточняются при заказе."
+    },
+    "walraven-1301-0425": {
+      "url": "https://library.walraven.com/repository/rnd/documents/EN-INT/BIS%20Bifix%C2%AE%201301%20Stainless%20Steel%20%28M8%2C%20M10%29%20-%20M%2005%2005%20%28EN-INT%29.pdf",
+      "title": "Walraven BIS Bifix 1301, M 05 05, EN-INT 04/2025",
+      "pages": "1: размерный рисунок и таблица M8",
+      "checked_on": "2026-09-30", "sha256": "6e588887d49c8760c934d1282c28773119e5347a8f9c4833db6cf350dc2653da",
+      "note": "Для нержавеющих труб. D — наружный диаметр, не DN. Fa,z — допустимая нагрузка хомута в указанном направлении, не несущая способность всей опоры."
+    },
+    "decast-2023": {
+      "url": "https://decast.com/upload/documentation/passport/Образец_паспорта_Декаст_ВСКМ90_2023.pdf",
+      "title": "ДЕКАСТ ВСКМ 90. ДКСТ.407221.001ПС, ред. 1.03",
+      "pages": "1: таблицы 1, 6; 2: раздел 5", "checked_on": "2026-09-30",
+      "note": "L1 зависит от комплекта монтажных частей и уточняется при заказе. Прямые участки обеспечиваются комплектом; переходы вне этой зоны."
+    },
+    "vt214-1224": {
+      "url": "https://valtec.ru/document/technical/VT.214-215-217-218-219-1224.pdf",
+      "title": "VALTEC VT.214, ПС-47558", "pages": "2: давление/температура; 3: габариты",
+      "checked_on": "2026-09-30", "sha256": "29dac853dfa10180f968db1c7339f5425f90cce0e1a51e2da8c2269f27125bc1",
+      "note": "C — строительная длина; A — длина рукоятки, НЕ длина корпуса. B — от оси до верха."
+    },
+    "vt192-0825": {
+      "url": "https://valtec.ru/document/technical/VT.190-191-192-0825.pdf",
+      "title": "VALTEC VT.192, ПС-47243-2", "pages": "1: характеристики; 2–3: габариты и монтаж",
+      "checked_on": "2026-09-30", "sha256": "603d2085bb2a6685d5fdf44ad29b6cecc7f1ae68baa79ebde9be69a54eee3d62",
+      "note": "H — ниже оси, не полный габарит и не пространство обслуживания. Горизонтальный монтаж пробкой вниз."
+    },
+    "vt161-0525": {
+      "url": "https://valtec.ru/document/technical/VT.161-0525.pdf",
+      "title": "VALTEC VT.161, ПС-47651", "pages": "1: характеристики; 3: размеры A/B",
+      "checked_on": "2026-09-30", "sha256": "d25a0468d5d65fb8427670d93a0a4f72c620030e23d947560e6f2c7edea798bc"
+    },
+    "vt161-drawing": {
+      "url": "https://valtec.ru/document/technical/drawing/VT.161.N/VT.161.N.pdf",
+      "title": "VALTEC VT.161.N, отдельный габаритный чертёж", "pages": "1",
+      "checked_on": "2026-09-30", "note": "Размеры расходятся с паспортом 0525. Автоматическое применение запрещено до уточнения исполнения."
+    }
+  },
+  "families": [
+    {
+      "id": "valtec-vt386", "manufacturer": "VALTEC", "model": "VT.386", "kind": "strainer",
+      "source_ids": ["vt386-0625"], "dimension_status": "verified",
+      "temperature_c": [1,110], "pn_bar": 16,
+      "connection_sex": "female", "connection_standard": "G",
+      "drive": "none", "mounting": "horizontal_cap_down",
+      "notes": ["Универсальный латунный фильтр, сетка 300 мкм; паспорт ПС-47335-3.",
+        "Пробка вниз, доступ для очистки обязателен. Вертикальная установка — восходящий поток по п. 6.1 и рисунку.",
+        "L соответствует A паспорта; B — полный поперечный габарит, не расстояние от оси и не зона обслуживания.",
+        "Артикул поставки и происхождение уточнить; российское производство не подтверждено.",
+        "Размерная модель не заменяет расчёт потерь фильтра; гидравлическое ядро не изменено."],
+      "columns": ["dn","article","thread","L","B_overall"],
+      "rows": [[15,"","1/2",56,62], [20,"","3/4",58,67], [25,"","1",84,91]]
+    },
+    {
+      "id": "itap-europa100-g", "manufacturer": "ITAP", "model": "EUROPA 100 (G)", "kind": "check",
+      "source_ids": ["itap-europa-100"], "dimension_status": "verified",
+      "temperature_c": [-20,100], "connection_sex": "female", "connection_standard": "G",
+      "drive": "none", "mounting": "any",
+      "notes": ["Направление по стрелке корпуса; исполнение ISO 228, не NPT.", "До изгиба/циркуляционного насоса — 10 диаметров трубы по инструкции ITAP; проверить компоновку, не назначать расстояние по символу на схеме."],
+      "columns": ["dn","article","thread","L","B","pn_bar"],
+      "rows": [
+        [15,"1000012","1/2",58.5,34.5,25], [20,"1000034","3/4",65,41.5,25],
+        [25,"1000100","1",74.5,48,25], [32,"1000114","1 1/4",83,60.5,18],
+        [40,"1000112","1 1/2",93,71,18], [50,"1000200","2",101,87,18]
+      ]
+    },
+    {
+      "id": "decast-vskm90-dg", "manufacturer": "ДЕКАСТ", "model": "ВСКМ 90 ДГ", "kind": "meter",
+      "source_ids": ["decast-106"], "dimension_status": "verified",
+      "pressure_loss_limit": {"kind": "upper_bound_at_qmax", "mpa": 0.1, "source_id": "decast-106", "reference": "Таблица 1, потеря давления при Qmax, не более", "checked_on": "2026-10-05"},
+      "temperature_c": [5,120], "pn_bar": 16,
+      "connection_sex": "male", "connection_standard": "G", "drive": "none",
+      "mounting": "horizontal_dial_up", "remote_readout": true,
+      "remote_interface": "Импульсный (геркон)",
+      "connection_kit": {
+        "id": "decast-vskm90-kit", "name": "Комплект присоединительных частей ДЕКАСТ ВСКМ 90", "status": "reference_only",
+        "installation": {
+          "meter_seal": "flat_gasket", "pipe_connection_sex": "male", "protects_straight_sections": true,
+          "contents": [["Присоединитель с накидной гайкой", 2], ["Плоская прокладка", 2]],
+          "reference": "ДКСТ.407221.001ПС ред. 1.06, рис. 1, пп. 5.2, 5.3, 5.8, 6.2. Состав поставки уточняется при заказе (табл. 6)."
+        }
+      },
+      "notes": ["ДГ не является базовым исполнением ВСКМ 90; выбирается явно.", "Цену импульса и вход регистратора согласовать по паспорту конкретного прибора.", "L1 и состав комплекта справочные; уточняются при заказе.", "Расходы класса B не заменяют расчётную таблицу СП/legacy."],
+      "columns": ["dn","L","L1_reference","H","H1","B","body_thread","kit_pipe_thread","qmin_B","qn","qmax"],
+      "rows": [
+        [15,165,235,100,170,85,"3/4","1/2",0.03,1.5,3],
+        [20,190,295,100,170,85,"1","3/4",0.05,2.5,5],
+        [25,260,383,120,190,105,"1 1/4","1",0.07,3.5,7],
+        [32,260,387,120,190,105,"1 1/2","1 1/4",0.12,6,12],
+        [40,300,432,155,245,125,"2","1 1/2",0.20,10,20],
+        [50,300,448,185,270,125,"2 1/2","2",0.45,15,30]
+      ]
+    },
+    {
+      "id": "decast-vskm90", "manufacturer": "ДЕКАСТ", "model": "ВСКМ 90", "kind": "meter",
+      "source_ids": ["decast-2023"], "dimension_status": "verified",
+      "temperature_c": [5,120], "pn_bar": 16,
+      "connection_sex": "male", "connection_standard": "G", "drive": "none",
+      "mounting": "horizontal_dial_up", "remote_readout": false,
+      "notes": ["L — корпус без комплекта. L1 — справочно с комплектом, не гарантированная монтажная длина.", "Расходы для класса B; не заменяют расчётную таблицу СП/legacy.", "Потеря давления при Qmax не является полной гидравлической характеристикой."],
+      "columns": ["dn","L","L1_reference","H","H1","B","body_thread","kit_pipe_thread","qmin_B","qn","qmax"],
+      "rows": [
+        [15,165,235,100,170,85,"3/4","1/2",0.03,1.5,3],
+        [20,190,295,100,170,85,"1","3/4",0.05,2.5,5],
+        [25,260,383,120,190,105,"1 1/4","1",0.07,3.5,7],
+        [32,260,387,120,190,105,"1 1/2","1 1/4",0.12,6,12],
+        [40,300,432,155,245,125,"2","1 1/2",0.20,10,20],
+        [50,300,448,185,270,125,"2 1/2","2",0.45,15,30]
+      ]
+    },
+    {
+      "id": "valtec-vt214", "manufacturer": "VALTEC", "model": "VT.214.N", "kind": "shutoff",
+      "source_ids": ["vt214-1224"], "dimension_status": "verified",
+      "temperature_c": [-20,150], "connection_sex": "female", "connection_standard": "G",
+      "drive": "manual", "mounting": "any",
+      "notes": ["Полнопроходной шаровой кран. Муфта–муфта; соединители и глубина свинчивания в L не входят."],
+      "columns": ["dn","article_suffix","thread","A_handle","B_above_axis","L","pn_bar"],
+      "rows": [
+        [15,"04","1/2",89.5,39,47.5,40], [20,"05","3/4",89.5,44.5,55.5,40],
+        [25,"06","1",105,50,62.5,40], [32,"07","1 1/4",122,60,77.5,25],
+        [40,"08","1 1/2",154,75,87,25], [50,"09","2",154,82,101,25],
+        [65,"10","2 1/2",200,101.5,139.5,16], [80,"11","3",235,109,153,16],
+        [100,"12","4",235,121,169.5,16]
+      ],
+      "pressure_temperature_table": {
+        "temperatures_c": [0,15,25,50,75,100,125,150],
+        "by_dn": {
+          "15": [40,40,40,37,31,25,18,13], "20": [40,40,40,37,31,25,18,13],
+          "25": [40,40,40,33,26,21,16,10], "32": [25,25,25,25,23,18,13,8],
+          "40": [25,25,25,25,20,16,12,7], "50": [25,25,25,23,17,14,8,5],
+          "65": [16,16,16,16,16,13,7,5], "80": [16,16,16,16,14,10,7,5],
+          "100": [16,16,16,16,14,10,7,5]
+        }
+      }
+    },
+    {
+      "id": "valtec-vt192", "manufacturer": "VALTEC", "model": "VT.192.N", "kind": "strainer",
+      "source_ids": ["vt192-0825"], "dimension_status": "verified",
+      "temperature_c": [5,150], "connection_sex": "female", "connection_standard": "G",
+      "drive": "none", "mounting": "horizontal_cap_down",
+      "notes": ["Косой фильтр. Предусмотреть отдельное место для извлечения сетки; H не является этим расстоянием."],
+      "columns": ["dn","article_suffix","thread","L","H_below_axis","pn_bar"],
+      "rows": [
+        [15,"04","1/2",55,40,20], [20,"05","3/4",69,50,20],
+        [25,"06","1",90,61,20], [32,"07","1 1/4",98,69,16],
+        [40,"08","1 1/2",105,77,16], [50,"09","2",125,87,16]
+      ]
+    },
+    {
+      "id": "valtec-vt161", "manufacturer": "VALTEC", "model": "VT.161.N", "kind": "check",
+      "source_ids": ["vt161-0525","vt161-drawing"], "dimension_status": "conflict",
+      "temperature_c": [-20,90], "connection_sex": "female", "connection_standard": "G",
+      "drive": "none", "mounting": "any",
+      "notes": ["КАРАНТИН: паспорт и габаритный чертёж расходятся; не выбирать автоматически и не наносить монтажный размер."],
+      "columns": ["dn","article_suffix","thread","passport_A","passport_B","drawing_L","drawing_diameter","pn_bar"],
+      "rows": [
+        [15,"04","1/2",34.5,46,47,35.5,40], [20,"05","3/4",42,54,48,37.5,40],
+        [25,"06","1",45.5,58,58.5,48,40], [32,"07","1 1/4",59,67,62.5,58,25],
+        [40,"08","1 1/2",68,75.5,75.5,70.5,25], [50,"09","2",79,80.5,83,84,25]
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "proaqua-pa22524p", "article": "PA22524P", "manufacturer": "PRO AQUA",
+      "pipe_material": "ppr", "pipe_system": "proaqua_ppr", "pipe_outer_diameter_mm": 63,
+      "joining": "socket_fusion", "connection_standard": "G", "thread": "2", "connection_sex": "female",
+      "pn_bar": null, "max_temperature_c": null, "dimension_status": "verified",
+      "dimensions_mm": {"L": 77}, "source_ids": ["proaqua-ppr-2026", "proaqua-fittings-passport"]
+    },
+    {
+      "id": "valtec-vtp707-06309", "article": "VTp.707.0.06309", "manufacturer": "VALTEC",
+      "pipe_material": "ppr", "pipe_system": "valtec_ppr", "pipe_outer_diameter_mm": 63,
+      "joining": "socket_fusion", "connection_standard": "G", "thread": "2", "connection_sex": "male",
+      "pn_bar": 25, "max_temperature_c": 95, "dimension_status": "conflict",
+      "dimensions_mm": {"passport_L": 102, "drawing_L": 124.5, "passport_socket_depth": 26},
+      "source_ids": ["vtp-0626", "vtp707-drawing"]
+    },
+    {
+      "id": "valtec-vtp761-06309", "article": "VTp.761.0.06309", "manufacturer": "VALTEC",
+      "pipe_material": "ppr", "pipe_system": "valtec_ppr", "pipe_outer_diameter_mm": 63,
+      "joining": "socket_fusion", "connection_standard": "G", "thread": "2", "connection_sex": "male",
+      "pn_bar": 25, "max_temperature_c": 95, "dimension_status": "conflict",
+      "dimensions_mm": {"passport_L": 85, "drawing_L": 94.3, "passport_socket_depth": 27},
+      "source_ids": ["vtp-0626", "vtp761-drawing"]
+    }
+  ],
+  "reducers": [
+    {
+      "id": "valtec-vtr580-0907", "article": "VTr.580.N.0907", "manufacturer": "VALTEC",
+      "large_dn": 50, "small_dn": 32, "connection_standard": "G",
+      "large_thread": "2", "large_sex": "male", "small_thread": "1 1/4", "small_sex": "male",
+      "pn_bar": 25, "temperature_c": [-40,250], "pressure_temperature": [[120,25],[200,20],[250,17]],
+      "dimension_status": "verified", "dimensions_mm": {"L": 41},
+      "source_ids": ["vtr-1025", "vtr580-drawing"]
+    }
+  ],
+  "thread_connectors": [
+    {
+      "id": "valtec-vtr582-0009", "article": "VTr.582.N.0009", "manufacturer": "VALTEC",
+      "connection_standard": "G", "equipment_thread": "2", "equipment_sex": "male",
+      "pipe_connector_thread": "2", "pipe_connector_sex": "male",
+      "pn_bar": 25, "temperature_c": [-40,250], "dimension_status": "verified",
+      "dimensions_mm": {"L": 44}, "source_ids": ["vtr-1025", "vtr582-drawing"]
+    }
+  ],
+  "pipe_clamps": {
+    "manufacturer": "Walraven", "model": "BIS Bifix 1301", "source_ids": ["walraven-1301-0425"],
+    "pipe_material": "stainless_steel", "thread": "M8",
+    "columns": ["article","d_min","d_max","B","H","h","b","s","fa_z_n"],
+    "rows": [
+      ["3117023",20,23,67,42,24,20,1.25,900],
+      ["3117029",25,28,72,47,27,20,1.25,900],
+      ["3117035",31,35,80,55,31,20,1.25,900],
+      ["3117043",40,43,87,62,35,20,1.25,900],
+      ["3117049",47,51,96,71,39,20,1.25,900],
+      ["3117063",57,64,108,83,45,20,1.25,900]
+    ]
+  }
+}

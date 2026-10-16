@@ -19,6 +19,9 @@ from dataclasses import dataclass
 from html import escape
 from math import hypot
 from pathlib import Path
+import os
+import re
+import tempfile
 from typing import Iterable
 from xml.etree import ElementTree
 
@@ -590,6 +593,7 @@ def build_typical_floor_assembly(
     slope_dn50: float = 0.03,
     slope_dn100: float = 0.02,
     junction_spacing_mm: float = 60.0,
+    riser_dn_mm: int | None = None,
 ) -> WastewaterFloorAssembly:
     """Build one connected gravity branch from fixtures to a K1 riser.
 
@@ -607,6 +611,8 @@ def build_typical_floor_assembly(
         raise ValueError("design slopes must be positive")
     if junction_spacing_mm < 45.0:
         raise ValueError("junction_spacing_mm must be at least 45 mm")
+    if riser_dn_mm is not None and (type(riser_dn_mm) is not int or not 100 <= riser_dn_mm <= 2000):
+        raise ValueError("riser_dn_mm must be an explicit nominal diameter of at least 100 mm")
 
     raw = tuple(fixtures or default_typical_floor_fixtures())
     if len(raw) < 3:
@@ -810,14 +816,14 @@ def build_typical_floor_assembly(
                 "riser_upper",
                 "riser_top",
                 "riser_join",
-                max(100, outlet_dn),
+                max(100, outlet_dn, riser_dn_mm or 0),
                 "riser",
             ),
             DraftPipeSegment(
                 "riser_lower",
                 "riser_join",
                 "riser_bottom",
-                max(100, outlet_dn),
+                max(100, outlet_dn, riser_dn_mm or 0),
                 "riser",
             ),
         )
@@ -995,7 +1001,7 @@ def build_typical_floor_assembly(
                 "riser_branch_wye",
                 "wye_45",
                 DraftPoint(riser_x, riser_y),
-                max(100, outlet_dn),
+                max(100, outlet_dn, riser_dn_mm or 0),
                 ("riser_upper", "riser_lower"),
             ),
         )
@@ -1090,8 +1096,9 @@ def _slope_sign_svg(
     end: DraftPoint,
     *,
     xy,
+    obstacles: tuple[tuple[float, float, float, float], ...] = (),
 ) -> str:
-    """Render an open angle pointing towards the downstream end.
+    """Render an acute angle pointing downstream, with a horizontal lower leg.
 
     The numeric value is placed beside the angle.  No line is allowed below
     the value: a horizontal baseline would turn the sign into an underlined
@@ -1099,32 +1106,133 @@ def _slope_sign_svg(
     """
     x1, y1 = xy(start)
     x2, y2 = xy(end)
+    from app.pz.leader_layout import _text_width, _boxes_overlap
+
     centre_x = (x1 + x2) / 2
     sign_y = min(y1, y2) - 17.0
     direction = 1.0 if x2 >= x1 else -1.0
+    value = f"{annotation.slope:.3f}".replace(".", ",")
+    text_width = _text_width(value, _FONT_H_2_5)
+
+    def bounds(cx):
+        text_x = cx + direction * 3.0
+        text_left = text_x - text_width if direction > 0 else text_x
+        return (min(text_left, cx + direction * 18.0), sign_y - 2.0 - _FONT_H_2_5,
+                max(text_left + text_width, cx + direction * 18.0), sign_y + 1.0)
+
+    # Prefer the historical centre. If it touches a connection/fitting/wall,
+    # move ONLY the annotation along its own DN run, never engineering ports.
+    left, right = sorted((x1, x2))
+    relative = bounds(0.)
+    candidates = {centre_x, left + 2 - direction * 8, right - 2 - direction * 18}
+    for obstacle in obstacles:
+        candidates.update((obstacle[0] - 2.1 - relative[2], obstacle[2] + 2.1 - relative[0]))
+    candidates = sorted(candidates, key=lambda value: (abs(value - centre_x), -value))
+    placed = False
+    for rise in (0., 2., 4., 6., 8.):
+        sign_y = min(y1, y2) - 17.0 - rise
+        for candidate in candidates:
+            box = bounds(candidate)
+            # The angle points to this run. The adjacent number may extend past
+            # its end, provided it clears geometry; it is not a pipe-length mark.
+            arm_x = candidate + direction * 8.0
+            apex_x = candidate + direction * 18.0
+            if min(arm_x, apex_x) < left + 2 or max(arm_x, apex_x) > right - 2:
+                continue
+            if not any(_boxes_overlap(box, obstacle, 2.0) for obstacle in obstacles):
+                centre_x = candidate
+                placed = True
+                break
+        if placed:
+            break
+    if not placed:
+        raise ValueError(f"Нет свободного места для подписи уклона {annotation.annotation_id}; геометрия не изменена")
+
     apex_x = centre_x + direction * 18.0
     arm_x = apex_x - direction * 10.0
     text_x = arm_x - direction * 5.0
     text_anchor = "end" if direction > 0 else "start"
     direction_label = "right" if direction > 0 else "left"
-    value = f"{annotation.slope:.3f}".replace(".", ",")
     return (
         f'<g data-slope-marker="{escape(annotation.annotation_id)}" '
         f'data-first-segment="{escape(annotation.first_segment_id)}" '
         f'data-last-segment="{escape(annotation.last_segment_id)}" '
         f'data-placement="above" data-slope-value="{value}" '
-        f'data-sign-shape="open-angle" data-slope-direction="{direction_label}" '
+        f'data-sign-shape="acute-angle" data-slope-direction="{direction_label}" '
+        'data-lower-leg-horizontal="true" '
         'data-label-underline="false">'
         f'<path data-slope-angle="true" '
         f'd="M{arm_x:.1f},{sign_y-6.0:.1f} '
         f'L{apex_x:.1f},{sign_y:.1f} '
-        f'L{arm_x:.1f},{sign_y+6.0:.1f}" fill="none" '
+        f'L{arm_x:.1f},{sign_y:.1f}" fill="none" '
         f'stroke="{BLACK}" stroke-width="1.3"/>'
-        f'<text x="{text_x:.1f}" y="{sign_y+3.5:.1f}" '
+        f'<text x="{text_x:.1f}" y="{sign_y-2.0:.1f}" '
         f'text-anchor="{text_anchor}" font-family="{FONT}" '
         f'font-size="{_FONT_H_2_5:.3f}">'
         f'{value}</text></g>'
     )
+
+
+def _floor_annotation_obstacles(svg: str) -> tuple[tuple[float, float, float, float], ...]:
+    """Fixed-coordinate strokes/text near the collector; not a general SVG auditor."""
+    from app.pz.leader_layout import _text_width
+
+    boxes = []
+
+    def visit(element):
+        if element.get("data-slope-marker"):
+            return
+        if element.get("transform"):
+            return  # UGO/local-coordinate groups are not in the drawing coordinate system.
+        if element.tag == "line":
+            x1, y1, x2, y2 = (float(element.get(k)) for k in ("x1", "y1", "x2", "y2"))
+            half_stroke = float(element.get("stroke-width", 1)) / 2
+            boxes.append((min(x1, x2) - half_stroke, min(y1, y2) - half_stroke,
+                          max(x1, x2) + half_stroke, max(y1, y2) + half_stroke))
+        elif element.tag == "rect" and element.get("data-architecture"):
+            x, y, w, h = (float(element.get(k)) for k in ("x", "y", "width", "height"))
+            boxes.extend(((x - 1, y, x + 1, y + h), (x + w - 1, y, x + w + 1, y + h),
+                          (x, y - 1, x + w, y + 1), (x, y + h - 1, x + w, y + h + 1)))
+        elif element.tag == "text" and all(element.get(k) is not None for k in ("x", "y", "font-size")):
+            size = float(element.get("font-size"))
+            width = _text_width("".join(element.itertext()), size)
+            x, y = float(element.get("x")), float(element.get("y"))
+            anchor = element.get("text-anchor", "start")
+            left = x - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+            boxes.append((left, y - size, left + width, y + .25 * size))
+        for child in element:
+            visit(child)
+
+    visit(ElementTree.fromstring(svg))
+    return tuple(boxes)
+
+
+def _floor_slope_bounds(element):
+    """Validate actual emitted coordinates, not only self-declared SVG flags."""
+    from app.pz.leader_layout import _text_width
+
+    angle = element.find("path")
+    text = element.find("text")
+    if angle is None or text is None:
+        return None
+    number = r"(-?\d+(?:\.\d+)?)"
+    match = re.fullmatch(rf"M{number},{number} L{number},{number} L{number},{number}", angle.get("d", ""))
+    if not match:
+        return None
+    heel_x, top_y, apex_x, y, lower_x, lower_y = map(float, match.groups())
+    try:
+        tx, ty, size = (float(text.get(k)) for k in ("x", "y", "font-size"))
+    except (ValueError, TypeError):
+        return None
+    right = element.get("data-slope-direction") == "right"
+    width = _text_width("".join(text.itertext()), size)
+    left = tx - width if right else tx
+    if (heel_x != lower_x or y != lower_y or top_y >= y or heel_x == apex_x
+            or (apex_x > heel_x) != right or not ty < y
+            or text.get("text-anchor") != ("end" if right else "start")
+            or (tx >= heel_x if right else tx <= heel_x)):
+        return None
+    return min(left, heel_x, apex_x), min(ty - size, top_y), max(left + width, heel_x, apex_x), y + 1
 
 
 def _diameter_transition_svg(
@@ -1167,6 +1275,36 @@ def _diameter_transition_svg(
     )
 
 
+def _fixture_schematic_room_span(assembly, fixture, *, scale, compact, annotation_scale):
+    """Horizontal drawing envelope in model coordinates, NOT room dimensions.
+
+    All six supported appliance symbols fit within +/-30 local SVG units
+    including their strokes (guarded by a rendered-catalog regression). The
+    envelope is translated from the SAME outlet anchor as the drawn symbol.
+    No architecture, pipe length or bill-of-materials data is inferred here.
+    """
+    from app.pz.leader_layout import _text_width
+
+    outlet_x = assembly.port(fixture.fixture_outlet_port_id).point.x_mm
+    ax, _ = get_ugo_connection_anchor(fixture.kind)
+    left = outlet_x + (-30 - ax) * _FIXTURE_SYMBOL_RATIO
+    right = outlet_x + (30 - ax) * _FIXTURE_SYMBOL_RATIO
+    if fixture.trap_mode == "external":
+        trap_x = assembly.port(fixture.trap_inlet_port_id).point.x_mm
+        left = min(left, trap_x - 2 * _TRAP_SYMBOL_RATIO)
+        right = max(right, trap_x + 39 * _TRAP_SYMBOL_RATIO)
+    if compact:
+        captions = [f"{fixture.quantity} шт."] if fixture.quantity > 1 else []
+    else:
+        quantity = f"; {fixture.quantity} шт." if fixture.quantity > 1 else ""
+        captions = [fixture.fixture_id,
+                    f"{_FIXTURE_LABEL[fixture.kind]}; {_system_mark(assembly.system)} ⌀{fixture.dn_mm}{quantity}"]
+    for caption in captions:
+        half = _text_width(caption, _FONT_H_2_5 * annotation_scale) / (2 * scale)
+        left, right = min(left, outlet_x - half), max(right, outlet_x + half)
+    return left, right
+
+
 def render_typical_floor_assembly_svg(
     assembly: WastewaterFloorAssembly,
     *,
@@ -1178,6 +1316,7 @@ def render_typical_floor_assembly_svg(
     render_architecture: bool = True,
     compact_fixture_annotations: bool = False,
     annotation_scale: float = 1.0,
+    include_riser_id: bool = False,
 ) -> str:
     """Render the connected floor graph using the canonical UGO catalogue."""
     errors = assembly.validate()
@@ -1200,8 +1339,10 @@ def render_typical_floor_assembly_svg(
         if compact_fixture_annotations
         else ""
     )
+    riser_metadata = f'data-floor-riser-id="{escape(assembly.riser_id)}" ' if include_riser_id else ''
     body: list[str] = [
         f'<g data-floor-assembly="{escape(assembly.assembly_id)}" '
+        f'{riser_metadata}'
         f'data-floor="{assembly.floor_no}" data-system="{assembly.system}"'
         f'{annotation_profile}>'
     ]
@@ -1216,20 +1357,53 @@ def render_typical_floor_assembly_svg(
         slab_y = 228.0
         shaft_left = riser_x - 30.0
 
-        contiguous_rooms: list[tuple[str, list[float]]] = []
+        contiguous_rooms: list[tuple[str, list[FloorFixtureDraft]]] = []
         for fixture in assembly.fixtures:
-            fixture_x = assembly.port(fixture.junction_port_id).point.x_mm
             room_label = fixture.room_label.strip() or "Помещение"
             if contiguous_rooms and contiguous_rooms[-1][0] == room_label:
-                contiguous_rooms[-1][1].append(fixture_x)
+                contiguous_rooms[-1][1].append(fixture)
             else:
-                contiguous_rooms.append((room_label, [fixture_x]))
+                contiguous_rooms.append((room_label, [fixture]))
         room_boundaries = [first_x]
-        for (_, left_points), (_, right_points) in zip(
+        # The existing cleanout callout is fixed in sheet coordinates. Its
+        # text can occupy the free interval on a mirrored fragment; do not
+        # move a schematic partition through it while clearing appliances.
+        from app.pz.leader_layout import _text_width
+
+        direction = -1.0 if mirror_x else 1.0
+        cap_screen_x, _ = xy("cleanout_cap")
+        callout_width = max(_text_width(text, _FONT_H_2_5) for text in
+                            ("Прочистка", f"{_system_mark(assembly.system)} ⌀{assembly.fixtures[0].dn_mm}"))
+        callout_left, callout_right = sorted(
+            (point - x) / (direction * scale) for point in
+            (cap_screen_x - 108, cap_screen_x - 108 + callout_width)
+        )
+        callout_left -= 3 / scale
+        callout_right += 3 / scale
+        for (_, left_fixtures), (_, right_fixtures) in zip(
             contiguous_rooms,
             contiguous_rooms[1:],
         ):
-            room_boundaries.append((max(left_points) + min(right_points)) / 2)
+            def span(fixture):
+                return _fixture_schematic_room_span(
+                    assembly, fixture, scale=scale, compact=compact_fixture_annotations,
+                    annotation_scale=annotation_scale,
+                )
+
+            left_edge = max(span(f)[1] for f in left_fixtures) + 3 / scale
+            right_edge = min(span(f)[0] for f in right_fixtures) - 3 / scale
+            if left_edge > right_edge:
+                raise ValueError("Нет места для условной границы помещений; трубы и приборы не изменены")
+            previous = (max(assembly.port(f.junction_port_id).point.x_mm for f in left_fixtures)
+                        + min(assembly.port(f.junction_port_id).point.x_mm for f in right_fixtures)) / 2
+            intervals = [(left_edge, right_edge)]
+            if left_edge < callout_right and callout_left < right_edge:
+                intervals = [(a, b) for a, b in ((left_edge, min(right_edge, callout_left)),
+                                               (max(left_edge, callout_right), right_edge)) if a < b]
+            if not intervals:
+                raise ValueError("Нет места для условной границы помещений; трубы и приборы не изменены")
+            candidates = [previous if a <= previous <= b else (a + b) / 2 for a, b in intervals]
+            room_boundaries.append(min(candidates, key=lambda value: abs(value - previous)))
         room_boundaries.append(shaft_left)
 
         sx1, sy1 = xy(DraftPoint(first_x, slab_y))
@@ -1310,7 +1484,8 @@ def render_typical_floor_assembly_svg(
         outlet = xy(fixture.fixture_outlet_port_id)
         ax, ay = get_ugo_connection_anchor(fixture.kind)
         fixture_scale = _FIXTURE_SYMBOL_RATIO * scale
-        origin_x = outlet[0] - ax * fixture_scale
+        direction = -1.0 if mirror_x else 1.0
+        origin_x = outlet[0] - direction * ax * fixture_scale
         origin_y = outlet[1] - ay * fixture_scale
         body.append(
             f'<g data-floor-fixture="{escape(fixture.fixture_id)}" '
@@ -1320,6 +1495,7 @@ def render_typical_floor_assembly_svg(
                 origin_x,
                 origin_y,
                 scale=fixture_scale,
+                mirror_x=mirror_x,
             )
         )
         if fixture.trap_mode == "external":
@@ -1328,9 +1504,10 @@ def render_typical_floor_assembly_svg(
             body.append(
                 render_ugo(
                     "trap",
-                    trap_in[0] + 14.0 * trap_scale,
+                    trap_in[0] + direction * 14.0 * trap_scale,
                     trap_in[1] + 20.0 * trap_scale,
                     scale=trap_scale,
+                    mirror_x=mirror_x,
                 )
             )
         body.append("</g>")
@@ -1533,6 +1710,7 @@ def render_typical_floor_assembly_svg(
         )
     )
 
+    pending_slopes = []
     for group_index, annotation in enumerate(slope_annotations, start=1):
         first = assembly.segment(annotation.first_segment_id)
         last = assembly.segment(annotation.last_segment_id)
@@ -1550,9 +1728,8 @@ def render_typical_floor_assembly_svg(
                 font_size=_FONT_H_2_5,
             )
         )
-        body.append(
-            _slope_sign_svg(annotation, start, end, xy=xy)
-        )
+        pending_slopes.append((len(body), annotation, start, end))
+        body.append("")
 
     for transition in diameter_transitions:
         downstream = assembly.segment(transition.downstream_segment_id)
@@ -1590,18 +1767,21 @@ def render_typical_floor_assembly_svg(
             + (collector_end.y_mm - collector_start.y_mm) * 0.84,
         )
     )
+    flow_direction = -1.0 if mirror_x else 1.0
+    fitting_label_anchor = 'text-anchor="end" ' if mirror_x else ''
     body.extend(
         (
             f'<path data-flow-direction="collector" '
-            f'd="M{flow_x-8:.1f},{flow_y-5:.1f} '
-            f'L{flow_x+3:.1f},{flow_y:.1f} '
-            f'L{flow_x-8:.1f},{flow_y+5:.1f} Z" fill="{BLACK}"/>',
+            f'd="M{flow_x-flow_direction*8:.1f},{flow_y-5:.1f} '
+            f'L{flow_x+flow_direction*3:.1f},{flow_y:.1f} '
+            f'L{flow_x-flow_direction*8:.1f},{flow_y+5:.1f} Z" fill="{BLACK}"/>',
             f'<path data-flow-direction="riser" '
             f'd="M{riser_join_x-6:.1f},{riser_join_y+42:.1f} '
             f'L{riser_join_x:.1f},{riser_join_y+54:.1f} '
             f'L{riser_join_x+6:.1f},{riser_join_y+42:.1f} Z" fill="{BLACK}"/>',
             f'<text data-fitting-label="riser_branch_wye_45" '
-            f'x="{riser_join_x+17:.1f}" y="{riser_join_y-14:.1f}" '
+            f'x="{riser_join_x+flow_direction*17:.1f}" y="{riser_join_y-14:.1f}" '
+            f'{fitting_label_anchor}'
             f'font-family="{FONT}" font-size="{_FONT_H_2_5:.3f}">Тр. 45°</text>',
         )
     )
@@ -1622,6 +1802,13 @@ def render_typical_floor_assembly_svg(
                 'контрольный путь троса до стояка</text>',
             )
         )
+    annotation_obstacles = _floor_annotation_obstacles("".join(body) + "</g>")
+    occupied_slopes = []
+    for index, annotation, start, end in pending_slopes:
+        sign = _slope_sign_svg(annotation, start, end, xy=xy,
+                               obstacles=(*annotation_obstacles, *occupied_slopes))
+        body[index] = sign
+        occupied_slopes.append(_floor_slope_bounds(ElementTree.fromstring(sign)))
     body.append("</g>")
     svg = "".join(body)
     convention_errors = audit_floor_rendering_conventions(assembly, svg)
@@ -1669,6 +1856,7 @@ def audit_floor_rendering_conventions(
         for row in root.iter()
         if row.get("data-slope-marker")
     }
+    obstacles = _floor_annotation_obstacles(svg)
     for expected in expected_slopes:
         element = slope_elements.get(expected.annotation_id)
         if element is None:
@@ -1688,7 +1876,8 @@ def audit_floor_rendering_conventions(
                 )
             )
         elif (
-            element.get("data-sign-shape") != "open-angle"
+            element.get("data-sign-shape") != "acute-angle"
+            or element.get("data-lower-leg-horizontal") != "true"
             or element.get("data-label-underline") != "false"
         ):
             findings.append(
@@ -1698,6 +1887,21 @@ def audit_floor_rendering_conventions(
                     "уклон должен быть показан открытым углом без линии под текстом",
                 )
             )
+        else:
+            from app.pz.leader_layout import _boxes_overlap
+
+            bounds = _floor_slope_bounds(element)
+            if bounds is None:
+                findings.append(DraftingConventionFinding(
+                    "invalid_slope_sign_geometry", expected.annotation_id,
+                    "Нижнее плечо знака уклона должно быть горизонтальным, вершина — по потоку",
+                ))
+            elif any(_boxes_overlap(bounds, obstacle, 1.8) for obstacle in obstacles):
+                # Placement uses 2 units; 0.2 accommodates SVG's 0.1-unit rounding.
+                findings.append(DraftingConventionFinding(
+                    "slope_annotation_collision", expected.annotation_id,
+                    "Подпись уклона касается линии/подписи; требуется свободное размещение",
+                ))
 
     transition_elements = {
         row.get("data-diameter-transition"): row
@@ -1780,108 +1984,130 @@ def audit_floor_rendering_conventions(
     return tuple(findings)
 
 
+_FLOOR_CONTROL_CHECKS = (
+    "Все трубы начинаются от приборов",
+    "Мойка, ванна и умывальник - с сифонами",
+    "Унитаз - DN100 и последний перед стояком",
+    "Ветви объединены в один самотечный коллектор",
+    "Прочистка - заглушённый конец первого тройника",
+    "Трос проходит по оси ветви до стояка",
+)
+_FLOOR_CONTROL_NOTICE = "Контроль монтажной логики. Не проектная документация. Не для выпуска."
+
+
+def _floor_control_text(value, *, x, y, width, bottom, size=12, pitch=17):
+    """Measured complete text, including unbroken identifiers; fixed-size type."""
+    from app.pz.leader_layout import _text_width
+
+    text = " ".join(value.split())
+    rows = []
+    while text:
+        end = 0
+        for index in range(1, len(text) + 1):
+            if _text_width(text[:index], size) > width:
+                break
+            end = index
+        if not end or y > bottom:
+            raise ValueError("Пояснения контрольного этажа не помещаются; PDF не изменён")
+        if end < len(text):
+            space = text.rfind(" ", 0, end + 1)
+            if space > 0:
+                end = space
+        rows.append(f'<text x="{x:g}" y="{y:g}" font-family="{FONT}" '
+                    f'font-size="{size:g}">{escape(text[:end])}</text>')
+        text = text[end:].lstrip()
+        y += pitch
+    return "".join(rows), y
+
+
+def _validate_floor_control_svg(svg):
+    """Check the fixed control-sheet text zones, without modifying the drawing."""
+    from app.pz.leader_layout import _text_width
+
+    root = ElementTree.fromstring(svg)
+    if root.get("data-release-ready") != "false":
+        raise ValueError("Контрольный этаж не является проектным выпуском")
+
+    def visit(element, transformed=False, drawing=False):
+        transformed = transformed or bool(element.get("transform"))
+        drawing = drawing or element.get("data-floor-assembly") is not None
+        if element.tag.endswith("text") and not transformed:
+            size = float(element.get("font-size"))
+            width = _text_width("".join(element.itertext()), size)
+            x, y = float(element.get("x")), float(element.get("y"))
+            anchor = element.get("text-anchor", "start")
+            left = x - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+            right = 854 if drawing else 1089
+            if left < 34 or left + width > right or y - size < 34 or y > 760:
+                raise ValueError("Подпись контрольного этажа выходит за поле; PDF не изменён")
+        if drawing and element.tag.endswith("rect") and element.get("data-architecture"):
+            x = float(element.get("x"))
+            if x < 34 or x + float(element.get("width")) > 854:
+                raise ValueError("Геометрия этажа не помещается на контрольном листе; PDF не изменён")
+        children = list(element)
+        for i, child in enumerate(children):
+            # Room captions must not cross their own schematic room boundary.
+            if child.get("data-architecture") == "room" and i + 1 < len(children):
+                label = children[i + 1]
+                if label.tag.endswith("text") and _text_width(
+                    "".join(label.itertext()), float(label.get("font-size"))
+                ) > float(child.get("width")) - 8:
+                    raise ValueError("Название помещения не помещается на контрольном листе; PDF не изменён")
+            visit(child, transformed, drawing)
+    visit(root)
+
+
 def build_typical_floor_control_sheet_svg(
     assembly: WastewaterFloorAssembly,
 ) -> str:
-    """A4 landscape approval sheet for one repeatable K1 floor module."""
-    width, height = 1123, 794
-    margin = 34
-    diagram_x = 112.0
-    diagram_y = 106.0
-    diagram_scale = 2.15
-    panel_x = 870.0
+    """Non-release A4 landscape control around the shared floor renderer."""
     system = _system_mark(assembly.system)
     elevation = f"{assembly.floor_elevation_m:+.3f}".replace(".", ",")
     body = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
-        'width="1122.519685" height="793.700787" viewBox="0 0 1123 794">',
+        'width="1122.519685" height="793.700787" viewBox="0 0 1123 794" data-release-ready="false">',
         '<rect width="1123" height="794" fill="white"/>',
-        f'<rect x="{margin}" y="{margin}" width="{width-2*margin}" '
-        f'height="{height-2*margin}" fill="none" stroke="{BLACK}" stroke-width="2"/>',
-        f'<text x="{margin+24}" y="{margin+36}" font-family="{FONT}" '
-        'font-size="21" font-weight="bold">Контрольный модуль 02. Типовой этаж системы К1</text>',
-        f'<text x="{margin+24}" y="{margin+59}" font-family="{FONT}" '
-        f'font-size="11.5" fill="{GRAY}">Параметрическая сборка: приборы - '
-        'гидрозатворы - общая ветвь - прочистка - стояк</text>',
-        f'<text x="{margin+24}" y="{diagram_y+24}" font-family="{FONT}" '
-        f'font-size="13" font-weight="bold">{assembly.floor_no} этаж</text>',
-        f'<text x="{margin+24}" y="{diagram_y+43}" font-family="{FONT}" '
-        f'font-size="10">отм. {elevation}</text>',
-        render_typical_floor_assembly_svg(
-            assembly,
-            diagnostics=False,
-            x=diagram_x,
-            y=diagram_y,
-            scale=diagram_scale,
-        ),
-        f'<line x1="{panel_x}" y1="{margin+86}" x2="{panel_x}" '
-        f'y2="{height-margin-26}" stroke="#777" stroke-width="1"/>',
-        f'<text x="{panel_x+18}" y="{margin+111}" font-family="{FONT}" '
-        'font-size="13" font-weight="bold">Проверки модуля</text>',
+        f'<text x="58" y="70" font-family="{FONT}" font-size="21" font-weight="bold">'
+        'Контрольный модуль 02. Типовой этаж системы К1</text>',
+        f'<text x="58" y="93" font-family="{FONT}" font-size="11.5" fill="{GRAY}">'
+        'Параметрическая сборка: приборы - гидрозатворы - общая ветвь - прочистка - стояк</text>',
+        f'<text x="58" y="112" font-family="{FONT}" font-size="11">{_FLOOR_CONTROL_NOTICE}</text>',
+        f'<text x="58" y="130" font-family="{FONT}" font-size="13" font-weight="bold">'
+        f'{assembly.floor_no} этаж</text>',
+        f'<text x="58" y="149" font-family="{FONT}" font-size="10">отм. {elevation}</text>',
+        render_typical_floor_assembly_svg(assembly, diagnostics=False, x=112., y=106., scale=2.15),
+        f'<text x="888" y="145" font-family="{FONT}" font-size="13" font-weight="bold">Проверки модуля</text>',
     ]
-    checks = (
-        "Все трубы начинаются от приборов",
-        "Мойка, ванна и умывальник - с сифонами",
-        "Унитаз - DN100 и последний перед стояком",
-        "Ветви объединены в один самотечный коллектор",
-        "Прочистка - заглушённый конец первого тройника",
-        "Трос проходит по оси ветви до стояка",
-    )
-    cy = margin + 140
-    for index, value in enumerate(checks, start=1):
-        body.extend(
-            (
-                f'<circle cx="{panel_x+25}" cy="{cy-4}" r="8" fill="none" '
-                f'stroke="{BLACK}" stroke-width="1.3"/>',
-                f'<text x="{panel_x+25}" y="{cy}" text-anchor="middle" '
-                f'font-family="{FONT}" font-size="8.5" font-weight="bold">{index}</text>',
-                f'<text x="{panel_x+42}" y="{cy}" font-family="{FONT}" '
-                f'font-size="8.7">{escape(value[:35])}</text>',
-            )
-        )
-        if len(value) > 35:
-            split = value.rfind(" ", 0, 35)
-            if split <= 0:
-                split = 35
-            body[-1] = (
-                f'<text x="{panel_x+42}" y="{cy-5}" font-family="{FONT}" '
-                f'font-size="8.7">{escape(value[:split])}</text>'
-            )
-            body.append(
-                f'<text x="{panel_x+42}" y="{cy+8}" font-family="{FONT}" '
-                f'font-size="8.7">{escape(value[split+1:])}</text>'
-            )
-        cy += 48
-
-    body.extend(
-        (
-            f'<line x1="{panel_x+18}" y1="{cy+2}" x2="{width-margin-18}" '
-            f'y2="{cy+2}" stroke="#777" stroke-width="0.8"/>',
-            f'<text x="{panel_x+18}" y="{cy+27}" font-family="{FONT}" '
-            f'font-size="10" font-weight="bold">Нормативная трассировка</text>',
-            f'<text x="{panel_x+18}" y="{cy+47}" font-family="{FONT}" '
-            'font-size="8.5">СП 30.13330.2020:</text>',
-            f'<text x="{panel_x+18}" y="{cy+62}" font-family="{FONT}" '
-            'font-size="8.5">17.2 - гидрозатворы;</text>',
-            f'<text x="{panel_x+18}" y="{cy+77}" font-family="{FONT}" '
-            'font-size="8.5">17.3, 19.1 - уклоны;</text>',
-            f'<text x="{panel_x+18}" y="{cy+92}" font-family="{FONT}" '
-            'font-size="8.5">18.26 - прочистка в начале;</text>',
-            f'<text x="{panel_x+18}" y="{cy+107}" font-family="{FONT}" '
-            'font-size="8.5">19.12 - минимальные диаметры.</text>',
-            f'<text x="{panel_x+18}" y="{height-margin-62}" font-family="{FONT}" '
-            f'font-size="8" fill="{GRAY}">Уклоны являются входами модуля;</text>',
-            f'<text x="{panel_x+18}" y="{height-margin-48}" font-family="{FONT}" '
-            f'font-size="8" fill="{GRAY}">гидравлическая проверка выполняется</text>',
-            f'<text x="{panel_x+18}" y="{height-margin-34}" font-family="{FONT}" '
-            f'font-size="8" fill="{GRAY}">отдельным расчётным слоем.</text>',
-            f'<text x="{margin+18}" y="{height-margin-16}" font-family="{FONT}" '
-            f'font-size="9" fill="{GRAY}">Графический язык - приложение В '
-            f'ГОСТ Р 21.620-2023. Система: {system}. Контрольный лист не входит в комплект ПД.</text>',
-            '</svg>',
-        )
-    )
-    return "".join(body)
+    cy = 174
+    for index, check in enumerate(_FLOOR_CONTROL_CHECKS, 1):
+        text, cy = _floor_control_text(f"{index}. {check}", x=888, y=cy, width=185, bottom=500)
+        body.append(text)
+        cy += 7
+    cy += 15
+    for value in (
+        "Нормативная трассировка",
+        "СП 30.13330.2020:",
+        "17.2 - гидрозатворы;",
+        "17.3, 19.1 - уклоны;",
+        "18.26 - прочистка в начале;",
+        "19.12 - минимальные диаметры.",
+    ):
+        text, cy = _floor_control_text(value, x=888, y=cy, width=185, bottom=665, size=11, pitch=16)
+        body.append(text)
+    text, _ = _floor_control_text(
+        "Уклоны являются входами модуля; гидравлическая проверка выполняется отдельным расчётным слоем.",
+        x=888, y=max(cy + 15, 680), width=185, bottom=730, size=11, pitch=15)
+    body.extend((
+        text,
+        f'<text x="52" y="744" font-family="{FONT}" font-size="9" fill="{GRAY}">'
+        f'Графический язык - приложение В ГОСТ Р 21.620-2023. Система: {system}. '
+        'Контрольный лист не входит в комплект ПД.</text>',
+        f'<text x="1073" y="760" text-anchor="end" font-family="{FONT}" font-size="12">Лист 1 из 1</text>',
+        '</svg>',
+    ))
+    svg = "".join(body)
+    _validate_floor_control_svg(svg)
+    return svg
 
 
 def generate_typical_floor_control_pdf(
@@ -1903,7 +2129,18 @@ def generate_typical_floor_control_pdf(
         riser_id=riser_id,
     )
     svg = build_typical_floor_control_sheet_svg(assembly)
+    _validate_floor_control_svg(svg)
+    pdf = cairosvg.svg2pdf(bytestring=svg.encode("utf-8"))
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2pdf(bytestring=svg.encode("utf-8"), write_to=str(path))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".floor-control-",
+                                         suffix=".pdf", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(pdf)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(path)

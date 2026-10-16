@@ -21,13 +21,16 @@ MVP-упрощения (осознанные):
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import uuid
+from tempfile import TemporaryDirectory
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.intake.request_dto import (
@@ -61,6 +64,7 @@ from app.pz.proof import build_proof_graph
 from app.quality_gates import build_release_quality_report
 from app.pz.wastewater_topology import build_wastewater_topology
 from app.pz.defense import (
+    DefenseLayoutError,
     build_defense_payload,
     generate_expert_response_pdf,
 )
@@ -68,6 +72,9 @@ from app.pz.digital_passport import build_passport_info, new_passport_id
 from app.schemas.impact import ImpactPreviewInput
 from app.data.sp30_tables import list_consumer_norms
 from app.data.storm_cities import list_cities
+from app.web.fan_inputs import FanFormInput
+from app.web.fan_review import assess_fan_preview
+from app.pz.wastewater_scheme_service import generate_saved_fan_binding_preview
 
 router = APIRouter(prefix="/wizard", tags=["wizard"])
 _TPL = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -98,17 +105,22 @@ _DOCUMENT_GROUPS = (
 )
 
 _DOCUMENTS = (
-    ("common", "Пояснительная записка", "pz_pdf"),
+    ("ios2", "ИОС2 · объединённый PDF", "water_package_pdf"),
+    ("ios2", "Пояснительная записка", "pz_pdf"),
     ("common", "Паспорт проекта и нормативный контроль",
      "commission_control_pdf"),
     ("common", "Баланс водопотребления и водоотведения", "balance_pdf"),
-    ("common", "Сводная спецификация", "spec_pdf"),
-    ("common", "Сводная принципиальная схема", "scheme_pdf"),
+    ("ios2", "Спецификация водоснабжения", "spec_pdf"),
+    ("ios2", "Принципиальная схема водоснабжения", "scheme_pdf"),
     ("ios2", "Схема вводов и узлов учёта", "metering_scheme_pdf"),
+    ("ios2", "Дождевая вода · баланс и структура", "rainwater_reuse_pdf"),
     ("ios2", "Схема насосов, зон и ГВС", "pump_zone_scheme_pdf"),
     ("ios2", "Расчётные обоснования В1 и Т3", "v1_calculation_pdf"),
     ("ios2", "Расчёт и подбор насосов", "pump_selection_pdf"),
     ("ios2", "Гидравлический расчёт В2", "hydraulic_pdf"),
+    ("ios2", "В2 · вводы и насосная (предварительно)", "fire_station_input_pdf"),
+    ("ios2", "В2 · диафрагмы и отключения (проверка)", "fire_pressure_review_pdf"),
+    ("ios2", "В2 · насосная, стояки и узлы", "fire_station_scheme_pdf"),
     ("ios2", "Проверка живучести кольца В2", "resilience_pdf"),
     ("ios3", "Комплект ИОС3 К1, К2 и К3",
      "wastewater_package_pdf"),
@@ -125,12 +137,25 @@ _DOCUMENTS = (
 
 
 def _form_context(**values):
+    prefill = values.get("prefill")
+    fan = FanFormInput.from_request(prefill) if prefill else FanFormInput()
+    revision = ""
+    fan_matches_saved = False
+    if values.get("project_id"):
+        try:
+            revision = _STORE.source_sha256(values["project_id"])
+            fan_matches_saved = fan == FanFormInput.from_request(_STORE.load_revision(values["project_id"], revision))
+        except (FileNotFoundError, ValueError):
+            pass
     return {
         "consumer_norms": _CONSUMER_NORMS,
         "storm_cities": _STORM_CITIES,
         "question_definitions": QUESTION_DEFINITIONS,
         "advisories": [],
         "example_mode": False,
+        "fan_raw": json.dumps(fan.to_mapping(), ensure_ascii=False),
+        "fan_revision": revision,
+        "fan_matches_saved": fan_matches_saved,
         **values,
     }
 
@@ -159,18 +184,24 @@ def _group_documents(documents: list[dict]) -> tuple[list[dict], list[dict]]:
 
 def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
     """Единый каталог фактически выпущенных PDF для результата и Defense."""
+    from app.pz.ios2_orchestrator import bundle_artifact_readiness
+    from app.pz.artifact_readiness import WASTEWATER_GRAPHIC_ARTIFACTS, WASTEWATER_PACKAGE
+
+    generated = bundle_artifact_readiness(bundle)
+    graphic_labels = {attribute: label for label, attribute in WASTEWATER_GRAPHIC_ARTIFACTS.values()}
+    graphic_labels["wastewater_package_pdf"] = WASTEWATER_PACKAGE
     from app.pz.wastewater_k3_scheme_service import (
         assess_wastewater_k3_scheme_readiness,
     )
-    from app.pz.wastewater_scheme_service import (
-        assess_wastewater_scheme_readiness,
-    )
+    from app.pz.wastewater_graphic_exports import wastewater_graphic_export
     from app.pz.wastewater_pressure_scheme_service import (
         assess_wastewater_pressure_scheme_readiness,
     )
 
+    k1_k2_export = None
     try:
-        k1_k2_ready = assess_wastewater_scheme_readiness(bundle.project).ready
+        k1_k2_export = wastewater_graphic_export(bundle.project, "k1-k2")
+        k1_k2_ready = k1_k2_export.ready
         k3_readiness = assess_wastewater_k3_scheme_readiness(bundle.project)
         pressure_readiness = assess_wastewater_pressure_scheme_readiness(
             bundle.project
@@ -192,6 +223,17 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
         })()
 
     def incomplete(attribute: str) -> bool:
+        if attribute in graphic_labels and not generated[graphic_labels[attribute]]:
+            return True
+        if attribute == "water_package_pdf":
+            from app.pz.water_package import missing_water_parts
+            return bool(missing_water_parts(bundle) or bundle.project.document.review_head_pending
+                        or bundle.fire_station_input_pdf or bundle.fire_pressure_review_pdf
+                        or bundle.rainwater_reuse_pdf)
+        if attribute in {"fire_station_input_pdf", "fire_pressure_review_pdf", "fire_station_scheme_pdf"}:
+            return True
+        if attribute == "rainwater_reuse_pdf":
+            return True
         if attribute == "wastewater_scheme_pdf":
             return not k1_k2_ready
         if attribute == "wastewater_k3_scheme_pdf":
@@ -207,6 +249,30 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
         return False
 
     def state_note(attribute: str) -> str:
+        if attribute == "water_package_pdf":
+            from app.pz.water_package import missing_water_parts
+            missing = missing_water_parts(bundle)
+            return ("В объединённом PDF отсутствуют: " + "; ".join(missing) if missing else
+                    "Включены предварительные расчёты или решения. Проверьте замечания ИОС2 перед выпуском.")
+        if attribute in {"fire_station_scheme_pdf", "fire_pressure_review_pdf"} and bundle.project.fire_pumps.pressure_review:
+            return bundle.project.fire_pumps.pressure_review["note"]
+        if attribute == "fire_pressure_review_pdf":
+            from app.intake.studio_fire_review import NOTICE
+            return NOTICE
+        if attribute == "fire_station_input_pdf":
+            if bundle.fire_pressure_review:
+                return bundle.fire_pressure_review["note"]
+            from app.intake.studio_fire_station import NOTICE
+            return NOTICE
+        if attribute in {"wastewater_scheme_pdf", "wastewater_package_pdf"} and k1_k2_export:
+            reasons = list(k1_k2_export.reasons)
+            if attribute == "wastewater_package_pdf":
+                for part in (k3_readiness, pressure_readiness):
+                    if part.applicable and not part.ready:
+                        reasons.extend(part.reasons)
+            return "; ".join(reasons) or "Готовность сформированной графики не подтверждена. Повторите сборку и проверьте замечания."
+        if attribute == "rainwater_reuse_pdf":
+            return "Предварительный баланс и функциональная структура. Очистка, насос, перелив и годовой эффект требуют обоснования."
         if attribute == "wastewater_k3_scheme_pdf":
             return (
                 k3_readiness.reasons[0]
@@ -223,11 +289,16 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
 
     documents = []
     for group, label, attribute in _DOCUMENTS:
+        is_representative = bool(k1_k2_export and k1_k2_export.presentation == "representative"
+                                 and attribute in {"wastewater_scheme_pdf", "wastewater_package_pdf"})
+        if is_representative and not k1_k2_export.available:
+            continue
         path = getattr(bundle, attribute, None)
         if not path:
             continue
         document = {
             "group": group,
+            "kind": attribute,
             "label": label,
             "name": os.path.basename(path),
             "state": (
@@ -241,6 +312,20 @@ def _bundle_documents(bundle) -> tuple[list[dict], list[dict]]:
                 else ""
             ),
         }
+        if is_representative:
+            document["state"] = ("incomplete" if attribute == "wastewater_package_pdf" and (
+                (k3_readiness.applicable and not k3_readiness.ready) or
+                (pressure_readiness.applicable and not pressure_readiness.ready)
+            ) else "preliminary")
+            document["label"] = ("Принципиальный разрез ИОС3" if attribute == "wastewater_scheme_pdf"
+                                 else "ИОС3 · предварительные документы")
+        water = getattr(bundle, "water_scheme_delivery", None)
+        if water and attribute in {"scheme_pdf", "water_package_pdf"}:
+            document["water_scheme"] = water
+            if attribute == "scheme_pdf":
+                document["label"] = water["label"]
+                document["state"] = "preliminary"
+                document["state_note"] = water["note"]
         documents.append(document)
     return _group_documents(documents)
 
@@ -309,6 +394,18 @@ def _get_run(run_id: str) -> dict | None:
         return None
 
 
+def _run_file_context(run_id: str) -> dict | None:
+    """Locate saved files without restoring/calculating a Project on a read."""
+    if run_id in _RUNS:
+        return _RUNS[run_id]
+    try:
+        snapshot = _RELEASE_STORE.load(run_id)
+    except (ReleaseNotFoundError, ReleaseIntegrityError, ValueError, OSError):
+        return None
+    return dict(outdir=os.path.join(_OUT_ROOT, run_id),
+                passport_id=snapshot.passport_id, release_id=snapshot.release_id)
+
+
 def _run_file(run: dict, name: str) -> str | None:
     if not name or os.path.basename(name) != name:
         return None
@@ -364,6 +461,16 @@ def wizard_form(request: Request, example: bool = False):
 async def wizard_design(request: Request):
     """Принимает форму, собирает IOS2Request, строит Project, гонит design_ios2."""
     form = await request.form()
+    fan_error = None
+    fan = FanFormInput()
+    try:
+        if "fan_data" in form:
+            fan = FanFormInput.parse(str(form["fan_data"]))
+        elif form.get("project_id"):
+            # Old clients must not erase data that they do not render.
+            fan = FanFormInput.from_request(_STORE.load(str(form["project_id"])))
+    except (ValueError, TypeError, FileNotFoundError) as exc:
+        fan_error = str(exc)
 
     def fv(name, default=""):
         return str(form.get(name, default)).strip()
@@ -716,6 +823,9 @@ async def wizard_design(request: Request):
         insulation_gvs_water_temp=ff("insulation_gvs_temp", 60.0),
         fire_mode=fv("fire_mode", "auto"),
         fire_height_m=(ff("fire_height") if fv("fire_height") else None),
+        fire_corridor_length_m=(
+            ff("fire_corridor_length_m") if fv("fire_corridor_length_m") else None
+        ),
         fire_category=fv("fire_category"),
         fire_hall_seats=(
             fi("fire_hall_seats") if fv("fire_hall_seats") else None
@@ -760,6 +870,7 @@ async def wizard_design(request: Request):
             if fv("wastewater_floor_height_m") else None
         ),
         wastewater_roof_kind=fv("wastewater_roof_kind", "unknown"),
+        **fan.request_fields(),
         wastewater_design_assignment_ref=fv("wastewater_design_assignment_ref"),
         wastewater_survey_ref=fv("wastewater_survey_ref"),
         wastewater_service_life_years=(
@@ -983,10 +1094,61 @@ async def wizard_design(request: Request):
         ),
         consumers=consumers,
     )
+    if fan_error:
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(
+            errors=["Фановая вентиляция: " + fan_error], prefill=req,
+            project_id=fv("project_id") or None, fan_raw=fv("fan_data", "{}"),
+        ))
+    if fv("project_id"):
+        try:
+            saved = _STORE.load(fv("project_id"))
+        except (FileNotFoundError, ValueError):
+            saved = None
+        if saved:
+            # This editor has no rainwater inputs. Do not silently discard the
+            # optional Studio study when editing other project fields.
+            from copy import deepcopy
+            req.rainwater_reuse = deepcopy(saved.rainwater_reuse)
+            req.suction_check = deepcopy(saved.suction_check)
+            # No apartment-feed editor here: retain the Studio choice. In the
+            # one-per-apartment mode the spec uses the current apartment count.
+            req.apartment_water_units = saved.apartment_water_units
+            if saved.source_data:
+                for key in ('station_room_number', 'station_floor_elevation_m', 'station_suction_elevation_m'):
+                    setattr(req.source_data, key, getattr(saved.source_data, key))
+        if saved and (saved.v1_sections or saved.t3_sections or (
+                saved.source_data and (saved.source_data.meter_minimum_checks or saved.source_data.apartment_meter_basis))):
+            # The large form does not edit sections. Preserve its input snapshot,
+            # and forbid applying it to changed demand without a new calculation.
+            req.v1_sections = saved.v1_sections
+            req.t3_sections = saved.t3_sections
+            if saved.source_data:
+                req.source_data.internal_losses_scope = saved.source_data.internal_losses_scope
+                req.source_data.h_il_hot_m = saved.source_data.h_il_hot_m
+                req.source_data.meter_minimum_checks = saved.source_data.meter_minimum_checks
+                # The full form must not turn a preliminary Studio estimate into
+                # a verified governing apartment just by re-saving the numbers.
+                req.source_data.apartment_meter_basis = saved.source_data.apartment_meter_basis
+            if (req.consumers != saved.consumers or req.hws_type != saved.hws_type
+                    or (saved.source_data and saved.source_data.apartment_meter_basis
+                        and req.apartments != saved.apartments)
+                    or req.source_data.hws_heater_in_scope != bool(
+                        saved.source_data and saved.source_data.hws_heater_in_scope)):
+                return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(
+                    errors=["Изменились потребители или источник ГВС. Пересчитайте участки В1 и Т3 в исходном проекте Studio перед переносом в полный редактор. При наличии проверки минимума водомеров обновите её исходные данные."],
+                    prefill=req, project_id=fv("project_id"),
+                ))
+    return design_request_response(request, req, fv("project_id") or None)
+
+
+def design_request_response(
+    request: Request, req: IOS2Request, pid: str | None = None,
+    *, force_quality_gates: bool = False,
+):
+    """Shared validated release path for Wizard and Studio; no form parsing."""
     preflight = preflight_request(req)
     advisories = review_request(req)
 
-    pid = fv("project_id") or None
     if not preflight.can_release:
         quality = build_release_quality_report(preflight)
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
@@ -1025,8 +1187,19 @@ async def wizard_design(request: Request):
             "prefill": req,
             "project_id": project_id,
         }), status_code=422)
+    from app.pz.wastewater_graphic_exports import wastewater_graphic_export
+    sewer_export = wastewater_graphic_export(bundle.project, "k1-k2")
+    if bundle.project.sewage.presentation is not None and not sewer_export.ready:
+        # A YAML/restored Studio project cannot promote a preview into a release,
+        # even where the legacy editor's optional quality-gate switch is off.
+        shutil.rmtree(outdir, ignore_errors=True)
+        return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
+            "errors": ["ИОС3 не готов к выпуску: " + "; ".join(sewer_export.reasons)],
+            "advisories": advisories, "prefill": req, "project_id": project_id,
+            "preflight": preflight,
+        }), status_code=422)
     quality = build_release_quality_report(preflight, bundle.commission_report)
-    if not quality.can_release and _HARD_QUALITY_GATES:
+    if not quality.can_release and (_HARD_QUALITY_GATES or force_quality_gates):
         shutil.rmtree(outdir, ignore_errors=True)
         return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(**{
             "errors": [
@@ -1387,14 +1560,17 @@ def wizard_defense_answer(
         output_path = str(_RELEASE_STORE.answer_path(run_id, output_name))
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=404, detail="выпуск не найден") from exc
-    generate_expert_response_pdf(
-        run["bundle"].project,
-        run["proof_graph"],
-        decision,
-        question,
-        evidence,
-        output_path,
-    )
+    try:
+        generate_expert_response_pdf(
+            run["bundle"].project,
+            run["proof_graph"],
+            decision,
+            question,
+            evidence,
+            output_path,
+        )
+    except DefenseLayoutError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return FileResponse(
         output_path,
         media_type="application/pdf",
@@ -1445,9 +1621,92 @@ def wizard_open(request: Request, project_id: str):
         req_dto = _STORE.load(project_id)
     except (FileNotFoundError, ValueError):
         return HTMLResponse("<h2>Проект не найден</h2>", status_code=404)
-    return _TPL.TemplateResponse(request, "wizard_form.html", {
-        **_form_context(errors=[], advisories=review_request(req_dto)),
-        "prefill": req_dto, "project_id": project_id})
+    return _TPL.TemplateResponse(request, "wizard_form.html", _form_context(
+        errors=[], advisories=review_request(req_dto),
+        prefill=req_dto, project_id=project_id))
+
+
+@router.post("/fan-inputs/validate")
+async def validate_fan_inputs(request: Request):
+    try:
+        data = FanFormInput.parse((await request.body()).decode("utf-8"))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    return {"data": data.to_mapping()}
+
+
+@router.post("/projects/{project_id}/fan-inputs")
+async def save_fan_inputs(request: Request, project_id: str):
+    """Patch ONLY fan inputs on the saved DTO; do not run design or truncate rows."""
+    raw = await request.body()
+    try:
+        current = _STORE.load(project_id)
+        revision = _STORE.source_sha256(project_id)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="Проект не найден") from None
+    if request.headers.get("if-match") != revision:
+        return JSONResponse({"error": "Проект уже изменён. Переоткройте его перед сохранением."}, status_code=409)
+    try:
+        data = FanFormInput.parse(raw.decode("utf-8"))
+        updated = replace(current, **data.request_fields())
+    except (ValueError, TypeError, UnicodeError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    # No await between the version check and atomic store writes.
+    _STORE.save(updated, project_id=project_id)
+    return {"data": data.to_mapping(), "revision": _STORE.source_sha256(project_id)}
+
+
+def _fan_project_snapshot(request: Request, project_id: str):
+    """Read an immutable revision, not YAML that may change during rendering."""
+    try:
+        revision = _STORE.source_sha256(project_id)
+        if request.headers.get("if-match") != revision:
+            raise HTTPException(409, "Версия проекта изменилась. Переоткройте проект и повторите проверку.")
+        return _STORE.load_revision(project_id, revision), revision
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "Сохранённая версия проекта не найдена") from None
+
+
+def _check_fan_revision(project_id: str, revision: str):
+    try:
+        current = _STORE.source_sha256(project_id)
+    except (ValueError, FileNotFoundError):
+        current = None
+    if current != revision:
+        raise HTTPException(409, "Проект изменён во время проверки. Обновите данные и повторите её.")
+
+
+@router.post("/projects/{project_id}/fan-check")
+def check_saved_fan_project(request: Request, project_id: str):
+    req, revision = _fan_project_snapshot(request, project_id)
+    report = assess_fan_preview(req)
+    _check_fan_revision(project_id, revision)
+    return JSONResponse(report.to_mapping(revision), headers={"Cache-Control": "no-store"})
+
+
+@router.post("/projects/{project_id}/fan-preview.pdf")
+def download_saved_fan_preview(request: Request, project_id: str):
+    req, revision = _fan_project_snapshot(request, project_id)
+    # Recheck server-side on EVERY download. A browser's previous green result
+    # cannot authorize a drawing with missing proof or incompatible geometry.
+    report = assess_fan_preview(req, check_drawing=False)
+    if not report.preview_ready or report.project is None:
+        _check_fan_revision(project_id, revision)
+        return JSONResponse(dict(report.to_mapping(revision), error="Дополните исходные данные перед формированием PDF"),
+                            status_code=422, headers={"Cache-Control": "no-store"})
+    with TemporaryDirectory(prefix="zarya-fan-preview-") as directory:
+        try:
+            result = generate_saved_fan_binding_preview(report.project, str(Path(directory) / "fan-control.pdf"))
+        except ValueError as exc:
+            return JSONResponse({"error": "Контроль графики не пройден. PDF не выдан.", "detail": str(exc)},
+                                status_code=422, headers={"Cache-Control": "no-store"})
+        content = Path(result.output_path).read_bytes()
+    _check_fan_revision(project_id, revision)
+    return Response(content, media_type="application/pdf", headers={
+        "Content-Disposition": 'attachment; filename="K1_K2_fan_control.pdf"',
+        "Cache-Control": "no-store", "X-Zarya-Project-Revision": revision,
+        "X-Zarya-Control-Only": "true",
+    })
 
 
 @router.post("/projects/{project_id}/delete")

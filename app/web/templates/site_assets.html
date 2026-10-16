@@ -1,0 +1,6 @@
+<link rel="stylesheet" href="/static/site.css?v=20260927-2">
+<script defer src="/static/site.js?v=20260926-1"></script>
+{% if request is defined and request.state is defined and request.state.pilot_user %}
+<link rel="stylesheet" href="/static/pilot_feedback.css?v=1">
+<script defer src="/static/pilot_feedback.js?v=1"></script>
+{% endif %}

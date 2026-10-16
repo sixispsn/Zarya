@@ -5,10 +5,56 @@
    Подключение в subitems_public.html (подпункт о насосных установках):
        {% if pumps.required %}{% include "pump_table.html" %}{% endif %}
 =========================================================================== #}
+{% if pumps.pressure_review %}
+{% include "fire_review_table.html" %}
+{% else %}
+{% if pumps.station_design %}
+{% include "fire_station_design_table.html" %}
+{% else %}
 {% set accepted = pumps.top3[0] if pumps.top3 else none %}
+{% set station_control = booster_control_for(pumps) %}
+{% if pumps is sameas project.pumps %}
+{% set station_external = station_external_items(project) %}
+{% if station_external %}
+<p><b>Внешняя обвязка насосной:</b> {% for item in station_external %}{{ item.name }}{% if not loop.last %}; {% endif %}{% endfor %}.
+Эти показанные точки учтены в спецификации отдельно от PBS; DN, PN, исполнение и модели требуют подбора.
+При наличии отдельного ВУ-Г его арматура повторно не добавляется.</p>
+{% endif %}
+{% set station_review = station_review_for(project) %}
+{% if station_review %}
+<p>Потребляемая электрическая мощность P1 установки пока не подтверждена. Каталожная P2 двигателя её не заменяет.</p>
+<p class="equip-verdict"><b>Увязка ВУ и насосной.</b> {{ station_review.notice }} Потери новой переключающей обвязки не подтверждены и не приняты равными нулю; приведённый подбор не подтверждает новую обвязку.</p>
+{% if station_review.unsupported_note %}<p>{{ station_review.unsupported_note }}</p>{% endif %}
+{% if station_review.scenarios %}
+<table class="equip"><thead><tr><th>Ремонт</th><th>Отсечки</th><th>Подача другим насосом</th><th>Опорожнение</th></tr></thead><tbody>
+{% for s in station_review.scenarios %}<tr><td>{{ s.title }}</td><td>{{ s.close_tags | join(', ') }}</td><td>{{ s.active }}: {{ 'путь есть; Q/H отдельно. Работа при ремонте этой проверкой не разрешается' if s.delivery_path_exists else 'путь не найден' }}</td><td>{{ s.body_service }} {{ s.pocket_note }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+{% if station_review.service %}
+<p>{{ station_review.service.summary }} {{ station_review.service.limitation }} {{ station_review.service.maintenance }}</p>
+<p>Основание: {{ station_review.service.source }}; {{ station_review.service.station_source }}.</p>
+{% endif %}
+{% for a in station_review.access_requirements %}
+<p><b>{{ a.mark }}* — {{ a.location }}.</b> {{ a.requirement }} {{ a.scope }}</p>
+{% endfor %}
+{% for h in station_review.hydraulic if h.id == 'existing_duty_check' %}<p><b>{{ h.title }}:</b> {{ h.value }}. {{ h.note }}</p>{% endfor %}
+{% if station_review.automation %}
+<p class="pump-compliance-title"><b>Задание по автоматизации В1, схема 1+1:</b></p>
+{% for a in station_review.automation %}<p>{{ a.title }}: {{ a.action }} Основание: {{ a.basis }}.</p>{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% if station_control %}
+<p>Мембранный бак Б1 объёмом 12 л с отсечкой предусмотрен в стандартном комплекте PBS; отдельная закупка повторно не учитывается (каталог PBS, с. 6–7).</p>
+<p class="equip-verdict"><b>Частотное управление предусмотрено в составе установки.</b> {{ station_control.description }} Источник: {{ station_control.source }}. {% if pumps.count_note == '1 рабочий + 1 резервный' or (pumps.working_units == 1 and pumps.reserve_units == 1) %}Для принятой схемы «1 рабочий + 1 резервный» каскадное добавление резервного насоса к рабочему расходу не предусматривается. {% endif %}Каталожная кривая при постоянной частоте вращения не является характеристикой регулируемого режима.</p>
+{% endif %}
+{% set intersection_check = check_saved_pump_intersection(pumps) %}
+{% if pumps.curve_kind == 'quadratic_estimate' and pumps.model and not intersection_check[0] %}
+<p class="equip-verdict">{{ intersection_check[1] }}. Сохранённые значения ниже не подтверждают рабочую точку.</p>
+{% endif %}
 {% if pumps.q_design_m3h and pumps.h_design_m %}
-<p class="equip-verdict">Расчётная точка системы: Q<sub>расч</sub> = {{ pumps.q_design_m3h | num(2) }} м³/ч,
-H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
+<p class="equip-verdict">Расчётная точка системы: Q<sub>расч</sub> = {{ pumps.q_design_m3h | num(3) }} м³/ч,
+H<sub>нас</sub> = {{ pumps.h_design_m | num(2) }} м.</p>
 {% endif %}
 {% if pumps.top3 %}
 <table class="equip">
@@ -17,8 +63,8 @@ H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
       <th class="e-num">№</th>
       <th class="e-name">Марка насосной установки</th>
       <th class="e-type">Тип</th>
-      <th class="e-q">Q раб.,<br>м³/ч</th>
-      <th class="e-h">H раб.,<br>м</th>
+      <th class="e-q">{{ 'Q расч.' if pumps.curve_kind == 'duty_only' else 'Q точки' }},<br>м³/ч</th>
+      <th class="e-h">{{ 'H каталога' if pumps.curve_kind == 'duty_only' else 'H точки' }},<br>м</th>
       <th class="e-p">N (P₂),<br>кВт</th>
       <th class="e-mot">Мощн.&nbsp;двиг.<br>≥, кВт</th>
       <th class="e-note">Примечание</th>
@@ -28,10 +74,10 @@ H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
     {% for c in pumps.top3 %}
       <tr{% if loop.first %} class="accepted"{% endif %}>
         <td class="e-num">{{ loop.index }}</td>
-        <td class="e-name">{{ c.brand }} {{ c.model }}{% if loop.first %}<br><span class="badge">{{ 'предварительно принят' if c.archived else 'принят' }}</span>{% endif %}</td>
+        <td class="e-name">{{ c.brand }} {{ c.model }}{% if loop.first %}<br><span class="badge">предварительный вариант</span>{% endif %}</td>
         <td class="e-type">{{ c.type_label }}</td>
         <td class="e-q">{{ c.wp_q | num(2) }}</td>
-        <td class="e-h">{{ c.wp_h | num(1) }}</td>
+        <td class="e-h">{{ c.wp_h | num(2) }}</td>
         <td class="e-p">{{ c.p2_kw | num(2) }}</td>
         <td class="e-mot">{{ c.motor_min_kw | num(2) }}</td>
         <td class="e-note">{{ c.note }}</td>
@@ -45,7 +91,7 @@ H<sub>нас</sub> = {{ pumps.h_design_m | num(1) }} м.</p>
 {% endif %}
 
 {% if accepted %}
-<p class="equip-verdict">Основные характеристики принятого варианта:
+<p class="equip-verdict">Основные характеристики рассматриваемого варианта:
 Pмакс = {{ accepted.p_max_bar | num(1) }} бар;
 {% if accepted.npshr is not none %}NPSHr = {{ accepted.npshr | num(1) }} м{% else %}NPSHr требует проверки по характеристике базового насоса{% endif %};
 расчётная мощность = {{ accepted.p2_kw | num(2) }} кВт.
@@ -61,6 +107,9 @@ Pмакс = {{ accepted.p_max_bar | num(1) }} бар;
 {% endif %}
 
 {% if pumps.selection_note %}<p class="equip-verdict">{{ pumps.selection_note }}</p>{% endif %}
+{% if pumps.curve_note %}<p class="equip-verdict">{{ pumps.curve_note }}</p>{% endif %}
+{% if not pumps.curve_kind %}<p class="equip-verdict">Сохранённый подбор требует пересчёта:
+разложение напора не подтверждено текущим ядром. Кривая системы не показана.</p>{% endif %}
 
 {% if pumps.sp10_checks %}
 <p class="subitem pump-compliance-title"><b>Проверка пожарной насосной установки по СП 10.13130.2020:</b></p>
@@ -80,8 +129,16 @@ Pмакс = {{ accepted.p_max_bar | num(1) }} бар;
 {% if pump_chart_svg %}
 <div class="figure">
   {{ pump_chart_svg | safe }}
-  <p class="figure-cap">Рисунок&nbsp;— Характеристика Q-H {{ 'предварительно принятого' if accepted and accepted.archived else 'принятого' }} насоса: кривая насоса,
-    кривая системы H&nbsp;=&nbsp;H<sub>ст</sub>&nbsp;+&nbsp;k·Q² и рабочая точка
-    Q&nbsp;=&nbsp;{{ pumps.wp_q | num(2) }} м³/ч, H&nbsp;=&nbsp;{{ pumps.wp_h | num(1) }} м.</p>
+  <p class="figure-cap">Рисунок&nbsp;— Характеристика Q-H рассматриваемого насоса: кривая насоса{% if pumps.curve_kind == 'quadratic_estimate' %},{% endif %}
+    {% if pumps.curve_kind == 'quadratic_estimate' %}
+    оценочная кривая системы H&nbsp;=&nbsp;max(0; H<sub>0</sub>&nbsp;+&nbsp;k·Q²).
+    {% if intersection_check[0] %}Предварительная точка пересечения:
+    Q&nbsp;=&nbsp;{{ pumps.wp_q | num(2) }} м³/ч, H&nbsp;=&nbsp;{{ pumps.wp_h | num(2) }} м.
+    {% else %}Пересечение не подтверждено; маркер рабочей точки не показан.{% endif %}</p>
+    {% else %}
+    и требуемая расчётная точка. Пересечение с кривой сети не определено.</p>
+    {% endif %}
 </div>
+{% endif %}
+{% endif %}
 {% endif %}

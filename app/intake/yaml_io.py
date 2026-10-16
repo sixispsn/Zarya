@@ -39,12 +39,25 @@ YAML — человекочитаемое зеркало IOS2Request в терм
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from dataclasses import asdict
+from app.calc.rainwater_reuse import from_dict as rainwater_from_dict
+from app.pz.wastewater_service import from_dict as wastewater_service_from_dict
+from app.calc.hws_stage_p import HwsStagePInput
 
 import yaml
+from app.calc.t3_hydraulics import T3SectionInput
+from app.pz.metering_detail_data import MeteringDetailData
+from app.pz.apartment_water_units import ApartmentWaterUnits
+from app.pz.water_service_assemblies import WaterServiceLayout, from_dict as service_layout_from_dict
+
+from app.pz.wastewater_ventilation import FanVentilationInput
+from app.pz.wastewater_fan_geometry import FanGeometryInput
+from app.pz.wastewater_presentation import RepresentativeSectionInput
 
 from app.intake.request_dto import (
     IOS2Request, DocumentRequest, RoomRequest, NetworkRequest,
     MainRunRequest, RiserRequest, SourceDataRequest, ConsumerGroupRequest,
+    V1SectionRequest,
     SewageRiserRequest, SewerPipeRequest, SewerElementRequest,
     SewerDischargeEventRequest, SewerFixtureSafetyRequest,
     SewerBoundaryLevelRequest, SewerFirstManholeRequest,
@@ -63,6 +76,65 @@ class YamlFormatError(ValueError):
 
 
 # ── YAML → IOS2Request ───────────────────────────────────────────────────────
+
+def _riser_count(building: dict, key: str) -> int:
+    value = building.get(key, 0)
+    if type(value) is not int or not 0 <= value <= 1_000_000:
+        raise YamlFormatError([f"building.{key}: требуется целое число от 0 до 1 000 000; 0 — количество не задано"])
+    return value
+
+
+def _sectional_valve_count(building: dict) -> int | None:
+    value = building.get("v1_sectional_valves_count")
+    if value is not None and (type(value) is not int or not 0 <= value <= 1_000_000):
+        raise YamlFormatError(["building.v1_sectional_valves_count: требуется целое число от 0 до 1 000 000 либо null"])
+    return value
+
+
+def _sectional_valve_basis(building: dict) -> str:
+    value = building.get("v1_sectional_valves_basis", "")
+    if not isinstance(value, str) or len(value) > 200:
+        raise YamlFormatError(["building.v1_sectional_valves_basis: требуется строка не длиннее 200 символов"])
+    return value
+
+
+def _water_service_layout(building: dict) -> WaterServiceLayout:
+    try:
+        return service_layout_from_dict(building.get("water_service_layout", {}))
+    except (ValueError, TypeError) as exc:
+        raise YamlFormatError([f"building.water_service_layout: {exc}"]) from exc
+
+
+def _sewer_pipe_fields(row: dict) -> dict:
+    from app.data.sewer_pipe_catalog import catalog_pipe_fields
+
+    try:
+        return catalog_pipe_fields(row)
+    except (TypeError, ValueError) as exc:
+        raise YamlFormatError([f"труба {row.get('id', '')}: {exc}"]) from exc
+
+
+def _floor_map(building: dict, key: str, value_type: type) -> dict:
+    """Отметки/квартиры по этажам без потери некорректных ключей при int()."""
+    raw = building.get(key)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise YamlFormatError([f"building.{key} должен быть словарём по этажам"])
+    result = {}
+    try:
+        for raw_floor, raw_value in raw.items():
+            floor = int(raw_floor)
+            if isinstance(raw_floor, bool) or float(raw_floor) != floor or floor in result:
+                raise ValueError("номер этажа не целый или повторяется")
+            value = value_type(raw_value)
+            if isinstance(raw_value, bool) or (value_type is int and float(raw_value) != value):
+                raise ValueError("количество должно быть целым числом")
+            result[floor] = value
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise YamlFormatError([f"building.{key}: {exc}"]) from exc
+    return result
+
 
 def load_request(text: str) -> IOS2Request:
     """Разбирает YAML-текст проекта в IOS2Request.
@@ -116,9 +188,24 @@ def load_request(text: str) -> IOS2Request:
     source_data_s = sect("source_data", required=False)
     insulation_s = sect("insulation", required=False)
     sewage_s = sect("sewage", required=False)
+    try:
+        wastewater_service = wastewater_service_from_dict(sewage_s.get("service"))
+    except ValueError as exc:
+        raise YamlFormatError([str(exc)]) from exc
     storm_s = sect("storm", required=False)
+    try:
+        hws_stage_p = HwsStagePInput(**sect("hws_stage_p", required=False))
+    except TypeError as exc:
+        raise YamlFormatError([f"hws_stage_p: {exc}"]) from exc
+    if errors := hws_stage_p.validate():
+        raise YamlFormatError(errors)
+    try:
+        rainwater_reuse = rainwater_from_dict(storm_s.get("reuse"))
+    except ValueError as exc:
+        raise YamlFormatError([f"storm.reuse: {exc}"]) from exc
     catering_s = sect("catering", required=False)
     technology_s = sect("technology_questionnaire", required=False)
+    apartment_units_s = sect("apartment_water_units", required=False)
     net_s = sect("network", required=False)
     rooms_s = data.get("rooms", [])
     if rooms_s is not None and not isinstance(rooms_s, list):
@@ -196,12 +283,35 @@ def load_request(text: str) -> IOS2Request:
             node_elevations={str(k): float(v) for k, v in
                              (net_s.get("node_elevations") or {}).items()})
 
+    try:
+        apartment_water_units = ApartmentWaterUnits(**apartment_units_s)
+    except TypeError as exc:
+        raise YamlFormatError([f"apartment_water_units: {exc}"]) from exc
+    if apartment_water_units.validate():
+        raise YamlFormatError(apartment_water_units.validate())
+    metering_detail_s = sect("metering_detail", required=False)
+    metering_detail = None
+    if metering_detail_s:
+        try:
+            metering_detail = MeteringDetailData(**metering_detail_s)
+        except TypeError as exc:
+            raise YamlFormatError([f"metering_detail: {exc}"]) from exc
+        if metering_detail.validate():
+            raise YamlFormatError(metering_detail.validate())
+
     fire_streams = fire.get("streams")
     source_data = None
     if source_data_s:
         sd = source_data_s
         def optional_float(name):
             return float(sd[name]) if sd.get(name) is not None else None
+        def station_elevation(name):
+            if isinstance(sd.get(name), bool):
+                raise YamlFormatError([f"source_data.{name}: отметка должна быть числом, не да/нет"])
+            try:
+                return optional_float(name)
+            except (TypeError, ValueError) as exc:
+                raise YamlFormatError([f"source_data.{name}: отметка должна быть числом"]) from exc
         source_data = SourceDataRequest(
             customer=str(sd.get("customer", "")),
             designer_org=str(sd.get("designer_org", "")),
@@ -222,15 +332,40 @@ def load_request(text: str) -> IOS2Request:
             elev_fixture_m=optional_float("elev_fixture_m"),
             h_geom_m=optional_float("h_geom_m"), il_dict_m=optional_float("il_dict_m"),
             h_il_m=optional_float("h_il_m"), network_kind=str(sd.get("network_kind", "domestic")),
+            internal_losses_scope=str(sd.get("internal_losses_scope", "shared")),
+            h_il_hot_m=optional_float("h_il_hot_m"),
             h_pr_m=float(sd.get("h_pr_m", 20.0)), h_tepl_m=float(sd.get("h_tepl_m", 0.0)),
             h_apartment_c_meter_m=optional_float("h_apartment_c_meter_m"),
             h_apartment_h_meter_m=optional_float("h_apartment_h_meter_m"),
+            apartment_meter_basis=str(sd.get("apartment_meter_basis", "")),
             hws_heater_in_scope=bool(sd.get("hws_heater_in_scope", False)),
             il_vvod_m=optional_float("il_vvod_m"), h_vvod_m=optional_float("h_vvod_m"),
             water_use_period_h=float(sd.get("water_use_period_h", 24.0)),
+            meter_minimum_checks=sd.get("meter_minimum_checks", {}),
             inputs_count=int(sd.get("inputs_count", 1)),
             npsh_available_m=optional_float("npsh_available_m"),
+            station_room_number=sd.get("station_room_number", ""),
+            station_floor_elevation_m=station_elevation("station_floor_elevation_m"),
+            station_suction_elevation_m=station_elevation("station_suction_elevation_m"),
         )
+    t3_sections = []
+    t3_data = data.get("t3_sections") or []
+    if not isinstance(t3_data, list):
+        raise YamlFormatError(["t3_sections должен быть списком участков"])
+    for index, row in enumerate(t3_data):
+        try:
+            t3_sections.append(T3SectionInput(**row))
+        except (TypeError, ValueError) as exc:
+            raise YamlFormatError([f"t3_sections[{index}]: неверная структура участка"]) from exc
+    v1_sections = []
+    section_data = data.get("v1_sections") or []
+    if not isinstance(section_data, list):
+        raise YamlFormatError(["v1_sections должен быть списком участков"])
+    for index, row in enumerate(section_data):
+        try:
+            v1_sections.append(V1SectionRequest(**row))
+        except (TypeError, ValueError) as exc:
+            raise YamlFormatError([f"v1_sections[{index}]: неверная структура участка"]) from exc
     consumers = [ConsumerGroupRequest(
                     str(x.get("code", "")), int(x.get("count", 0)),
                     str(x.get("name", "")))
@@ -276,10 +411,10 @@ def load_request(text: str) -> IOS2Request:
             system=str(x.get("system", "K1")),
             section_id=str(x.get("id", x.get("section_id", ""))),
             purpose=str(x.get("purpose", "")),
-            material=str(x.get("material", "")),
-            standard=str(x.get("standard", "")),
-            outer_diameter_mm=float(x.get("outer_diameter_mm", 0)),
-            wall_thickness_mm=float(x.get("wall_thickness_mm", 0)),
+            **_sewer_pipe_fields(x),
+            catalog_series_id=str(x.get("catalog_series_id", "")),
+            **{key: x.get(key) for key in ("q_hour_max_m3h", "fixtures_count", "receiving_length_m", "fixture_max_lps")},
+            flow_source=str(x.get("flow_source", "")),
             length_m=float(x.get("length_m", 0)),
             calculation_length_m=(
                 float(x["calculation_length_m"])
@@ -479,16 +614,47 @@ def load_request(text: str) -> IOS2Request:
         for x in (sewage_s.get("internal_nodes") or [])
         if isinstance(x, dict)
     ]
+    fan_geometry = None
+    presentation = None
+    if sewage_s.get("presentation") is not None:
+        try:
+            presentation = RepresentativeSectionInput.from_mapping(sewage_s["presentation"])
+        except (TypeError, ValueError) as exc:
+            raise YamlFormatError([f"sewage.presentation: {exc}"]) from exc
+    if sewage_s.get("fan_geometry") is not None:
+        try:
+            fan_geometry = FanGeometryInput.from_mapping(sewage_s["fan_geometry"])
+        except (TypeError, ValueError) as exc:
+            raise YamlFormatError([f"sewage.fan_geometry: {exc}"]) from exc
+    fan_ventilation = None
+    if sewage_s.get("fan_ventilation") is not None:
+        try:
+            fan_ventilation = FanVentilationInput.from_mapping(sewage_s["fan_ventilation"])
+        except (TypeError, ValueError) as exc:
+            raise YamlFormatError([f"sewage.fan_ventilation: {exc}"]) from exc
     return IOS2Request(
         document=document,
         building_type=str(bld.get("type", "residential")),
         floors=int(bld.get("floors", 0)),
+        floors_below=int(bld.get("floors_below", 0)),
+        residents=int(bld.get("residents", 0)),
+        seismicity=bld.get("seismicity", 0),
+        permafrost=bld.get("permafrost", False),
+        basement_clear_height_m=(
+            float(bld["basement_clear_height_m"])
+            if bld.get("basement_clear_height_m") is not None else None
+        ),
+        floor_elevations_m=_floor_map(bld, "floor_elevations_m", float),
+        apartments_by_floor=_floor_map(bld, "apartments_by_floor", int),
         building_height_m=float(bld.get("height_m", 0)),
         total_area_m2=float(bld.get("total_area_m2", 0)),
         hws_type=str(bld.get("hws_type", "central")),
-        risers_v1=int(bld.get("risers_v1", 0)),
-        risers_t3=int(bld.get("risers_t3", 0)),
-        risers_t4=int(bld.get("risers_t4", 0)),
+        risers_v1=_riser_count(bld, "risers_v1"),
+        risers_t3=_riser_count(bld, "risers_t3"),
+        risers_t4=_riser_count(bld, "risers_t4"),
+        v1_sectional_valves_count=_sectional_valve_count(bld),
+        v1_sectional_valves_basis=_sectional_valve_basis(bld),
+        water_service_layout=_water_service_layout(bld),
         apartments=int(bld.get("apartments", 0)),
         owner_groups_count=int(bld.get("owner_groups_count", 1)),
         insulation_location=str(insulation_s.get("location", "room_hot")),
@@ -502,6 +668,10 @@ def load_request(text: str) -> IOS2Request:
             if fire.get("height_m") is not None else None
         ),
         fire_category=str(fire.get("category", "")),
+        fire_corridor_length_m=(
+            float(fire["corridor_length_m"])
+            if fire.get("corridor_length_m") is not None else None
+        ),
         fire_hall_seats=(
             int(fire["hall_seats"])
             if fire.get("hall_seats") is not None else None
@@ -522,10 +692,15 @@ def load_request(text: str) -> IOS2Request:
         nozzle_mm=int(fire.get("nozzle_mm", 13)),
         compact_jet_m=int(fire.get("compact_jet_m", 12)),
         fire_topology=str(fire.get("topology", "auto")),
+        fire_station_model=fire.get("station_model"),
+        suction_check=data.get("suction_check"),
         fire_topology_basis=str(fire.get("topology_basis", "")),
         fire_branch_electric_valves=bool(fire.get("branch_electric_valves", False)),
         roof_type=str(storm_s.get("roof_type", "not_set")),
         storm_city=str(storm_s.get("city", "")),
+        rainwater_reuse=rainwater_reuse,
+        wastewater_service=wastewater_service,
+        hws_stage_p=hws_stage_p,
         storm_roof_area_m2=float(storm_s.get("roof_area_m2", 0)),
         storm_walls_area_m2=float(storm_s.get("walls_area_m2", 0)),
         storm_period_years=int(storm_s.get("period_years", 1)),
@@ -606,11 +781,32 @@ def load_request(text: str) -> IOS2Request:
             float(sewage_s["basement_floor_elevation_m"])
             if sewage_s.get("basement_floor_elevation_m") is not None else None
         ),
+        wastewater_outlet_plan_side=str(sewage_s.get("outlet_plan_side", "unknown")),
+        wastewater_first_manhole_cover_relative_elevation_m=(
+            float(sewage_s["first_manhole_cover_relative_elevation_m"])
+            if sewage_s.get("first_manhole_cover_relative_elevation_m") is not None else None
+        ),
+        wastewater_pipe_series_id=str(sewage_s.get("pipe_series_id", "")),
+        wastewater_ground_relative_elevation_m=(
+            float(sewage_s["ground_relative_elevation_m"])
+            if sewage_s.get("ground_relative_elevation_m") is not None else None
+        ),
+        wastewater_frost_depth_m=(
+            float(sewage_s["frost_depth_m"])
+            if sewage_s.get("frost_depth_m") is not None else None
+        ),
         wastewater_floor_height_m=(
             float(sewage_s["floor_height_m"])
             if sewage_s.get("floor_height_m") is not None else None
         ),
         wastewater_roof_kind=str(sewage_s.get("roof_kind", "unknown")),
+        wastewater_presentation=presentation,
+        wastewater_fan_ventilation=fan_ventilation,
+        wastewater_fan_geometry=fan_geometry,
+        wastewater_roof_relative_elevation_m=(
+            float(sewage_s["roof_relative_elevation_m"])
+            if sewage_s.get("roof_relative_elevation_m") is not None else None
+        ),
         wastewater_design_assignment_ref=str(
             sewage_s.get("design_assignment_ref", "")
         ),
@@ -807,7 +1003,10 @@ def load_request(text: str) -> IOS2Request:
             technology_s.get("grease_trap_location", "unknown")
         ),
         zones=int(bld.get("zones", 1)),
-        rooms=rooms, network=network, source_data=source_data, consumers=consumers)
+        rooms=rooms, network=network, source_data=source_data, consumers=consumers,
+        metering_detail=metering_detail,
+        apartment_water_units=apartment_water_units,
+        v1_sections=v1_sections, t3_sections=t3_sections)
 
 
 def load_request_file(path: str) -> IOS2Request:
@@ -837,12 +1036,26 @@ def dump_request(req: IOS2Request) -> str:
         },
         "building": {
             "type": req.building_type, "floors": req.floors,
+            **({"floors_below": req.floors_below} if req.floors_below else {}),
+            **({"residents": req.residents} if req.residents else {}),
+            **({"seismicity": req.seismicity} if req.seismicity else {}),
+            **({"permafrost": req.permafrost} if req.permafrost else {}),
+            **({"basement_clear_height_m": req.basement_clear_height_m}
+               if req.basement_clear_height_m is not None else {}),
+            **({"floor_elevations_m": req.floor_elevations_m} if req.floor_elevations_m else {}),
+            **({"apartments_by_floor": req.apartments_by_floor} if req.apartments_by_floor else {}),
             "height_m": req.building_height_m, "zones": req.zones,
             "hws_type": req.hws_type,
             "total_area_m2": req.total_area_m2,
             "risers_v1": req.risers_v1,
             "risers_t3": req.risers_t3,
             "risers_t4": req.risers_t4,
+            **({"v1_sectional_valves_count": req.v1_sectional_valves_count}
+               if req.v1_sectional_valves_count is not None else {}),
+            **({"v1_sectional_valves_basis": req.v1_sectional_valves_basis}
+               if req.v1_sectional_valves_basis else {}),
+            **({"water_service_layout": asdict(req.water_service_layout)}
+               if req.water_service_layout != WaterServiceLayout() else {}),
             "apartments": req.apartments,
             "owner_groups_count": req.owner_groups_count,
         },
@@ -850,6 +1063,8 @@ def dump_request(req: IOS2Request) -> str:
             "mode": req.fire_mode,
             **({"height_m": req.fire_height_m} if req.fire_height_m is not None else {}),
             **({"category": req.fire_category} if req.fire_category else {}),
+            **({"corridor_length_m": req.fire_corridor_length_m}
+               if req.fire_corridor_length_m is not None else {}),
             **({"hall_seats": req.fire_hall_seats}
                if req.fire_hall_seats is not None else {}),
             **({"area_m2": req.fire_area_m2}
@@ -862,6 +1077,7 @@ def dump_request(req: IOS2Request) -> str:
             "nozzle_mm": req.nozzle_mm,
             "compact_jet_m": req.compact_jet_m,
             "topology": req.fire_topology,
+            **({"station_model": req.fire_station_model} if req.fire_station_model is not None else {}),
             **({"topology_basis": req.fire_topology_basis}
                if req.fire_topology_basis else {}),
             "branch_electric_valves": req.fire_branch_electric_valves,
@@ -899,8 +1115,10 @@ def dump_request(req: IOS2Request) -> str:
             "melt_m3_year": req.storm_melt_m3_year,
             "treatment_volume_m3": req.storm_treatment_volume_m3,
             "storage_volume_m3": req.storm_storage_volume_m3,
+            "reuse": asdict(req.rainwater_reuse),
         },
         "sewage": {
+            "service": asdict(req.wastewater_service),
             "max_fixture_lps": req.sewage_max_fixture_lps,
             "outlets_count": req.sewage_outlets_count,
             "risers": [{
@@ -924,6 +1142,7 @@ def dump_request(req: IOS2Request) -> str:
                 "system": x.system,
                 "id": x.section_id,
                 "purpose": x.purpose,
+                **({"catalog_series_id": x.catalog_series_id} if x.catalog_series_id else {}),
                 "material": x.material,
                 "standard": x.standard,
                 "outer_diameter_mm": x.outer_diameter_mm,
@@ -935,6 +1154,8 @@ def dump_request(req: IOS2Request) -> str:
                    if x.nominal_diameter_mm is not None else {}),
                 **({"design_flow_lps": x.design_flow_lps}
                    if x.design_flow_lps is not None else {}),
+                **{key: getattr(x, key) for key in ("q_hour_max_m3h", "fixtures_count", "receiving_length_m", "fixture_max_lps", "flow_source")
+                   if getattr(x, key) is not None},
                 **({"manning_n": x.manning_n}
                    if x.manning_n is not None else {}),
                 **({"hydraulic_source": x.hydraulic_source}
@@ -1060,8 +1281,27 @@ def dump_request(req: IOS2Request) -> str:
             "basement_floor_elevation_m": (
                 req.wastewater_basement_floor_elevation_m
             ),
+            **({"outlet_plan_side": req.wastewater_outlet_plan_side}
+               if req.wastewater_outlet_plan_side != "unknown" else {}),
+            **({"first_manhole_cover_relative_elevation_m":
+                req.wastewater_first_manhole_cover_relative_elevation_m}
+               if req.wastewater_first_manhole_cover_relative_elevation_m is not None else {}),
+            **({"pipe_series_id": req.wastewater_pipe_series_id}
+               if req.wastewater_pipe_series_id else {}),
+            **({"ground_relative_elevation_m": req.wastewater_ground_relative_elevation_m}
+               if req.wastewater_ground_relative_elevation_m is not None else {}),
+            **({"frost_depth_m": req.wastewater_frost_depth_m}
+               if req.wastewater_frost_depth_m is not None else {}),
             "floor_height_m": req.wastewater_floor_height_m,
             "roof_kind": req.wastewater_roof_kind,
+            **({"presentation": req.wastewater_presentation.to_mapping()}
+               if req.wastewater_presentation is not None else {}),
+            **({"fan_ventilation": req.wastewater_fan_ventilation.to_mapping()}
+               if req.wastewater_fan_ventilation is not None else {}),
+            **({"fan_geometry": req.wastewater_fan_geometry.to_mapping()}
+               if req.wastewater_fan_geometry is not None else {}),
+            **({"roof_relative_elevation_m": req.wastewater_roof_relative_elevation_m}
+               if req.wastewater_roof_relative_elevation_m is not None else {}),
             "disposal_mode": req.wastewater_disposal_mode,
             "tu_org": req.wastewater_tu_org,
             "tu_number": req.wastewater_tu_number,
@@ -1140,11 +1380,23 @@ def dump_request(req: IOS2Request) -> str:
             "grease_trap_location": req.grease_trap_location,
         },
     }
+    data["hws_stage_p"] = asdict(req.hws_stage_p)
+    if req.suction_check is not None:
+        from app.schemas.pump_suction import ProjectSuctionInput
+        data["suction_check"] = ProjectSuctionInput.model_validate(req.suction_check).model_dump()
+    if req.apartment_water_units != ApartmentWaterUnits():
+        data["apartment_water_units"] = asdict(req.apartment_water_units)
+    if req.metering_detail is not None:
+        data["metering_detail"] = asdict(req.metering_detail)
     if req.source_data is not None:
         sd = req.source_data
         data["source_data"] = {
             key: value for key, value in vars(sd).items()
             if value not in (None, "")
+        }
+        from app.calc.meter_verification import validate_meter_minimum_checks
+        data["source_data"]["meter_minimum_checks"] = {
+            k: asdict(v) for k, v in validate_meter_minimum_checks(sd.meter_minimum_checks).items()
         }
     if req.consumers:
         data["consumers"] = [{
@@ -1152,6 +1404,10 @@ def dump_request(req: IOS2Request) -> str:
             "code": x.code,
             "count": x.count,
         } for x in req.consumers]
+    if req.v1_sections:
+        data["v1_sections"] = [vars(row).copy() for row in req.v1_sections]
+    if req.t3_sections:
+        data["t3_sections"] = [vars(row).copy() for row in req.t3_sections]
     if req.rooms:
         data["rooms"] = [{
             "name": r.name, "length_m": r.length_m, "width_m": r.width_m,

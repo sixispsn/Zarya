@@ -4,7 +4,7 @@ app/calc/ring_hydraulics.py — увязка одного кольца В2 ме�
 
 Hydraulic Engine v3. Топология (жёстко зафиксирована):
   • ровно один независимый цикл в графе;
-  • один или два активных источника в узлах кольца;
+  • один или два источника на кольце либо на независимых подводах без отборов;
   • все ПК — вне кольца, на тупиковых стояках/ветвях, подключённых к узлам кольца;
   • на участках кольца нет ПК и промежуточных отборов;
   • штатный режим целого кольца.
@@ -29,6 +29,7 @@ Hydraulic Engine v3. Топология (жёстко зафиксирована
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Dict, List, Optional, Tuple
 
 from app.calc.fire_hydraulics import PipeSegment
@@ -273,7 +274,7 @@ class BranchToPK:
     cabinet_id: ПК на конце ветви.
     cabinet_head_m: требуемый напор у клапана ПК (из табл. 7.3), м.
     cabinet_elevation_m: отметка ПК.
-    source_elevation_m: отметка источника (ввода на кольце).
+    source_elevation_m: отметка внешнего источника, где задан Hгар.
     """
     attach_node: str
     segments: List[PipeSegment]
@@ -294,13 +295,15 @@ class PKRequiredHead:
     geodesic_lift_m: float       # Δz = отметка ПК − отметка источника
     cabinet_head_m: float        # H_ПК (табл. 7.3)
     required_head_at_source_m: float   # сумма
+    inlet_loss_m: float = 0.0    # подвод от внешней точки подключения до кольца
 
 
 def required_head_via_ring(
     ring_result: RingSolveResult,
     branch: BranchToPK,
+    *, inlet_loss_m: float = 0.0,
 ) -> PKRequiredHead:
-    """Шаг 3: H_треб = H_ПК + Δz + h_кольца(до узла) + h_ветви.
+    """Шаг 3: H_треб = H_ПК + Δz + h_подвода + h_кольца(до узла) + h_ветви.
 
     h_кольца — из node_head_offset_m увязанного кольца;
     h_ветви — по A·L_eff·Q² с расходом ветви (тупик: расход известен).
@@ -314,21 +317,23 @@ def required_head_via_ring(
         branch_loss += seg.A * seg.effective_length_m * (branch.flow_lps ** 2)
 
     dz = branch.cabinet_elevation_m - branch.source_elevation_m
-    total = branch.cabinet_head_m + dz + ring_loss + branch_loss
+    total = branch.cabinet_head_m + dz + inlet_loss_m + ring_loss + branch_loss
     return PKRequiredHead(
         cabinet_id=branch.cabinet_id, attach_node=branch.attach_node,
         ring_loss_m=ring_loss, branch_loss_m=branch_loss,
         geodesic_lift_m=dz, cabinet_head_m=branch.cabinet_head_m,
-        required_head_at_source_m=total)
+        required_head_at_source_m=total, inlet_loss_m=inlet_loss_m)
 
 
 def dictating_pk_via_ring(
     ring_result: RingSolveResult,
     branches: List[BranchToPK],
+    *, inlet_loss_m: float = 0.0,
 ) -> Tuple[Optional[PKRequiredHead], List[PKRequiredHead]]:
     """Диктующий ПК на кольцевой сети: максимум требуемого напора по всем ветвям.
     Возвращает (диктующий, все)."""
-    heads = [required_head_via_ring(ring_result, b) for b in branches]
+    heads = [required_head_via_ring(ring_result, b, inlet_loss_m=inlet_loss_m)
+             for b in branches]
     if not heads:
         return None, []
     dictating = max(heads, key=lambda h: h.required_head_at_source_m)
@@ -406,12 +411,25 @@ def find_single_cycle(net: FireNetwork) -> Optional[Tuple[List[str], List[PipeSe
             path_segs.pop()
         return None
 
-    for start in nodes:
+    # Воспроизводимый порядок обхода/строк отчёта, независимо от hash seed.
+    for start in sorted(nodes):
         if not visited.get(start):
             res = dfs(start, None, None)
             if res:
                 return res
     return None
+
+
+@dataclass
+class RingInletPath:
+    """Последовательный подвод без отборов; Hгар задан у source_node, не attach_node."""
+    source_node: str
+    attach_node: str
+    segments: List[PipeSegment]
+
+    @property
+    def resistance(self) -> float:
+        return sum(s.A * s.effective_length_m for s in self.segments)
 
 
 @dataclass
@@ -422,6 +440,7 @@ class RingNetworkDecomposition:
     branches: List[BranchToPK]                 # ветви с ПК
     branch_demands_by_node: Dict[str, float]   # узловые отборы
     problems: List[str] = field(default_factory=list)
+    inlet_paths: Dict[str, RingInletPath] = field(default_factory=dict)
 
 
 def decompose_ring_network(
@@ -431,8 +450,8 @@ def decompose_ring_network(
     heads_by_cabinet: Dict[str, float],
 ) -> RingNetworkDecomposition:
     """Раскладывает сеть с одним кольцом: контур + тупиковые ветви от узлов
-    кольца до активных ПК. Проверяет топологию v3 (источник на кольце,
-    ПК вне кольца)."""
+    кольца до активных ПК. Внешние источники допускаются на независимых
+    последовательных подводах без промежуточных отборов/ответвлений."""
     problems: List[str] = []
     cyc = find_single_cycle(net)
     if cyc is None:
@@ -441,11 +460,49 @@ def decompose_ring_network(
     loop_node_set = set(loop_nodes)
     loop_seg_ids = {s.segment_id for s in loop_segs}
 
-    if net.source.node_id not in loop_node_set:
-        problems.append(f"источник {net.source.node_id} не на кольце (топология v3)")
-
     src_elev = net.nodes[net.source.node_id].elevation_m
     adj = net.adjacency()
+    from collections import deque
+    inlets: Dict[str, RingInletPath] = {}
+    inlet_segment_ids: set[str] = set()
+    cabinet_nodes = {c.node_id for c in net.cabinets}
+    for source in [net.source] + ([net.second_source] if net.second_source else []):
+        q = deque([source.node_id])
+        prev = {}
+        seen = {source.node_id}
+        attach = None
+        while q:
+            cur = q.popleft()
+            if cur in loop_node_set:
+                attach = cur
+                break
+            for nb, seg in adj.get(cur, []):
+                if seg.segment_id not in loop_seg_ids and nb not in seen:
+                    seen.add(nb)
+                    prev[nb] = (cur, seg)
+                    q.append(nb)
+        if attach is None:
+            problems.append(f"ввод {source.node_id}: нет пути до кольца")
+            continue
+        path = []
+        node = attach
+        while node != source.node_id:
+            parent, seg = prev[node]
+            path.append(seg)
+            # Нельзя свернуть разветвлённый подвод в одно сопротивление: на нём
+            # уже нет единого расхода. Такие сети требуют другого решателя.
+            expected_degree = 1 if parent == source.node_id else 2
+            if len(adj.get(parent, [])) != expected_degree or parent in cabinet_nodes:
+                problems.append(f"ввод {source.node_id}: подвод имеет ответвление/ПК в узле {parent}")
+            if not isfinite(seg.A) or seg.A < 0 or not isfinite(seg.effective_length_m) or seg.effective_length_m < 0:
+                problems.append(f"ввод {source.node_id}: некорректное сопротивление {seg.segment_id}")
+            node = parent
+        path.reverse()
+        ids = {s.segment_id for s in path}
+        if ids & inlet_segment_ids:
+            problems.append("подводы источников должны быть независимыми до кольца")
+        inlet_segment_ids.update(ids)
+        inlets[source.node_id] = RingInletPath(source.node_id, attach, path)
     branches: List[BranchToPK] = []
     demands: Dict[str, float] = {}
 
@@ -474,6 +531,8 @@ def decompose_ring_network(
         node = attach
         while node != cab.node_id:
             p, s = prev[node]; segs.append(s); node = p
+        if any(s.segment_id in inlet_segment_ids for s in segs):
+            problems.append(f"ПК {cab.cabinet_id}: отбор на подводе до кольца не поддержан")
         # segs идут от кольца к ПК — то, что нужно BranchToPK
         flow = flows_by_cabinet.get(cab.cabinet_id, 0.0)
         branches.append(BranchToPK(
@@ -484,7 +543,7 @@ def decompose_ring_network(
             source_elevation_m=src_elev))
         demands[attach] = demands.get(attach, 0.0) + flow
 
-    return RingNetworkDecomposition(loop_nodes, loop_segs, branches, demands, problems)
+    return RingNetworkDecomposition(loop_nodes, loop_segs, branches, demands, problems, inlets)
 
 
 @dataclass
@@ -514,14 +573,17 @@ def solve_ring_scenario(
             0.0, 0.0, "", [], RingSolveResult(False, 0, 0.0), [],
             warnings=deco.problems)
 
-    problem = build_loop_problem(net.source.node_id, deco.loop_nodes,
+    inlet = deco.inlet_paths[net.source.node_id]
+    total_flow = sum(deco.branch_demands_by_node.values())
+    problem = build_loop_problem(inlet.attach_node, deco.loop_nodes,
                                  deco.loop_segments, deco.branch_demands_by_node)
     ring = solve_single_loop(problem)
     if not ring.converged:
         return RingScenarioOutcome(0.0, 0.0, "", [], ring, [],
                                    warnings=ring.warnings + ["увязка кольца не сошлась"])
 
-    dic, per_pk = dictating_pk_via_ring(ring, deco.branches)
+    dic, per_pk = dictating_pk_via_ring(
+        ring, deco.branches, inlet_loss_m=inlet.resistance * total_flow ** 2)
     if dic is None:
         return RingScenarioOutcome(0.0, 0.0, "", [], ring, [],
                                    warnings=["нет ветвей с ПК"])
@@ -547,6 +609,10 @@ def solve_ring_scenario(
 
     seg_by_id = {s.segment_id: s for s in net.segments}
     all_pk = [b.cabinet_id for b in deco.branches]
+    for seg in inlet.segments:
+        sections.append(_mk_section(seg, total_flow,
+                                    seg.A * seg.effective_length_m * total_flow ** 2,
+                                    shared=True, serving=sorted(all_pk)))
     for rf in ring.segments:
         seg = seg_by_id[rf.segment_id]
         # кольцевые участки общие: несут перераспределённый расход всех ПК
@@ -843,22 +909,30 @@ def analyze_ring_resilience(
 # контур через разность располагаемых напоров вводов (ΔH = H1 − H2).
 # Поправка реального контура увязывает потери по кольцу; поправка фиктивного —
 # перераспределяет ПОДАЧУ между вводами до согласования напоров:
-#     невязка фиктивного контура = Σh(путь ввод1→ввод2 по кольцу) − (H1 − H2)
+#     невязка = h_подвод1 + Σh(кольцо 1→2) − h_подвод2 − (H1 − H2)
 # Итерации обоих контуров до сходимости обеих невязок.
 #
-# MVP-границы: ровно два ввода, оба на узлах одного кольца; ПК на тупиках
-# (как v3). Отказ ввода → выключил и решил обычной односорсной задачей.
+# Ровно два независимых ввода на одно кольцо; ПК на тупиках. Подводы могут
+# состоять из нескольких последовательных участков, но без отборов по пути.
+# Отказ ввода → обычная односорсная задача с полным расходом живого подвода.
 
 @dataclass
 class TwoSourceLoopProblem:
-    """Кольцо с двумя активными вводами."""
+    """Кольцо с двумя вводами: node - узел присоединения, head - внешняя пьезометрия.
+
+    Сопротивления подводов используют то же h=A·L_eff·Q², что и кольцо.
+    Нулевые сопротивления точно воспроизводят прежнюю постановку на кольце.
+    Это проверка заданных расходов, не pressure-driven модель подачи при дефиците.
+    """
     source1_node: str
-    source1_head_m: float                # располагаемый напор ввода 1
+    source1_head_m: float                # Hгар+z внешнего ввода 1
     source2_node: str
     source2_head_m: float
     loop_nodes: List[str]                # обход кольца
     loop_segments: List[PipeSegment]     # по обходу
     node_demands: Dict[str, float]       # отборы стояков
+    source1_resistance: float = 0.0      # Σ A·L_eff внешнего подвода 1
+    source2_resistance: float = 0.0
 
     def validate(self) -> List[str]:
         pr: List[str] = []
@@ -872,6 +946,12 @@ class TwoSourceLoopProblem:
                 pr.append(f"ввод {s} не на кольце")
         if self.source1_node == self.source2_node:
             pr.append("вводы должны быть в разных узлах")
+        for head in (self.source1_head_m, self.source2_head_m):
+            if not isfinite(head):
+                pr.append("пьезометрический напор ввода должен быть конечным")
+        for resistance in (self.source1_resistance, self.source2_resistance):
+            if not isfinite(resistance) or resistance < 0:
+                pr.append("сопротивление подвода должно быть конечным и неотрицательным")
         total = sum(self.node_demands.get(nd, 0.0) for nd in self.loop_nodes)
         if total <= 0:
             pr.append("суммарный отбор кольца = 0")
@@ -935,6 +1015,16 @@ def solve_two_source_loop(
     def _k(i):  # сопротивление участка
         return segs[i].A * segs[i].effective_length_m
 
+    def _supply(idx: int) -> float:
+        return Q[idx] - Q[(idx - 1) % n] + problem.node_demands.get(nodes[idx], 0.0)
+
+    k1, k2 = problem.source1_resistance, problem.source2_resistance
+
+    def _pseudo_residual():
+        s1, s2 = _supply(i1), _supply(i2)
+        return (sum(_k(i) * Q[i] * abs(Q[i]) for i in pseudo_path)
+                + k1 * s1 * abs(s1) - k2 * s2 * abs(s2) - dH)
+
     res_loop = res_pseudo = 0.0
     it = 0
     for it in range(1, max_iterations + 1):
@@ -947,8 +1037,9 @@ def solve_two_source_loop(
             for i in range(n):
                 Q[i] += dQ
         # контур 2 — фиктивный (ввод1 → ввод2), невязка с учётом ΔH
-        numer2 = sum(_k(i) * Q[i] * abs(Q[i]) for i in pseudo_path) - dH
-        denom2 = sum(2.0 * _k(i) * abs(Q[i]) for i in pseudo_path)
+        numer2 = _pseudo_residual()
+        denom2 = (sum(2.0 * _k(i) * abs(Q[i]) for i in pseudo_path)
+                  + 2.0 * k1 * abs(_supply(i1)) + 2.0 * k2 * abs(_supply(i2)))
         res_pseudo = abs(numer2)
         if denom2 > 1e-12:
             dQ2 = -numer2 / denom2
@@ -957,19 +1048,15 @@ def solve_two_source_loop(
         if res_loop < tolerance_m and res_pseudo < tolerance_m:
             break
 
-    # подачи вводов из узловых балансов:
-    # в узле ввода: подача = Σ(уход по инцидентным участкам) − Σ(приход) + отбор
-    def _supply(idx: int) -> float:
-        out_seg = idx                    # участок nodes[idx] → nodes[idx+1]
-        in_seg = (idx - 1) % n           # участок nodes[idx-1] → nodes[idx]
-        return Q[out_seg] - Q[in_seg] + problem.node_demands.get(nodes[idx], 0.0)
-
+    # Контроль конечного, а не предшествующего поправке состояния.
+    res_loop = abs(sum(_k(i) * Q[i] * abs(Q[i]) for i in range(n)))
+    res_pseudo = abs(_pseudo_residual())
     s1 = _supply(i1)
     s2 = _supply(i2)
 
-    # напоры в узлах: от ввода1 (H1) по обходу с учётом знака потерь
-    node_head: Dict[str, float] = {nodes[i1]: problem.source1_head_m}
-    cum = problem.source1_head_m
+    # H1 остаётся на внешнем источнике; на кольце вычитается потеря подвода.
+    cum = problem.source1_head_m - k1 * s1 * abs(s1)
+    node_head: Dict[str, float] = {nodes[i1]: cum}
     k = i1
     for _ in range(n):
         hl = _k(k) * Q[k] * abs(Q[k])
@@ -1031,13 +1118,18 @@ def solve_two_source_loop_with_check_valves(
     sres = solve_single_loop(single, tolerance_m=tolerance_m,
                              max_iterations=max_iterations)
     total = sum(problem.node_demands.get(nd, 0.0) for nd in problem.loop_nodes)
+    strong_head = (problem.source1_head_m if strong == problem.source1_node
+                   else problem.source2_head_m)
+    resistance = (problem.source1_resistance if strong == problem.source1_node
+                  else problem.source2_resistance)
     return TwoSourceSolveResult(
         converged=sres.converged, iterations=sres.iterations,
         residual_loop_m=sres.final_residual_m, residual_pseudo_m=0.0,
         segments=sres.segments,
         supply1_lps=(total if strong == problem.source1_node else 0.0),
         supply2_lps=(total if strong == problem.source2_node else 0.0),
-        node_head_m={},   # напоры не считаем в одновводном фолбэке (offset в sres)
+        node_head_m={node: strong_head - resistance * total ** 2 - offset
+                     for node, offset in sres.node_head_offset_m.items()},
         warnings=sres.warnings + [
             f"обратный клапан: ввод {weak} закрыт (реверс при чистой увязке), "
             f"сеть питается только от {strong}"])
@@ -1091,9 +1183,11 @@ def solve_two_source_scenario(
     deco = decompose_ring_network(net, active_cabinets, flows_by_cabinet,
                                   heads_by_cabinet)
     if deco.problems or not deco.loop_nodes:
-        return None
+        return TwoSourceScenarioOutcome(
+            0.0, 0.0, 0.0, "", False, [], [], TwoSourceSolveResult(False, 0, 0.0, 0.0),
+            warnings=deco.problems)
     s1, s2 = net.source, net.second_source
-    if s2 is None or s2.node_id not in deco.loop_nodes:
+    if s2 is None:
         return None
     if s1.available_head_m is None or s2.available_head_m is None:
         return None   # двухвводная постановка требует напоров обоих вводов
@@ -1102,11 +1196,13 @@ def solve_two_source_scenario(
     # а available_head_m хранит манометрический напор на отметке ввода.
     h1_total = s1.available_head_m + net.nodes[s1.node_id].elevation_m
     h2_total = s2.available_head_m + net.nodes[s2.node_id].elevation_m
+    inlet1, inlet2 = deco.inlet_paths[s1.node_id], deco.inlet_paths[s2.node_id]
     problem = TwoSourceLoopProblem(
-        source1_node=s1.node_id, source1_head_m=h1_total,
-        source2_node=s2.node_id, source2_head_m=h2_total,
+        source1_node=inlet1.attach_node, source1_head_m=h1_total,
+        source2_node=inlet2.attach_node, source2_head_m=h2_total,
         loop_nodes=deco.loop_nodes, loop_segments=deco.loop_segments,
-        node_demands=deco.branch_demands_by_node)
+        node_demands=deco.branch_demands_by_node,
+        source1_resistance=inlet1.resistance, source2_resistance=inlet2.resistance)
     solve = solve_two_source_loop_with_check_valves(problem)
     if not solve.converged:
         return TwoSourceScenarioOutcome(
@@ -1114,22 +1210,11 @@ def solve_two_source_scenario(
             warnings=solve.warnings + ["двухвводная увязка не сошлась"])
 
     src_elev = net.nodes[s1.node_id].elevation_m
-    # напоры узлов: в клапанном фолбэке node_head_m пуст — достроим от offset
     node_head = dict(solve.node_head_m)
-    if not node_head:
-        # односорсный фолбэк: напор узла = H_сильного − потери до узла
-        strong = s1 if solve.supply1_lps > 0 else s2
-        base = SingleLoopProblem(strong.node_id, deco.loop_nodes,
-                                 deco.loop_segments, deco.branch_demands_by_node)
-        sres = solve_single_loop(base)
-        strong_total = (strong.available_head_m
-                        + net.nodes[strong.node_id].elevation_m)
-        node_head = {n: strong_total - off
-                     for n, off in sres.node_head_offset_m.items()}
 
     checks: List[TwoSourcePKCheck] = []
     for b in deco.branches:
-        nh = node_head.get(b.attach_node, 0.0)
+        nh = node_head[b.attach_node]
         bl = sum(seg.A * seg.effective_length_m * (b.flow_lps ** 2)
                  for seg in b.segments)
         dz = b.cabinet_elevation_m - src_elev
@@ -1167,6 +1252,10 @@ def solve_two_source_scenario(
             velocity_design_ok=(None if v is None else v <= design_limit),
             is_shared=shared, serving_cabinets=serving)
 
+    for inlet, supply in ((inlet1, solve.supply1_lps), (inlet2, solve.supply2_lps)):
+        for seg in inlet.segments:
+            sections.append(_mk(seg, abs(supply), seg.A * seg.effective_length_m * supply ** 2,
+                                True, sorted(all_pk)))
     for rf in solve.segments:
         sections.append(_mk(seg_by_id[rf.segment_id], rf.abs_flow_lps,
                             rf.head_loss_m, True, sorted(all_pk)))

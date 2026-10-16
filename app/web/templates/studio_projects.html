@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru" data-theme="light" data-ui="white">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ЗАРЯ — мои проекты</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/studio.css?v=15">
+  {% include 'site_assets.html' %}
+  <link rel="stylesheet" href="/static/pilot_admin.css?v=1"><script src="/static/studio_projects.js?v=1" defer></script>
+</head>
+<body>
+{% include 'site_header.html' %}
+<main id="main-content" class="studio-library" tabindex="-1">
+  <h1>Мои проекты</h1>
+  <p class="library-note">Продолжите работу с теми же документами и исходными данными.</p>
+  {% if request.state.pilot_user %}<p><a class="text-button" href="/studio/pilot-objects">Объекты пилота · сохранённые версии →</a></p>{% endif %}
+  {% if request.state.pilot_user %}<form id="studio-new-project" class="admin-invite"><h2>Новый объект</h2><div class="admin-fields"><label>Название или псевдоним<input name="title" required maxlength="120" placeholder="Например, Дом на Лесной"></label></div><button class="soft-button" type="submit">Создать проект →</button></form><p data-project-error role="alert"></p>{% endif %}
+  {% if current %}
+  <section class="library-current">
+    <div><p>{% if is_study %}Учебный пример{% elif request.state.pilot_user %}Текущий проект · {{ request.state.pilot_user.name }}{% else %}Текущий проект · в этом браузере{% endif %}</p><h2>{{ title }}</h2><p>Последние сохранённые данные</p></div>
+    <a class="soft-button" href="/studio?view=project">Продолжить →</a>
+  </section>
+  {% else %}
+  <section class="library-current">
+    <div><h2>Начните свой проект</h2><p>Добавьте документы или начните с исходных чисел.</p></div>
+    <a class="soft-button" href="/studio">Начать →</a>
+  </section>
+  {% endif %}
+  {% for item in personal %}<section class="library-current"><div><h2>{{ item.title }}</h2><p>Сохранённый рабочий проект</p></div><button class="soft-button" type="button" data-open-project="{{ item.id }}">Открыть →</button></section>{% endfor %}
+  {% if archive %}
+  <details class="studio-archive">
+    <summary>Архив прежних проектов · {{ archive|length }}</summary>
+    <p class="library-note">Исходные данные сохранены без изменений. Архив открывается отдельно в прежнем редакторе: автоматического переноса с потерей настроек нет.</p>
+    <div class="library-grid">
+      {% for p in archive %}
+      <article class="library-project">
+        <h3>{{ 'Проект без названия' if p.title == p.project_id else p.title }}</h3>
+        <p>Изменён {{ p.updated_at[:16].replace('T', ' ') }}</p>
+        <a class="text-button" href="/studio/archive/{{ p.project_id }}/source.yaml">Скачать исходные данные</a>
+        <a class="text-button" href="/wizard/open/{{ p.project_id }}" target="_blank" rel="noopener">Прежний редактор ↗</a>
+      </article>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</main>
+</body>
+</html>

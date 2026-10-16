@@ -1,62 +1,39 @@
-{# Спецификация — форма 1 ГОСТ 21.110-2013 (9 граф). Контекст: spec #}
-{% macro table_header() %}
-  <table class="spec spec-header">
-  <colgroup>
-    <col style="width:20mm"><col style="width:130mm"><col style="width:60mm">
-    <col style="width:35mm"><col style="width:45mm"><col style="width:20mm">
-    <col style="width:20mm"><col style="width:25mm"><col style="width:40mm">
-  </colgroup>
-  <tbody>
-    <tr>
-      <th>Поз.</th>
-      <th>Наименование и техническая характеристика</th>
-      <th>Тип, марка, обозначение документа, опросного листа</th>
-      <th>Код продукции</th>
-      <th>Поставщик</th>
-      <th>Ед. измерения</th>
-      <th>Кол.</th>
-      <th>Масса 1 ед., кг</th>
-      <th>Приме­чание</th>
-    </tr>
-  </tbody>
-  </table>
-{% endmacro %}
-{% set ns = namespace(division='') %}
-{% for sec in spec.sections %}
-{% set section_loop = loop %}
-{# Запас по высоте нужен для многострочных примечаний о креплениях и проходках. #}
-{% for row_chunk in sec.rows|batch(8) %}
-{% if not (section_loop.first and loop.first) %}<div class="spec-page-break"></div>{% endif %}
-<div class="spec-sheet">
-{{ table_header() }}
+{# One measured sheet, not a fixed number of product rows. #}
+{% for page in pages %}
+<div class="spec-sheet" data-spec-sheet="{{ loop.index }}">
 <table class="spec">
   <colgroup>
     <col style="width:20mm"><col style="width:130mm"><col style="width:60mm">
     <col style="width:35mm"><col style="width:45mm"><col style="width:20mm">
     <col style="width:20mm"><col style="width:25mm"><col style="width:40mm">
   </colgroup>
+  <thead><tr data-layout-key="header">
+    <th>Поз.</th><th>Наименование и техническая характеристика</th>
+    <th>Тип, марка, обозначение документа, опросного листа</th>
+    <th>Код продукции</th><th>Поставщик</th><th>Ед. измерения</th>
+    <th>Кол.</th><th>Масса 1 ед., кг</th><th>Примечание</th>
+  </tr></thead>
   <tbody>
-    {% if sec.division %}
-      <tr class="s-division"><td colspan="9">{{ sec.division }}{% if sec.division == ns.division %} (продолжение){% endif %}</td></tr>
-      {% set ns.division = sec.division %}
+  {% for entry in page.rows %}
+    {% if entry.kind in ('division', 'section') %}
+    <tr class="s-{{ entry.kind }}" data-layout-key="{{ entry.key }}"><td></td><td>{{ entry.title }}</td><td colspan="7"></td></tr>
+    {% elif entry.kind == 'note' %}
+    <tr class="s-note" data-layout-key="{{ entry.key }}"{% if entry.height_mm %} style="height:{{ entry.height_mm }}mm"{% endif %}><td colspan="9"><b>Примечания.</b> {{ entry.text }}</td></tr>
+    {% else %}
+    {% set r = entry.row %}
+    <tr class="s-item" data-layout-key="{{ entry.key }}"{% if entry.height_mm %} style="height:{{ entry.height_mm }}mm"{% endif %}>
+      <td class="c">{{ r.diagram_pos or (r.pos if r.pos is not none else '') }}</td>
+      <td class="l">{{ r.name }}</td><td>{{ r.type_mark }}</td>
+      <td>{{ r.code }}</td><td>{{ r.manufacturer }}</td><td>{{ r.unit }}</td>
+      <td>{{ r.qty|spec_qty(r.unit) }}</td><td>{{ r.mass }}</td>
+      <td class="l">{{ r.note }}{% if r.quantity_note %}{% if r.note %}<br>{% endif %}{{ r.quantity_note }}{% endif %}</td>
+    </tr>
     {% endif %}
-    <tr class="s-section"><td colspan="9">{{ sec.title }}{% if not loop.first %} (продолжение){% endif %}</td></tr>
-    {% for r in row_chunk %}
-      <tr>
-        <td class="c">{{ r.pos if r.pos is not none else '' }}</td>
-        <td class="l">{{ r.name }}</td>
-        <td class="c">{{ r.type_mark }}</td>
-        <td class="c">{{ r.code }}</td>
-        <td class="c">{{ r.manufacturer }}</td>
-        <td class="c">{{ r.unit }}</td>
-        <td class="c">{{ r.qty|spec_qty(r.unit) }}</td>
-        <td class="c">{{ r.mass }}</td>
-        <td class="l">{{ r.note }}</td>
-      </tr>
-    {% endfor %}
+  {% endfor %}
+  {% for h in page.blanks %}
+    <tr class="spec-filler" aria-hidden="true" style="height:{{ h }}mm">{% for i in range(9) %}<td></td>{% endfor %}</tr>
+  {% endfor %}
   </tbody>
 </table>
 </div>
 {% endfor %}
-{% endfor %}
-{% if spec.note %}<p class="spec-note">{{ spec.note }}</p>{% endif %}

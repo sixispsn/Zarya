@@ -1,0 +1,46 @@
+{% set suction = suction_review_for(project) %}
+{% if suction %}
+<div class="suction-review">
+<h3>Проверка всасывания В1: отдельный путь и режим</h3>
+<p><b>{{ suction.note }}</b> {{ suction.notice }}</p>
+{% if suction.status == 'current' %}
+{% set b = suction.inputs.balance %}{% set r = suction.result.balance %}{% set losses = suction.result.losses %}
+<p>Путь: {{ suction.route.label }}.</p>
+<p>Границы и режим пути: {{ suction.inputs.path_basis or 'не заданы' }}</p>
+<table class="equip suction-inputs">
+<thead><tr><th>Параметр</th><th>Значение</th></tr></thead><tbody>
+<tr><td>Вид давления</td><td>{{ {'absolute': 'абсолютное', 'gauge': 'избыточное'}.get(b.pressure_kind, 'не задан') }}</td></tr>
+{% for label, value in suction.input_rows %}
+<tr><td>{{ label }}</td><td>{{ value | num(3) if value is not none else 'нужны данные' }}</td></tr>
+{% endfor %}
+<tr><td>Полные потери пути Hf, м</td><td>{{ losses.total_loss_m | num(3) if losses.total_loss_m is not none else 'не подтверждены' }}</td></tr>
+</tbody></table>
+<p>Основания исходных: {{ b.basis or 'не заданы' }}</p>
+<p>Основание NPSHr: {{ b.npshr_basis or 'не задано' }}</p>
+<h4>Привязка готовых потерь</h4>
+{% for row in losses.rows %}
+<p><b>Результат {{ loop.index }}: {{ row.id }}.</b>
+Потери {{ row.loss_m | num(3) if row.loss_m is not none else 'не заданы' }} м;
+Q = {{ row.flow_m3h | num(3) if row.flow_m3h is not none else 'не задан' }} м³/ч;
+t = {{ row.temperature_c | num(2) if row.temperature_c is not none else 'не задана' }} °C.
+{{ 'Привязка подтверждена для указанного режима.' if row.status == 'bound' else 'Нужны данные или соответствие расхода и температуры выбранному режиму; в итог не включён.' }}
+Основание: {{ row.basis or 'не задано' }}</p>
+<p>Состав покрытия:</p><ul>{% for c in row.covers %}<li>{{ suction.route.components[c] }}</li>{% endfor %}</ul>
+{% else %}<p>Готовые потери не заданы. Нулевыми не приняты.</p>{% endfor %}
+{% if losses.missing_components %}<p>Не подтверждены потери следующих элементов и связей:</p>
+<ul>{% for c in losses.missing_components %}<li>{{ suction.route.components[c] }}</li>{% endfor %}</ul>{% endif %}
+{% for issue in losses.issues %}<p>{{ issue }}.</p>{% endfor %}
+<p>Методика: CNP CDM/CDMF, каталог 24.11.2025, с. 18.
+NPSHa = 10,2·pабс + zисх - zнас - Hf - Hv.
+Сравнение с NPSHr + Hs выполнено без промежуточного округления; значения ниже округлены только для вывода.</p>
+<div class="suction-conclusion">
+<table class="equip suction-result"><thead><tr><th>Показатель</th><th>Результат</th></tr></thead><tbody>
+<tr><td>NPSHa, м</td><td>{{ r.available_m | num(3) if r.available_m is not none else 'не определён' }}</td></tr>
+<tr><td>NPSHr + Hs, м</td><td>{{ r.required_m | num(3) if r.required_m is not none else 'не определено' }}</td></tr>
+<tr><td>Вывод по заданному режиму</td><td>{{ 'Условие выполнено' if r.check_ok is sameas true else ('Условие не выполнено' if r.check_ok is sameas false else 'Проверка не завершена') }}</td></tr>
+</tbody></table>
+{% if suction.missing %}<p>Необходимы: {{ suction.missing | join('; ') }}.</p>{% endif %}
+</div>
+{% endif %}
+</div>
+{% endif %}

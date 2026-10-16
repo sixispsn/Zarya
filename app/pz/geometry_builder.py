@@ -83,7 +83,7 @@ def build_network(project: Project) -> object:
 
     Стояк разворачивается в: узел ПК (на cabinet_elevation_m) + участок от
     attach_node + FireCabinetNode с параметрами крана из FireSystem
-    (Ду, рукав) и jet_m из спека стояка. Топологию (дерево/кольцо) билдер не
+    (Ду клапана, отверстие ствола, рукав) и jet_m из спека стояка. Топологию (дерево/кольцо) билдер не
     определяет — граф покажет её сам солверу.
     """
     from app.calc.fire_hydraulics import (
@@ -126,7 +126,7 @@ def build_network(project: Project) -> object:
             inner_diameter_mm=steel_vgp_ordinary(r.dn).inner_mm))
         cabinets.append(FireCabinetNode(
             cabinet_id=cab_id, node_id=pk_node,
-            dn=fire.nozzle_dn, hose_m=fire.hose_length_m,
+            dn=fire.nozzle_dn, nozzle_mm=fire.nozzle_mm, hose_m=fire.hose_length_m,
             jet_m=r.jet_m, riser_id=r.riser_id,
             repair_section_id=(r.repair_section_id or None)))
 

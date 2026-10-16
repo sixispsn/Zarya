@@ -50,21 +50,23 @@
   </table>
 </div>
 
+<main class="calculation-body">
 <h1 class="section-title">Гидравлический расчёт внутреннего противопожарного водопровода (В2)</h1>
+{% if station_preliminary %}<p>Предварительная модель общей станции: фиксированные расходы ПК. Проверка совместной работы по давлению, диафрагм, всех ремонтных режимов и покрытия помещений не выполнена.</p>{% endif %}
 
 {# ── БЛОК 1: ШАПКА РАСЧЁТА ── #}
 <table class="hdr">
   <tr><td class="k">Расчётный сценарий</td><td>{{ h.n_simultaneous }} одновременно действующих ПК ({{ h.active_cabinet_ids|join(', ') }})</td></tr>
   <tr><td class="k">Расчётный расход</td><td>{{ '%.1f'|format(h.total_flow_lps) }} л/с</td></tr>
   <tr><td class="k">Диктующий</td><td>{{ h.dictating_label }}</td></tr>
-  <tr><td class="k">Требуемый напор на вводе</td><td>{{ '%.1f'|format(h.required_head_at_source_m) }} м</td></tr>
+  <tr><td class="k">Требуемый напор в расчётной границе сети</td><td>{{ '%.1f'|format(h.required_head_at_source_m) }} м</td></tr>
   {% if h.available_head_m is not none %}
   <tr><td class="k">Доступный напор источника</td><td>{{ '%.1f'|format(h.available_head_m) }} м</td></tr>
   {% endif %}
   {% if h.needs_pump and h.pump_duty %}
   <tr><td class="k">Насосная установка В2</td><td>требуется: Q = {{ '%.1f'|format(h.pump_duty.flow_lps) }} л/с, H = {{ '%.1f'|format(h.pump_duty.required_head_m) }} м</td></tr>
   {% if fire_pumps.model %}
-  <tr><td class="k">Подобранная установка</td><td>{{ fire_pumps.model }}; фактическая рабочая точка Q = {{ '%.2f'|format(fire_pumps.wp_q) }} м³/ч, H = {{ '%.1f'|format(fire_pumps.wp_h) }} м; {{ fire_pumps.count_note }}</td></tr>
+  <tr><td class="k">Подобранная установка</td><td>{{ fire_pumps.model }}; {{ 'каталог при Qрасч' if fire_pumps.curve_kind == 'duty_only' else 'расчётная рабочая точка' }}: Q = {{ '%.2f'|format(fire_pumps.wp_q) }} м³/ч, H = {{ '%.1f'|format(fire_pumps.wp_h) }} м; {{ fire_pumps.count_note }}</td></tr>
   {% endif %}
   {% elif h.needs_pump %}
   <tr><td class="k">Насосная установка В2</td><td>требуется: дефицит напора {{ '%.1f'|format(h.required_head_at_source_m - (h.available_head_m or 0)) }} м; рабочую точку основного расчётного режима определить с учётом совместной работы источников по п. 12.1 СП 10.13130.2020</td></tr>
@@ -72,6 +74,10 @@
   <tr><td class="k">Насосная установка В2</td><td>не требуется</td></tr>
   {% endif %}
 </table>
+
+{% if h.pump_duty %}
+{% for note in h.pump_duty.notes %}<p>{{ note }}</p>{% endfor %}
+{% endif %}
 
 {% if fire_pumps.sp10_checks %}
 <h2 class="sub">Проверка пожарной насосной установки по СП 10.13130.2020</h2>
@@ -146,6 +152,10 @@
 
 {# ── БЛОК 5: ЗАКЛЮЧЕНИЕ ── #}
 <h2 class="sub">Заключение</h2>
-<div class="concl">{{ conclusion_html|safe }}</div>
+{% if station_preliminary %}
+<div class="concl"><p>Рассчитан заданный граф с {{ h.n_simultaneous }} одновременно действующими ПК при общем расходе {{ '%.3f'|format(h.total_flow_lps) }} л/с. Требуемый напор на выходе общей станции: {{ '%.3f'|format(h.required_head_at_source_m) }} м.</p>
+<p>Каталожный подбор по расчётному заданию не является найденной рабочей точкой совместной работы насоса и ПК. Резервный агрегат не суммируется с рабочим. Результат не подтверждает проект в целом.</p></div>
+{% else %}<div class="concl">{{ conclusion_html|safe }}</div>{% endif %}
 
+</main>
 </body></html>
