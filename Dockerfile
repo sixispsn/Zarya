@@ -13,6 +13,7 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         fonts-dejavu-core \
         fonts-liberation \
+        nodejs \
         libcairo2 \
         libharfbuzz-subset0 \
         libopenjp2-7 \
@@ -29,12 +30,19 @@ RUN python -c "import cairosvg; assert cairosvg.svg2pdf(bytestring=b'<svg xmlns=
 
 COPY app ./app
 COPY demo ./demo
+COPY legacy/sp30_calculator.html ./legacy/sp30_calculator.html
+COPY scripts/legacy_rainwater_reference.mjs ./scripts/legacy_rainwater_reference.mjs
+COPY scripts/pilot_access.py ./scripts/pilot_access.py
+
+# Local snapshot files can be 0600; the non-root runtime must read all sources.
+RUN chmod -R a+rX /app/app /app/demo /app/legacy /app/scripts
 
 RUN useradd --create-home --uid 10001 zarya \
     && mkdir -p /data/projects \
     && chown -R zarya:zarya /data
 
 USER zarya
+RUN python -c "from app.main import app; assert app"
 
 EXPOSE 8000
 

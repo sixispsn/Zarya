@@ -1,6 +1,10 @@
 .git
 .gitignore
 .DS_Store
+backup
+private
+restored-*
+*.tar.gz
 .env
 .env.*
 !.env.example
@@ -11,13 +15,21 @@ venv
 .venv
 dist
 tmp
+output
+ci-artifacts
+.mypy_cache
+.ruff_cache
+.coverage
 temp
 demo_backup
 docs
-legacy
+legacy/*
+!legacy/sp30_calculator.html
 tests
 make_test_pz.py
 start_zarya.py
-scripts
+scripts/*
+!scripts/legacy_rainwater_reference.mjs
+!scripts/pilot_access.py
 Запустить Зарю.bat
 Запустить Зарю.command

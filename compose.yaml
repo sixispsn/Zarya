@@ -7,6 +7,11 @@ services:
     restart: unless-stopped
     environment:
       ZARYA_PROJECTS_DIR: /data/projects
+      ZARYA_STUDIO_DIR: /data/projects/_studio
+      ZARYA_STUDIO_ENABLED: ${ZARYA_STUDIO_ENABLED:-1}
+      ZARYA_PILOT_ENABLED: ${ZARYA_PILOT_ENABLED:-0}
+      ZARYA_REQUIRE_PILOT: "1"
+      ZARYA_PILOT_DIR: /data/projects/_pilot
       ZARYA_PASSPORTS_DIR: /data/projects/_passports
       ZARYA_ARCHITECTURE_IMPORT_ROOT: /data/projects/_architecture
       ZARYA_RELEASES_DIR: /data/projects/_releases

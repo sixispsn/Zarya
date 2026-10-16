@@ -3,3 +3,4 @@
 mypy==1.16.0
 pytest-cov==6.1.1
 ruff==0.11.13
+types-reportlab==5.0.0.20261008
