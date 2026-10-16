@@ -83,7 +83,11 @@ def blocker_snapshot(
                 "detail": finding.detail,
                 "reference": finding.reference,
             })
-    return sorted(findings, key=lambda row: (row["code"], row["detail"]))
+    # The quality report now includes the same GOST leaf rows directly.
+    # Expanding DOC-04/05 must not count them twice. Only exact duplicates
+    # are collapsed: another cause/reference under the same code stays.
+    unique = {(row["code"], row["detail"], row["reference"]): row for row in findings}
+    return [unique[key] for key in sorted(unique)]
 
 
 def check_expected_blockers(

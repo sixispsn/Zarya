@@ -1,9 +1,10 @@
 """
 Тесты подбора насосов.
 
-Эталон: формулы из legacy/sp30_calculator.html.
+Каталог/скоринг legacy; разложение кривой исправлено по согласованию L02.
 """
 import pytest
+import math
 
 from app.calc.pumps import PumpInput, calculate_pump
 
@@ -38,25 +39,26 @@ class TestHead:
         ))
         assert r.h_required == 0.0
 
-    def test_system_curve_is_exact_legacy_formula(self):
-        """legacy: Hстат=Hгар; k=(Hp-Hстат)/Q² при Hp>Hстат."""
+    def test_system_curve_uses_head_balance_l02(self):
+        """L02: H0=25+20−20; k=5/5², а не прежние 20 и 0.4."""
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost",
             h_geom_manual=25, h_losses=5, h_pr=20, h_gar=20,
         ))
         assert r.h_required == 30.0
-        assert r.h_stat == 20.0
-        assert r.k_sys == 0.4
+        assert r.h_stat == 25.0
+        assert r.k_sys == 0.2
 
-    def test_system_curve_legacy_fallback_k(self):
-        """legacy: если Hp не больше Hстат, используется k=0,1."""
+    def test_sufficient_source_head_has_no_fallback_or_pump(self):
+        """L02: signed H0=-5; потери 2 м; насос не нужен."""
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost",
             h_geom_manual=5, h_losses=2, h_pr=10, h_gar=20,
         ))
         assert r.h_required == 0.0
-        assert r.h_stat == 20.0
-        assert r.k_sys == 0.1
+        assert r.h_stat == -5.0
+        assert r.k_sys == 0.08
+        assert not r.required and not r.candidates
 
 
 class TestSelection:
@@ -75,7 +77,7 @@ class TestSelection:
         """Кандидаты отсортированы по убыванию score."""
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost",
-            h_geom_manual=25, h_gar=20,
+            h_geom_manual=25, h_losses=5, h_gar=20,
         ))
         scores = [c.score for c in r.candidates]
         assert scores == sorted(scores, reverse=True)
@@ -92,7 +94,7 @@ class TestSelection:
     def test_curve_returned(self):
         """Для построения графика возвращается кривая насоса."""
         r = calculate_pump(PumpInput(
-            q_design_m3h=5, pump_type="boost", h_geom_manual=25, h_gar=20))
+            q_design_m3h=5, pump_type="boost", h_geom_manual=25, h_losses=5, h_gar=20))
         assert len(r.candidates[0].eff_curve) > 0
 
     def test_current_catalog_covers_project_working_point(self):
@@ -110,20 +112,24 @@ class TestSelection:
         assert r.candidates
         accepted = r.candidates[0]
         assert accepted.pump.model == "Helix FIRST V 1606-5/16/E/S/400-50"
-        assert (accepted.working_point.q, accepted.working_point.h) == (15.75, 60.2)
+        # Independent quadratic: catalog segment H=99.7-2.5Q, system H=46+kQ².
+        k = 8.007 / 14.4612**2
+        q = (-2.5 + math.sqrt(2.5**2 + 4*k*53.7)) / (2*k)
+        assert accepted.working_point.q == pytest.approx(q, abs=1e-8)
+        assert accepted.working_point.h == pytest.approx(99.7-2.5*q, abs=1e-8)
         assert accepted.pump.source_url.startswith("https://wilo.com/")
 
     @pytest.mark.parametrize("mode,q_design,h_geom,h_losses,h_gar,expected", [
         ("1", 5.0, 25.0, 5.0, 20.0,
-         [("CR 10-4", 5.94, 34.1, 160), ("CR 5-8", 5.99, 34.1, 110)]),
+         [("CR 10-4", 6.361998256, 33.095004361, 150), ("CR 5-8", 6.109609582, 32.465465849, 100)]),
         ("2p", 10.0, 25.0, 5.0, 20.0,
-         [("CR 10-4", 11.88, 34.1, 160), ("CR 5-8", 11.97, 34.1, 110)]),
+         [("CR 10-4", 12.723996511, 33.095004361, 150), ("CR 5-8", 12.219219164, 32.465465849, 100)]),
         ("2s", 5.0, 50.0, 5.0, 20.0,
-         [("CR 10-4", 5.88, 68.3, 145), ("CR 5-8", 5.95, 69.0, 95)]),
+         [("CR 10-4", 7.406029237, 60.969853813, 100), ("CR 5-8", 6.354436675, 58.075773092, 100)]),
     ])
-    def test_candidates_match_legacy_golden_working_points(
+    def test_candidates_match_l04_golden_working_points(
             self, mode, q_design, h_geom, h_losses, h_gar, expected):
-        """Golden получен выполнением JS-функций legacy без DOM-обвязки."""
+        """L04 algebraic JS oracle; scoring rules unchanged, their inputs corrected."""
         result = calculate_pump(PumpInput(
             q_design_m3h=q_design, pump_type="boost", mode=mode,
             h_geom_manual=h_geom, h_losses=h_losses,
@@ -131,7 +137,11 @@ class TestSelection:
         ))
         actual = [(x.pump.model, x.working_point.q, x.working_point.h, x.score)
                   for x in result.candidates]
-        assert actual == expected
+        assert len(actual) == len(expected)
+        for (model, q, h, score), (wm, wq, wh, ws) in zip(actual, expected, strict=True):
+            assert (model, score) == (wm, ws)
+            assert q == pytest.approx(wq, abs=1e-8)
+            assert h == pytest.approx(wh, abs=1e-8)
 
 
 class TestModes:
@@ -140,14 +150,14 @@ class TestModes:
     def test_parallel_mode(self):
         r = calculate_pump(PumpInput(
             q_design_m3h=10, pump_type="boost", mode="2p",
-            h_geom_manual=25, h_gar=20,
+            h_geom_manual=25, h_losses=5, h_gar=20,
         ))
         assert r.h_required >= 0
 
     def test_series_mode(self):
         r = calculate_pump(PumpInput(
             q_design_m3h=5, pump_type="boost", mode="2s",
-            h_geom_manual=50, h_gar=20,
+            h_geom_manual=50, h_losses=5, h_gar=20,
         ))
         assert r.h_required >= 0
 

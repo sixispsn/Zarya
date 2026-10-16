@@ -29,14 +29,14 @@ def test_cnp_fire_curve_covers_one_stream_duty():
         source_kind=SourceKind.CITY_MAIN,
     ), npsh_a_m=8.0)
 
-    assert result.model == "CNP / Aikon PFFS 2 CDM10-9 DS 16 S"
+    assert result.model == "CNP / Aikon PFFS 2 CDM10-8 DS 16 S"
     assert result.pump_head_at_design_m >= 70.0
     suction = next(
         check for check in result.sp10_checks
         if check.clause == "12.20-12.21"
     )
     assert suction.status == "verified"
-    assert suction.decision == "NPSHa=8.0 м; NPSHr+0,5=2.5 м"
+    assert suction.decision == "NPSHa=8.0 м; NPSHr+0,5=2.4 м"
 
 
 def test_cnp_fire_curve_covers_two_stream_duty():
@@ -50,7 +50,16 @@ def test_cnp_fire_curve_covers_two_stream_duty():
     assert result.pump_head_at_design_m >= 70.0
 
 
-def test_cnp_booster_uses_npshr_of_base_pump_at_working_point():
+def _only_cdm10_8(monkeypatch, kind="boost"):
+    import app.calc.pumps as module
+    model = "PBS CDM10-8" if kind == "boost" else "PFFS 2 CDM10-8 DS 16 S"
+    pump = next(p for p in list_pumps(kind, include_current=True) if p.model == model)
+    monkeypatch.setattr(module, "list_pumps", lambda *args, **kwargs: [pump])
+
+
+def test_cnp_booster_uses_npshr_of_base_pump_at_working_point(monkeypatch):
+    # Test NPSHr independently from the changed ranking after L02.
+    _only_cdm10_8(monkeypatch)
     result = calculate_pump(PumpInput(
         q_design_m3h=10.0,
         pump_type="boost",
@@ -66,7 +75,7 @@ def test_cnp_booster_uses_npshr_of_base_pump_at_working_point():
     assert accepted.pump.model == "PBS CDM10-8"
     # Постоянного условного NPSHr нет: используется Q-NPSHr кривая.
     assert accepted.pump.npshr is None
-    assert accepted.npshr_at_working_point == 2.14
+    assert accepted.npshr_at_working_point == 2.48
     assert accepted.npsh_ok is True
     assert any("кавитации нет" in reason for reason in accepted.reasons)
 
@@ -102,7 +111,8 @@ def test_cnp_npshr_is_interpolated_from_vector_catalog_curve():
     assert interpolate_pump_npshr(pump, 14) == 2.8
 
 
-def test_cnp_fire_npsh_failure_reaches_sp10_check():
+def test_cnp_fire_npsh_failure_reaches_sp10_check(monkeypatch):
+    _only_cdm10_8(monkeypatch, "fire")
     result = compute_fire_pump_from_duty(PumpDutyPoint(
         required_head_m=70.0,
         flow_lps=2.6,
@@ -114,10 +124,11 @@ def test_cnp_fire_npsh_failure_reaches_sp10_check():
         if check.clause == "12.20-12.21"
     )
     assert suction.status == "fail"
-    assert suction.decision == "NPSHa=2.0 м; NPSHr+0,5=2.5 м"
+    assert suction.decision == "NPSHa=2.0 м; NPSHr+0,5=2.4 м"
 
 
-def test_pump_api_exposes_npshr_at_working_point():
+def test_pump_api_exposes_npshr_at_working_point(monkeypatch):
+    _only_cdm10_8(monkeypatch)
     response = calculate_pump_api(PumpRequest(
         q_design_m3h=10.0,
         pump_type="boost",
@@ -130,7 +141,7 @@ def test_pump_api_exposes_npshr_at_working_point():
 
     accepted = response.candidates[0]
     assert accepted.pump.model == "PBS CDM10-8"
-    assert accepted.npshr_at_working_point == 2.14
+    assert accepted.npshr_at_working_point == 2.48
     assert accepted.npsh_ok is True
 
 

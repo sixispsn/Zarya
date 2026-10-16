@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20261002-unified-section
+    environment:
+      ZARYA_BUILD_COMMIT: unified-section-20261002

@@ -372,9 +372,48 @@ def test_five_risers_are_paginated_without_losing_topology():
     assert "продолжение на листе 4" in svgs[0]
     assert "продолжение на листе 5" in svgs[1]
     assert "продолжение на листе 6" in svgs[2]
+    for floor_sheet, basement_svg in enumerate(svgs[3:], 1):
+        refs = [row for row in ElementTree.fromstring(basement_svg).iter()
+                if row.get("data-basement-revision-reference")]
+        assert refs
+        assert all(f"см. лист {floor_sheet}" in " ".join(row.itertext()) for row in refs)
+    # Short K2 continuation is not erased by a DN gap beneath a tee.
+    short = ElementTree.fromstring(svgs[4])
+    stub = next(g for g in short.iter() if g.get("data-label-on-adjacent-section"))
+    assert len(stub) == 1 and stub[0].tag.endswith("line")
+    assert stub.get("data-label-dn") == "150"
+    assert not any(g.get("data-slope-marker", "").endswith("slope-in-2")
+                   and "К2" in g.get("data-slope-marker", "") for g in short.iter())
     for system in ("К1", "К2"):
         for index in range(1, 6):
             assert f"{system}-Ст{index}" in joined
+
+
+@pytest.mark.parametrize("corruption", ["dn", "disconnected", "missing_mark", "revision_sheet"])
+def test_fragment_annotation_audit_rejects_false_shared_marks_and_references(corruption):
+    assembly = build_wastewater_building_assembly(
+        resolve_wastewater_building_project_inputs(_project_with_linear_riser_count(5)),
+        floor_height_m=3.0,
+        roof_kind="flat_non_accessible",
+    )
+    pages = list(build_wastewater_building_svgs(assembly))
+    root = ElementTree.fromstring(pages[4])
+    stub = next(g for g in root.iter() if g.get("data-label-on-adjacent-section"))
+    if corruption == "dn":
+        stub.set("data-label-dn", "100")
+    elif corruption == "disconnected":
+        stub[0].set("x2", "1")
+    elif corruption == "missing_mark":
+        target = stub.get("data-label-on-adjacent-section")
+        marker = next(g for g in root.iter() if g.get("data-pipe-line-id") == target)
+        marker.set("data-inline-pipe-label", "")
+    else:
+        ref = next(g for g in root.iter() if g.get("data-basement-revision-reference"))
+        caption = next(g for g in ref.iter() if g.tag.endswith("text"))
+        caption.text = caption.text.replace("см. лист 2", "см. лист 1")
+    pages[4] = ElementTree.tostring(root, encoding="unicode")
+    findings = audit_wastewater_building_svgs(assembly, tuple(pages))
+    assert any("inline system/DN" in f or "wrong floor sheet" in f for f in findings)
 
 
 def test_five_riser_pdf_has_six_axis_matched_a1_pages(tmp_path):

@@ -23,13 +23,14 @@ from app.pz.wastewater_scheme_service import (
     generate_wastewater_scheme,
 )
 from app.pz.wastewater_topology import build_wastewater_topology
+from tests.fan_fixtures import confirm_independent_fans
 
 
 DEMO = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
 
 
 def _project():
-    return build_project(load_request_file(str(DEMO)))
+    return confirm_independent_fans(build_project(load_request_file(str(DEMO))))
 
 
 def _confirmed_axis_layout(project, *, omit: str = ""):
@@ -232,3 +233,11 @@ def test_explicit_scheme_geometry_is_required_without_defaults():
     assert not readiness.ready
     assert any("высота типового этажа" in row for row in readiness.reasons)
     assert any("вид и доступность кровли" in row for row in readiness.reasons)
+
+
+def test_complex_roof_requires_sections_before_drawing():
+    project = deepcopy(_project())
+    project.sewage.roof_kind = "complex"
+    readiness = assess_wastewater_scheme_readiness(project)
+    assert not readiness.ready
+    assert any("Сложная кровля требует участков" in row for row in readiness.reasons)

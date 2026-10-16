@@ -67,6 +67,20 @@ def test_ios3_adapter_preserves_existing_stable_rule_ids(tmp_path):
     assert {"K-GOST-A01", "K-GOST-A02", "K-GOST-A03"} <= ids
 
 
+def test_horizontal_flow_reference_does_not_attribute_sp_formula_to_gost(tmp_path):
+    from app.pz.wastewater_gost import audit_wastewater_gost
+
+    project = _project(tmp_path)
+    source = next(r for r in audit_wastewater_gost(project).checks if r.code == "K-GOST-08F")
+    row = next(r for r in build_ios3_gost_matrix(project).rows if r.rule_id == source.code)
+    assert row.reference == (
+        "ГОСТ Р 21.620-2023 (2023), 5.1.4.1; "
+        "СП 30.13330.2020, п. 5.7(7), таблица 5.1"
+    )
+    assert row.status == source.status and row.evidence == source.evidence
+    assert row.document_id == "gost_r_21_620_2023"
+
+
 def test_artifacts_are_pending_before_build_and_block_when_missing_after(tmp_path):
     project = _project(tmp_path)
     preview = build_ios2_gost_matrix(project)

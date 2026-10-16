@@ -1,3 +1,5 @@
+import pytest
+
 from app.calc.fire_hydraulics import PumpDutyPoint, SourceKind
 from app.pz.pump_bridge import compute_fire_pump_from_duty
 
@@ -11,15 +13,18 @@ def test_fire_pump_selected_by_main_duty_point():
     result = compute_fire_pump_from_duty(
         duty, npsh_a_m=8.0, maximum_source_head_m=30.0, pk_total=8)
     assert result.required is True
-    assert result.model == "CNP / Aikon PFFS 2 CDM10-9 DS 16 S"
+    # L02: каталог при Qрасч, без прежней выдуманной параболы от (0,0).
+    assert result.model == "CNP / Aikon PFFS 2 CDM10-8 DS 16 S"
+    assert result.curve_kind == "duty_only"
+    assert "пересечение" in result.curve_note
     assert result.wp_q > 0 and result.wp_h > 0
-    assert result.q_design_m3h == 9.36
+    assert result.q_design_m3h == pytest.approx(9.36)
     assert result.h_design_m == 70.0
     assert result.top3[0].type_label == "пожарный"
     assert "1 рабочий + 1 резервный" in result.count_note
     assert result.selection_note == ""
     assert "Каталог PFFS" in result.top3[0].source_note
-    assert result.top3[0].npshr == 2.0
+    assert result.top3[0].npshr == 1.9
     assert any("кавитации нет" in reason for reason in result.top3[0].reasons)
     assert result.pump_head_at_design_m >= result.h_design_m
     assert result.maximum_system_pressure_bar < result.top3[0].p_max_bar
@@ -140,7 +145,7 @@ def test_pz_and_spec_show_separate_fire_pump_selection():
         duty, npsh_a_m=8.0, maximum_source_head_m=30.0)
 
     html = generate_pz_html(project)
-    assert "CNP / Aikon PFFS 2 CDM10-9 DS 16 S" in html
+    assert "CNP / Aikon PFFS 2 CDM10-8 DS 16 S" in html
     assert "Расчётная точка системы" in html
     assert "1 рабочий + 1 резервный" in html
     assert "Проверка пожарной насосной установки по СП 10.13130.2020" in html

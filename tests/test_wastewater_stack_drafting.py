@@ -77,6 +77,8 @@ def test_revision_floors_follow_lower_upper_and_three_storey_spacing(
     [
         ("flat_non_accessible", 0.2),
         ("pitched", 0.2),
+        ("gable", 0.2),
+        ("single_slope", 0.2),
         ("collecting_vent_shaft", 0.1),
         ("flat_accessible", 3.0),
     ],

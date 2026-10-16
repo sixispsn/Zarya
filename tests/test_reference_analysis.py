@@ -202,4 +202,7 @@ def test_reference_analysis_routes_and_navigation_are_wired():
         "wizard_projects.html",
     ):
         html = open(f"app/web/templates/{name}", encoding="utf-8").read()
-        assert 'href="/wizard/analyze"' in html
+        assert "{% include 'site_header.html' %}" in html
+    header = _TPL.env.get_template("site_header.html").render()
+    assert 'href="/wizard/analyze"' not in header
+    assert 'href="/studio/projects"' in header

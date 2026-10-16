@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20261004-samara-ios2
+    environment:
+      ZARYA_BUILD_COMMIT: samara-ios2-20261004

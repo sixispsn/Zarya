@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20261005-studio-ios2
+    environment:
+      ZARYA_BUILD_COMMIT: studio-ios2-20261005

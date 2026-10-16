@@ -37,7 +37,9 @@ from app.pz.wastewater_structure_renderer import (
     build_wastewater_structure_svg,
 )
 from app.intake.project_store import ProjectStore
+from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request_file
+from tests.fan_fixtures import confirm_independent_fans
 from tests.test_architecture_pdf import _request as _web_request, _vector_pdf
 
 
@@ -368,6 +370,9 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     request_dto = load_request_file(str(
         Path(__file__).parents[1] / "demo" / "demo_project.yaml"
     ))
+    request_dto.wastewater_fan_ventilation = confirm_independent_fans(
+        build_project(request_dto)
+    ).sewage.fan_ventilation
     # Declare an intentionally incomplete pressure system: the architecture
     # workspace must expose the same honest status sheet as the full bundle.
     request_dto.wastewater_pump_required = True
@@ -415,7 +420,9 @@ def test_saved_project_link_gates_control_svg_by_exact_yaml_version(
     compact_pdf_text = "".join(pdf_text.split())
     assert "№101Кухня" in compact_pdf_text
     assert "№102Санузел" in compact_pdf_text
-    assert "По подтверждённой архитектуре" in pdf_text
+    # The full form-3 title cell wraps the same wording; PDF line breaks
+    # and glyph spacing are not a change in architecture confirmation.
+    assert "Поподтверждённойархитектуре" in compact_pdf_text
 
     pressure_response = web.architecture_wastewater_graphic_pdf(
         import_id,

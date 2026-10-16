@@ -17,6 +17,20 @@ def _request(identifier: str, target: tuple[float, float]) -> LeaderRequest:
     )
 
 
+@pytest.mark.parametrize("offsets", [(), (0.,), (-1.,), (float("nan"),), (float("inf"),)])
+def test_leader_rejects_invalid_distance_candidates(offsets):
+    with pytest.raises(ValueError, match="offsets"):
+        LeaderLayoutEngine(bounds=LeaderBounds(0, 0, 1000, 600), units_per_mm=1,
+                           vertical_offsets_mm=offsets)
+
+
+def test_explicit_long_leader_reaches_free_annotation_band():
+    engine = LeaderLayoutEngine(bounds=LeaderBounds(450, 60, 900, 130), units_per_mm=10/3,
+                                vertical_offsets_mm=(50., 60., 70., 80.))
+    placement = engine.place(_request("long", (400, 350)))
+    assert 60 <= placement.text_box[1] < placement.text_box[3] <= 130
+
+
 def test_leader_has_arrow_horizontal_shelf_and_physical_text_height():
     engine = LeaderLayoutEngine(
         bounds=LeaderBounds(0, 0, 1000, 600),

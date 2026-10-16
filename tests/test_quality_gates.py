@@ -82,3 +82,25 @@ def test_serialized_preflight_builds_same_gate_statuses():
         row["state"] for row in typed["gates"]
     ]
     assert serialized["gates"][1]["findings"]
+
+
+def test_missing_gost_document_cannot_leave_documentation_green():
+    commission = {'checks': [], 'normative_audits': [{'rows': [dict(
+        rule_id='V-GOST-A05', title='Схема насосной', status='missing',
+        evidence='Привязка не подтверждена', blocks_release=True,
+        reference='ГОСТ Р 21.619-2023, п. 5.2.2.5', systems=['В2'], fact_ids=['station.location'])]}]}
+    report = build_release_quality_report({'issues':[]}, commission)
+    gate = next(g for g in report.gates if g.gate_id=='documentation')
+    assert gate.state == QualityState.BLOCKED and not report.can_release
+    assert gate.findings[0].detail == 'Привязка не подтверждена'
+    assert gate.findings[0].source == 'normative_audit'
+    assert gate.findings[0].systems == ('В2',)
+
+
+def test_nonblocking_gost_reviews_do_not_turn_into_stage_p_blockers():
+    rows = [dict(rule_id=status, status=status, blocks_release=False)
+            for status in ('pending_build', 'manual_review', 'missing', 'verified', 'not_applicable')]
+    report = build_release_quality_report({}, {'normative_audits':[{'rows':rows}]})
+    gate = next(g for g in report.gates if g.gate_id=='documentation')
+    assert gate.state == QualityState.CONDITIONAL and report.can_release
+    assert [r.state for r in gate.findings] == [QualityState.CONDITIONAL]*3 + [QualityState.READY]*2

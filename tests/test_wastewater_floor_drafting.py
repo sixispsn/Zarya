@@ -347,7 +347,7 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert 'data-placement="above"' in normative
     assert 'data-slope-value="0,030"' in normative
     assert 'data-slope-value="0,020"' in normative
-    assert normative.count('data-sign-shape="open-angle"') == 2
+    assert normative.count('data-sign-shape="acute-angle"') == 2
     assert normative.count('data-label-underline="false"') == 2
     assert normative.count('data-slope-angle="true"') == 2
     assert normative.count('data-diameter-transition=') == 1
@@ -371,7 +371,7 @@ def test_svg_contains_canonical_ugo_fittings_and_no_fake_cleanout_stub():
     assert audit_floor_rendering_conventions(floor, normative) == ()
 
 
-def test_slope_sign_is_an_open_angle_without_a_text_underline():
+def test_slope_sign_is_an_acute_angle_without_a_text_underline():
     floor = build_typical_floor_assembly()
     root = ElementTree.fromstring(
         render_typical_floor_assembly_svg(floor, diagnostics=False)
@@ -381,7 +381,8 @@ def test_slope_sign_is_an_open_angle_without_a_text_underline():
     assert len(signs) == 2
     for sign in signs:
         assert sign.get("data-placement") == "above"
-        assert sign.get("data-sign-shape") == "open-angle"
+        assert sign.get("data-sign-shape") == "acute-angle"
+        assert sign.get("data-lower-leg-horizontal") == "true"
         assert sign.get("data-label-underline") == "false"
         angle = next(
             row for row in sign.iter("path")

@@ -128,6 +128,11 @@ def _gost_request():
     req.wastewater_laying_method = "открыто под потолком и в шахтах"
     req.wastewater_fire_barrier_note = "противопожарные муфты по узлам КР"
     req.wastewater_deformation_joint_note = "пересечения не предусмотрены"
+    # Structural completeness fixture, not hydraulic sizing: each horizontal
+    # flow is explicitly supplied; declared h/d alone is not flow evidence.
+    for pipe in req.sewer_pipes[1:]:
+        pipe.design_flow_lps = 2.0
+        pipe.flow_source = "Синтетический расчёт участка для теста состава ИОС3"
     return req
 
 

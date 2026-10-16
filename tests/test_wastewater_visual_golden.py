@@ -31,6 +31,7 @@ from app.pz.wastewater_pressure_project_inputs import (
 from tests.test_wastewater_building_drafting import _demo_assembly, _demo_project
 from tests.test_wastewater_k3_scheme import _k3_project
 from tests.test_wastewater_pressure_scheme import _pressure_project
+from tests.fan_fixtures import confirm_independent_fans
 
 
 GOLDEN = Path(__file__).parent / "golden" / "wastewater_graphics.json"
@@ -118,7 +119,7 @@ def test_residential_public_pdf_export_uses_exact_golden_pages(monkeypatch, tmp_
 
     monkeypatch.setattr(cairosvg, "svg2pdf", capture)
     result = generate_wastewater_graphic_export(
-        _demo_project(), "k1-k2", str(tmp_path / "residential.pdf"),
+        confirm_independent_fans(_demo_project()), "k1-k2", str(tmp_path / "residential.pdf"),
     )
     assert result.ready
     assert len(captured) == 1

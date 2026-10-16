@@ -1,7 +1,7 @@
 """
 Тесты для расчёта водопотребления.
 
-Эталонные числа взяты из legacy/sp30_calculator.html — режим расчёта 1-в-1.
+Формулы legacy с явно согласованным исправлением Б.2 (L01, 21.09.2026).
 """
 import pytest
 
@@ -18,7 +18,7 @@ class TestAlphaTable:
 
     def test_alpha_at_exact_point(self):
         """α при точном попадании в табличное значение."""
-        assert get_alpha(0.015) == 0.200
+        assert get_alpha(0.015) == 0.202
         assert get_alpha(1.000) == 0.969
         assert get_alpha(10.0) == 4.126
 
@@ -28,11 +28,12 @@ class TestAlphaTable:
         assert get_alpha(0.0) == 0.200
         assert get_alpha(-1.0) == 0.200
 
-    def test_alpha_above_maximum(self):
-        """NP выше максимума - аппроксимация формулой."""
-        # NP=100: α = 1.72 × 100^0.49 - 0.5 ≈ 1.72 × 9.55 - 0.5 ≈ 15.92
-        result = get_alpha(100.0)
-        assert 15.0 < result < 17.0
+    def test_alpha_in_restored_range(self):
+        """NP=100 находится внутри полной Б.2, без аппроксимации."""
+        assert get_alpha(100.0) == 25.91
+        assert get_alpha(2000.0) == 426.80
+        with pytest.raises(ValueError, match="предел таблицы Б.2"):
+            get_alpha(2001.0)
 
     def test_alpha_interpolation(self):
         """Линейная интерполяция между точками."""
@@ -49,7 +50,7 @@ class TestAlphaTable:
 class TestGoldenOffice480:
     """
     Эталон: Административные здания (office), 480 работающих.
-    Из legacy/sp30_calculator.html: ожидаемые результаты в каждом поле.
+    Legacy calcBlock с исправленной Б.2; два часовых golden изменены явно.
     """
 
     @pytest.fixture
@@ -62,9 +63,9 @@ class TestGoldenOffice480:
         assert result.total.q_sec == 1.499
 
     def test_total_q_hr(self, result):
-        """q_hr_tot = 3.182 м³/ч (округлено до 3 знаков)."""
-        # В HTML: 3.1816 → round до 3 знаков = 3.182
-        assert result.total.q_hr == 3.182
+        """L01: NPhr=24, αhr=7.935; 0.005 × 80 × 7.935 = 3.174."""
+        # Архивный golden 3.182 основан на неверной ячейке 7.954.
+        assert result.total.q_hr == 3.174
 
     def test_total_q_day(self, result):
         """q_day_tot = 5.760 м³/сут."""
@@ -96,9 +97,9 @@ class TestGoldenOffice480:
         assert result.hot.q_sec == 0.774
 
     def test_hot_q_hr(self, result):
-        """q_hr_h = 1.547 м³/ч."""
-        # В HTML: 1.5474 → 1.547
-        assert result.hot.q_hr == 1.547
+        """L01: NPhr=13.6, αhr=5.159; 0.005 × 60 × 5.159 = 1.5477."""
+        # Архивный golden 1.547 основан на неверной ячейке 5.158.
+        assert result.hot.q_hr == 1.548
 
     def test_hot_q_day(self, result):
         """q_day_h = 2.160 м³/сут."""
@@ -109,7 +110,7 @@ class TestGoldenOffice480:
         assert result.sewage_flow == 3.099
 
     def test_heat_max(self, result):
-        """Q_max = 1.16 × 1.5474 × 60 ≈ 107.7 кВт."""
+        """Q_max = 1.16 × 1.5477 × 60 ≈ 107.7 кВт."""
         assert result.heat_max_kw == 107.7
 
     def test_heat_avg(self, result):

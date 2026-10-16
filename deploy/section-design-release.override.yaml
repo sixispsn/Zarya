@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20261002-section-design
+    environment:
+      ZARYA_BUILD_COMMIT: section-design-20261002

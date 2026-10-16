@@ -1,9 +1,6 @@
+# Single personal login. Deploy only with ZARYA_REQUIRE_PILOT=1 and the fail-closed image.
 {$ZARYA_DOMAIN} {
 	encode zstd gzip
-
-	basic_auth {
-		{$ZARYA_USERNAME} {$ZARYA_PASSWORD_HASH}
-	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

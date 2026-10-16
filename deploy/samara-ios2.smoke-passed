@@ -1,0 +1,11 @@
+Release: 20261004-samara-ios2
+Image: 676595034936
+Verified 2026-10-05, before activation.
+Exactly 37 reviewed runtime files; no legacy/auth/store source changes.
+Samara authenticated HTTP: 8 private PDFs, 37 pages, 6 top-level bookmarks.
+Original project restored on study exit; incomplete release remains blocked.
+Ordinary personal pilot: uploads, calculations, PZ, sewer PDF, snapshots,
+private generated baseline, feedback, revocation and session resume passed.
+Representative section: HTTP preview, PDF merge, YAML, stale-link revocation passed.
+313 unique local regression tests passed (279 plus 40, overlap 6).
+All 37 server PDF pages rendered and reviewed; no clipped content.

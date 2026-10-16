@@ -1,5 +1,7 @@
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import pytest
 from pypdf import PdfReader
@@ -175,6 +177,40 @@ def test_control_svg_has_rooms_barriers_and_typical_floor_break():
     assert 'data-section-barrier="F6-FW-1"' in svg
     assert 'data-collapsed-architecture-floors="3-5"' in svg
     assert "этажи 3-5 не показаны" in svg
+
+
+def test_control_sheet_keeps_visible_nonproject_status_and_input_registry():
+    registry = _registry()
+    original_registry = deepcopy(registry)
+    model = build_architecture_section(registry)
+    original_model = deepcopy(model)
+    root = ET.fromstring(build_architecture_section_control_svg(model))
+    labels = ["".join(element.itertext()) for element in root.iter()
+              if element.tag == "{http://www.w3.org/2000/svg}text"]
+
+    # The disclaimer must remain printable text, not only metadata / a comment.
+    assert any("Контрольный модуль" in label for label in labels)
+    assert any("Контрольный лист компонента, не лист проектной документации." in label
+               for label in labels)
+    assert any(model.source_ref in label for label in labels)
+    assert registry == original_registry
+    assert model == original_model
+
+
+def test_generator_wrapper_uses_control_export_without_project_conversion(tmp_path, monkeypatch):
+    import app.pz.architecture_section_engine as engine
+    from app.pz.generator import generate_architecture_section_node_pdf
+
+    calls = []
+    output = str(tmp_path / "component-control.pdf")
+
+    def record_control_export(output_path, registry):
+        calls.append((output_path, registry))
+        return output_path
+
+    monkeypatch.setattr(engine, "generate_architecture_section_control_pdf", record_control_export)
+    assert generate_architecture_section_node_pdf(str(DEMO), output) == output
+    assert calls == [(output, _registry())]
 
 
 def test_confirmed_layout_renderer_keeps_storeys_rooms_and_typical_break():

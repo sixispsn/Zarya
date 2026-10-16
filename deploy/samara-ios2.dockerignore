@@ -1,0 +1,8 @@
+**
+!app/
+!app/**
+!demo/
+!demo/**
+!deploy/
+!deploy/samara-ios2.Dockerfile
+!.dockerignore

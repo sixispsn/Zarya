@@ -19,9 +19,9 @@ def test_demo_preserves_revision_schedule_and_confirms_all_lower_turn_access():
     result = audit_wastewater_sp30(_project())
     assert result.ready
     assert result.errors == []
-    assert len(result.warnings) == 1
-    assert "логика1.pdf" in result.warnings[0]
-    assert "п. 18.4" in result.warnings[0]
+    assert len(result.warnings) == 2
+    assert result.fan_ventilation.status == "pending"
+    assert any("логика1.pdf" in row and "п. 18.4" in row for row in result.warnings)
     assert result.revision_floors["К1-Ст1"] == [1, 4, 7, 10, 13, 16]
     assert result.revision_floors["К1-Ст2"] == [1, 4, 7, 10, 13, 16]
     assert result.revision_floors["К2-Ст1"] == [1, 14]

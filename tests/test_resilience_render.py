@@ -58,6 +58,17 @@ def test_html_negative_verdict():
     rep = analyze_ring_resilience(_net(60.0), 2)
     html = generate_resilience_html(_proj(), rep)
     assert "не подтверждает работоспособность" in html
+    assert "основного" in html and "затем проверить" in html
+    assert "принять по худшему аварийному режиму" not in html
+
+
+def test_verified_pump_is_not_reassigned_total_source_head():
+    rep = analyze_ring_resilience(_net(30.0), 2,
+                                   verified_pump_head_m=50, verified_pump_flow_lps=10)
+    assert rep.survives_by_pump
+    html = generate_resilience_html(_proj(), rep)
+    assert "не равен добавке насоса" in html
+    assert "Рабочую точку насосной установки" not in html
 
 
 def test_pdf_is_a4(tmp_path):

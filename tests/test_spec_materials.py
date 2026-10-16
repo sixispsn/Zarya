@@ -1,6 +1,5 @@
 """Состав труб и изоляции спецификации стадии П."""
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -36,15 +35,13 @@ def test_demo_spec_contains_stage_p_v1_pipes_and_calculated_insulation():
     assert all("δ" in row.type_mark for row in insulation)
 
 
-def test_demo_spec_contains_normative_fasteners_and_meter_stand():
+def test_demo_spec_contains_normative_fasteners_without_invented_meter_stand():
     project = _demo_project()
-    project.meters.rows = [SimpleNamespace(
-        label="Ввод ХВС", dn=32, type_label="крыльчатый",
-        need_bypass=True, need_combo=False,
-    )]
-    rows = _section(build_specification(project), "В1").rows
-    stand = next(row for row in rows if "Подставка" in row.name)
-    assert stand.qty == 1
+    spec = build_specification(project)
+    rows = _section(spec, "В1").rows
+    support = next(row for row in _section(spec, "Водомерный узел").rows if "Опоры и крепления" in row.name)
+    assert support.qty is None
+    assert not any("Подставка" in row.name for section in spec.sections for row in section.rows)
     fasteners = [row for row in rows if "Хомут трубный" in row.name or "Крепление скользящее" in row.name]
     by_dn = {row.type_mark: row for row in fasteners}
     assert by_dn["Ду50"].qty == 193
@@ -56,15 +53,16 @@ def test_demo_spec_contains_normative_fasteners_and_meter_stand():
 def test_demo_spec_contains_t3_t4_pipes_and_insulation():
     rows = _section(_demo_spec(), "Т3-Т4").rows
     assert any("Труба " in row.name for row in rows)
-    assert any("теплоизоляционные" in row.name for row in rows)
-    assert any("балансировочный" in row.name.lower() and row.qty == 8 for row in rows)
-    sleeves = [row for row in rows if "Гильза" in row.name]
-    assert [row.type_mark for row in sleeves] == [
-        "DN32; Ø42,3×3,2; dвн=35,9 мм",
-        "DN65; Ø75,5×4; dвн=67,5 мм",
-    ]
-    sealant = next(row for row in rows if "заделки зазоров" in row.name)
-    assert "27,2 дм³" in sealant.note
+    assert any("Теплоизоляция" in row.name for row in rows)
+    # Riser count alone no longer chooses the circulation-layout variant.
+    assert any("балансировочный" in row.name.lower() and row.qty is None for row in rows)
+    # No T3/T4 section geometry in this demo: the old DN20, sleeves and
+    # sealant volume were consequences of a template, not a network model.
+    sleeves = next(row for row in rows if 'hws-sleeves' in row.component_ids)
+    assert sleeves.qty is None and sleeves.type_mark == "По узлам пересечения конструкций"
+    sealant = next(row for row in rows if 'hws-sealant' in row.component_ids)
+    assert sealant.qty is None and '27,2 дм³' not in sealant.note
+    assert all(row.qty is None for row in rows if row.unit == 'м')
 
 
 def test_demo_spec_contains_exact_v2_ring_and_riser_lengths():
@@ -83,11 +81,11 @@ def test_demo_spec_contains_exact_v2_ring_and_riser_lengths():
     assert ring_fix.qty == 17
     assert riser_fix.qty == 64
     sleeve = next(row for row in rows if "Гильза" in row.name)
-    assert sleeve.type_mark == "DN90; Ø101,3×4; dвн=93,3 мм"
+    assert sleeve.type_mark == "DN80; Ø88,5×4; dвн=80,5 мм"
     assert sleeve.qty == 64
     firestop = next(row for row in rows if "огнезащитный" in row.name.lower())
     assert firestop.unit == "кг"
-    assert "30,2 дм³" in firestop.note
+    assert "7,8 дм³" in firestop.note
 
 
 def test_stage_p_sleeves_use_actual_pipe_od_and_sleeve_id():
@@ -98,7 +96,9 @@ def test_stage_p_sleeves_use_actual_pipe_od_and_sleeve_id():
         "DN40; Ø48×3,5; dвн=41 мм",
         "DN80; Ø88,5×4; dвн=80,5 мм",
     ]
-    assert all("на 5–10 мм (принято 8 мм)" in row.note for row in sleeves)
+    assert "разность диаметров 9 мм; СП 30, п. 11.5: 5–10 мм" in sleeves[0].note
+    assert "разность диаметров 20,5 мм; габарит предварительный" in sleeves[1].note
+    assert "11.5" not in sleeves[1].note  # External wall inlet, not an internal crossing.
     sealant = next(row for row in v1 if "заделки зазоров" in row.name)
     assert "13,9 дм³" in sealant.note
 
@@ -106,6 +106,7 @@ def test_stage_p_sleeves_use_actual_pipe_od_and_sleeve_id():
 def test_spec_sections_follow_gost_21_601_order():
     spec = _demo_spec()
     assert [(section.division, section.title.split(" — ")[0]) for section in spec.sections] == [
+        ("Водоснабжение холодное", "В1"),
         ("Водоснабжение холодное", "В1"),
         ("Водоснабжение холодное", "В2"),
         ("Водоснабжение горячее", "Т3-Т4"),
@@ -154,10 +155,10 @@ def test_normative_items_and_minimum_insulation_are_in_specification():
         int(row.type_mark.rsplit("δ", 1)[1]) >= 10
         for row in v1 if "δ" in row.type_mark
     )
-    assert all(
-        int(row.type_mark.rsplit("δ", 1)[1]) >= 25
-        for row in t3 if "δ" in row.type_mark
-    )
+    insulation = [row for row in t3 if row.name.startswith('Теплоизоляция')]
+    assert len(insulation) == 3
+    assert all('минимум 25 мм' in row.note for row in insulation)
+    assert all(row.qty is None for row in insulation)
 
 
 def test_k1_grease_trap_and_k2_sections_do_not_invent_quantity():

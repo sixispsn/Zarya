@@ -22,6 +22,7 @@ def test_branch_uses_existing_solver_and_does_not_add_service_devices():
     project = _project()
     pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
     pipe.design_flow_lps = 2.758
+    pipe.flow_source = "Синтетическая горизонтальная нагрузка для теста решателя"
     pipe.manning_n = 0.011
     pipe.hydraulic_source = "явные исходные данные только теста"
     before = deepcopy(project.sewage.elements)
@@ -35,7 +36,7 @@ def test_branch_uses_existing_solver_and_does_not_add_service_devices():
     assert next(h for h in result.hydraulics if h.section_id == pipe.section_id) == expected
     assert project.sewage.elements == before
     assert pipe.fill_ratio is None
-    assert pipe.section_id not in result.resolved_flows_lps  # Never infer branch shares.
+    assert result.resolved_flows_lps[pipe.section_id] == 2.758  # Explicit, not an inferred share.
     assert pipe.section_id not in {s.section_id for s in result.linear_service_checks}
 
 
@@ -68,6 +69,7 @@ def test_overloaded_branch_is_not_reported_as_a_successful_calculation():
     project = _project()
     pipe = next(p for p in project.sewage.pipes if p.section_id == "К1-Ветв-СУ1")
     pipe.design_flow_lps = 100.0  # Deliberately impossible load for this test pipe.
+    pipe.flow_source = "Синтетическая горизонтальная нагрузка для теста перегрузки"
     pipe.manning_n = 0.011
     pipe.hydraulic_source = "явные исходные данные только теста"
     result = assess_wastewater_diagnostics(project)
@@ -83,8 +85,9 @@ def test_demo_resolves_flow_and_keeps_explicit_lower_turn_access():
     assert not result.ready
     assert any("К1-М1" in row and "0–52 м" in row for row in result.errors)
     assert not any("К2-М1" in row and "достижимость" in row for row in result.errors)
-    assert result.resolved_flows_lps == {"К1-М1": 2.758, "К1-Вып1": 5.516}
-    assert {row.status for row in result.hydraulics} == {"verified"}
+    assert result.resolved_flows_lps == {}  # No summation of riser maxima anymore.
+    assert not result.hydraulics
+    assert any("5.7" in warning or "основание" in warning for warning in result.warnings)
     assert {row.status for row in result.diameter_checks} == {"verified"}
     sanitary_segments = [
         row.generated_segment_dn_mm for row in result.diameter_checks

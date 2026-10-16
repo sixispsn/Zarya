@@ -6,6 +6,28 @@ Live-путь (uvicorn + POST + скачивание PDF) прогнан вру�
 """
 import os
 import pytest
+from starlette.datastructures import FormData
+from starlette.requests import Request
+
+
+def _request(form=None, *, pilot_user=None):
+    """Use the same request/state contract as middleware, not a form-only stub."""
+    request = Request({
+        "type": "http", "http_version": "1.1",
+        "method": "POST" if form is not None else "GET",
+        "scheme": "http", "path": "/wizard/design" if form is not None else "/wizard",
+        "root_path": "", "query_string": b"", "headers": [],
+        "client": ("testclient", 50000), "server": ("testserver", 80),
+        "state": {"pilot_user": pilot_user},
+    })
+    if form is not None:
+        request._form = FormData(form)
+    return request
+
+
+@pytest.fixture
+def form_request():
+    return _request()
 
 
 def test_wizard_router_importable():
@@ -33,26 +55,19 @@ def test_wizard_included_in_app():
     assert "/api/project/preflight/live" in paths
 
 
-def test_root_redirects_to_workspace():
+def test_root_redirects_to_workspace(monkeypatch):
     from app.main import root
+    monkeypatch.delenv("ZARYA_STUDIO_ENABLED", raising=False)
     response = root()
     assert response.status_code == 307
-    assert response.headers["location"] == "/wizard"
+    assert response.headers["location"] == "/studio"
 
 
 def test_empty_submit_returns_visible_validation_errors():
     import asyncio
-    from starlette.datastructures import FormData
-    from starlette.requests import Request
     from app.web.wizard import wizard_design
 
-    request = Request({
-        "type": "http", "http_version": "1.1", "method": "POST",
-        "scheme": "http", "path": "/wizard/design", "root_path": "",
-        "query_string": b"", "headers": [],
-        "client": ("testclient", 50000), "server": ("testserver", 80),
-    })
-    request._form = FormData()
+    request = _request({})
     response = asyncio.run(wizard_design(request))
 
     assert response.status_code == 200
@@ -76,15 +91,15 @@ def test_templates_exist_and_valid_jinja():
         _TPL.env.get_template(name)   # парсится с фильтрами веб-приложения
 
 
-def test_form_template_has_all_sections():
+def test_form_template_has_all_sections(form_request):
     from app.web.wizard import _TPL, _form_context
     # рендерим шаблон — имена run/riser-полей генерятся циклом
     html = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]))
+        **_form_context(errors=[], request=form_request))
     assert html.count("<fieldset") == 5
 
 
-def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
+def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation(form_request):
     from pathlib import Path
 
     from app.intake.yaml_io import load_request_file
@@ -93,7 +108,7 @@ def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
     demo = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
     prefill = load_request_file(str(demo))
     html = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[], prefill=prefill, example_mode=True),
+        **_form_context(errors=[], prefill=prefill, example_mode=True, request=form_request),
     )
     assert "Учебный К2: Москва" in html
     assert 'value="moscow" selected' in html
@@ -109,11 +124,11 @@ def test_example_form_keeps_moscow_and_roof_area_for_storm_calculation():
     assert '<option value="flat_non_accessible" selected>' in html
 
 
-def test_form_template_has_collapsed_wastewater_element_registry():
+def test_form_template_has_collapsed_wastewater_element_registry(form_request):
     from app.web.wizard import _TPL, _form_context
 
     html = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]),
+        **_form_context(errors=[], request=form_request),
     )
     assert "Реестр элементов схемы и спецификации К1/К2/К3" in html
     assert 'name="sewer_element1_id"' in html
@@ -167,11 +182,11 @@ def test_form_template_has_collapsed_wastewater_element_registry():
     assert "Уточним технологию объекта" in html
 
 
-def test_form_exposes_all_sp30_consumer_norms():
+def test_form_exposes_all_sp30_consumer_norms(form_request):
     from app.data.sp30_tables import list_consumer_norms
     from app.web.wizard import _TPL, _form_context
     html = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]))
+        **_form_context(errors=[], request=form_request))
     for norm in list_consumer_norms():
         assert f'value="{norm.code}"' in html
 
@@ -226,17 +241,17 @@ def test_incomplete_wastewater_topology_marks_scheme_documents(monkeypatch):
     assert groups[0]["key"] == "ios3"
 
 
-def test_interface_presents_ios2_and_ios3_as_one_project():
+def test_interface_presents_ios2_and_ios3_as_one_project(form_request):
     from app.web.wizard import _TPL, _form_context
 
     form = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]))
+        **_form_context(errors=[], request=form_request))
     result = open(
         "app/web/templates/wizard_result.html", encoding="utf-8").read()
     projects = open(
         "app/web/templates/wizard_projects.html", encoding="utf-8").read()
 
-    assert "ZARYA / IOS2 + IOS3" in form
+    assert "Расширенный редактор · ИОС2 + ИОС3" in form
     assert "Инженерные системы ИОС2 / ИОС3" in form
     assert "Собрать ИОС2 + ИОС3" in form
     assert "ИОС2 · В1 В2 Т3 Т4" in form
@@ -245,14 +260,15 @@ def test_interface_presents_ios2_and_ios3_as_one_project():
     assert "автоматически заменяется на ИОС3" in form
     assert "ИОС2 + ИОС3 · комплект успешно собран" in result
     assert 'data-discipline="{{ group.key }}"' in result
-    assert "ИОС2 + ИОС3 · локальное хранилище" in projects
+    assert "ИОС2 + ИОС3" in projects
+    assert "Сохранённые проекты" in projects
 
 
-def test_form_marks_only_blocking_inputs_with_status_lamps():
+def test_form_marks_only_blocking_inputs_with_status_lamps(form_request):
     from app.web.wizard import _TPL, _form_context
 
     form = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]))
+        **_form_context(errors=[], request=form_request))
 
     for field in ("building_type", "floors", "height", "fire_height",
                   "fire_category", "fire_hall_seats", "fire_area_m2",
@@ -284,7 +300,7 @@ def test_blueprint_ui_marks_edited_sections():
     assert ".accepted::before" not in css
 
 
-def test_dark_theme_is_default_and_responsive():
+def test_legacy_palette_remains_available_and_responsive():
     css = open("app/web/static/wizard.css", encoding="utf-8").read()
     js = open("app/web/static/wizard.js", encoding="utf-8").read()
     assert "--canvas: #111625" in css
@@ -313,10 +329,10 @@ def test_proof_ui_is_interactive_and_responsive():
     assert ".impact-output-grid" in css
 
 
-def test_live_normative_advisories_are_wired():
+def test_live_normative_advisories_are_wired(form_request):
     from app.web.wizard import _TPL, _form_context
     html = _TPL.env.get_template("wizard_form.html").render(
-        **_form_context(errors=[]))
+        **_form_context(errors=[], request=form_request))
     js = open("app/web/static/wizard.js", encoding="utf-8").read()
     assert "data-validation-panel" in html
     assert 'data-purpose="residential"' in html
@@ -341,24 +357,22 @@ def test_invalid_form_keeps_entered_values():
     import asyncio
     from app.web.wizard import wizard_design
 
-    class RequestStub:
-        async def form(self):
-            return {
-                "cipher": "ERR-ИОС2",
-                "object_name": "Дом с ошибкой",
-                "organization": "Тест",
-                "building_type": "residential",
-                "floors": "0",
-                "height": "48",
-                "consumer1_name": "Жилая часть",
-                "consumer1_code": "residential_central_hw",
-                "consumer1_count": "480",
-                "consumer2_name": "Спортивный комплекс",
-                "consumer2_code": "sport_pool",
-                "consumer2_count": "120",
-            }
+    request = _request({
+        "cipher": "ERR-ИОС2",
+        "object_name": "Дом с ошибкой",
+        "organization": "Тест",
+        "building_type": "residential",
+        "floors": "0",
+        "height": "48",
+        "consumer1_name": "Жилая часть",
+        "consumer1_code": "residential_central_hw",
+        "consumer1_count": "480",
+        "consumer2_name": "Спортивный комплекс",
+        "consumer2_code": "sport_pool",
+        "consumer2_count": "120",
+    })
 
-    response = asyncio.run(wizard_design(RequestStub()))
+    response = asyncio.run(wizard_design(request))
     assert response.status_code == 200
     body = response.body.decode("utf-8")
     assert "Дом с ошибкой" in body
@@ -367,3 +381,21 @@ def test_invalid_form_keeps_entered_values():
     assert "Спортивный комплекс" in body
     assert 'value="sport_pool" data-unit=' in body
     assert 'data-unit="чел" data-purpose="public" selected' in body
+
+
+@pytest.mark.parametrize("role", [None, "tester", "admin"])
+def test_form_header_and_feedback_follow_request_identity(role):
+    from app.web.wizard import _TPL, _form_context
+    user = {"role": role, "name": "Инженер <тест>"} if role else None
+    html = _TPL.env.get_template("wizard_form.html").render(
+        **_form_context(errors=[], request=_request(pilot_user=user)))
+    # Template rendering is not access authorization; pilot middleware is
+    # separately checked by test_pilot_access against real HTTP requests.
+    assert ('href="/access/admin"' in html) == (role == "admin")
+    assert ('href="/access/feedback"' in html) == (role == "admin")
+    assert ('action="/access/logout"' in html) == bool(role)
+    assert ('id="pilot-feedback"' in html) == bool(role)
+    assert ('/static/pilot_feedback.js' in html) == bool(role)
+    assert "Инженер <тест>" not in html
+    if role:
+        assert "Инженер &lt;тест&gt;" in html

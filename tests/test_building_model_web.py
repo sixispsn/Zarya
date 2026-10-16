@@ -80,7 +80,7 @@ def test_building_model_routes_are_included_in_application():
     assert router_paths <= app_paths
 
 
-def test_building_model_page_is_available_from_main_navigation():
+def test_building_model_stays_available_but_not_in_primary_navigation():
     response = building_model_page(_request("/wizard/building-model"))
     wizard = _TPL.env.get_template("wizard_form.html").render()
 
@@ -88,7 +88,8 @@ def test_building_model_page_is_available_from_main_navigation():
     body = response.body.decode("utf-8")
     assert "Модель здания" in body
     assert "АР всегда главнее шаблона" in body
-    assert 'href="/wizard/building-model"' in wizard
+    assert 'href="/wizard/building-model"' not in wizard
+    assert 'href="/studio/projects"' in wizard
 
 
 def test_building_model_preview_expands_default_residential_program():

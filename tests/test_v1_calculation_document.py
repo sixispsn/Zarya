@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from pypdf import PdfReader
 
 from app.intake.project_builder import build_project
@@ -12,7 +13,9 @@ from tests.test_pump_bridge import _request
 
 
 def _text(path: str) -> str:
-    return " ".join(page.extract_text() or "" for page in PdfReader(path).pages)
+    # Page/line wrapping is not semantic content; physical placement is tested
+    # separately in test_annex_spec_frame and test_pz_balance_frame.
+    return " ".join(" ".join(page.extract_text() or "" for page in PdfReader(path).pages).split())
 
 
 def test_v1_calculation_html_uses_existing_results(tmp_path):
@@ -26,15 +29,22 @@ def test_v1_calculation_html_uses_existing_results(tmp_path):
     assert "демонстрац" not in html.lower()
 
 
-def test_ios2_text_does_not_contain_k1_or_k2_calculation_paragraphs(tmp_path):
+@pytest.mark.parametrize("purpose", ["residential", "public"])
+def test_ios2_text_does_not_contain_k1_or_k2_calculation_paragraphs(tmp_path, purpose):
+    from app.pz.project import BuildingPurpose
+    project = build_project(_request())
+    project.building.purpose = BuildingPurpose(purpose)
     bundle = design_ios2(
-        build_project(_request()), output_dir=str(tmp_path), render_documents=False,
+        project, output_dir=str(tmp_path), render_documents=False,
     )
     html = generate_pz_html(bundle.project)
 
     assert "Расчётный расход хозяйственно-бытовых стоков определён" not in html
     assert "Пропускная способность стояков, горизонтальные участки" not in html
     assert "Показатель расчёта К2" not in html
+    assert "q<sub>0s</sub>" not in html
+    assert "прокладка канализационных" not in html
+    assert "решения по системам водоотведения приведены в подразделе ИОС3" in html
 
 
 def test_twelve_fire_cabinets_promote_two_inlets_everywhere(tmp_path):
@@ -49,7 +59,7 @@ def test_twelve_fire_cabinets_promote_two_inlets_everywhere(tmp_path):
 
     assert bundle.project.source.inputs_count == 2
     assert bundle.project.meters.inputs_count == 2
-    assert "Ввод водопровода 2x" in generate_scheme_svg(bundle.project)
+    assert "Вводы В1 (2 шт.)" in generate_scheme_svg(bundle.project)
 
 
 def test_itp_in_scope_uses_legacy_common_input_and_hot_branch_path(tmp_path):
@@ -100,8 +110,9 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert wastewater.exists()
     wastewater_text = _text(str(wastewater))
     assert "Расчётные обоснования систем К1 и К2" in wastewater_text
-    assert "Расчётный расход хозяйственно-бытовых стоков К1" in wastewater_text
-    assert "Расчётные обоснования систем К1 и К2" in pz_text
+    assert "Расход К1 по формуле для стояков" in wastewater_text
+    assert "Это не расход горизонтального выпуска" in wastewater_text
+    assert "Расчётные обоснования систем К1 и К2" not in pz_text
     wastewater_scheme = Path(bundle.wastewater_scheme_pdf)
     assert wastewater_scheme.name == "Схема_К1_К2.pdf"
     assert wastewater_scheme.exists()
@@ -145,7 +156,7 @@ def test_v1_calculation_is_separate_pdf_and_appended(tmp_path):
     assert "Матрица нормативной трассировки" in commission_text
     assert "Протокол автоматических проверок" in commission_text
     assert bundle.commission_report.project_fingerprint in commission_text
-    assert "Матрица нормативной трассировки" in pz_text
+    assert "Матрица нормативной трассировки" not in pz_text
 
 
 def test_wastewater_pz_has_ios3_cipher_and_no_fake_requisites():

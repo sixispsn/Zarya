@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20260930-rainwater-pump
+    environment:
+      ZARYA_BUILD_COMMIT: rainwater-pump-20260930

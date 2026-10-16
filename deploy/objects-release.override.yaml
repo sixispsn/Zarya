@@ -1,0 +1,8 @@
+services:
+  app:
+    image: zarya-release:20260928-pilot-objects
+    environment:
+      ZARYA_BUILD_COMMIT: pilot-objects-20260928
+      ZARYA_STUDIO_ENABLED: "1"
+      ZARYA_PILOT_ENABLED: "1"
+      ZARYA_PILOT_DIR: /data/projects/_pilot

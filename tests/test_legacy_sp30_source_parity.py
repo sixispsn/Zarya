@@ -1,5 +1,7 @@
 """Защита от расхождения Python-справочников с исходным legacy HTML."""
 import re
+import hashlib
+import json
 from pathlib import Path
 
 from app.data.sp30_tables import ALPHA_TABLE, CONSUMER_NORMS
@@ -7,7 +9,7 @@ from app.data.pumps import PUMPS
 from app.data.fire_tables import FIRE_NOZZLE_TABLE
 
 
-LEGACY = Path(__file__).parents[1] / "legacy" / "sp30_calculator.html"
+LEGACY = Path(__file__).parents[1] / "legacy/archive/sp30_calculator.pre-2026-09-21.html"
 
 
 def test_all_consumer_norm_rows_are_present_verbatim_in_legacy():
@@ -30,12 +32,19 @@ def test_all_consumer_norm_rows_are_present_verbatim_in_legacy():
         assert parsed[norm.label] == (norm.unit, expected), norm.code
 
 
-def test_every_alpha_table_pair_is_present_in_legacy():
+def test_alpha_has_only_the_explicit_l01_table_exception():
     source = LEGACY.read_text(encoding="utf-8")
     block = source.split("const B2 = [", 1)[1].split("];", 1)[0]
     parsed = [(float(x), float(y)) for x, y in re.findall(
         r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]", block)]
-    assert parsed == ALPHA_TABLE
+    # Preserve the erroneous historical oracle, do not silently redefine parity.
+    assert hashlib.sha256(block.encode()).hexdigest() == (
+        "02826d8bf4348a1d6a1b3e9a00807984d58283b69ef69095a27b455ca2903270"
+    )
+    assert len(parsed) == 342
+    assert parsed[-1] == (63.0, 17.39)
+    fixture = json.loads((Path(__file__).parent / "fixtures/sp30_b2_official.json").read_text())
+    assert ALPHA_TABLE == [(float(x), float(y)) for x, y, _ in fixture["rows"]]
 
 
 def test_every_fire_nozzle_row_matches_legacy_source():
@@ -83,7 +92,7 @@ def test_every_pump_and_curve_point_matches_legacy_source():
         }
 
 
-def test_python_pump_system_curve_formula_is_literal_legacy_formula():
+def test_archived_l02_error_remains_visible_in_original_source():
     source = LEGACY.read_text(encoding="utf-8")
     function = source.split("function calcPumpHead()", 1)[1].split(
         "// Подбор насосов", 1)[0]

@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20260930-metering-extras
+    environment:
+      ZARYA_BUILD_COMMIT: metering-extras-20260930

@@ -1,0 +1,52 @@
+/* Isolated browser session: never touches the user's Studio cookie. */
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const base=process.env.STUDIO_URL || 'http://127.0.0.1:8766';
+assert(['127.0.0.1','localhost'].includes(new URL(base).hostname));
+const out=path.resolve('output/studio-preview/screenshots');
+fs.mkdirSync(out,{recursive:true});
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'chrome'});
+ try {
+  const page=await browser.newPage({viewport:{width:1280,height:1000}});
+  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+  await page.goto(base+'/studio');
+  await page.waitForFunction(()=>document.querySelector('#studio').getAttribute('aria-busy')==='false');
+  await page.getByRole('button',{name:'Начать без документов'}).click();
+  await page.locator('#field-residents').fill('77');
+  await page.getByRole('button',{name:'Попробовать на примере →'}).filter({visible:true}).click();
+  await page.locator('#example-picker').screenshot({path:out+'/study-picker.png'});
+  await page.locator('[data-kind="two"]').click();
+  await page.getByText('Учебный пример · 2 этажа · 8 квартир',{exact:true}).waitFor();
+  assert.equal(await page.locator('#field-residents').inputValue(),'20');
+  assert.equal(await page.locator('#field-floors').count(),0);
+  await page.getByRole('button',{name:'Схема К1 + К2'}).click();
+  await page.getByRole('link',{name:'Схема К1 и К2 · учебный разрез ↗'}).waitFor({timeout:60000});
+  const oldUrl=await page.getByRole('link',{name:'Схема К1 и К2 · учебный разрез ↗'}).getAttribute('href');
+  assert.equal((await page.request.get(base+oldUrl)).status(),200);
+  await page.locator('#field-residents').fill('50');
+  await page.locator('#field-storm_roof_area_m2').fill('200');
+  await page.getByRole('button',{name:'Рассчитать',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.demand-summary')?.textContent.includes('9 м³/сут'));
+  assert.equal((await page.request.get(base+oldUrl)).status(),404);
+  await page.getByRole('button',{name:'ПЗ ИОС3',exact:false}).click();
+  await page.getByRole('link',{name:'Пояснительная записка ИОС3 · учебная ↗'}).waitFor({timeout:60000});
+  await page.screenshot({path:out+'/study-two.png',fullPage:true});
+  await page.getByRole('button',{name:'Другой пример',exact:true}).click();
+  await page.locator('[data-kind="three"]').click();
+  await page.getByText('Учебный пример · 3 этажа · 12 квартир',{exact:true}).waitFor();
+  assert.equal(await page.locator('#field-residents').inputValue(),'36');
+  await page.getByRole('button',{name:'Схема К1 + К2'}).click();
+  await page.getByRole('link',{name:'Схема К1 и К2 · учебный разрез ↗'}).waitFor({timeout:60000});
+  await page.setViewportSize({width:390,height:844});
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:out+'/study-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Вернуться к своему проекту →'}).click();
+  await page.locator('#field-floors').waitFor();
+  assert.equal(await page.locator('#field-residents').inputValue(),'77');
+  assert.deepEqual(errors,[]);
+  console.log('PASS: two/three live exports, changed demand, stale PDFs revoked, mobile, original draft restored');
+ } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

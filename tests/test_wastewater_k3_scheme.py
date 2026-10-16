@@ -21,6 +21,7 @@ from app.pz.wastewater_k3_scheme_service import (
 from app.pz.wastewater_scheme_service import (
     assess_wastewater_scheme_readiness,
 )
+from tests.fan_fixtures import confirm_independent_fans
 
 
 DEMO = Path(__file__).parents[1] / "demo" / "demo_project.yaml"
@@ -382,7 +383,7 @@ def test_pressure_k3_is_not_masqueraded_as_gravity():
 
 
 def test_k3_register_does_not_block_canonical_k1_k2_release():
-    project = _k3_project()
+    project = confirm_independent_fans(_k3_project())
     project.building.floors_above = 16
     project.building.height_m = 48.0
     project.sewage.floor_height_m = 3.0

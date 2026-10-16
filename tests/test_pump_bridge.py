@@ -9,7 +9,7 @@ def test_zero_flow_no_pump():
 
 
 def test_pump_selected_with_working_point():
-    ps, h_req = compute_pump(q_design_m3h=6.57, floors=12, h_gar_m=26.0)
+    ps, h_req = compute_pump(q_design_m3h=6.57, floors=12, h_losses_m=8.0, h_gar_m=26.0)
     assert ps.required is True
     assert ps.model
     assert ps.wp_q > 0 and ps.wp_h > 0
@@ -18,13 +18,13 @@ def test_pump_selected_with_working_point():
 
 
 def test_pump_curve_is_tuples():
-    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_gar_m=35.0)
+    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_losses_m=8.0, h_gar_m=35.0)
     assert ps.curve
     assert all(len(pt) == 2 for pt in ps.curve)
 
 
 def test_pump_has_system_curve():
-    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_gar_m=35.0)
+    ps, _ = compute_pump(q_design_m3h=6.57, floors=12, h_losses_m=8.0, h_gar_m=35.0)
     assert ps.k_sys > 0
     assert ps.h_stat > 0
 

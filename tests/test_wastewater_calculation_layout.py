@@ -15,6 +15,12 @@ def test_calculation_table_text_stays_inside_its_cell(tmp_path):
         build_project(load_request_file("demo/demo_project.yaml")),
         output_dir=str(tmp_path), render_documents=False,
     ).project
+    # Explicit synthetic horizontal loads exercise table layout; old sums of
+    # riser maxima are no longer valid calculation inputs (SP30 5.7).
+    for pipe in project.sewage.pipes:
+        if pipe.section_id in {"К1-М1", "К1-Вып1"}:
+            pipe.design_flow_lps = 2.758
+            pipe.flow_source = "Синтетическая горизонтальная нагрузка для теста вёрстки"
     rendered = HTML(
         string=generate_wastewater_calculation_html(project),
         base_url=str(TEMPLATES_DIR),

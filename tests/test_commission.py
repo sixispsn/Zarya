@@ -1,7 +1,7 @@
 """Комиссионный паспорт, трассировка и честные статусы выпуска."""
 from pathlib import Path
 
-from app.calc.storm import StormInput, calculate_storm
+from app.calc.storm import StormInput, StormNetworkInput, assess_storm_network, calculate_storm
 from app.intake.project_builder import build_project
 from app.intake.yaml_io import load_request
 from app.pz.commission import build_commission_report
@@ -78,6 +78,34 @@ def test_stage_r_items_are_visible_but_do_not_block():
         row.blocking for row in report.checks
         if row.code in {"K2-02", "K1-01", "STAGE-01"}
     )
+
+
+def test_empty_storm_assessment_explains_unchecked_elements_without_blocking():
+    project = _calculated_project()
+    project.storm.system_kind = "internal"
+    project.storm.result = calculate_storm(StormInput("moscow", 1200))
+    project.storm.network_assessment = assess_storm_network(
+        project.storm.result, StormNetworkInput(roof_type="flat"),
+    )
+    assert project.storm.network_assessment.notes == ()  # current no-elements case
+    row = next(r for r in build_commission_report(project).checks if r.code == "K2-02")
+    assert row.status == "stage_r" and not row.blocking
+    assert "ворон" in row.result and "стояк" in row.result
+    assert "расход" in row.result.lower()
+
+
+def test_explicit_storm_failure_retains_original_reason_and_blocking():
+    project = _calculated_project()
+    project.storm.system_kind = "internal"
+    project.storm.result = calculate_storm(StormInput("moscow", 1200))
+    assessment = assess_storm_network(project.storm.result, StormNetworkInput(
+        roof_type="flat", funnels_count=1, roof_sections=1,
+        selected_riser_dn_mm=85, risers_count=1, max_riser_flow_lps=20,
+    ))
+    project.storm.network_assessment = assessment
+    row = next(r for r in build_commission_report(project).checks if r.code == "K2-02")
+    assert row.blocking and row.status == "missing"
+    assert row.result == "; ".join(assessment.notes)
 
 
 def test_high_rise_requirements_are_traced_to_documents():

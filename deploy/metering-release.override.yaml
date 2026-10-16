@@ -1,0 +1,13 @@
+services:
+  app:
+    image: zarya-release:20260930-metering-options
+    environment:
+      ZARYA_BUILD_COMMIT: metering-options-20260930
+      ZARYA_STUDIO_ENABLED: "1"
+      ZARYA_PILOT_ENABLED: "1"
+      ZARYA_REQUIRE_PILOT: "1"
+      ZARYA_PILOT_DIR: /data/projects/_pilot
+      ZARYA_GEO_ENABLED: ${ZARYA_GEO_ENABLED:-1}
+      ZARYA_MAP_TILES_URL: ${ZARYA_MAP_TILES_URL:-}
+      ZARYA_GEOCODER_URL: ${ZARYA_GEOCODER_URL:-https://photon.komoot.io/api/}
+      ZARYA_ELEVATION_URL: ${ZARYA_ELEVATION_URL:-https://api.opentopodata.org/v1/srtm30m}

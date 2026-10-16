@@ -67,8 +67,37 @@ def test_mode2_builds_documents_only(tmp_path):
     assert b.commission_control_pdf and os.path.exists(b.commission_control_pdf)
     assert b.commission_report is not None
     assert b.spec_pdf and os.path.exists(b.spec_pdf)
+    assert b.metering_scheme_pdf and os.path.exists(b.metering_scheme_pdf)
+    from pypdf import PdfReader
+    meter_text = PdfReader(b.metering_scheme_pdf).pages[0].extract_text()
+    assert "Водосчётчик" in meter_text
+    assert "Данные водомера" in meter_text
+    assert any("Водомерный узел:" in warning for warning in b.warnings)
     # гидролист НЕ собран (нет отчёта)
     assert b.hydraulic_pdf is None
+
+    # Finished PDFs, not only templates: sewer calculations belong to IOS3.
+    water = PdfReader(b.pz_pdf)
+    sewer = PdfReader(b.wastewater_pz_pdf)
+    water_text = " ".join(page.extract_text() or "" for page in water.pages)
+    sewer_text = " ".join(page.extract_text() or "" for page in sewer.pages)
+    # The approved horizontal/riser separation renamed this calculation;
+    # still require the actual current headings only in the IOS3 PDF.
+    for title in ("Расход К1 по формуле для стояков",
+                  "Проверка характерных стояков К1"):
+        assert title not in water_text
+        assert title in sewer_text
+    assert "Паспорт проекта и нормативный контроль" not in water_text
+    assert "Баланс водопотребления и водоотведения" in water_text
+    from tests.test_pdf_merge import outline
+    water_marks = outline(water)
+    sewer_marks = outline(sewer)
+    assert len(water_marks) >= 3  # base text, V1 and pump calculation appendices
+    assert len(sewer_marks) >= 2  # base text and K1/K2 calculation appendix
+    for path in (b.pz_pdf, b.wastewater_pz_pdf, b.wastewater_package_pdf):
+        pdf = PdfReader(path)
+        assert all(page is not None and 0 <= page < len(pdf.pages)
+                   for _, _, page in outline(pdf))
 
 
 def test_mode2_warns_about_skipped(tmp_path):

@@ -338,7 +338,9 @@ def test_import_store_persists_versioned_project_link(tmp_path):
         )
 
 
-def test_architecture_routes_template_and_navigation_are_wired():
+def test_architecture_routes_template_and_navigation_are_wired(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from jinja2 import nodes
     from app.main import app
     from app.web.architecture_import import _TPL
 
@@ -365,5 +367,17 @@ def test_architecture_routes_template_and_navigation_are_wired():
         "wizard_analysis.html",
         "wizard_analysis_result.html",
     ):
-        html = open(f"app/web/templates/{name}", encoding="utf-8").read()
-        assert 'href="/wizard/architecture"' in html
+        source = _TPL.env.loader.get_source(_TPL.env, name)[0]
+        includes = _TPL.env.parse(source).find_all(nodes.Include)
+        assert any(isinstance(node.template, nodes.Const)
+                   and node.template.value == "site_header.html" for node in includes)
+    header = _TPL.env.get_template("site_header.html").render()
+    assert 'href="/studio/projects"' in header
+    assert 'href="/wizard/architecture"' not in header
+    monkeypatch.setenv("ZARYA_PROJECTS_DIR", str(tmp_path / "projects"))
+    monkeypatch.setenv("ZARYA_NORMATIVE_MONITOR_ENABLED", "0")
+    with TestClient(app) as client:
+        for path in ("/wizard", "/wizard/projects", "/wizard/analyze", "/wizard/architecture"):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert 'href="/studio/projects"' in response.text

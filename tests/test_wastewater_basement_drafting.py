@@ -81,8 +81,8 @@ def test_project_elevations_are_blank_until_explicitly_supplied():
         "collector_slope_per_mille",
     )
     assert not basement.project_inputs_complete
-    assert "отм. пола ________" in svg
-    assert "отм. лотка ________" in svg
+    assert "отм. пола не задана" in svg
+    assert "отм. лотка не задана" in svg
     assert 'data-slope-status="required"' in svg
     assert "уклон не задан" in svg
 
@@ -116,7 +116,7 @@ def test_blank_outlet_mark_stays_visible_as_missing_project_data():
     svg = build_wastewater_basement_control_svg(basement)
 
     assert "outlet_id" in basement.missing_project_inputs
-    assert "Выпуск ________ DN100" in svg
+    assert "Выпуск (марка не задана) DN100" in svg
 
 
 def test_outlet_dn_increase_is_explicit_and_drawn_as_unfilled_transition():

@@ -179,3 +179,18 @@ def test_wizard_new_routes_registered():
     paths = app.openapi()["paths"].keys()
     assert "/wizard/projects" in paths
     assert "/wizard/open/{project_id}" in paths
+
+
+@pytest.mark.parametrize("role", [None, "participant", "admin"])
+def test_site_includes_preserve_pilot_visibility(role):
+    from types import SimpleNamespace
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader("app/web/templates"))
+    user = SimpleNamespace(role=role, name="Участник") if role else None
+    context = {"request": SimpleNamespace(state=SimpleNamespace(pilot_user=user))}
+    assets = env.get_template("site_assets.html").render(**context)
+    header = env.get_template("site_header.html").render(**context)
+    assert ('pilot_feedback.js' in assets) == bool(role)
+    assert ('id="pilot-feedback"' in header) == bool(role)
+    assert ('action="/access/logout"' in header) == bool(role)
+    assert ('href="/access/admin"' in header) == (role == "admin")

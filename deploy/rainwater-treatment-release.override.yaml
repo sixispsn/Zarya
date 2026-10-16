@@ -1,0 +1,5 @@
+services:
+  app:
+    image: zarya-release:20261001-rainwater-treatment
+    environment:
+      ZARYA_BUILD_COMMIT: rainwater-treatment-20261001
